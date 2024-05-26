@@ -1,6 +1,6 @@
 const P12S = [{
-    filename: 'token.p12',
-    password: 'S1gnB4nak3n'
+    filename: 'token.p12', // p12 token name that must be located in cert/
+    password: process.env.DIGITAL_SIGNTURE_PASSWORD,
 }];
 
 

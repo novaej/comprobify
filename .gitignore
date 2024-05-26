@@ -3,5 +3,6 @@ node_modules/
 
 .env
 
+cert/token.p12
 
 .DS_STORE
