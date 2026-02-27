@@ -308,25 +308,32 @@ The builder stores `this.subtotal` and `this.total` as side effects of `buildInf
 ## 14. XmlValidatorService — `src/services/xml-validator.service.js`
 
 ```js
-// Lazy singleton — loaded once on first call
-function getSchema() {
-  if (!cachedSchema) {
-    cachedSchema = libxmljs.parseXml(xsdContent, { baseUrl: 'file://' + XSD_PATH });
-  }
-  return cachedSchema;
-}
-
 function validate(xmlString) {
-  const stripped = xmlString.replace(/<\?xml[^?]*\?>\s*/i, '');
-  const doc = libxmljs.parseXml(stripped);
-  const valid = doc.validate(schema);
-  return valid ? { valid: true } : { valid: false, errors: doc.validationErrors };
+  const tmpFile = path.join(os.tmpdir(), `sri-validate-${process.pid}-${Date.now()}.xml`);
+  try {
+    fs.writeFileSync(tmpFile, xmlString, 'utf8');
+    execFileSync('xmllint', ['--noout', '--schema', XSD_PATH, tmpFile], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    return { valid: true };
+  } catch (err) {
+    const stderr = err.stderr ? err.stderr.toString().trim() : err.message;
+    const errors = stderr
+      .split('\n')
+      .filter((line) => line.includes('error') || line.includes('invalid'))
+      .map((line) => ({ message: line.trim() }));
+    return { valid: false, errors: errors.length ? errors : [{ message: stderr }] };
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch (_) { /* ignore cleanup errors */ }
+  }
 }
 ```
 
-**Why strip the XML declaration before validating?** `libxmljs2` parses the schema and the document separately, then validates the document's element tree against the schema. The `<?xml?>` processing instruction is not part of the element tree and confuses some XSD validators when the document fragment is embedded.
+**Why `xmllint` instead of an npm package?** The Node.js XSD validation ecosystem is sparse and largely unmaintained (`libxmljs2` was end-of-life). `xmllint` is part of the system `libxml2` installation — the same C library those npm packages wrap — actively maintained by the OS, and available everywhere (pre-installed on macOS, available via `libxml2-utils` on Ubuntu/Debian). Zero npm footprint and no native rebuild issues across Node.js versions.
 
-**Why `baseUrl`?** The factura XSD contains `<xsd:import schemaLocation="xmldsig-core-schema.xsd"/>`. Without `baseUrl`, libxmljs2 cannot resolve the relative path and throws "Invalid XSD schema". Setting `baseUrl` to the XSD file's `file://` URI allows the import to resolve against the `assets/` directory where both XSD files live.
+**Why a temp file?** `xmllint --schema` requires a file path for the document being validated; it does not accept stdin when a schema is involved. The file is always deleted in the `finally` block regardless of outcome.
+
+**Why `--noout`?** Suppresses the serialised XML output — only the validation result and errors on stderr matter.
 
 **Why validate before signing, not after?** If the XML is schema-invalid, SRI will reject it at reception. Catching it before signing saves the crypto cost and returns a clear 400 error to the caller with the specific XSD violation, instead of a cryptic SRI SOAP fault after the round-trip.
 
