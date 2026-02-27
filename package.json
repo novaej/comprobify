@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "migrate": "node db/migrate.js",
+    "seed:dev": "NODE_ENV=development node db/seeders/dev-issuer.js",
     "test": "jest",
     "test:unit": "jest tests/unit",
     "test:integration": "jest tests/integration --runInBand"

@@ -119,30 +119,17 @@ This creates all 10 tables: `issuers`, `documents`, `sequential_numbers`, `sri_r
 
 ---
 
-## 8. Insert an issuer
+## 8. Seed the development issuer
 
-The API requires at least one active issuer row before it can generate invoices.
-
-```sql
-INSERT INTO issuers (
-  ruc, business_name, trade_name, main_address,
-  branch_code, issue_point_code,
-  environment, emission_type,
-  required_accounting,
-  cert_path, cert_password_enc
-) VALUES (
-  '1712345678001',          -- your RUC
-  'YOUR COMPANY NAME',
-  'TRADE NAME',
-  'MAIN ADDRESS, CITY',
-  '001', '001',
-  '1',                      -- 1=test, 2=production
-  '1',
-  'SI',
-  'cert/token.p12',
-  'YOUR_ENCRYPTED_PASSWORD' -- output from step 5
-);
+```bash
+CERT_PASSWORD=your_p12_password npm run seed:dev
 ```
+
+This inserts a placeholder dev issuer (RUC `1712345678001`, SRI test environment) and encrypts the certificate password automatically. Safe to run multiple times — it upserts on RUC.
+
+Edit `db/seeders/dev-issuer.js` to change the RUC, name, or address before running.
+
+> For production, insert the issuer directly via SQL with a real encrypted password (see `GETTING_STARTED.md` step 5 for how to encrypt it).
 
 ---
 
