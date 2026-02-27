@@ -268,9 +268,9 @@ The service auto-creates the counter row on first use (`INSERT` if no row found)
 
 ## 12. AccessKeyService — `src/services/access-key.service.js`
 
-Thin wrapper around `helpers/generar-clave-acceso.js`. Translates between the service layer's camelCase arguments and the helper's expected signature.
+Thin wrapper around `helpers/access-key-generator.js`. Translates between the service layer's camelCase arguments and the helper's expected signature.
 
-**Why a wrapper instead of calling the helper directly?** The helper is legacy code preserved as-is. The wrapper gives the service layer a clean interface and isolates tests — services mock `accessKeyService.generate`, not the helper internals.
+**Why a wrapper instead of calling the helper directly?** The wrapper gives the service layer a clean interface and isolates tests — services mock `accessKeyService.generate`, not the helper internals.
 
 The 49-digit access key is structured as:
 
@@ -348,7 +348,7 @@ function signXml(xmlString, certPath, certPasswordEnc) {
 }
 ```
 
-Thin wrapper around `helpers/firmar.js` (XAdES-BES signing via `node-forge`). Its only responsibility is to decrypt the certificate password before passing it to the signing helper.
+Thin wrapper around `helpers/signer.js` (XAdES-BES signing via `node-forge`). Its only responsibility is to decrypt the certificate password before passing it to the signing helper.
 
 **Why wrap the helper?** Same reason as `accessKeyService` — isolates tests and keeps the service layer from knowing about the helper's internal API.
 
