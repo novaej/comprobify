@@ -1,4 +1,4 @@
-const { sign } = require('../../helpers/firmar');
+const { sign } = require('../../helpers/signer');
 const cryptoService = require('./crypto.service');
 
 function signXml(xmlString, certPath, certPasswordEnc) {

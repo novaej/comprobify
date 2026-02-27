@@ -1,7 +1,7 @@
-jest.mock('../../../helpers/firmar');
+jest.mock('../../../helpers/signer');
 jest.mock('../../../src/services/crypto.service');
 
-const { sign } = require('../../../helpers/firmar');
+const { sign } = require('../../../helpers/signer');
 const cryptoService = require('../../../src/services/crypto.service');
 const signingService = require('../../../src/services/signing.service');
 
