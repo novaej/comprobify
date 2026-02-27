@@ -19,18 +19,15 @@ All variables are required unless marked optional.
 | Variable | Description |
 |----------|-------------|
 | `PORT` | HTTP port (default `8080`) |
-| `RUC` | Issuer RUC (13 digits) — also stored in `issuers` table |
-| `ENVIRONMENT` | `1` = SRI test environment · `2` = SRI production |
-| `BRANCH_CODE` | Branch code, e.g. `001` |
-| `ISSUE_POINT_CODE` | Issue point code, e.g. `001` |
-| `CERT_PATH` | Path to P12 certificate file, e.g. `cert/token.p12` |
 | `DB_HOST` | PostgreSQL host |
 | `DB_PORT` | PostgreSQL port (default `5432`) |
 | `DB_NAME` | Database name |
 | `DB_USER` | Database user |
 | `DB_PASSWORD` | Database password |
 | `DB_SSL` | `true` to enable SSL (required in production) |
-| `ENCRYPTION_KEY` | 64-character hex string (32 bytes) — used for AES-256-GCM cert password encryption |
+| `ENCRYPTION_KEY` | 64-character hex string (32 bytes) — AES-256-GCM key for cert password encryption |
+
+> **Issuer-specific config** (RUC, branch code, issue point, SRI environment, certificate path and password) is stored per-issuer in the `issuers` database table. This enables multiple issuers to be configured independently without changing environment variables.
 
 Generate `ENCRYPTION_KEY`:
 ```bash
@@ -41,12 +38,14 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## SRI environments
 
-| `ENVIRONMENT` value | SRI URLs used |
-|--------------------|--------------|
+The SRI endpoint is resolved per-issuer at runtime from `issuers.environment`:
+
+| `issuers.environment` | SRI URLs used |
+|----------------------|--------------|
 | `1` (test) | `https://celcer.sri.gob.ec/comprobantes-electronicos-ws/...` |
 | `2` (production) | `https://cel.sri.gob.ec/comprobantes-electronicos-ws/...` |
 
-**Never point `ENVIRONMENT=2` at the test database, or `ENVIRONMENT=1` at a production issuer.**
+**Never set `environment = '2'` on a test issuer row, or `environment = '1'` on a production issuer row.**
 
 ---
 

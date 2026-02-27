@@ -117,10 +117,11 @@ async function sendToSri(accessKey) {
     throw new AppError(`Cannot send document with status ${document.status}. Must be SIGNED.`, 400);
   }
 
+  const issuer = await issuerModel.findById(document.issuer_id);
   const sriService = require('./sri.service');
   let result;
   try {
-    result = await sriService.sendReceipt(document.signed_xml);
+    result = await sriService.sendReceipt(document.signed_xml, issuer.environment);
   } catch (err) {
     await documentEventModel.create(document.id, 'ERROR', document.status, null, {
       operation: 'SEND',
@@ -157,10 +158,11 @@ async function checkAuthorization(accessKey) {
     throw new AppError(`Cannot check authorization for document with status ${document.status}. Must be RECEIVED.`, 400);
   }
 
+  const issuer = await issuerModel.findById(document.issuer_id);
   const sriService = require('./sri.service');
   let result;
   try {
-    result = await sriService.checkAuthorization(accessKey);
+    result = await sriService.checkAuthorization(accessKey, issuer.environment);
   } catch (err) {
     await documentEventModel.create(document.id, 'ERROR', document.status, null, {
       operation: 'AUTHORIZE',

@@ -68,11 +68,20 @@ function parseMessages(messagesXml) {
   return messages;
 }
 
-async function sendReceipt(signedXml) {
+function getSriUrls(environment) {
+  const base = environment === '2' ? config.sri.prodBaseUrl : config.sri.testBaseUrl;
+  return {
+    receptionUrl: `${base}/RecepcionComprobantesOffline?wsdl`,
+    authorizationUrl: `${base}/AutorizacionComprobantesOffline?wsdl`,
+  };
+}
+
+async function sendReceipt(signedXml, environment) {
+  const { receptionUrl } = getSriUrls(environment);
   const xmlBase64 = Buffer.from(signedXml, 'utf8').toString('base64');
   const envelope = buildReceptionEnvelope(xmlBase64);
 
-  const response = await fetchWithRetry(config.sri.receptionUrl, {
+  const response = await fetchWithRetry(receptionUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'text/xml; charset=utf-8',
@@ -97,10 +106,11 @@ async function sendReceipt(signedXml) {
   };
 }
 
-async function checkAuthorization(accessKey) {
+async function checkAuthorization(accessKey, environment) {
+  const { authorizationUrl } = getSriUrls(environment);
   const envelope = buildAuthorizationEnvelope(accessKey);
 
-  const response = await fetchWithRetry(config.sri.authorizationUrl, {
+  const response = await fetchWithRetry(authorizationUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'text/xml; charset=utf-8',

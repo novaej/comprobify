@@ -55,15 +55,6 @@ Open `.env` and fill in every value:
 ```env
 PORT=8080
 
-# SRI — use ENVIRONMENT=1 for test, ENVIRONMENT=2 for production
-RUC=                        # your 13-digit RUC
-ENVIRONMENT=1
-BRANCH_CODE=001
-ISSUE_POINT_CODE=001
-
-# Certificate — path to your P12 file
-CERT_PATH=cert/token.p12
-
 # PostgreSQL
 DB_HOST=localhost
 DB_PORT=5432
@@ -72,9 +63,11 @@ DB_USER=postgres
 DB_PASSWORD=
 DB_SSL=false
 
-# 32-byte AES encryption key for the certificate password
+# 32-byte AES encryption key for certificate passwords stored in the database
 ENCRYPTION_KEY=             # see step 4
 ```
+
+> **Issuer data (RUC, branch code, issue point, SRI environment, certificate path/password) is stored per-issuer in the `issuers` database table — not in `.env`.** This allows multiple issuers to be configured independently.
 
 ---
 
