@@ -1,0 +1,195 @@
+# Getting Started
+
+Get the API running locally from scratch.
+
+---
+
+## Prerequisites
+
+| Tool | Minimum version | Install |
+|------|----------------|---------|
+| Node.js | 18.x | https://nodejs.org |
+| npm | 9.x | bundled with Node.js |
+| PostgreSQL | 14.x | https://www.postgresql.org |
+| xmllint | any | `brew install libxml2` (macOS) · `apt install libxml2-utils` (Ubuntu) |
+
+---
+
+## 1. Clone
+
+```bash
+git clone <repo-url>
+cd node-sri-fe
+```
+
+---
+
+## 2. Database setup
+
+### Option A — Existing PostgreSQL (local install)
+
+```bash
+psql -U postgres -c "CREATE DATABASE sri_invoicing;"
+```
+
+### Option B — Docker
+
+```bash
+docker run --name sri-postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=sri_invoicing \
+  -p 5432:5432 \
+  -d postgres:16
+```
+
+---
+
+## 3. Configure environment
+
+```bash
+cp .example.env .env
+```
+
+Open `.env` and fill in every value:
+
+```env
+PORT=8080
+
+# SRI — use ENVIRONMENT=1 for test, ENVIRONMENT=2 for production
+RUC=                        # your 13-digit RUC
+ENVIRONMENT=1
+ESTABLECIMIENTO=001
+PUNTO_EMISION=001
+
+# Certificate — path to your P12 file
+CERT_PATH=cert/token.p12
+
+# PostgreSQL
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=sri_invoicing
+DB_USER=postgres
+DB_PASSWORD=
+DB_SSL=false
+
+# 32-byte AES encryption key for the certificate password
+ENCRYPTION_KEY=             # see step 4
+```
+
+---
+
+## 4. Generate encryption key
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Copy the output into `ENCRYPTION_KEY` in `.env`.
+
+---
+
+## 5. Place your P12 certificate
+
+Copy your `.p12` digital certificate to `cert/token.p12`.
+
+> The `cert/` directory is gitignored — the certificate will never be committed.
+
+To encrypt the certificate password for storage in the database, use the crypto service:
+
+```bash
+node -e "
+  require('dotenv').config();
+  const c = require('./src/services/crypto.service');
+  console.log(c.encrypt('YOUR_P12_PASSWORD'));
+"
+```
+
+Store the output in the `cert_password_enc` column of the `issuers` table.
+
+---
+
+## 6. Install dependencies
+
+```bash
+npm install
+```
+
+---
+
+## 7. Run migrations
+
+```bash
+npm run migrate
+```
+
+This creates all 10 tables: `issuers`, `documents`, `sequential_numbers`, `sri_responses`, `document_events`, `invoice_details`, `clients`, `products`, and the catalog tables.
+
+---
+
+## 8. Insert an issuer
+
+The API requires at least one active issuer row before it can generate invoices.
+
+```sql
+INSERT INTO issuers (
+  ruc, business_name, trade_name, main_address,
+  branch_code, issue_point_code,
+  environment, emission_type,
+  required_accounting,
+  cert_path, cert_password_enc
+) VALUES (
+  '1712345678001',          -- your RUC
+  'YOUR COMPANY NAME',
+  'TRADE NAME',
+  'MAIN ADDRESS, CITY',
+  '001', '001',
+  '1',                      -- 1=test, 2=production
+  '1',
+  'SI',
+  'cert/token.p12',
+  'YOUR_ENCRYPTED_PASSWORD' -- output from step 5
+);
+```
+
+---
+
+## 9. Start the server
+
+```bash
+npm start
+```
+
+The API is available at: **http://localhost:8080**
+
+---
+
+## 10. Verify
+
+```bash
+curl -s http://localhost:8080/api/invoices/0000000000000000000000000000000000000000000000000 | jq
+# → { "ok": false, "message": "Document not found" }
+```
+
+A 404 response confirms the server is running and routing correctly.
+
+---
+
+## Troubleshooting
+
+**`ENCRYPTION_KEY must be a 64-character hex string`**
+The `ENCRYPTION_KEY` in `.env` is missing or wrong length. Re-run step 4.
+
+**`No active issuer configured`**
+No row in the `issuers` table, or `active = false`. Complete step 8.
+
+**`Migration X failed`**
+Check that the database exists and credentials in `.env` are correct. Re-run `npm run migrate` — already-applied migrations are skipped automatically.
+
+**`xmllint: command not found`**
+Install libxml2: `brew install libxml2` (macOS) or `apt install libxml2-utils` (Ubuntu).
+
+**`Invalid certificate, certificate has expired`**
+Your P12 certificate's validity period has passed. Renew it from your certificate authority (Banco Central del Ecuador or Security Data).
+
+**Port already in use**
+Change `PORT` in `.env` or stop the conflicting process: `lsof -i :8080`.

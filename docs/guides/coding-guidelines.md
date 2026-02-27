@@ -1,0 +1,267 @@
+# Coding Guidelines
+
+Conventions and patterns for working in this codebase. Every section has code examples. Follow these when adding new features or fixing bugs.
+
+---
+
+## Architecture rules
+
+**Layer boundary — never skip a layer:**
+
+```
+Route → Validator → Controller → Service → Model / Builder / Helper
+```
+
+- Controllers call services. Never call models directly from controllers.
+- Services call models, builders, and helpers. Never import `req` or `res`.
+- Models only execute SQL. No business logic.
+
+**How to add a new endpoint end-to-end:**
+
+1. Add the SQL migration in `db/migrations/NNN_description.sql`
+2. Run `npm run migrate`
+3. Create or update the model in `src/models/`
+4. Create or update the service in `src/services/`
+5. Add the validator chain in `src/validators/`
+6. Add the controller method in `src/controllers/`
+7. Register the route in `src/routes/`
+8. Add unit tests for the service and model
+
+---
+
+## Adding a new document type
+
+The builder registry makes this a four-step process:
+
+**1. Create the builder** — extend `BaseDocumentBuilder`:
+
+```js
+// src/builders/credit-note.builder.js
+const BaseDocumentBuilder = require('./base.builder');
+
+class CreditNoteBuilder extends BaseDocumentBuilder {
+  constructor(issuer) {
+    super(issuer, '04'); // SRI document type code
+  }
+
+  build(body, accessKey, sequential) {
+    this.buildInfoTributaria({ accessKey, sequential });
+    // build credit-note-specific sections...
+    return this.toXml('notaCredito');
+  }
+}
+
+module.exports = CreditNoteBuilder;
+```
+
+**2. Register it** in `src/builders/index.js`:
+
+```js
+const builders = {
+  '01': InvoiceBuilder,
+  '04': CreditNoteBuilder, // add here
+};
+```
+
+**3. Add the XSD** for the new document type to `assets/` (download from SRI).
+
+**4. Update `xml-validator.service.js`** to select the correct schema by document type code.
+
+---
+
+## Models
+
+All queries use parameterised placeholders — no string interpolation, ever:
+
+```js
+// ✅ correct
+const { rows } = await db.query(
+  'SELECT * FROM documents WHERE access_key = $1',
+  [accessKey]
+);
+
+// ❌ never do this
+const { rows } = await db.query(
+  `SELECT * FROM documents WHERE access_key = '${accessKey}'`
+);
+```
+
+Use `db.query()` for single statements. Use `db.getClient()` when you need an explicit transaction:
+
+```js
+// explicit transaction example
+const client = await db.getClient();
+try {
+  await client.query('BEGIN');
+  // ... queries ...
+  await client.query('COMMIT');
+} catch (err) {
+  await client.query('ROLLBACK');
+  throw err;
+} finally {
+  client.release();
+}
+```
+
+Model functions accept plain objects with camelCase keys and return raw PostgreSQL row objects (snake_case). The service layer is responsible for any mapping.
+
+---
+
+## Services
+
+Services are plain async functions — no classes. They orchestrate models, builders, and helpers:
+
+```js
+// src/services/example.service.js
+const someModel = require('../models/some.model');
+const AppError = require('../errors/app-error');
+
+async function doSomething(id) {
+  const record = await someModel.findById(id);
+  if (!record) {
+    throw new NotFoundError('Record');
+  }
+  // ... business logic ...
+  return result;
+}
+
+module.exports = { doSomething };
+```
+
+Never import `req`, `res`, or anything from `src/routes/` inside a service.
+
+---
+
+## Controllers
+
+Controllers are thin — one call to the service, one response:
+
+```js
+const doSomething = async (req, res) => {
+  const result = await someService.doSomething(req.params.id);
+  res.json({ ok: true, result });
+};
+```
+
+All async controllers are wrapped with `asyncHandler` in the route definition — never add try/catch inside a controller.
+
+---
+
+## Validators
+
+Add validator chains in `src/validators/`. Use `express-validator` `body()`, `param()`, and `query()` functions:
+
+```js
+const { body, param } = require('express-validator');
+
+const createSomething = [
+  body('name').notEmpty().isLength({ max: 300 }).withMessage('Name is required'),
+  body('amount').isNumeric().withMessage('Amount must be numeric'),
+];
+
+module.exports = { createSomething };
+```
+
+Register the chain and `validateRequest` middleware before the controller in the route:
+
+```js
+router.post('/', createSomething, validateRequest, asyncHandler(controller.create));
+```
+
+---
+
+## Error handling
+
+Use the typed error classes — never call `res.status()` directly in a service:
+
+```js
+const AppError = require('../errors/app-error');         // 500 by default
+const NotFoundError = require('../errors/not-found-error'); // 404
+const ValidationError = require('../errors/validation-error'); // 400, carries errors[]
+const SriError = require('../errors/sri-error');            // 502, carries sriMessages[]
+
+// throw from anywhere — the error handler middleware catches it
+throw new NotFoundError('Document');
+throw new ValidationError([{ message: 'Access key must be 49 digits' }]);
+throw new SriError('SRI service unavailable', sriMessages);
+```
+
+The `error-handler.js` middleware maps `AppError` subclasses to their status codes and formats the response as `{ ok: false, message, errors?, sriMessages? }`.
+
+---
+
+## Audit events
+
+Log a `document_events` row for every meaningful state change:
+
+```js
+const documentEventModel = require('../models/document-event.model');
+
+// signature: create(documentId, eventType, fromStatus, toStatus, detail)
+await documentEventModel.create(document.id, 'STATUS_CHANGED', 'RECEIVED', 'AUTHORIZED', {
+  authorizationNumber: result.authorizationNumber,
+});
+```
+
+Use these event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`. Always log an `ERROR` event in the catch block before re-throwing.
+
+---
+
+## Tests
+
+Unit tests live in `tests/unit/` mirroring the `src/` structure. Mock all dependencies — never hit the real database or SRI in a unit test:
+
+```js
+// tests/unit/services/example.service.test.js
+jest.mock('../../../src/models/some.model');
+jest.mock('../../../src/models/document-event.model');
+
+const someModel = require('../../../src/models/some.model');
+const documentEventModel = require('../../../src/models/document-event.model');
+const exampleService = require('../../../src/services/example.service');
+
+describe('ExampleService', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    documentEventModel.create.mockResolvedValue({});
+  });
+
+  test('throws NotFoundError when record does not exist', async () => {
+    someModel.findById.mockResolvedValue(null);
+    await expect(exampleService.doSomething(99)).rejects.toThrow('not found');
+  });
+});
+```
+
+Run tests:
+
+```bash
+npm run test:unit          # unit tests only (fast, no DB)
+npm run test:integration   # requires test PostgreSQL DB
+npm test                   # all tests
+```
+
+---
+
+## Naming conventions
+
+- **Files:** kebab-case — `document-event.model.js`, `access-key.service.js`
+- **Variables/functions:** camelCase
+- **Database columns:** snake_case (PostgreSQL convention)
+- **Language:** English for all identifiers, file names, table names, column names. Spanish only where SRI requires it (XML element names like `infoTributaria`, `claveAcceso`, SOAP payloads)
+- **Document type codes:** use the SRI string codes (`'01'`, `'04'`) not aliases
+
+---
+
+## Common mistakes
+
+1. **Calling a model directly from a controller** — always go through the service layer.
+2. **String-interpolating SQL** — always use `$1, $2` parameterised placeholders.
+3. **Throwing a plain `Error` instead of an `AppError` subclass** — the error handler will return a generic 500 instead of the correct status.
+4. **Forgetting `asyncHandler`** — async route handlers not wrapped with it will silently swallow errors in some Express versions.
+5. **Missing `validateRequest`** — the validator chain runs but does nothing without this middleware.
+6. **Signing before XSD validation** — signing is expensive; always validate first.
+7. **Retrying on HTTP-level SRI errors** — only retry on `fetch` throws (network failures), not on `!response.ok` responses.
+8. **Not logging an ERROR audit event before re-throwing** — the document history will have a gap.
+9. **Hard-deleting database rows** — update status or set `active = false` instead.
+10. **Reading `process.env` directly** — always import from `src/config/index.js`.

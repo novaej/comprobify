@@ -1,99 +1,153 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Primary guide for AI coding assistants. This file is loaded automatically into context. Every rule here takes precedence over AI defaults.
+
+---
 
 ## Project Overview
 
-Node.js REST API (Express.js) for generating, digitally signing, and submitting electronic invoices (facturas electrónicas) to Ecuador's SRI (Servicio de Rentas Internas). Supports the full document lifecycle: Generate → Sign → Send → Authorize. Uses PostgreSQL for persistence with concurrency-safe sequential numbers.
+**SRI Electronic Invoice API** — Node.js/Express REST API for generating, digitally signing, and submitting electronic invoices (*facturas electrónicas*) to Ecuador's SRI. Full document lifecycle: Generate → Sign → Send → Authorize. PostgreSQL for persistence.
+
+---
 
 ## Commands
 
-- **Start server:** `npm start` or `node app.js` (runs on port from `.env`, default 8080)
-- **Install dependencies:** `npm install`
-- **Run migrations:** `npm run migrate`
-- **Run all tests:** `npm test`
-- **Run unit tests:** `npm run test:unit`
-- **Run integration tests:** `npm run test:integration` (requires test DB)
+```bash
+npm start                 # start server (default port 8080)
+npm run migrate           # apply SQL migrations
+npm test                  # all tests
+npm run test:unit         # unit tests only (no DB required)
+npm run test:integration  # integration tests (requires test DB)
+```
 
-## Environment Setup
-
-1. Copy `.example.env` to `.env` and fill in values
-2. Place P12 digital certificate at `cert/token.p12`
-3. Create PostgreSQL database and run `npm run migrate`
-4. Generate encryption key: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
-5. Set `ENCRYPTION_KEY` in `.env`
-
-## Naming Convention
-
-Code uses **English** for identifiers, file names, variable names, table names, and column names. Spanish is used only where SRI requires it (XML element names like `infoTributaria`, `claveAcceso`, SRI SOAP payloads).
+---
 
 ## Architecture
 
-**Pattern:** Layered Express REST API — Route → Controller → Service → Model (PostgreSQL)
-
-**Request flow:** Route (`src/routes/`) → Validator → Controller (`src/controllers/`) → Service (`src/services/`) → Model (`src/models/`) / Builder (`src/builders/`)
-
-### Key directories
-
-- `src/server.js` — Express server class (middleware, routes, error handling)
-- `src/config/` — Central config (`index.js`) and pg Pool setup (`database.js`)
-- `src/controllers/invoices.controller.js` — Thin controller: validate → delegate → respond
-- `src/services/` — Business logic layer:
-  - `document.service.js` — Orchestrator: create, sign, send, authorize
-  - `sequential.service.js` — Sequential numbers with SELECT FOR UPDATE locking
-  - `access-key.service.js` — Wraps helpers/generar-clave-acceso.js
-  - `signing.service.js` — Wraps helpers/firmar.js, decrypts cert password
-  - `sri.service.js` — SOAP calls to SRI web services
-  - `crypto.service.js` — AES-256-GCM encrypt/decrypt for sensitive data
-- `src/builders/` — XML document construction:
-  - `base.builder.js` — Shared infoTributaria, XML attributes, toXml()
-  - `invoice.builder.js` — Factura-specific: infoFactura, detalles, pagos
-  - `index.js` — Builder registry by document type code
-- `src/models/` — PostgreSQL CRUD:
-  - `document.model.js`, `issuer.model.js`, `sequential.model.js`, `sri-response.model.js`
-- `src/validators/` — express-validator chains for request validation
-- `src/middleware/` — error-handler, validate-request, async-handler
-- `src/errors/` — Typed error classes (AppError, ValidationError, SriError, NotFoundError)
-- `helpers/` — Legacy utilities (PRESERVED, wrapped by services):
-  - `generar-clave-acceso.js` — 49-digit SRI access key with Module 11 check digit
-  - `firmar.js` — XAdES-BES XML signing using node-forge
-- `db/migrations/` — SQL migration files (run with `npm run migrate`)
-- `cert/` — P12 certificate storage
-- `assets/` — SRI XML schema and example files
-- `tests/unit/` — Jest unit tests
-- `tests/integration/` — Jest integration tests
-
-### Document lifecycle
-
 ```
-POST /api/invoices → SIGNED → POST /:key/send → RECEIVED → GET /:key/authorize → AUTHORIZED
-                                     │                            │
-                                     → RETURNED                   → NOT_AUTHORIZED
+Route → Validator → Controller → Service → Model / Builder / Helper
 ```
 
-### Invoice generation pipeline
+**Dependency rule:** each layer calls only the layer below it. Controllers never touch models. Services never touch `req`/`res`.
 
-1. Load issuer from PostgreSQL `issuers` table
-2. Get next sequential with row-level locking (`SELECT ... FOR UPDATE`)
-3. Generate 49-digit SRI access key (date + doc type + RUC + environment + series + sequential + check digit)
-4. Build invoice XML via InvoiceBuilder (infoTributaria + infoFactura + detalles + pagos)
-5. Digitally sign XML using P12 certificate (XAdES-BES with SHA-1/RSA-2048)
-6. Save document to PostgreSQL `documents` table
-7. Return document metadata as JSON
+```
+src/routes/        URL definitions + validator chains
+src/validators/    express-validator field rules
+src/controllers/   thin HTTP handlers — one service call, one response
+src/services/      business logic and orchestration
+src/models/        PostgreSQL CRUD (parameterised queries only)
+src/builders/      XML document construction (builder registry)
+src/errors/        AppError → ValidationError / NotFoundError / SriError
+helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11)
+db/migrations/     SQL migration files 001–010
+assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
+```
 
-## API Endpoints
+---
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/invoices` | Create and sign a new invoice |
-| GET | `/api/invoices/:accessKey` | Get document details |
-| POST | `/api/invoices/:accessKey/send` | Send signed XML to SRI |
-| GET | `/api/invoices/:accessKey/authorize` | Check authorization at SRI |
+## CRITICAL RULES
 
-## Database
+1. **English only** — all identifiers, file names, table names, column names. Spanish only where SRI mandates it (XML element names: `infoTributaria`, `claveAcceso`, SOAP payloads).
+2. **Never string-interpolate SQL** — always use `$1, $2` parameterised placeholders.
+3. **Never skip layers** — controller → service → model. Never controller → model.
+4. **Never read `process.env` directly** — import from `src/config/index.js`.
+5. **Validate before signing** — XSD validation runs before the expensive crypto step.
+6. **Always log an ERROR audit event before re-throwing** from a SRI service catch block.
+7. **No hard deletes** — set `active = false` or update status instead.
+8. **Wrap all async route handlers** in `asyncHandler` — never add try/catch in controllers.
 
-PostgreSQL with `pg` (raw client, parameterized queries). Tables: `issuers`, `documents`, `sequential_numbers`, `sri_responses`, `cat_document_types`, `cat_emission_types`.
+---
 
-## Testing
+## Key Patterns
 
-Jest. Unit tests mock all dependencies. Integration tests require a test PostgreSQL database.
+**Sequential numbers:** `SELECT ... FOR UPDATE` inside an explicit transaction — guarantees no duplicate sequential numbers under concurrent load. See `src/services/sequential.service.js`.
+
+**Certificate password:** stored AES-256-GCM encrypted in `issuers.cert_password_enc`. Decrypted at signing time only. Key lives in `ENCRYPTION_KEY` env var.
+
+**XSD validation:** `xmllint` CLI via `execFileSync` against `assets/factura_V2.1.0.xsd`. Must be pre-validation (before signing). `xmllint` must be installed on the server.
+
+**Retry logic:** `fetchWithRetry` in `sri.service.js` — retries only on `fetch` throws (network), never on HTTP-level SRI responses.
+
+**Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`.
+
+**Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry.
+
+---
+
+## Document Lifecycle
+
+```
+POST /api/invoices → SIGNED
+POST /:key/send   → RECEIVED | RETURNED
+GET  /:key/authorize → AUTHORIZED | NOT_AUTHORIZED
+```
+
+**Invoice generation steps:**
+1. Load issuer (`issuers` table)
+2. `SELECT ... FOR UPDATE` → next sequential
+3. Generate 49-digit access key (Module 11 check digit)
+4. Build unsigned XML (`InvoiceBuilder`)
+5. Validate against XSD (`xmllint`)
+6. Sign XML (XAdES-BES, P12 cert)
+7. `INSERT` into `documents`
+8. `bulkCreate` into `invoice_details`
+9. Log `CREATED` event to `document_events`
+10. Fire-and-forget upsert into `clients`
+
+---
+
+## Git Commit Conventions
+
+Format: `type: short description` (max 72 chars, imperative mood, no period)
+
+| Type | Use for |
+|------|---------|
+| `feat` | new feature |
+| `fix` | bug fix |
+| `refactor` | code change with no behaviour change |
+| `docs` | documentation only |
+| `test` | adding or fixing tests |
+| `chore` | dependencies, tooling, config |
+| `ci` | CI/CD pipeline changes |
+
+```
+feat: add credit note document type
+fix: resolve duplicate sequential on concurrent requests
+refactor: extract XSD validation into separate service
+docs: add ADR for sequential locking strategy
+chore: update express to 4.22.1
+```
+
+---
+
+## Common Mistakes to Avoid
+
+1. Calling a model directly from a controller — always go through the service.
+2. String-interpolating SQL — use `$1, $2` always.
+3. Throwing `new Error()` instead of an `AppError` subclass — the error handler returns a generic 500.
+4. Forgetting `asyncHandler` on a route — async errors are swallowed silently.
+5. Forgetting `validateRequest` in the route chain — validator runs but errors are never checked.
+6. Signing before XSD validation — signing is expensive; fail fast.
+7. Retrying on HTTP-level SRI errors — only retry on `fetch` throws.
+8. Not logging an `ERROR` audit event before re-throwing — leaves a gap in the document history.
+9. Reading `process.env` directly in a service or model — use `src/config/index.js`.
+10. Hardcoding Spanish identifiers in new code — use English everywhere except SRI XML elements.
+
+---
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `GETTING_STARTED.md` | Local setup guide |
+| `docs/guides/code-flow.md` | Layer-by-layer request walkthrough |
+| `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
+| `docs/adr/` | Architecture Decision Records |
+| `src/services/document.service.js` | Main orchestrator — invoice lifecycle |
+| `src/services/sri.service.js` | SRI SOAP integration + retry logic |
+| `src/services/xml-validator.service.js` | XSD pre-validation via xmllint |
+| `src/services/sequential.service.js` | FOR UPDATE sequential locking |
+| `src/builders/index.js` | Builder registry |
+| `db/migrations/` | All 10 SQL migrations |
+| `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
+| `.example.env` | Environment variable template |
