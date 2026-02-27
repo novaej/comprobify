@@ -1,0 +1,121 @@
+const config = require('../config');
+const SriError = require('../errors/sri-error');
+
+function buildReceptionEnvelope(xmlBase64) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ec="http://ec.gob.sri.ws.recepcion">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ec:validarComprobante>
+      <xml>${xmlBase64}</xml>
+    </ec:validarComprobante>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+}
+
+function buildAuthorizationEnvelope(accessKey) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ec="http://ec.gob.sri.ws.autorizacion">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ec:autorizacionComprobante>
+      <claveAccesoComprobante>${accessKey}</claveAccesoComprobante>
+    </ec:autorizacionComprobante>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+}
+
+function extractTagContent(xml, tag) {
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`);
+  const match = xml.match(regex);
+  return match ? match[1].trim() : null;
+}
+
+function extractAllTags(xml, tag) {
+  const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'g');
+  const results = [];
+  let match;
+  while ((match = regex.exec(xml)) !== null) {
+    results.push(match[1].trim());
+  }
+  return results;
+}
+
+function parseMessages(messagesXml) {
+  const messages = [];
+  const messageBlocks = extractAllTags(messagesXml, 'mensaje');
+  for (const block of messageBlocks) {
+    messages.push({
+      identifier: extractTagContent(block, 'identificador'),
+      message: extractTagContent(block, 'mensaje'),
+      additionalInfo: extractTagContent(block, 'informacionAdicional'),
+      type: extractTagContent(block, 'tipo'),
+    });
+  }
+  return messages;
+}
+
+async function sendReceipt(signedXml) {
+  const xmlBase64 = Buffer.from(signedXml, 'utf8').toString('base64');
+  const envelope = buildReceptionEnvelope(xmlBase64);
+
+  const response = await fetch(config.sri.receptionUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/xml; charset=utf-8',
+      SOAPAction: '',
+    },
+    body: envelope,
+  });
+
+  const rawResponse = await response.text();
+
+  if (!response.ok) {
+    throw new SriError(`SRI reception service returned HTTP ${response.status}`, []);
+  }
+
+  const estado = extractTagContent(rawResponse, 'estado');
+  const messages = parseMessages(rawResponse);
+
+  return {
+    status: estado,
+    messages,
+    rawResponse,
+  };
+}
+
+async function checkAuthorization(accessKey) {
+  const envelope = buildAuthorizationEnvelope(accessKey);
+
+  const response = await fetch(config.sri.authorizationUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/xml; charset=utf-8',
+      SOAPAction: '',
+    },
+    body: envelope,
+  });
+
+  const rawResponse = await response.text();
+
+  if (!response.ok) {
+    throw new SriError(`SRI authorization service returned HTTP ${response.status}`, []);
+  }
+
+  const estado = extractTagContent(rawResponse, 'estado');
+  const numeroAutorizacion = extractTagContent(rawResponse, 'numeroAutorizacion');
+  const fechaAutorizacion = extractTagContent(rawResponse, 'fechaAutorizacion');
+  const comprobante = extractTagContent(rawResponse, 'comprobante');
+  const messages = parseMessages(rawResponse);
+
+  return {
+    status: estado,
+    authorizationNumber: numeroAutorizacion,
+    authorizationDate: fechaAutorizacion,
+    authorizationXml: comprobante,
+    messages,
+    rawResponse,
+  };
+}
+
+module.exports = { sendReceipt, checkAuthorization };
