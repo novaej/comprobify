@@ -1,6 +1,19 @@
 const config = require('../config');
 const SriError = require('../errors/sri-error');
 
+async function fetchWithRetry(url, options, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fetch(url, options);
+    } catch (err) {
+      if (attempt === maxRetries) throw err;
+      const delay = 1000 * 2 ** (attempt - 1); // 1s → 2s → 4s
+      console.warn(`SRI fetch attempt ${attempt} failed (${err.message}), retrying in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+}
+
 function buildReceptionEnvelope(xmlBase64) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ec="http://ec.gob.sri.ws.recepcion">
@@ -59,7 +72,7 @@ async function sendReceipt(signedXml) {
   const xmlBase64 = Buffer.from(signedXml, 'utf8').toString('base64');
   const envelope = buildReceptionEnvelope(xmlBase64);
 
-  const response = await fetch(config.sri.receptionUrl, {
+  const response = await fetchWithRetry(config.sri.receptionUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'text/xml; charset=utf-8',
@@ -87,7 +100,7 @@ async function sendReceipt(signedXml) {
 async function checkAuthorization(accessKey) {
   const envelope = buildAuthorizationEnvelope(accessKey);
 
-  const response = await fetch(config.sri.authorizationUrl, {
+  const response = await fetchWithRetry(config.sri.authorizationUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'text/xml; charset=utf-8',

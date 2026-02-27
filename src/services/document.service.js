@@ -2,12 +2,17 @@ const moment = require('moment');
 const config = require('../config');
 const issuerModel = require('../models/issuer.model');
 const documentModel = require('../models/document.model');
+const invoiceDetailModel = require('../models/invoice-detail.model');
+const documentEventModel = require('../models/document-event.model');
+const clientModel = require('../models/client.model');
 const sequentialService = require('./sequential.service');
 const accessKeyService = require('./access-key.service');
 const signingService = require('./signing.service');
+const xmlValidator = require('./xml-validator.service');
 const { getBuilder } = require('../builders');
 const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
+const ValidationError = require('../errors/validation-error');
 
 const DOCUMENT_TYPE_INVOICE = '01';
 
@@ -47,6 +52,12 @@ async function create(body) {
   const builder = getBuilder(DOCUMENT_TYPE_INVOICE, issuer);
   const unsignedXml = builder.build({ ...body, issueDate }, accessKey, sequential);
 
+  // Validate against XSD before signing
+  const xsdResult = xmlValidator.validate(unsignedXml);
+  if (!xsdResult.valid) {
+    throw new ValidationError(xsdResult.errors);
+  }
+
   // Sign XML
   const signedXml = signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc);
 
@@ -74,6 +85,20 @@ async function create(body) {
     requestPayload: body,
   });
 
+  // Persist invoice line items
+  await invoiceDetailModel.bulkCreate(document.id, body.items);
+
+  // Log audit event
+  await documentEventModel.create(document.id, 'CREATED', null, 'SIGNED', {
+    accessKey,
+    sequential,
+  });
+
+  // Upsert buyer into clients table (non-blocking — failure doesn't abort the invoice)
+  clientModel.findOrCreate(issuer.id, body.buyer).catch((err) => {
+    console.warn('Failed to upsert client record:', err.message);
+  });
+
   return formatDocument(document);
 }
 
@@ -93,7 +118,16 @@ async function sendToSri(accessKey) {
   }
 
   const sriService = require('./sri.service');
-  const result = await sriService.sendReceipt(document.signed_xml);
+  let result;
+  try {
+    result = await sriService.sendReceipt(document.signed_xml);
+  } catch (err) {
+    await documentEventModel.create(document.id, 'ERROR', document.status, null, {
+      operation: 'SEND',
+      message: err.message,
+    });
+    throw err;
+  }
 
   const sriResponseModel = require('../models/sri-response.model');
   await sriResponseModel.create({
@@ -106,6 +140,10 @@ async function sendToSri(accessKey) {
 
   const newStatus = result.status === 'RECIBIDA' ? 'RECEIVED' : 'RETURNED';
   const updated = await documentModel.updateStatus(document.id, newStatus);
+
+  await documentEventModel.create(document.id, 'SENT', document.status, newStatus, {
+    sriStatus: result.status,
+  });
 
   return formatDocument(updated);
 }
@@ -120,7 +158,16 @@ async function checkAuthorization(accessKey) {
   }
 
   const sriService = require('./sri.service');
-  const result = await sriService.checkAuthorization(accessKey);
+  let result;
+  try {
+    result = await sriService.checkAuthorization(accessKey);
+  } catch (err) {
+    await documentEventModel.create(document.id, 'ERROR', document.status, null, {
+      operation: 'AUTHORIZE',
+      message: err.message,
+    });
+    throw err;
+  }
 
   const sriResponseModel = require('../models/sri-response.model');
   await sriResponseModel.create({
@@ -145,6 +192,11 @@ async function checkAuthorization(accessKey) {
   }
 
   const updated = await documentModel.updateStatus(document.id, newStatus, extraFields);
+
+  await documentEventModel.create(document.id, 'STATUS_CHANGED', document.status, newStatus, {
+    sriStatus: result.status,
+    authorizationNumber: result.authorizationNumber || null,
+  });
 
   return formatDocument(updated);
 }

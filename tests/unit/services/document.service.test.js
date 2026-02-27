@@ -1,15 +1,23 @@
 jest.mock('../../../src/models/issuer.model');
 jest.mock('../../../src/models/document.model');
+jest.mock('../../../src/models/invoice-detail.model');
+jest.mock('../../../src/models/document-event.model');
+jest.mock('../../../src/models/client.model');
 jest.mock('../../../src/services/sequential.service');
 jest.mock('../../../src/services/access-key.service');
 jest.mock('../../../src/services/signing.service');
+jest.mock('../../../src/services/xml-validator.service');
 jest.mock('../../../src/builders');
 
 const issuerModel = require('../../../src/models/issuer.model');
 const documentModel = require('../../../src/models/document.model');
+const invoiceDetailModel = require('../../../src/models/invoice-detail.model');
+const documentEventModel = require('../../../src/models/document-event.model');
+const clientModel = require('../../../src/models/client.model');
 const sequentialService = require('../../../src/services/sequential.service');
 const accessKeyService = require('../../../src/services/access-key.service');
 const signingService = require('../../../src/services/signing.service');
+const xmlValidator = require('../../../src/services/xml-validator.service');
 const builders = require('../../../src/builders');
 const documentService = require('../../../src/services/document.service');
 
@@ -56,6 +64,10 @@ describe('DocumentService', () => {
     };
     builders.getBuilder.mockReturnValue(mockBuilder);
     signingService.signXml.mockReturnValue('<factura>signed-xml</factura>');
+    xmlValidator.validate.mockReturnValue({ valid: true });
+    invoiceDetailModel.bulkCreate.mockResolvedValue([]);
+    documentEventModel.create.mockResolvedValue({});
+    clientModel.findOrCreate.mockResolvedValue({});
 
     documentModel.create.mockResolvedValue({
       id: 1,
@@ -88,6 +100,23 @@ describe('DocumentService', () => {
   test('create throws when no issuer configured', async () => {
     issuerModel.findFirst.mockResolvedValue(null);
     await expect(documentService.create(validBody)).rejects.toThrow('No active issuer configured');
+  });
+
+  test('create throws ValidationError when XSD validation fails', async () => {
+    xmlValidator.validate.mockReturnValue({
+      valid: false,
+      errors: [{ message: 'Element infoFactura is not valid' }],
+    });
+    await expect(documentService.create(validBody)).rejects.toMatchObject({
+      statusCode: 400,
+      errors: [{ message: 'Element infoFactura is not valid' }],
+    });
+  });
+
+  test('create persists invoice_details and logs CREATED event', async () => {
+    await documentService.create(validBody);
+    expect(invoiceDetailModel.bulkCreate).toHaveBeenCalledWith(1, validBody.items);
+    expect(documentEventModel.create).toHaveBeenCalledWith(1, 'CREATED', null, 'SIGNED', expect.any(Object));
   });
 
   test('getByAccessKey returns formatted document', async () => {
