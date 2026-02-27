@@ -58,8 +58,8 @@ PORT=8080
 # SRI — use ENVIRONMENT=1 for test, ENVIRONMENT=2 for production
 RUC=                        # your 13-digit RUC
 ENVIRONMENT=1
-ESTABLECIMIENTO=001
-PUNTO_EMISION=001
+BRANCH_CODE=001
+ISSUE_POINT_CODE=001
 
 # Certificate — path to your P12 file
 CERT_PATH=cert/token.p12

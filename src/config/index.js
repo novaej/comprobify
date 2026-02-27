@@ -2,9 +2,8 @@ const config = {
   port: process.env.PORT || 8080,
   environment: process.env.ENVIRONMENT || '1',
   ruc: process.env.RUC || '',
-  branchCode: process.env.ESTABLECIMIENTO || '001',
-  issuePointCode: process.env.PUNTO_EMISION || '001',
-  certPassword: process.env.DIGITAL_SIGNTURE_PASSWORD || '',
+  branchCode: process.env.BRANCH_CODE || '001',
+  issuePointCode: process.env.ISSUE_POINT_CODE || '001',
   certPath: process.env.CERT_PATH || 'cert/token.p12',
   encryptionKey: process.env.ENCRYPTION_KEY || '',
   db: {

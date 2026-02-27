@@ -21,8 +21,8 @@ All variables are required unless marked optional.
 | `PORT` | HTTP port (default `8080`) |
 | `RUC` | Issuer RUC (13 digits) — also stored in `issuers` table |
 | `ENVIRONMENT` | `1` = SRI test environment · `2` = SRI production |
-| `ESTABLECIMIENTO` | Branch code, e.g. `001` |
-| `PUNTO_EMISION` | Issue point code, e.g. `001` |
+| `BRANCH_CODE` | Branch code, e.g. `001` |
+| `ISSUE_POINT_CODE` | Issue point code, e.g. `001` |
 | `CERT_PATH` | Path to P12 certificate file, e.g. `cert/token.p12` |
 | `DB_HOST` | PostgreSQL host |
 | `DB_PORT` | PostgreSQL port (default `5432`) |
