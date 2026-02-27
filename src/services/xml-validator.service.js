@@ -1,33 +1,30 @@
 const path = require('path');
 const fs = require('fs');
-const libxmljs = require('libxmljs2');
+const os = require('os');
+const { execFileSync } = require('child_process');
 
 const XSD_PATH = path.join(__dirname, '../../assets/factura_V2.1.0.xsd');
 
-let cachedSchema = null;
-
-function getSchema() {
-  if (!cachedSchema) {
-    const xsdContent = fs.readFileSync(XSD_PATH, 'utf8');
-    // baseUrl is required so libxmljs2 can resolve the relative xmldsig-core-schema.xsd import
-    cachedSchema = libxmljs.parseXml(xsdContent, { baseUrl: `file://${XSD_PATH}` });
-  }
-  return cachedSchema;
-}
-
 function validate(xmlString) {
-  // Strip XML declaration before validation
-  const stripped = xmlString.replace(/<\?xml[^?]*\?>\s*/i, '');
-  const doc = libxmljs.parseXml(stripped);
-  const schema = getSchema();
-
-  const valid = doc.validate(schema);
-  if (valid) {
+  // Write XML to a temp file — xmllint requires a file path, not stdin, for --schema
+  const tmpFile = path.join(os.tmpdir(), `sri-validate-${process.pid}-${Date.now()}.xml`);
+  try {
+    fs.writeFileSync(tmpFile, xmlString, 'utf8');
+    execFileSync('xmllint', ['--noout', '--schema', XSD_PATH, tmpFile], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
     return { valid: true };
+  } catch (err) {
+    // xmllint writes validation errors to stderr; exit code is non-zero on failure
+    const stderr = err.stderr ? err.stderr.toString().trim() : err.message;
+    const errors = stderr
+      .split('\n')
+      .filter((line) => line.includes('error') || line.includes('invalid'))
+      .map((line) => ({ message: line.trim() }));
+    return { valid: false, errors: errors.length ? errors : [{ message: stderr }] };
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch (_) { /* ignore cleanup errors */ }
   }
-
-  const errors = doc.validationErrors.map((e) => ({ message: e.message.trim() }));
-  return { valid: false, errors };
 }
 
 module.exports = { validate };

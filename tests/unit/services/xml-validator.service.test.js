@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 
-// Use the real libxmljs2 and real XSD for these tests
+// Uses the real xmllint CLI and real XSD for these tests
 const xmlValidator = require('../../../src/services/xml-validator.service');
 
 const ASSETS_DIR = path.join(__dirname, '../../../assets');
@@ -27,8 +27,7 @@ describe('XmlValidatorService', () => {
     expect(result.errors[0]).toHaveProperty('message');
   });
 
-  test('validate strips XML declaration before validating', () => {
-    // Should not throw on XML with declaration
+  test('validate handles XML with declaration without throwing', () => {
     const xmlWithDecl = '<?xml version="1.0" encoding="UTF-8"?><factura><unexpected/></factura>';
     const result = xmlValidator.validate(xmlWithDecl);
     expect(result).toHaveProperty('valid');
