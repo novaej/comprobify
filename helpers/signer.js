@@ -209,7 +209,7 @@ const sign = (p12Path, p12Password, xmlString = '') => {
     xmlString = xmlString.replace(/\t|\r/g, '');
 
     const sha1_xml = sha1ToBase64(
-        xmlString.replace('<?xml version="1.0" encoding="UTF-8"?>', ''),
+        xmlString.replace(/^<\?xml[^?]*\?>\s*/, ''),
         'utf8'
     );
 
@@ -347,10 +347,12 @@ const sign = (p12Path, p12Password, xmlString = '') => {
     const md = forge.md.sha1.create();
     md.update(canonicalized_SignedInfo, 'utf8');
 
-    // sign() returns raw bytes; encode as Base64 wrapped at 76 chars
-    const signature = btoa(key.sign(md)
+    // Base64-encode the raw signature bytes first, then wrap the base64 string
+    // at 76 chars. Wrapping must happen on the base64 string, not on the binary.
+    const signature = Buffer.from(key.sign(md), 'binary')
+        .toString('base64')
         .match(/.{1,76}/g)
-        .join('\n'));
+        .join('\n');
 
     // --- Step 11: Assemble the full <ds:Signature> block ---
     let xadesBes = '';

@@ -68,6 +68,16 @@ async function create(body) {
     const builder = getBuilder(DOCUMENT_TYPE_INVOICE, issuer);
     const unsignedXml = builder.build({ ...body, issueDate }, accessKey, sequential);
 
+    // Validate that payments sum matches the calculated invoice total
+    const paymentsTotal = parseFloat(
+      body.payments.reduce((sum, p) => sum + parseFloat(p.total), 0).toFixed(2)
+    );
+    if (paymentsTotal !== parseFloat(builder.total)) {
+      throw new ValidationError([
+        `payments total (${paymentsTotal.toFixed(2)}) does not match invoice total (${builder.total})`,
+      ]);
+    }
+
     // Validate against XSD — throws ValidationError if invalid, rolls back transaction
     const xsdResult = xmlValidator.validate(unsignedXml);
     if (!xsdResult.valid) {
@@ -231,7 +241,7 @@ async function checkAuthorization(accessKey) {
   return formatDocument(updated);
 }
 
-async function rebuild(accessKey, body) {
+async function resign(accessKey) {
   const document = await documentModel.findByAccessKey(accessKey);
   if (!document) {
     throw new NotFoundError('Document');
@@ -245,36 +255,11 @@ async function rebuild(accessKey, body) {
   }
 
   const issuer = await issuerModel.findById(document.issuer_id);
+  const signedXml = signingService.signXml(document.unsigned_xml, issuer.cert_path, issuer.cert_password_enc);
 
-  // issueDate is encoded in the access key — it cannot change on rebuild
-  const storedIssueDate = moment(document.issue_date).format('DD/MM/YYYY');
-  if (body && body.issueDate && body.issueDate !== storedIssueDate) {
-    throw new AppError(
-      `issueDate cannot be changed on rebuild (access key encodes ${storedIssueDate}).`,
-      400
-    );
-  }
+  const updated = await documentModel.updateStatus(document.id, DocumentStatus.SIGNED, { signed_xml: signedXml });
 
-  const resolvedBody = body || document.request_payload;
-
-  const builder = getBuilder(document.document_type, issuer);
-  const unsignedXml = builder.build({ ...resolvedBody, issueDate: storedIssueDate }, document.access_key, document.sequential);
-
-  const xsdResult = xmlValidator.validate(unsignedXml);
-  if (!xsdResult.valid) {
-    throw new ValidationError(xsdResult.errors);
-  }
-
-  const signedXml = signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc);
-
-  const extraFields = { unsigned_xml: unsignedXml, signed_xml: signedXml, subtotal: builder.subtotal, total: builder.total };
-  if (body) {
-    extraFields.request_payload = JSON.stringify(body);
-  }
-
-  const updated = await documentModel.updateStatus(document.id, DocumentStatus.SIGNED, extraFields);
-
-  await documentEventModel.create(document.id, EventType.REBUILT, document.status, DocumentStatus.SIGNED, {});
+  await documentEventModel.create(document.id, EventType.RESIGNED, document.status, DocumentStatus.SIGNED, {});
 
   return formatDocument(updated);
 }
@@ -291,4 +276,4 @@ function formatDocument(doc) {
   };
 }
 
-module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild };
+module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, resign };
