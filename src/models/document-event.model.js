@@ -1,7 +1,8 @@
 const db = require('../config/database');
 
-async function create(documentId, eventType, fromStatus, toStatus, detail) {
-  const { rows } = await db.query(
+async function create(documentId, eventType, fromStatus, toStatus, detail, client) {
+  const q = client || db;
+  const { rows } = await q.query(
     `INSERT INTO document_events (document_id, event_type, from_status, to_status, detail)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,

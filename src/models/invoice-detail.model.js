@@ -1,8 +1,9 @@
 const db = require('../config/database');
 
-async function bulkCreate(documentId, items) {
+async function bulkCreate(documentId, items, client) {
   if (!items || items.length === 0) return [];
 
+  const q = client || db;
   const rows = [];
   for (const item of items) {
     const quantity = parseFloat(item.quantity);
@@ -12,7 +13,7 @@ async function bulkCreate(documentId, items) {
     const taxTotal = item.taxes.reduce((sum, t) => sum + parseFloat(t.value), 0);
     const lineTotal = subtotal + taxTotal;
 
-    const { rows: inserted } = await db.query(
+    const { rows: inserted } = await q.query(
       `INSERT INTO invoice_details
         (document_id, main_code, aux_code, description, quantity, unit_price, discount, subtotal, taxes, line_total)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)

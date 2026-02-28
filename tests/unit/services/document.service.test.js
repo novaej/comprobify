@@ -9,6 +9,17 @@ jest.mock('../../../src/services/signing.service');
 jest.mock('../../../src/services/xml-validator.service');
 jest.mock('../../../src/builders');
 
+// Mock the database module so the service can obtain a transaction client
+const mockClient = {
+  query: jest.fn().mockResolvedValue({}),
+  release: jest.fn(),
+};
+jest.mock('../../../src/config/database', () => ({
+  query: jest.fn(),
+  getClient: jest.fn(),
+}));
+
+const db = require('../../../src/config/database');
 const issuerModel = require('../../../src/models/issuer.model');
 const documentModel = require('../../../src/models/document.model');
 const invoiceDetailModel = require('../../../src/models/invoice-detail.model');
@@ -53,6 +64,10 @@ const validBody = {
 describe('DocumentService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+
+    db.getClient.mockResolvedValue(mockClient);
+    mockClient.query.mockResolvedValue({});
+
     issuerModel.findFirst.mockResolvedValue(mockIssuer);
     sequentialService.getNext.mockResolvedValue(263);
     accessKeyService.generate.mockResolvedValue('2602202601171234567800110010010000002630000026311');
@@ -83,7 +98,8 @@ describe('DocumentService', () => {
     const result = await documentService.create(validBody);
 
     expect(issuerModel.findFirst).toHaveBeenCalled();
-    expect(sequentialService.getNext).toHaveBeenCalledWith(1, '001', '001', '01');
+    // sequential is now called with the transaction client as the 5th argument
+    expect(sequentialService.getNext).toHaveBeenCalledWith(1, '001', '001', '01', mockClient);
     expect(accessKeyService.generate).toHaveBeenCalled();
     expect(builders.getBuilder).toHaveBeenCalledWith('01', mockIssuer);
     expect(signingService.signXml).toHaveBeenCalledWith(
@@ -95,6 +111,23 @@ describe('DocumentService', () => {
     expect(result.status).toBe('SIGNED');
     expect(result.accessKey).toBeDefined();
     expect(result.sequential).toBe('000000263');
+  });
+
+  test('create commits the transaction on success', async () => {
+    await documentService.create(validBody);
+    expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+    expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+    expect(mockClient.release).toHaveBeenCalled();
+  });
+
+  test('create rolls back the transaction and releases client on error', async () => {
+    xmlValidator.validate.mockReturnValue({
+      valid: false,
+      errors: [{ message: 'Element infoFactura is not valid' }],
+    });
+    await expect(documentService.create(validBody)).rejects.toMatchObject({ statusCode: 400 });
+    expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(mockClient.release).toHaveBeenCalled();
   });
 
   test('create throws when no issuer configured', async () => {
@@ -115,8 +148,10 @@ describe('DocumentService', () => {
 
   test('create persists invoice_details and logs CREATED event', async () => {
     await documentService.create(validBody);
-    expect(invoiceDetailModel.bulkCreate).toHaveBeenCalledWith(1, validBody.items);
-    expect(documentEventModel.create).toHaveBeenCalledWith(1, 'CREATED', null, 'SIGNED', expect.any(Object));
+    expect(invoiceDetailModel.bulkCreate).toHaveBeenCalledWith(1, validBody.items, mockClient);
+    expect(documentEventModel.create).toHaveBeenCalledWith(
+      1, 'CREATED', null, 'SIGNED', expect.any(Object), mockClient
+    );
   });
 
   test('getByAccessKey returns formatted document', async () => {
