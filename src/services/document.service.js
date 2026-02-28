@@ -16,6 +16,7 @@ const NotFoundError = require('../errors/not-found-error');
 const ValidationError = require('../errors/validation-error');
 const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
+const OperationType = require('../constants/operation-type');
 
 const DOCUMENT_TYPE_INVOICE = '01';
 
@@ -151,7 +152,7 @@ async function sendToSri(accessKey) {
   const sriResponseModel = require('../models/sri-response.model');
   await sriResponseModel.create({
     documentId: document.id,
-    operationType: 'RECEPTION',
+    operationType: OperationType.RECEPTION,
     status: result.status,
     messages: result.messages,
     rawResponse: result.rawResponse,
@@ -192,7 +193,7 @@ async function checkAuthorization(accessKey) {
   const sriResponseModel = require('../models/sri-response.model');
   await sriResponseModel.create({
     documentId: document.id,
-    operationType: 'AUTHORIZATION',
+    operationType: OperationType.AUTHORIZATION,
     status: result.status,
     messages: result.messages,
     rawResponse: result.rawResponse,
