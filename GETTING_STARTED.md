@@ -115,7 +115,7 @@ npm install
 npm run migrate
 ```
 
-This creates all 10 tables: `issuers`, `documents`, `sequential_numbers`, `sri_responses`, `document_events`, `invoice_details`, `clients`, `products`, and the catalog tables.
+This creates all tables: `issuers`, `documents`, `sequential_numbers`, `sri_responses`, `document_events`, `invoice_details`, `clients`, `products`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`).
 
 ---
 
