@@ -1,4 +1,15 @@
 const { validationResult } = require('express-validator');
+
+jest.mock('../../../src/models/catalog.model', () => ({
+  isValidIdType:       jest.fn(async (v) => ['04', '05', '06', '07', '08'].includes(v)),
+  isValidTaxType:      jest.fn(async (v) => ['2', '3', '5'].includes(v)),
+  isValidTaxRate:      jest.fn(async (taxCode, rateCode) => {
+    const valid = { '2': ['0', '2', '3', '6', '7'], '3': ['3051'], '5': ['5001'] };
+    return valid[taxCode]?.includes(rateCode) ?? false;
+  }),
+  isValidPaymentMethod: jest.fn(async (v) => ['01','15','16','17','18','19','20','21'].includes(v)),
+}));
+
 const { createInvoice } = require('../../../src/validators/invoice.validator');
 
 async function runValidation(body) {
@@ -96,5 +107,31 @@ describe('Invoice Validator', () => {
     }];
     const result = await runValidation({ ...validBody, items });
     expect(result.isEmpty()).toBe(false);
+  });
+
+  test('rejects unknown buyer idType', async () => {
+    const body = { ...validBody, buyer: { ...validBody.buyer, idType: '99' } };
+    const result = await runValidation(body);
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'buyer.idType')).toBe(true);
+  });
+
+  test('rejects unknown tax code', async () => {
+    const items = [{ ...validBody.items[0], taxes: [{ ...validBody.items[0].taxes[0], code: '9' }] }];
+    const result = await runValidation({ ...validBody, items });
+    expect(result.isEmpty()).toBe(false);
+  });
+
+  test('rejects invalid rateCode for tax code', async () => {
+    const items = [{ ...validBody.items[0], taxes: [{ ...validBody.items[0].taxes[0], rateCode: '99' }] }];
+    const result = await runValidation({ ...validBody, items });
+    expect(result.isEmpty()).toBe(false);
+  });
+
+  test('rejects unknown payment method', async () => {
+    const payments = [{ method: '99', total: '100.00' }];
+    const result = await runValidation({ ...validBody, payments });
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'payments[0].method')).toBe(true);
   });
 });

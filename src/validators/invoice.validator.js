@@ -1,4 +1,5 @@
 const { body } = require('express-validator');
+const catalog = require('../models/catalog.model');
 
 const createInvoice = [
   body('issueDate')
@@ -10,7 +11,12 @@ const createInvoice = [
   body('buyer.idType')
     .isLength({ min: 2, max: 2 })
     .isNumeric()
-    .withMessage('Buyer idType must be 2 digits'),
+    .withMessage('Buyer idType must be 2 digits')
+    .custom(async (value) => {
+      if (!(await catalog.isValidIdType(value))) {
+        throw new Error(`Invalid buyer idType: ${value}`);
+      }
+    }),
   body('buyer.id')
     .notEmpty()
     .isLength({ max: 20 })
@@ -51,10 +57,25 @@ const createInvoice = [
     .withMessage('At least one tax per item is required'),
   body('items.*.taxes.*.code')
     .notEmpty()
-    .withMessage('Tax code is required'),
+    .withMessage('Tax code is required')
+    .custom(async (value) => {
+      if (!(await catalog.isValidTaxType(value))) {
+        throw new Error(`Invalid tax code: ${value}`);
+      }
+    }),
   body('items.*.taxes.*.rateCode')
     .notEmpty()
     .withMessage('Tax rateCode is required'),
+
+  // Validate code+rateCode pair together on the tax object
+  body('items.*.taxes.*')
+    .custom(async (tax) => {
+      if (tax.code && tax.rateCode) {
+        if (!(await catalog.isValidTaxRate(tax.code, tax.rateCode))) {
+          throw new Error(`Invalid rateCode "${tax.rateCode}" for tax code "${tax.code}"`);
+        }
+      }
+    }),
   body('items.*.taxes.*.rate')
     .notEmpty()
     .isNumeric()
@@ -74,7 +95,12 @@ const createInvoice = [
   body('payments.*.method')
     .notEmpty()
     .isLength({ min: 2, max: 2 })
-    .withMessage('Payment method must be 2 digits'),
+    .withMessage('Payment method must be 2 digits')
+    .custom(async (value) => {
+      if (!(await catalog.isValidPaymentMethod(value))) {
+        throw new Error(`Invalid payment method: ${value}`);
+      }
+    }),
   body('payments.*.total')
     .notEmpty()
     .isNumeric()
