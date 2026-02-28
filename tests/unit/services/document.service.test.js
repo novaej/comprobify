@@ -185,7 +185,7 @@ describe('DocumentService', () => {
       .rejects.toThrow('Cannot send document with status AUTHORIZED');
   });
 
-  test('checkAuthorization rejects when status is not RECEIVED', async () => {
+  test('checkAuthorization rejects when status is not RECEIVED or NOT_AUTHORIZED', async () => {
     documentModel.findByAccessKey.mockResolvedValue({
       id: 1,
       status: 'SIGNED',

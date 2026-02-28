@@ -173,8 +173,12 @@ async function checkAuthorization(accessKey) {
   if (!document) {
     throw new NotFoundError('Document');
   }
-  if (document.status !== DocumentStatus.RECEIVED) {
-    throw new AppError(`Cannot check authorization for document with status ${document.status}. Must be ${DocumentStatus.RECEIVED}.`, 400);
+  const checkableStatuses = [DocumentStatus.RECEIVED, DocumentStatus.NOT_AUTHORIZED];
+  if (!checkableStatuses.includes(document.status)) {
+    throw new AppError(
+      `Cannot check authorization for document with status ${document.status}. Must be ${checkableStatuses.join(' or ')}.`,
+      400
+    );
   }
 
   const issuer = await issuerModel.findById(document.issuer_id);
