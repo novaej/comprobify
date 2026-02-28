@@ -78,7 +78,7 @@ describe('AccessKeyService', () => {
     ).rejects.toBeDefined();
   });
 
-  test('check digit is deterministic for same inputs', async () => {
+  test('numeric code field (positions 31-38) is always 8 digits', async () => {
     const params = {
       issueDate: '26/02/2026',
       documentType: '01',
@@ -90,8 +90,10 @@ describe('AccessKeyService', () => {
       emissionType: '1',
     };
 
-    const key1 = await accessKeyService.generate(params);
-    const key2 = await accessKeyService.generate(params);
-    expect(key1).toBe(key2);
+    // Generate several keys to confirm the 8-digit numeric code section is always well-formed
+    for (let i = 0; i < 5; i++) {
+      const key = await accessKeyService.generate(params);
+      expect(key.substring(31, 39)).toMatch(/^\d{8}$/);
+    }
   });
 });

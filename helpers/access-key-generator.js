@@ -37,12 +37,9 @@ const generateModule11Digit = (accessKey = '', factor = 2) => {
     let sum = 0;
 
     for (let i = digits.length - 1; i >= 0; i--) {
-        if (currentFactor <= 7) {
-            sum += digits[i] * currentFactor;
-            currentFactor++;
-        } else {
-            currentFactor = factor;
-        }
+        if (currentFactor > 7) currentFactor = factor;
+        sum += parseInt(digits[i]) * currentFactor;
+        currentFactor++;
     }
 
     const mod11 = sum % 11;

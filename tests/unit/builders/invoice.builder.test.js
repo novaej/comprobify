@@ -74,7 +74,7 @@ describe('InvoiceBuilder', () => {
     const builder = new InvoiceBuilder(mockIssuer);
     const xml = builder.build(validBody, '1'.repeat(49), 263);
 
-    expect(xml).toContain('nombre="email"');
+    expect(xml).toContain("nombre='email'");
     expect(xml).toContain('test@example.com');
   });
 

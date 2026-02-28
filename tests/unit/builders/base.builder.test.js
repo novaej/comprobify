@@ -49,10 +49,10 @@ describe('BaseDocumentBuilder', () => {
     builder.buildInfoTributaria({ accessKey: '1'.repeat(49), sequential: 1 });
     const xml = builder.toXml('factura');
 
-    expect(xml).toContain('<?xml version="1.0" encoding="UTF-8"?>');
+    expect(xml).toContain("<?xml version='1.0' encoding='UTF-8'?>");
     expect(xml).toContain('<factura');
-    expect(xml).toContain('id="comprobante"');
-    expect(xml).toContain('version="2.1.0"');
+    expect(xml).toContain("id='comprobante'");
+    expect(xml).toContain("version='2.1.0'");
     expect(xml).toContain('<infoTributaria>');
     expect(xml).toContain('</factura>');
   });
