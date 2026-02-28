@@ -14,6 +14,8 @@ const { getBuilder } = require('../builders');
 const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const ValidationError = require('../errors/validation-error');
+const DocumentStatus = require('../constants/document-status');
+const EventType = require('../constants/event-type');
 
 const DOCUMENT_TYPE_INVOICE = '01';
 
@@ -82,7 +84,7 @@ async function create(body) {
       branchCode: issuer.branch_code,
       issuePointCode: issuer.issue_point_code,
       issueDate: moment(issueDate, 'DD/MM/YYYY').toDate(),
-      status: 'SIGNED',
+      status: DocumentStatus.SIGNED,
       unsignedXml,
       signedXml,
       buyerId: body.buyer.id,
@@ -97,7 +99,7 @@ async function create(body) {
     await invoiceDetailModel.bulkCreate(document.id, body.items, client);
 
     // Log audit event within the same transaction
-    await documentEventModel.create(document.id, 'CREATED', null, 'SIGNED', {
+    await documentEventModel.create(document.id, EventType.CREATED, null, DocumentStatus.SIGNED, {
       accessKey,
       sequential,
     }, client);
@@ -129,8 +131,8 @@ async function sendToSri(accessKey) {
   if (!document) {
     throw new NotFoundError('Document');
   }
-  if (document.status !== 'SIGNED') {
-    throw new AppError(`Cannot send document with status ${document.status}. Must be SIGNED.`, 400);
+  if (document.status !== DocumentStatus.SIGNED) {
+    throw new AppError(`Cannot send document with status ${document.status}. Must be ${DocumentStatus.SIGNED}.`, 400);
   }
 
   const issuer = await issuerModel.findById(document.issuer_id);
@@ -139,7 +141,7 @@ async function sendToSri(accessKey) {
   try {
     result = await sriService.sendReceipt(document.signed_xml, issuer.environment);
   } catch (err) {
-    await documentEventModel.create(document.id, 'ERROR', document.status, null, {
+    await documentEventModel.create(document.id, EventType.ERROR, document.status, null, {
       operation: 'SEND',
       message: err.message,
     });
@@ -155,10 +157,10 @@ async function sendToSri(accessKey) {
     rawResponse: result.rawResponse,
   });
 
-  const newStatus = result.status === 'RECIBIDA' ? 'RECEIVED' : 'RETURNED';
+  const newStatus = result.status === 'RECIBIDA' ? DocumentStatus.RECEIVED : DocumentStatus.RETURNED;
   const updated = await documentModel.updateStatus(document.id, newStatus);
 
-  await documentEventModel.create(document.id, 'SENT', document.status, newStatus, {
+  await documentEventModel.create(document.id, EventType.SENT, document.status, newStatus, {
     sriStatus: result.status,
   });
 
@@ -170,8 +172,8 @@ async function checkAuthorization(accessKey) {
   if (!document) {
     throw new NotFoundError('Document');
   }
-  if (document.status !== 'RECEIVED') {
-    throw new AppError(`Cannot check authorization for document with status ${document.status}. Must be RECEIVED.`, 400);
+  if (document.status !== DocumentStatus.RECEIVED) {
+    throw new AppError(`Cannot check authorization for document with status ${document.status}. Must be ${DocumentStatus.RECEIVED}.`, 400);
   }
 
   const issuer = await issuerModel.findById(document.issuer_id);
@@ -180,7 +182,7 @@ async function checkAuthorization(accessKey) {
   try {
     result = await sriService.checkAuthorization(accessKey, issuer.environment);
   } catch (err) {
-    await documentEventModel.create(document.id, 'ERROR', document.status, null, {
+    await documentEventModel.create(document.id, EventType.ERROR, document.status, null, {
       operation: 'AUTHORIZE',
       message: err.message,
     });
@@ -196,7 +198,7 @@ async function checkAuthorization(accessKey) {
     rawResponse: result.rawResponse,
   });
 
-  const newStatus = result.status === 'AUTORIZADO' ? 'AUTHORIZED' : 'NOT_AUTHORIZED';
+  const newStatus = result.status === 'AUTORIZADO' ? DocumentStatus.AUTHORIZED : DocumentStatus.NOT_AUTHORIZED;
   const extraFields = {};
 
   if (result.authorizationNumber) {
@@ -211,7 +213,7 @@ async function checkAuthorization(accessKey) {
 
   const updated = await documentModel.updateStatus(document.id, newStatus, extraFields);
 
-  await documentEventModel.create(document.id, 'STATUS_CHANGED', document.status, newStatus, {
+  await documentEventModel.create(document.id, EventType.STATUS_CHANGED, document.status, newStatus, {
     sriStatus: result.status,
     authorizationNumber: result.authorizationNumber || null,
   });

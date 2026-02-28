@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const DocumentStatus = require('../constants/document-status');
 
 async function create({ issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload }, client) {
   const q = client || db;
@@ -7,7 +8,7 @@ async function create({ issuerId, documentType, accessKey, sequential, branchCod
       (issuer_id, document_type, access_key, sequential, branch_code, issue_point_code, issue_date, status, unsigned_xml, signed_xml, buyer_id, buyer_name, buyer_id_type, subtotal, total, request_payload)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      RETURNING *`,
-    [issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status || 'SIGNED', unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload ? JSON.stringify(requestPayload) : null]
+    [issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status || DocumentStatus.SIGNED, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload ? JSON.stringify(requestPayload) : null]
   );
   return rows[0];
 }
