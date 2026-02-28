@@ -2,6 +2,21 @@
 
 Features deferred from the SRI gap analysis. Implement when the core lifecycle is stable and in production.
 
+## Idempotency Key
+
+Submitting the same request body twice creates two separate invoices — each gets a new sequential and access key. There is currently no duplicate detection on content.
+
+To prevent this, callers should send a unique idempotency key per intended invoice (e.g. their internal order ID). The API would:
+
+- Accept an `Idempotency-Key` header (or `idempotencyKey` body field)
+- Store it in a dedicated `idempotency_key` column on `documents` (with a UNIQUE constraint)
+- On a duplicate key: return the existing document with `200` instead of creating a new one
+- On a key conflict with a different payload: return `409 Conflict`
+
+This is especially important before enabling the async queue, where retries could otherwise produce duplicate invoices.
+
+---
+
 ## Authentication & Authorization
 
 - API key or JWT authentication middleware
