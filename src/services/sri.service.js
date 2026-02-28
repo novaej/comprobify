@@ -54,18 +54,25 @@ function extractAllTags(xml, tag) {
   return results;
 }
 
-function parseMessages(messagesXml) {
-  const messages = [];
-  const messageBlocks = extractAllTags(messagesXml, 'mensaje');
-  for (const block of messageBlocks) {
-    messages.push({
-      identifier: extractTagContent(block, 'identificador'),
-      message: extractTagContent(block, 'mensaje'),
-      additionalInfo: extractTagContent(block, 'informacionAdicional'),
-      type: extractTagContent(block, 'tipo'),
-    });
-  }
-  return messages;
+function parseMessages(xml) {
+  const mensajesBlock = extractTagContent(xml, 'mensajes');
+  if (!mensajesBlock) return [];
+
+  const pick = (tag) =>
+    [...mensajesBlock.matchAll(new RegExp(`<${tag}>([^<]*)</${tag}>`, 'g'))]
+      .map((m) => m[1].trim() || null);
+
+  const identifiers     = pick('identificador');
+  const msgs            = pick('mensaje');
+  const additionalInfos = pick('informacionAdicional');
+  const types           = pick('tipo');
+
+  return identifiers.map((id, i) => ({
+    identifier:     id,
+    message:        msgs[i]             ?? null,
+    additionalInfo: additionalInfos[i]  ?? null,
+    type:           types[i]            ?? null,
+  }));
 }
 
 function getSriUrls(environment) {
@@ -125,6 +132,7 @@ async function checkAuthorization(accessKey, environment) {
     throw new SriError(`SRI authorization service returned HTTP ${response.status}`, []);
   }
 
+  const numeroComprobantes = extractTagContent(rawResponse, 'numeroComprobantes');
   const estado = extractTagContent(rawResponse, 'estado');
   const numeroAutorizacion = extractTagContent(rawResponse, 'numeroAutorizacion');
   const fechaAutorizacion = extractTagContent(rawResponse, 'fechaAutorizacion');
@@ -132,6 +140,7 @@ async function checkAuthorization(accessKey, environment) {
   const messages = parseMessages(rawResponse);
 
   return {
+    pending: numeroComprobantes === '0',
     status: estado,
     authorizationNumber: numeroAutorizacion,
     authorizationDate: fechaAutorizacion,

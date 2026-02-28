@@ -17,12 +17,13 @@ class InvoiceBuilder extends BaseDocumentBuilder {
       subtotal += itemTotal;
 
       for (const tax of item.taxes) {
+        const taxValue = itemTotal * (parseFloat(tax.rate) / 100);
         const key = `${tax.code}-${tax.rateCode}`;
         if (!taxTotals[key]) {
           taxTotals[key] = { codigo: tax.code, codigoPorcentaje: tax.rateCode, baseImponible: 0, valor: 0 };
         }
-        taxTotals[key].baseImponible += parseFloat(tax.taxBase);
-        taxTotals[key].valor += parseFloat(tax.value);
+        taxTotals[key].baseImponible += itemTotal;
+        taxTotals[key].valor += taxValue;
       }
     }
 
@@ -79,13 +80,16 @@ class InvoiceBuilder extends BaseDocumentBuilder {
           descuento: item.discount || '0.00',
           precioTotalSinImpuesto: itemTotal.toFixed(2),
           impuestos: {
-            impuesto: item.taxes.map((tax) => ({
-              codigo: tax.code,
-              codigoPorcentaje: tax.rateCode,
-              tarifa: tax.rate,
-              baseImponible: tax.taxBase,
-              valor: tax.value,
-            })),
+            impuesto: item.taxes.map((tax) => {
+              const taxValue = itemTotal * (parseFloat(tax.rate) / 100);
+              return {
+                codigo: tax.code,
+                codigoPorcentaje: tax.rateCode,
+                tarifa: tax.rate,
+                baseImponible: itemTotal.toFixed(2),
+                valor: taxValue.toFixed(2),
+              };
+            }),
           },
         };
       }),

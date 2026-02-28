@@ -80,14 +80,6 @@ const createInvoice = [
     .notEmpty()
     .isNumeric()
     .withMessage('Tax rate must be numeric'),
-  body('items.*.taxes.*.taxBase')
-    .notEmpty()
-    .isNumeric()
-    .withMessage('Tax base must be numeric'),
-  body('items.*.taxes.*.value')
-    .notEmpty()
-    .isNumeric()
-    .withMessage('Tax value must be numeric'),
 
   body('payments')
     .isArray({ min: 1 })

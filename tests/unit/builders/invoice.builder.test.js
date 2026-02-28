@@ -23,7 +23,7 @@ const validBody = {
     quantity: '1.000000',
     unitPrice: '1428.570000',
     discount: '0.00',
-    taxes: [{ code: '2', rateCode: '2', rate: '12.00', taxBase: '1428.57', value: '171.43' }],
+    taxes: [{ code: '2', rateCode: '2', rate: '12.00' }],
   }],
   payments: [{ method: '20', total: '1600.00' }],
   additionalInfo: [{ name: 'email', value: 'test@example.com' }],
@@ -97,7 +97,7 @@ describe('InvoiceBuilder', () => {
           quantity: '2.000000',
           unitPrice: '500.000000',
           discount: '0.00',
-          taxes: [{ code: '2', rateCode: '2', rate: '12.00', taxBase: '1000.00', value: '120.00' }],
+          taxes: [{ code: '2', rateCode: '2', rate: '12.00' }],
         },
       ],
     };

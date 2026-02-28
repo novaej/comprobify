@@ -17,6 +17,7 @@ const ValidationError = require('../errors/validation-error');
 const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
 const OperationType = require('../constants/operation-type');
+const SriErrorCodes = require('../constants/sri-error-codes');
 
 const DOCUMENT_TYPE_INVOICE = '01';
 
@@ -173,10 +174,9 @@ async function checkAuthorization(accessKey) {
   if (!document) {
     throw new NotFoundError('Document');
   }
-  const checkableStatuses = [DocumentStatus.RECEIVED, DocumentStatus.NOT_AUTHORIZED];
-  if (!checkableStatuses.includes(document.status)) {
+  if (document.status !== DocumentStatus.RECEIVED) {
     throw new AppError(
-      `Cannot check authorization for document with status ${document.status}. Must be ${checkableStatuses.join(' or ')}.`,
+      `Cannot check authorization for document with status ${document.status}. Must be ${DocumentStatus.RECEIVED}.`,
       400
     );
   }
@@ -203,6 +203,10 @@ async function checkAuthorization(accessKey) {
     rawResponse: result.rawResponse,
   });
 
+  if (result.pending) {
+    return formatDocument(document);
+  }
+
   const newStatus = result.status === 'AUTORIZADO' ? DocumentStatus.AUTHORIZED : DocumentStatus.NOT_AUTHORIZED;
   const statusChanged = newStatus !== document.status;
 
@@ -210,9 +214,11 @@ async function checkAuthorization(accessKey) {
 
   if (statusChanged) {
     const extraFields = {};
-    if (result.authorizationNumber) extraFields.authorization_number = result.authorizationNumber;
-    if (result.authorizationDate)   extraFields.authorization_date   = result.authorizationDate;
-    if (result.authorizationXml)    extraFields.authorization_xml    = result.authorizationXml;
+    if (newStatus === DocumentStatus.AUTHORIZED) {
+      if (result.authorizationNumber) extraFields.authorization_number = result.authorizationNumber;
+      if (result.authorizationDate)   extraFields.authorization_date   = result.authorizationDate;
+      if (result.authorizationXml)    extraFields.authorization_xml    = result.authorizationXml;
+    }
 
     updated = await documentModel.updateStatus(document.id, newStatus, extraFields);
 
@@ -221,6 +227,54 @@ async function checkAuthorization(accessKey) {
       authorizationNumber: result.authorizationNumber || null,
     });
   }
+
+  return formatDocument(updated);
+}
+
+async function rebuild(accessKey, body) {
+  const document = await documentModel.findByAccessKey(accessKey);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+  const rebuildableStatuses = [DocumentStatus.RETURNED, DocumentStatus.NOT_AUTHORIZED];
+  if (!rebuildableStatuses.includes(document.status)) {
+    throw new AppError(
+      `Cannot rebuild document with status ${document.status}. Must be ${rebuildableStatuses.join(' or ')}.`,
+      400
+    );
+  }
+
+  const issuer = await issuerModel.findById(document.issuer_id);
+
+  // issueDate is encoded in the access key — it cannot change on rebuild
+  const storedIssueDate = moment(document.issue_date).format('DD/MM/YYYY');
+  if (body && body.issueDate && body.issueDate !== storedIssueDate) {
+    throw new AppError(
+      `issueDate cannot be changed on rebuild (access key encodes ${storedIssueDate}).`,
+      400
+    );
+  }
+
+  const resolvedBody = body || document.request_payload;
+
+  const builder = getBuilder(document.document_type, issuer);
+  const unsignedXml = builder.build({ ...resolvedBody, issueDate: storedIssueDate }, document.access_key, document.sequential);
+
+  const xsdResult = xmlValidator.validate(unsignedXml);
+  if (!xsdResult.valid) {
+    throw new ValidationError(xsdResult.errors);
+  }
+
+  const signedXml = signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc);
+
+  const extraFields = { unsigned_xml: unsignedXml, signed_xml: signedXml, subtotal: builder.subtotal, total: builder.total };
+  if (body) {
+    extraFields.request_payload = JSON.stringify(body);
+  }
+
+  const updated = await documentModel.updateStatus(document.id, DocumentStatus.SIGNED, extraFields);
+
+  await documentEventModel.create(document.id, EventType.REBUILT, document.status, DocumentStatus.SIGNED, {});
 
   return formatDocument(updated);
 }
@@ -237,4 +291,4 @@ function formatDocument(doc) {
   };
 }
 
-module.exports = { create, getByAccessKey, sendToSri, checkAuthorization };
+module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild };
