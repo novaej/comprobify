@@ -33,6 +33,7 @@ class InvoiceBuilder extends BaseDocumentBuilder {
     this.data.infoFactura = {
       fechaEmision: issueDate,
       ...(this.issuer.branch_address && { dirEstablecimiento: this.issuer.branch_address }),
+      ...(this.issuer.special_taxpayer && { contribuyenteEspecial: this.issuer.special_taxpayer }),
       ...(this.issuer.required_accounting && { obligadoContabilidad: this.issuer.required_accounting }),
       tipoIdentificacionComprador: buyer.idType,
       razonSocialComprador: buyer.name,

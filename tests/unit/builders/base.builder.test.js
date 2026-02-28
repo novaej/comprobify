@@ -30,16 +30,18 @@ describe('BaseDocumentBuilder', () => {
     expect(info.ptoEmi).toBe('001');
     expect(info.secuencial).toBe('000000263');
     expect(info.dirMatriz).toBe('AV. QUITO');
-    expect(info.obligadoContabilidad).toBe('SI');
+    // obligadoContabilidad belongs in infoFactura per XSD — not infoTributaria
+    expect(info.obligadoContabilidad).toBeUndefined();
   });
 
   test('omits optional fields when not present', () => {
-    const issuer = { ...mockIssuer, trade_name: null, required_accounting: null };
+    const issuer = { ...mockIssuer, trade_name: null };
     const builder = new BaseDocumentBuilder(issuer, '01');
     builder.buildInfoTributaria({ accessKey: '1'.repeat(49), sequential: 1 });
 
     expect(builder.data.infoTributaria.nombreComercial).toBeUndefined();
-    expect(builder.data.infoTributaria.obligadoContabilidad).toBeUndefined();
+    expect(builder.data.infoTributaria.agenteRetencion).toBeUndefined();
+    expect(builder.data.infoTributaria.contribuyenteRimpe).toBeUndefined();
   });
 
   test('toXml generates valid XML with attributes', () => {

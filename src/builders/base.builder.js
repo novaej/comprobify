@@ -20,8 +20,8 @@ class BaseDocumentBuilder {
       ptoEmi: this.issuer.issue_point_code,
       secuencial: String(sequential).padStart(9, '0'),
       dirMatriz: this.issuer.main_address,
-      ...(this.issuer.special_taxpayer && { contribuyenteEspecial: this.issuer.special_taxpayer }),
-      ...(this.issuer.required_accounting && { obligadoContabilidad: this.issuer.required_accounting }),
+      ...(this.issuer.agent_retention && { agenteRetencion: this.issuer.agent_retention }),
+      ...(this.issuer.contribuyente_rimpe && { contribuyenteRimpe: this.issuer.contribuyente_rimpe }),
     };
     return this;
   }
