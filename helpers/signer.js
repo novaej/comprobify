@@ -195,7 +195,7 @@ const sign = (p12Path, p12Password, xmlString = '') => {
     // Compute SHA-1 digest of the DER-encoded certificate — goes into
     // XAdES SigningCertificate/CertDigest to bind the cert to the signature
     const certificateX509_asn1 = forge.pki.certificateToAsn1(certificate);
-    const certificateX509_der = forge.asn1.toDer(certificateX509_asn1).getBytes;
+    const certificateX509_der = forge.asn1.toDer(certificateX509_asn1).getBytes();
     const hash_certificateX509_der = sha1ToBase64(certificateX509_der);
     const certificateX509_serialNumber = parseInt(certificate.serialNumber, 16);
 
@@ -216,7 +216,7 @@ const sign = (p12Path, p12Password, xmlString = '') => {
     // Namespace declarations injected during "canonicalisation" — SRI's
     // approach approximates C14N by adding namespaces to the element being
     // digested rather than running a full C14N transform
-    const namespaces = 'xmnls:ds="http://wwww.w3.org/2000/09/xmldsig#" xmnls:etsi="http://uri.etsi.org/01903/v1.3.2#"';
+    const namespaces = 'xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:etsi="http://uri.etsi.org/01903/v1.3.2#"';
 
     // Generate unique numeric IDs for all signature sub-elements
     const certificateNumber       = getRandomNumber();
@@ -302,7 +302,7 @@ const sign = (p12Path, p12Password, xmlString = '') => {
     //   - #comprobante                  → the invoice XML body digest
     // SignedInfo itself is then RSA-SHA1 signed to produce SignatureValue.
     let signedInfo = '';
-    signedInfo += '<ds:SigendInfo Id="Signature-SignedInfo' + signedInfoNumber + '">';
+    signedInfo += '<ds:SignedInfo Id="Signature-SignedInfo' + signedInfoNumber + '">';
     signedInfo += '\n<ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315">';
     signedInfo += '</ds:CanonicalizationMethod>';
     signedInfo += '\n<ds:SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1">';
@@ -337,12 +337,12 @@ const sign = (p12Path, p12Password, xmlString = '') => {
     signedInfo += sha1_xml;
     signedInfo += '</ds:DigestValue>';
     signedInfo += '\n</ds:Reference>';
-    signedInfo += '\n</ds:SigendInfo>';
+    signedInfo += '\n</ds:SignedInfo>';
 
     // --- Step 10: RSA-SHA1 sign the canonicalised SignedInfo ---
     // Inject namespaces to simulate C14N, then hash with SHA-1 and sign
     // using the private key extracted from the P12 bag
-    const canonicalized_SignedInfo = signedInfo.replace('<ds:SigendInfo', '<ds:SigendInfo ' + namespaces);
+    const canonicalized_SignedInfo = signedInfo.replace('<ds:SignedInfo', '<ds:SignedInfo ' + namespaces);
 
     const md = forge.md.sha1.create();
     md.update(canonicalized_SignedInfo, 'utf8');
