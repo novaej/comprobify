@@ -7,6 +7,7 @@
     "start": "node app.js",
     "dev": "nodemon app.js",
     "migrate": "node db/migrate.js",
+    "db:reset": "NODE_ENV=development node db/reset.js",
     "seed:dev": "NODE_ENV=development node db/seeders/dev-issuer.js",
     "test": "jest",
     "test:unit": "jest tests/unit",

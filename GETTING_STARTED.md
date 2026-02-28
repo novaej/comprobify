@@ -154,6 +154,22 @@ A 404 response confirms the server is running and routing correctly.
 
 ---
 
+## Reset the database (dev only)
+
+To wipe all data and start fresh:
+
+```bash
+npm run db:reset
+```
+
+This drops and recreates the `public` schema, re-runs all migrations, and leaves the database empty. Re-run the seeder afterwards:
+
+```bash
+npm run seed:dev
+```
+
+---
+
 ## Troubleshooting
 
 **`ENCRYPTION_KEY must be a 64-character hex string`**
