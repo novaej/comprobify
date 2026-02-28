@@ -204,24 +204,23 @@ async function checkAuthorization(accessKey) {
   });
 
   const newStatus = result.status === 'AUTORIZADO' ? DocumentStatus.AUTHORIZED : DocumentStatus.NOT_AUTHORIZED;
-  const extraFields = {};
+  const statusChanged = newStatus !== document.status;
 
-  if (result.authorizationNumber) {
-    extraFields.authorization_number = result.authorizationNumber;
-  }
-  if (result.authorizationDate) {
-    extraFields.authorization_date = result.authorizationDate;
-  }
-  if (result.authorizationXml) {
-    extraFields.authorization_xml = result.authorizationXml;
-  }
+  let updated = document;
 
-  const updated = await documentModel.updateStatus(document.id, newStatus, extraFields);
+  if (statusChanged) {
+    const extraFields = {};
+    if (result.authorizationNumber) extraFields.authorization_number = result.authorizationNumber;
+    if (result.authorizationDate)   extraFields.authorization_date   = result.authorizationDate;
+    if (result.authorizationXml)    extraFields.authorization_xml    = result.authorizationXml;
 
-  await documentEventModel.create(document.id, EventType.STATUS_CHANGED, document.status, newStatus, {
-    sriStatus: result.status,
-    authorizationNumber: result.authorizationNumber || null,
-  });
+    updated = await documentModel.updateStatus(document.id, newStatus, extraFields);
+
+    await documentEventModel.create(document.id, EventType.STATUS_CHANGED, document.status, newStatus, {
+      sriStatus: result.status,
+      authorizationNumber: result.authorizationNumber || null,
+    });
+  }
 
   return formatDocument(updated);
 }
