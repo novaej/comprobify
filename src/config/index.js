@@ -11,7 +11,8 @@ const config = {
   },
   sri: {
     testBaseUrl: 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws',
-    prodBaseUrl: 'https://cel.sri.gob.ec/comprobantes-electronicos-ws',
+    // prodBaseUrl: 'https://cel.sri.gob.ec/comprobantes-electronicos-ws',
+    prodBaseUrl: '',
   },
 };
 
