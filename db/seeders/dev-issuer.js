@@ -8,9 +8,10 @@
  * Requires:
  *   - DB running and migrations applied (npm run migrate)
  *   - ENCRYPTION_KEY set in .env
- *   - cert/token.p12 present (or update CERT_PATH below)
- *   - CERT_PASSWORD env var set to your P12 plaintext password
- *     e.g.: CERT_PASSWORD=mypassword npm run seed:dev
+ *   - CERT_PASSWORD env var (P12 plaintext password)
+ *
+ * Issuer data is read from .env (DEV_ISSUER_* variables).
+ * See .example.env for the full list of configurable fields.
  */
 
 require('dotenv').config();
@@ -34,17 +35,17 @@ const pool = new Pool({
 });
 
 const DEV_ISSUER = {
-  ruc:                '1712345678001',
-  business_name:      'DEV COMPANY S.A.',
-  trade_name:         'DEV CO',
-  main_address:       'AV. AMAZONAS N39-123, QUITO',
-  branch_code:        '001',
-  issue_point_code:   '001',
-  environment:        '1',       // 1 = SRI test environment
-  emission_type:      '1',       // 1 = normal emission
-  required_accounting: 'SI',
-  branch_address:     'AV. AMAZONAS N39-123, QUITO',
-  cert_path:          'cert/token.p12',
+  ruc:                process.env.DEV_ISSUER_RUC            || '1700000000001',
+  business_name:      process.env.DEV_ISSUER_BUSINESS_NAME  || 'DEV COMPANY S.A.',
+  trade_name:         process.env.DEV_ISSUER_TRADE_NAME     || 'DEV CO',
+  main_address:       process.env.DEV_ISSUER_ADDRESS        || 'AV. AMAZONAS N39-123, QUITO',
+  branch_code:        process.env.DEV_ISSUER_BRANCH_CODE    || '001',
+  issue_point_code:   process.env.DEV_ISSUER_ISSUE_POINT    || '001',
+  environment:        process.env.DEV_ISSUER_ENVIRONMENT    || '1',   // 1 = SRI test, 2 = production
+  emission_type:      '1',
+  required_accounting: process.env.DEV_ISSUER_ACCOUNTING    || 'NO',
+  branch_address:     process.env.DEV_ISSUER_ADDRESS        || 'AV. AMAZONAS N39-123, QUITO',
+  cert_path:          process.env.DEV_ISSUER_CERT_PATH      || 'cert/token.p12',
 };
 
 async function seed() {

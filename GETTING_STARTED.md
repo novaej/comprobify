@@ -121,15 +121,15 @@ This creates all 10 tables: `issuers`, `documents`, `sequential_numbers`, `sri_r
 
 ## 8. Seed the development issuer
 
+Fill in the `DEV_ISSUER_*` variables in your `.env` file (copied from `.example.env` in step 3), then run:
+
 ```bash
-CERT_PASSWORD=your_p12_password npm run seed:dev
+npm run seed:dev
 ```
 
-This inserts a placeholder dev issuer (RUC `1712345678001`, SRI test environment) and encrypts the certificate password automatically. Safe to run multiple times — it upserts on RUC.
+This encrypts `CERT_PASSWORD` automatically and upserts the issuer row — safe to run multiple times.
 
-Edit `db/seeders/dev-issuer.js` to change the RUC, name, or address before running.
-
-> For production, insert the issuer directly via SQL with a real encrypted password (see `GETTING_STARTED.md` step 5 for how to encrypt it).
+> For production, insert the issuer directly via SQL with a real encrypted password (see step 5 for how to encrypt it).
 
 ---
 
