@@ -3,7 +3,7 @@ const EventType = Object.freeze({
   SENT:           'SENT',
   STATUS_CHANGED: 'STATUS_CHANGED',
   ERROR:          'ERROR',
-  RESIGNED:       'RESIGNED',
+  REBUILT:        'REBUILT',
 });
 
 module.exports = EventType;

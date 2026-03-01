@@ -241,7 +241,7 @@ async function checkAuthorization(accessKey) {
   return formatDocument(updated);
 }
 
-async function resign(accessKey) {
+async function rebuild(accessKey, body) {
   const document = await documentModel.findByAccessKey(accessKey);
   if (!document) {
     throw new NotFoundError('Document');
@@ -255,11 +255,42 @@ async function resign(accessKey) {
   }
 
   const issuer = await issuerModel.findById(document.issuer_id);
-  const signedXml = signingService.signXml(document.unsigned_xml, issuer.cert_path, issuer.cert_password_enc);
 
-  const updated = await documentModel.updateStatus(document.id, DocumentStatus.SIGNED, { signed_xml: signedXml });
+  // Preserve the original issue date, access key, and sequential — only the
+  // invoice content (taxes, items, buyer, payments) is corrected by the caller
+  const issueDate = moment(document.issue_date).format('DD/MM/YYYY');
 
-  await documentEventModel.create(document.id, EventType.RESIGNED, document.status, DocumentStatus.SIGNED, {});
+  const builder = getBuilder(DOCUMENT_TYPE_INVOICE, issuer);
+  const unsignedXml = builder.build({ ...body, issueDate }, document.access_key, document.sequential);
+
+  const paymentsTotal = parseFloat(
+    body.payments.reduce((sum, p) => sum + parseFloat(p.total), 0).toFixed(2)
+  );
+  if (paymentsTotal !== parseFloat(builder.total)) {
+    throw new ValidationError([
+      `payments total (${paymentsTotal.toFixed(2)}) does not match invoice total (${builder.total})`,
+    ]);
+  }
+
+  const xsdResult = xmlValidator.validate(unsignedXml);
+  if (!xsdResult.valid) {
+    throw new ValidationError(xsdResult.errors);
+  }
+
+  const signedXml = signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc);
+
+  const updated = await documentModel.updateStatus(document.id, DocumentStatus.SIGNED, {
+    unsigned_xml: unsignedXml,
+    signed_xml: signedXml,
+    request_payload: JSON.stringify(body),
+    subtotal: builder.subtotal,
+    total: builder.total,
+    buyer_id: body.buyer.id,
+    buyer_name: body.buyer.name,
+    buyer_id_type: body.buyer.idType,
+  });
+
+  await documentEventModel.create(document.id, EventType.REBUILT, document.status, DocumentStatus.SIGNED, {});
 
   return formatDocument(updated);
 }
@@ -276,4 +307,4 @@ function formatDocument(doc) {
   };
 }
 
-module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, resign };
+module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild };

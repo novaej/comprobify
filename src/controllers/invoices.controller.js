@@ -24,9 +24,9 @@ const checkAuthorization = async (req, res) => {
   res.json({ ok: true, document: result });
 };
 
-const resign = async (req, res) => {
-  const result = await documentService.resign(req.params.accessKey);
+const rebuild = async (req, res) => {
+  const result = await documentService.rebuild(req.params.accessKey, req.body);
   res.json({ ok: true, document: result });
 };
 
-module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, resign };
+module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild };
