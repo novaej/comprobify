@@ -6,8 +6,11 @@ const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
 
-async function generate(accessKey) {
-  const document = await documentModel.findByAccessKey(accessKey);
+async function generate(accessKeyOrDocument) {
+  const document = typeof accessKeyOrDocument === 'string'
+    ? await documentModel.findByAccessKey(accessKeyOrDocument)
+    : accessKeyOrDocument;
+
   if (!document) {
     throw new NotFoundError('Document');
   }

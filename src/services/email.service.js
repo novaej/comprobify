@@ -17,7 +17,7 @@ async function sendInvoiceAuthorized(document) {
   }
 
   const issuer = await issuerModel.findById(document.issuer_id);
-  const ridePdf  = await rideService.generate(document.access_key);
+  const ridePdf  = await rideService.generate(document);
   const xmlBytes = Buffer.from(document.authorization_xml, 'utf8');
 
   const { subject, text, html } = template.render(document, issuer);

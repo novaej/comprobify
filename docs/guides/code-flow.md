@@ -454,7 +454,7 @@ All models use parameterized queries exclusively (`$1, $2, ...`) — never strin
 |---|---|---|
 | `issuer.model` | `issuers` | `findFirst`, `findByRuc`, `create` |
 | `document.model` | `documents` | `create`, `findByAccessKey`, `findById`, `updateStatus`, `findPendingEmails` |
-| `sequential.model` | `sequential_numbers` | managed directly by `sequential.service` |
+| (no model) | `sequential_numbers` | managed directly by `sequential.service` |
 | `sri-response.model` | `sri_responses` | `create`, `findByDocumentId` |
 | `client.model` | `clients` | `findOrCreate`, `findByIdentifier` |
 | `product.model` | `products` | `findByCode`, `upsert` |

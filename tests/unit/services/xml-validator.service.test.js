@@ -7,29 +7,29 @@ const xmlValidator = require('../../../src/services/xml-validator.service');
 const ASSETS_DIR = path.join(__dirname, '../../../assets');
 
 describe('XmlValidatorService', () => {
-  test('validate returns valid:true for a well-formed factura XML', () => {
+  test('validate returns valid:true for a well-formed factura XML', async () => {
     const xmlPath = path.join(ASSETS_DIR, 'factura_V2.1.0.xml');
     if (!fs.existsSync(xmlPath)) {
       console.warn('Skipping: factura_V2.1.0.xml not found in assets/');
       return;
     }
     const xml = fs.readFileSync(xmlPath, 'utf8');
-    const result = xmlValidator.validate(xml);
+    const result = await xmlValidator.validate(xml);
     expect(result.valid).toBe(true);
   });
 
-  test('validate returns valid:false with errors for invalid XML', () => {
+  test('validate returns valid:false with errors for invalid XML', async () => {
     const invalidXml = '<factura><unexpected/></factura>';
-    const result = xmlValidator.validate(invalidXml);
+    const result = await xmlValidator.validate(invalidXml);
     expect(result.valid).toBe(false);
     expect(Array.isArray(result.errors)).toBe(true);
     expect(result.errors.length).toBeGreaterThan(0);
     expect(result.errors[0]).toHaveProperty('message');
   });
 
-  test('validate handles XML with declaration without throwing', () => {
+  test('validate handles XML with declaration without throwing', async () => {
     const xmlWithDecl = '<?xml version="1.0" encoding="UTF-8"?><factura><unexpected/></factura>';
-    const result = xmlValidator.validate(xmlWithDecl);
+    const result = await xmlValidator.validate(xmlWithDecl);
     expect(result).toHaveProperty('valid');
   });
 });

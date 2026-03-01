@@ -7,6 +7,9 @@ jest.mock('../../../src/services/sequential.service');
 jest.mock('../../../src/services/access-key.service');
 jest.mock('../../../src/services/signing.service');
 jest.mock('../../../src/services/xml-validator.service');
+jest.mock('../../../src/services/sri.service');
+jest.mock('../../../src/models/sri-response.model');
+jest.mock('../../../src/services/email.service');
 jest.mock('../../../src/builders');
 
 // Mock the database module so the service can obtain a transaction client
@@ -49,7 +52,7 @@ const mockIssuer = {
 
 const validBody = {
   issueDate: '26/02/2026',
-  buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS' },
+  buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
   items: [{
     mainCode: '001',
     description: 'SERVICE',

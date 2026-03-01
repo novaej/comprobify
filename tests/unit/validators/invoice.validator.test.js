@@ -24,7 +24,7 @@ async function runValidation(body) {
 describe('Invoice Validator', () => {
   const validBody = {
     issueDate: '26/02/2026',
-    buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS' },
+    buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
     items: [{
       mainCode: '001',
       description: 'SERVICE',
@@ -126,6 +126,21 @@ describe('Invoice Validator', () => {
     const items = [{ ...validBody.items[0], taxes: [{ ...validBody.items[0].taxes[0], rateCode: '99' }] }];
     const result = await runValidation({ ...validBody, items });
     expect(result.isEmpty()).toBe(false);
+  });
+
+  test('rejects missing buyer email', async () => {
+    const { email, ...buyerNoEmail } = validBody.buyer;
+    const body = { ...validBody, buyer: buyerNoEmail };
+    const result = await runValidation(body);
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'buyer.email')).toBe(true);
+  });
+
+  test('rejects invalid buyer email', async () => {
+    const body = { ...validBody, buyer: { ...validBody.buyer, email: 'not-an-email' } };
+    const result = await runValidation(body);
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'buyer.email')).toBe(true);
   });
 
   test('rejects unknown payment method', async () => {

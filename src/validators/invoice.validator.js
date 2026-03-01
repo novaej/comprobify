@@ -25,6 +25,10 @@ const createInvoice = [
     .notEmpty()
     .isLength({ max: 300 })
     .withMessage('Buyer name is required and must be max 300 characters'),
+  body('buyer.email')
+    .notEmpty()
+    .isEmail()
+    .withMessage('Buyer email is required and must be a valid email address'),
   body('buyer.address')
     .optional()
     .isLength({ max: 300 }),

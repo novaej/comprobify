@@ -21,6 +21,8 @@ const EventType = require('../constants/event-type');
 const OperationType = require('../constants/operation-type');
 const SriErrorCodes = require('../constants/sri-error-codes');
 const emailService = require('./email.service');
+const sriService = require('./sri.service');
+const sriResponseModel = require('../models/sri-response.model');
 
 const DOCUMENT_TYPE_INVOICE = '01';
 
@@ -100,7 +102,7 @@ async function create(body, idempotencyKey = null) {
     }
 
     // Validate against XSD — throws ValidationError if invalid, rolls back transaction
-    const xsdResult = xmlValidator.validate(unsignedXml);
+    const xsdResult = await xmlValidator.validate(unsignedXml);
     if (!xsdResult.valid) {
       throw new ValidationError(xsdResult.errors);
     }
@@ -108,9 +110,10 @@ async function create(body, idempotencyKey = null) {
     // Sign XML — throws if certificate is expired or invalid, rolls back transaction
     const signedXml = signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc);
 
-    // Extract buyer email from additionalInfo if provided
-    const buyerEmail = (body.additionalInfo || [])
-      .find(f => f.name.toLowerCase() === 'email')?.value || null;
+    // Prefer buyer.email from payload, fall back to additionalInfo for backward compat
+    const buyerEmail = body.buyer.email
+      || (body.additionalInfo || []).find(f => f.name.toLowerCase() === 'email')?.value
+      || null;
 
     // Save document within the same transaction
     document = await documentModel.create({
@@ -182,7 +185,6 @@ async function sendToSri(accessKey) {
   }
 
   const issuer = await issuerModel.findById(document.issuer_id);
-  const sriService = require('./sri.service');
   let result;
   try {
     result = await sriService.sendReceipt(document.signed_xml, issuer.environment);
@@ -194,7 +196,6 @@ async function sendToSri(accessKey) {
     throw err;
   }
 
-  const sriResponseModel = require('../models/sri-response.model');
   await sriResponseModel.create({
     documentId: document.id,
     operationType: OperationType.RECEPTION,
@@ -226,7 +227,6 @@ async function checkAuthorization(accessKey) {
   }
 
   const issuer = await issuerModel.findById(document.issuer_id);
-  const sriService = require('./sri.service');
   let result;
   try {
     result = await sriService.checkAuthorization(accessKey, issuer.environment);
@@ -238,7 +238,6 @@ async function checkAuthorization(accessKey) {
     throw err;
   }
 
-  const sriResponseModel = require('../models/sri-response.model');
   await sriResponseModel.create({
     documentId: document.id,
     operationType: OperationType.AUTHORIZATION,
@@ -332,7 +331,7 @@ async function rebuild(accessKey, body) {
     ]);
   }
 
-  const xsdResult = xmlValidator.validate(unsignedXml);
+  const xsdResult = await xmlValidator.validate(unsignedXml);
   if (!xsdResult.valid) {
     throw new ValidationError(xsdResult.errors);
   }

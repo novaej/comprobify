@@ -1,16 +1,19 @@
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs/promises');
 const os = require('os');
-const { execFileSync } = require('child_process');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+
+const execFileAsync = promisify(execFile);
 
 const XSD_PATH = path.join(__dirname, '../../assets/factura_V2.1.0.xsd');
 
-function validate(xmlString) {
+async function validate(xmlString) {
   // Write XML to a temp file — xmllint requires a file path, not stdin, for --schema
   const tmpFile = path.join(os.tmpdir(), `sri-validate-${process.pid}-${Date.now()}.xml`);
   try {
-    fs.writeFileSync(tmpFile, xmlString, 'utf8');
-    execFileSync('xmllint', ['--noout', '--schema', XSD_PATH, tmpFile], {
+    await fs.writeFile(tmpFile, xmlString, 'utf8');
+    await execFileAsync('xmllint', ['--noout', '--schema', XSD_PATH, tmpFile], {
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     return { valid: true };
@@ -23,7 +26,7 @@ function validate(xmlString) {
       .map((line) => ({ message: line.trim() }));
     return { valid: false, errors: errors.length ? errors : [{ message: stderr }] };
   } finally {
-    try { fs.unlinkSync(tmpFile); } catch (_) { /* ignore cleanup errors */ }
+    try { await fs.unlink(tmpFile); } catch (_) { /* ignore cleanup errors */ }
   }
 }
 

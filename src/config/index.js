@@ -10,9 +10,8 @@ const config = {
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
   },
   sri: {
-    testBaseUrl: 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws',
-    // prodBaseUrl: 'https://cel.sri.gob.ec/comprobantes-electronicos-ws',
-    prodBaseUrl: '',
+    testBaseUrl: process.env.SRI_TEST_BASE_URL || 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws',
+    prodBaseUrl: process.env.SRI_PROD_BASE_URL || 'https://cel.sri.gob.ec/comprobantes-electronicos-ws',
   },
   email: {
     provider:      process.env.EMAIL_PROVIDER    || 'mailgun',
