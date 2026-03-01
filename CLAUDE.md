@@ -39,7 +39,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11)
-db/migrations/     SQL migration files 001–010
+db/migrations/     SQL migration files 001–017
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -68,7 +68,7 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Retry logic:** `fetchWithRetry` in `sri.service.js` — retries only on `fetch` throws (network), never on HTTP-level SRI responses.
 
-**Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`.
+**Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`.
 
 **Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry.
 
@@ -77,10 +77,13 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ## Document Lifecycle
 
 ```
-POST /api/invoices → SIGNED
-POST /:key/send   → RECEIVED | RETURNED
-GET  /:key/authorize → AUTHORIZED | NOT_AUTHORIZED
+POST /api/invoices        → SIGNED
+POST /:key/send           → RECEIVED | RETURNED
+GET  /:key/authorize      → AUTHORIZED | NOT_AUTHORIZED
+POST /:key/rebuild        → SIGNED  (from RETURNED or NOT_AUTHORIZED)
 ```
+
+`rebuild` corrects invoice content (taxes, items, buyer, payments) and re-signs using the same `access_key`, `sequential`, and `issue_date`. Used when SRI returns RETURNED or NOT_AUTHORIZED.
 
 **Invoice generation steps:**
 1. Load issuer (`issuers` table)

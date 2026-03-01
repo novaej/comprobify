@@ -81,7 +81,7 @@ A single `pg.Pool` is created once and shared across the entire process. The poo
 
 ```
 src/routes/index.js       → mounts /invoices
-src/routes/invoices.routes.js  → defines the 4 endpoints
+src/routes/invoices.routes.js  → defines the 5 endpoints
 ```
 
 The top-level `index.js` is a simple aggregator. Adding a new resource (e.g. `/api/credit-notes`) means adding one line here without touching anything else.
@@ -245,7 +245,30 @@ If the SOAP call throws (network failure), an `ERROR` event is logged before re-
 6. Return formatted document
 ```
 
-The authorization XML returned by SRI (the RIDE-embeddable representation) is stored directly in the `documents` row for future retrieval.
+The authorization XML returned by SRI is entity-encoded inside the SOAP `<comprobante>` element and stored as-is in `documents.authorization_xml`. Decode HTML entities before use (e.g. to render a PDF).
+
+---
+
+### `rebuild(accessKey, body)` — POST /api/invoices/:accessKey/rebuild
+
+Used when SRI returns `RETURNED` (structural issue) or `NOT_AUTHORIZED` (content issue, e.g. wrong tax rate). The same access key and sequential are reused — SRI specs allow fixing and resubmitting with the same identity.
+
+```
+1. Load document, assert status === 'RETURNED' or 'NOT_AUTHORIZED'
+2. Preserve issue_date, access_key, sequential from stored document
+3. getBuilder('01', issuer).build({ ...body, issueDate }, access_key, sequential)
+4. Validate payments total matches builder total
+5. xmlValidator.validate(unsignedXml)       ← fail fast before signing
+6. signingService.signXml(...)              ← fresh XAdES-BES signature
+7. documentModel.updateStatus('SIGNED', {
+     unsigned_xml, signed_xml, request_payload, subtotal, total,
+     buyer_id, buyer_name, buyer_id_type
+   })
+8. documentEventModel.create('REBUILT', oldStatus, 'SIGNED', {})
+9. Return formatted document
+```
+
+After `rebuild`, the document is back in `SIGNED` status and can be sent with `POST /:key/send` again.
 
 ---
 
@@ -297,7 +320,7 @@ builders/invoice.builder.js → buildInfoFactura(), buildDetalles(), buildAdditi
 
 **Why a builder registry?** The `document.service` calls `getBuilder(documentTypeCode, issuer)` and gets back a builder without knowing which class it is. Adding a new document type (e.g. `'04'` credit note) requires only registering a new class — no changes to the service.
 
-`BaseDocumentBuilder` holds the XML root attributes (namespaces, `id="comprobante"`, `version="2.1.0"`) and the `infoTributaria` block, which is identical for all SRI document types.
+`BaseDocumentBuilder` holds the XML root attributes (`id="comprobante"`, `version="2.1.0"`) and the `infoTributaria` block, which is identical for all SRI document types. Namespace declarations (`xmlns:ds`, `xmlns:etsi`) are intentionally absent from the root element — they are injected by the signer directly onto `<ds:Signature>` to avoid inclusive C14N namespace pollution that would invalidate the digest.
 
 `InvoiceBuilder.build()` is the main method — it calls all the sub-builders in the SRI-required XML element order and returns the serialized XML string via `toXml()` which uses `js2xmlparser` to convert the JS object tree to XML.
 
@@ -349,6 +372,13 @@ function signXml(xmlString, certPath, certPasswordEnc) {
 ```
 
 Thin wrapper around `helpers/signer.js` (XAdES-BES signing via `node-forge`). Its only responsibility is to decrypt the certificate password before passing it to the signing helper.
+
+`helpers/signer.js` produces a valid XAdES-BES signature with:
+- **RSA-SHA256** for the signature and all digests (not SHA-1)
+- **2 References** in SignedInfo: `#comprobante` (enveloped, with enveloped-signature transform) then `#SignedProperties`
+- **KeyInfo** contains only `X509Certificate` — no `RSAKeyValue`, no KeyInfo reference
+- **Inclusive C14N** (C14N 1.0) applied by injecting `xmlns:ds` and `xmlns:etsi` directly on the element being digested
+- **Issuer DN** formatted without spaces after commas (`CN=...,OU=...,O=...,C=EC`) to match Java-based SRI tooling
 
 **Why wrap the helper?** Same reason as `accessKeyService` — isolates tests and keeps the service layer from knowing about the helper's internal API.
 
@@ -434,6 +464,7 @@ Every state change in a document's lifecycle produces a row in `document_events`
 | `SENT` | After `documentModel.updateStatus` in `sendToSri()` |
 | `STATUS_CHANGED` | After `documentModel.updateStatus` in `checkAuthorization()` |
 | `ERROR` | In the catch block of both SRI service calls |
+| `REBUILT` | After `documentModel.updateStatus` in `rebuild()` |
 
 The `from_status` / `to_status` columns make it possible to reconstruct the exact history of a document without reading multiple tables. The `detail` JSONB column carries context (access key, SRI status, authorization number, error message) without needing extra columns for every possible scenario.
 
@@ -495,6 +526,15 @@ GET /api/invoices/:key/authorize
         ├── sriResponseModel.create()
         ├── documentModel.updateStatus('AUTHORIZED' | 'NOT_AUTHORIZED')
         └── documentEventModel.create('STATUS_CHANGED')
+
+POST /api/invoices/:key/rebuild
+  └── documentService.rebuild
+        ├── assert status === 'RETURNED' or 'NOT_AUTHORIZED'
+        ├── InvoiceBuilder.build(body, stored access_key, stored sequential)
+        ├── xmlValidator.validate()
+        ├── signingService.signXml()
+        ├── documentModel.updateStatus('SIGNED', { xml, payload, totals, buyer })
+        └── documentEventModel.create('REBUILT')
 
 Any unhandled throw →  errorHandler middleware
   ├── AppError subclass → specific status + message + (errors | sriMessages)

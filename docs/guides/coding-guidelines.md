@@ -203,7 +203,7 @@ await documentEventModel.create(document.id, 'STATUS_CHANGED', 'RECEIVED', 'AUTH
 });
 ```
 
-Use these event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`. Always log an `ERROR` event in the catch block before re-throwing.
+Use these event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`. Always log an `ERROR` event in the catch block before re-throwing.
 
 ---
 
