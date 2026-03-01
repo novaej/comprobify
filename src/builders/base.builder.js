@@ -29,8 +29,6 @@ class BaseDocumentBuilder {
   getXmlAttributes() {
     return {
       '@': {
-        'xmlns:ds': 'http://www.w3.org/2000/09/xmldsig#',
-        'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance',
         id: 'comprobante',
         version: '2.1.0',
       },
@@ -41,6 +39,7 @@ class BaseDocumentBuilder {
     const doc = { ...this.getXmlAttributes(), ...this.data };
     return js2xmlparser.parse(rootElement, doc, {
       declaration: { encoding: 'UTF-8' },
+      format: { doubleQuotes: true },
     });
   }
 }
