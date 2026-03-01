@@ -33,13 +33,15 @@ Route → Validator → Controller → Service → Model / Builder / Helper
 ```
 src/routes/        URL definitions + validator chains
 src/validators/    express-validator field rules
+src/middleware/    asyncHandler, validateRequest, errorHandler, idempotency
 src/controllers/   thin HTTP handlers — one service call, one response
 src/services/      business logic and orchestration
+src/services/email/  email provider factory + Mailgun provider + templates
 src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
-src/errors/        AppError → ValidationError / NotFoundError / SriError
+src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–018
+db/migrations/     SQL migration files 001–021
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -68,35 +70,44 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Retry logic:** `fetchWithRetry` in `sri.service.js` — retries only on `fetch` throws (network), never on HTTP-level SRI responses.
 
-**Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`.
+**Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`, `EMAIL_SENT`, `EMAIL_FAILED`.
 
 **Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry.
+
+**Idempotency key:** `POST /api/invoices` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
+
+**Email delivery:** when a document becomes `AUTHORIZED`, `emailService.sendInvoiceAuthorized()` is called fire-and-forget. It generates the RIDE PDF and XML on the fly and sends both as attachments via Mailgun. Per-document status tracked in `documents.email_status` (`PENDING` → `SENT` / `FAILED` / `SKIPPED`). Failed sends retried via `POST /email-retry` (batch) or `POST /:key/email-retry` (single, add `?force=true` to resend an already-sent email). Provider swappable via `EMAIL_PROVIDER` env var + new file in `src/services/email/providers/`.
 
 ---
 
 ## Document Lifecycle
 
 ```
-POST /api/invoices        → SIGNED
-POST /:key/send           → RECEIVED | RETURNED
-GET  /:key/authorize      → AUTHORIZED | NOT_AUTHORIZED
-POST /:key/rebuild        → SIGNED  (from RETURNED or NOT_AUTHORIZED)
-GET  /:key/ride           → application/pdf  (AUTHORIZED only)
+POST /api/invoices              → SIGNED   (Idempotency-Key header optional)
+POST /:key/send                 → RECEIVED | RETURNED
+GET  /:key/authorize            → AUTHORIZED | NOT_AUTHORIZED  (+fires email)
+POST /:key/rebuild              → SIGNED  (from RETURNED or NOT_AUTHORIZED)
+GET  /:key/ride                 → application/pdf  (AUTHORIZED only)
+GET  /:key/xml                  → application/xml  (authorization XML or signed XML)
+POST /email-retry               → batch retry all PENDING/FAILED emails
+POST /:key/email-retry          → retry single email (?force=true to resend SENT)
 ```
 
 `rebuild` corrects invoice content (taxes, items, buyer, payments) and re-signs using the same `access_key`, `sequential`, and `issue_date`. Used when SRI returns RETURNED or NOT_AUTHORIZED.
 
 **Invoice generation steps:**
-1. Load issuer (`issuers` table)
-2. `SELECT ... FOR UPDATE` → next sequential
-3. Generate 49-digit access key (Module 11 check digit)
-4. Build unsigned XML (`InvoiceBuilder`)
-5. Validate against XSD (`xmllint`)
-6. Sign XML (XAdES-BES, P12 cert)
-7. `INSERT` into `documents`
-8. `bulkCreate` into `invoice_details`
-9. Log `CREATED` event to `document_events`
-10. Fire-and-forget upsert into `clients`
+1. Idempotency check — if key seen + hash matches, return existing doc immediately
+2. Load issuer (`issuers` table)
+3. `SELECT ... FOR UPDATE` → next sequential
+4. Generate 49-digit access key (Module 11 check digit)
+5. Build unsigned XML (`InvoiceBuilder`)
+6. Validate against XSD (`xmllint`)
+7. Sign XML (XAdES-BES, P12 cert)
+8. Extract `buyer_email` from `additionalInfo[name=Email]`
+9. `INSERT` into `documents` (with `idempotency_key`, `payload_hash`, `buyer_email`)
+10. `bulkCreate` into `invoice_details`
+11. Log `CREATED` event to `document_events`
+12. Fire-and-forget upsert into `clients`
 
 ---
 
@@ -136,6 +147,8 @@ chore: update express to 4.22.1
 8. Not logging an `ERROR` audit event before re-throwing — leaves a gap in the document history.
 9. Reading `process.env` directly in a service or model — use `src/config/index.js`.
 10. Hardcoding Spanish identifiers in new code — use English everywhere except SRI XML elements.
+11. Generating a new idempotency key on every retry — the key must be generated once and reused across retries for the same intended invoice.
+12. Adding a new `document_events` event type without updating the `chk_document_events_event_type` CHECK constraint — the INSERT will fail silently if the constraint is not updated in a migration.
 
 ---
 
@@ -148,12 +161,18 @@ chore: update express to 4.22.1
 | `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
 | `docs/adr/` | Architecture Decision Records |
 | `src/services/document.service.js` | Main orchestrator — invoice lifecycle |
+| `src/services/email.service.js` | Sends RIDE PDF + XML on authorization via provider |
+| `src/services/email/index.js` | Email provider factory (`EMAIL_PROVIDER` env var) |
+| `src/services/email/providers/mailgun.provider.js` | Mailgun SDK wrapper |
+| `src/services/email/templates/invoice-authorized.js` | Spanish email subject + text + HTML |
 | `src/services/ride.service.js` | RIDE PDF generation — on-demand, not persisted |
 | `src/services/sri.service.js` | SRI SOAP integration + retry logic |
 | `src/services/xml-validator.service.js` | XSD pre-validation via xmllint |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
+| `src/middleware/idempotency.js` | Extracts + validates `Idempotency-Key` header |
+| `src/errors/conflict-error.js` | AppError subclass for HTTP 409 |
 | `src/builders/index.js` | Builder registry |
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
-| `db/migrations/` | SQL migration files 001–018 |
+| `db/migrations/` | SQL migration files 001–021 |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

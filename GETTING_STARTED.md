@@ -65,9 +65,17 @@ DB_SSL=false
 
 # 32-byte AES encryption key for certificate passwords stored in the database
 ENCRYPTION_KEY=             # see step 4
+
+# Email delivery (optional — omit to disable buyer notifications)
+EMAIL_PROVIDER=mailgun
+EMAIL_FROM=Facturación <no-reply@mg.yourdomain.com>
+MAILGUN_API_KEY=
+MAILGUN_DOMAIN=mg.yourdomain.com
 ```
 
 > **Issuer data (RUC, branch code, issue point, SRI environment, certificate path/password) is stored per-issuer in the `issuers` database table — not in `.env`.** This allows multiple issuers to be configured independently.
+
+> **Email delivery is optional.** If `MAILGUN_API_KEY` or `MAILGUN_DOMAIN` are not set, the server still runs normally — emails are simply not sent and `email_status` stays `PENDING`.
 
 ---
 
@@ -115,7 +123,7 @@ npm install
 npm run migrate
 ```
 
-This creates all tables: `issuers`, `documents`, `sequential_numbers`, `sri_responses`, `document_events`, `invoice_details`, `clients`, `products`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`).
+This applies all 21 migrations, creating tables: `issuers`, `documents`, `sequential_numbers`, `sri_responses`, `document_events`, `invoice_details`, `clients`, `products`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`). Already-applied migrations are skipped automatically.
 
 ---
 
@@ -151,6 +159,25 @@ curl -s http://localhost:8080/api/invoices/0000000000000000000000000000000000000
 ```
 
 A 404 response confirms the server is running and routing correctly.
+
+---
+
+## Creating invoices safely (idempotency)
+
+`POST /api/invoices` accepts an optional `Idempotency-Key` header. Pass a unique key per intended invoice (e.g. an internal order ID or a UUID) to make retries safe:
+
+```bash
+curl -s -X POST http://localhost:8080/api/invoices \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-12345" \
+  -d '{ ... }'
+```
+
+- First request: creates the invoice → HTTP **201**
+- Repeated request with same key and body: returns the existing invoice → HTTP **200**
+- Same key but different body: → HTTP **409 Conflict**
+
+Omitting the header is valid — the invoice is created normally with no idempotency tracking.
 
 ---
 

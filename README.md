@@ -39,7 +39,7 @@ Node.js REST API for generating, digitally signing, and submitting electronic in
 ## Document Lifecycle
 
 ```
-POST /api/invoices
+POST /api/invoices  (Idempotency-Key header)
        │  Generate → Sign → Save
        ▼
     SIGNED
@@ -50,9 +50,10 @@ POST /:key/send  ──→  RETURNED (SRI rejected)
        │                                │
 GET /:key/authorize  ──→  NOT_AUTHORIZED┘
        │
-    AUTHORIZED
+    AUTHORIZED ──→  email sent (RIDE PDF + XML attached)
        │
 GET /:key/ride  →  RIDE PDF (application/pdf)
+GET /:key/xml   →  Authorization XML (application/xml)
 ```
 
 ---
@@ -67,6 +68,9 @@ GET /:key/ride  →  RIDE PDF (application/pdf)
 | `GET` | `/api/invoices/:accessKey/authorize` | Poll SRI authorization service for final status |
 | `POST` | `/api/invoices/:accessKey/rebuild` | Correct and re-sign a RETURNED or NOT_AUTHORIZED invoice |
 | `GET` | `/api/invoices/:accessKey/ride` | Download RIDE PDF for an AUTHORIZED invoice |
+| `GET` | `/api/invoices/:accessKey/xml` | Download authorization XML (or signed XML if not yet authorized) |
+| `POST` | `/api/invoices/email-retry` | Batch retry all PENDING/FAILED emails (max 100) |
+| `POST` | `/api/invoices/:accessKey/email-retry` | Retry email for one invoice (`?force=true` to resend already-sent) |
 
 ---
 
@@ -96,6 +100,12 @@ Invoice details are persisted to `invoice_details` (one row per item) alongside 
 **RIDE PDF generation**
 `GET /:accessKey/ride` generates the official *Representación Impresa del Documento Electrónico* on-the-fly for any `AUTHORIZED` document. Built with PDFKit (A4) and bwip-js (Code 128 barcode). Includes all SRI-mandatory fields: issuer data, buyer, line items, tax breakdown separated by legal category (15%, 0%, No objeto, Exento), payment methods, authorization number, access key barcode, and ESTADO: AUTORIZADO.
 
+**Email delivery**
+When a document becomes `AUTHORIZED`, an email is sent to the buyer (if an `email` field is present in `additionalInfo`) with the RIDE PDF and the authorization XML attached — both generated on-the-fly. Delivery is fire-and-forget (non-blocking). Status is tracked per-document (`PENDING` / `SENT` / `FAILED` / `SKIPPED`) and exposed in every document response. Failed sends can be retried individually (`POST /:key/email-retry`) or in batch (`POST /email-retry`).
+
+**Idempotency key**
+`POST /api/invoices` accepts an optional `Idempotency-Key` header. If the same key is sent again with the same body, the original document is returned (HTTP 200) instead of creating a duplicate. If the body differs, a 409 Conflict is returned. Concurrent requests with the same key are safe — uniqueness is enforced at the database level via a partial index, and the race-losing request receives the winning document as a replay.
+
 ---
 
 ## Project Structure
@@ -111,17 +121,18 @@ Invoice details are persisted to `invoice_details` (one row per item) alongside 
 │   ├── routes/                Route definitions + validator chains
 │   ├── controllers/           Thin HTTP handlers
 │   ├── services/              Business logic and orchestration
+│   │   └── email/             Email provider factory + Mailgun provider + templates
 │   ├── models/                PostgreSQL CRUD (parameterised queries only)
 │   ├── builders/              XML document construction (builder registry)
 │   ├── validators/            express-validator chains
-│   ├── middleware/            asyncHandler, validateRequest, errorHandler
+│   ├── middleware/            asyncHandler, validateRequest, errorHandler, idempotency
 │   └── errors/                Typed error classes (AppError hierarchy)
 ├── helpers/
 │   ├── signer.js              XAdES-BES signing via node-forge
 │   └── access-key-generator.js  49-digit SRI access key + Module 11 check digit
 ├── db/
 │   ├── migrate.js             Migration runner
-│   └── migrations/            SQL migration files (001–010)
+│   └── migrations/            SQL migration files (001–021)
 ├── assets/
 │   ├── factura_V2.1.0.xsd     Official SRI invoice schema
 │   └── xmldsig-core-schema.xsd  W3C XML-DSig schema (imported by factura XSD)
@@ -171,6 +182,8 @@ See **[docs/README.md](docs/README.md)** for the full documentation index.
 - [ ] SRI `ENVIRONMENT=2` only in production — `ENVIRONMENT=1` for test
 - [ ] All error stack traces suppressed from HTTP responses (handled by `error-handler.js`)
 - [ ] `xmllint` (`libxml2-utils`) installed on the server
+- [ ] `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` set for email delivery (or omit to disable)
+- [ ] `EMAIL_FROM` set to a verified sender address matching the Mailgun domain
 
 ---
 
