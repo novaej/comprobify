@@ -38,6 +38,18 @@ function buildAuthorizationEnvelope(accessKey) {
 </soapenv:Envelope>`;
 }
 
+function unescapeXml(str) {
+  // &amp; must be last — it represents a literal & and must not re-decode other entities
+  return str
+    .replace(/&lt;/g,   '<')
+    .replace(/&gt;/g,   '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g,   (_, d) => String.fromCharCode(parseInt(d, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&amp;/g,  '&');
+}
+
 function extractTagContent(xml, tag) {
   const regex = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`);
   const match = xml.match(regex);
@@ -144,7 +156,7 @@ async function checkAuthorization(accessKey, environment) {
     status: estado,
     authorizationNumber: numeroAutorizacion,
     authorizationDate: fechaAutorizacion,
-    authorizationXml: comprobante,
+    authorizationXml: comprobante ? unescapeXml(comprobante) : null,
     messages,
     rawResponse,
   };

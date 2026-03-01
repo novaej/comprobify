@@ -37,4 +37,21 @@ const getRide = async (req, res) => {
   res.send(buffer);
 };
 
-module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild, getRide };
+const retryEmails = async (req, res) => {
+  const result = await documentService.retryFailedEmails();
+  res.json({ ok: true, result });
+};
+
+const retrySingleEmail = async (req, res) => {
+  const result = await documentService.retrySingleEmail(req.params.accessKey);
+  res.json({ ok: true, result });
+};
+
+const getXml = async (req, res) => {
+  const { xml } = await documentService.getXml(req.params.accessKey);
+  res.setHeader('Content-Type', 'application/xml');
+  res.setHeader('Content-Disposition', `attachment; filename="${req.params.accessKey}.xml"`);
+  res.send(xml);
+};
+
+module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml };

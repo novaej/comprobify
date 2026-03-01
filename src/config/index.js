@@ -14,6 +14,12 @@ const config = {
     // prodBaseUrl: 'https://cel.sri.gob.ec/comprobantes-electronicos-ws',
     prodBaseUrl: '',
   },
+  email: {
+    provider:      process.env.EMAIL_PROVIDER    || 'mailgun',
+    from:          process.env.EMAIL_FROM        || '',
+    mailgunApiKey: process.env.MAILGUN_API_KEY   || '',
+    mailgunDomain: process.env.MAILGUN_DOMAIN    || '',
+  },
 };
 
 module.exports = config;

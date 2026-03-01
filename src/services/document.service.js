@@ -18,6 +18,7 @@ const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
 const OperationType = require('../constants/operation-type');
 const SriErrorCodes = require('../constants/sri-error-codes');
+const emailService = require('./email.service');
 
 const DOCUMENT_TYPE_INVOICE = '01';
 
@@ -87,6 +88,10 @@ async function create(body) {
     // Sign XML — throws if certificate is expired or invalid, rolls back transaction
     const signedXml = signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc);
 
+    // Extract buyer email from additionalInfo if provided
+    const buyerEmail = (body.additionalInfo || [])
+      .find(f => f.name.toLowerCase() === 'email')?.value || null;
+
     // Save document within the same transaction
     document = await documentModel.create({
       issuerId: issuer.id,
@@ -105,6 +110,7 @@ async function create(body) {
       subtotal: builder.subtotal,
       total: builder.total,
       requestPayload: body,
+      buyerEmail,
     }, client);
 
     // Persist invoice line items within the same transaction
@@ -236,6 +242,32 @@ async function checkAuthorization(accessKey) {
       sriStatus: result.status,
       authorizationNumber: result.authorizationNumber || null,
     });
+
+    if (newStatus === DocumentStatus.AUTHORIZED) {
+      emailService.sendInvoiceAuthorized(updated)
+        .then(({ sent }) => {
+          const emailFields = sent
+            ? { email_status: 'SENT', email_sent_at: new Date() }
+            : { email_status: 'SKIPPED' };
+          return Promise.all([
+            documentModel.updateStatus(updated.id, updated.status, emailFields),
+            documentEventModel.create(updated.id,
+              sent ? EventType.EMAIL_SENT : EventType.EMAIL_FAILED,
+              null, null, { to: updated.buyer_email }),
+          ]);
+        })
+        .catch(err => {
+          console.warn('Invoice email failed:', err.message);
+          Promise.all([
+            documentModel.updateStatus(updated.id, updated.status, {
+              email_status: 'FAILED',
+              email_error: err.message,
+            }),
+            documentEventModel.create(updated.id, EventType.EMAIL_FAILED,
+              null, null, { error: err.message }),
+          ]).catch(() => {});
+        });
+    }
   }
 
   return formatDocument(updated);
@@ -295,6 +327,78 @@ async function rebuild(accessKey, body) {
   return formatDocument(updated);
 }
 
+async function retryFailedEmails() {
+  const documents = await documentModel.findPendingEmails();
+  const result = { sent: 0, failed: 0 };
+
+  for (const doc of documents) {
+    try {
+      await emailService.sendInvoiceAuthorized(doc);
+      await documentModel.updateStatus(doc.id, doc.status, {
+        email_status: 'SENT',
+        email_sent_at: new Date(),
+        email_error: null,
+      });
+      await documentEventModel.create(doc.id, EventType.EMAIL_SENT,
+        null, null, { to: doc.buyer_email, retried: true });
+      result.sent++;
+    } catch (err) {
+      await documentModel.updateStatus(doc.id, doc.status, {
+        email_status: 'FAILED',
+        email_error: err.message,
+      });
+      await documentEventModel.create(doc.id, EventType.EMAIL_FAILED,
+        null, null, { error: err.message, retried: true });
+      result.failed++;
+    }
+  }
+
+  return result;
+}
+
+async function retrySingleEmail(accessKey) {
+  const document = await documentModel.findByAccessKey(accessKey);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+  if (document.status !== DocumentStatus.AUTHORIZED) {
+    throw new AppError(`Cannot send email for document with status ${document.status}. Must be ${DocumentStatus.AUTHORIZED}.`, 400);
+  }
+  if (!document.buyer_email) {
+    await documentModel.updateStatus(document.id, document.status, { email_status: 'SKIPPED' });
+    return { sent: false, reason: 'no_email' };
+  }
+
+  try {
+    await emailService.sendInvoiceAuthorized(document);
+    await documentModel.updateStatus(document.id, document.status, {
+      email_status: 'SENT',
+      email_sent_at: new Date(),
+      email_error: null,
+    });
+    await documentEventModel.create(document.id, EventType.EMAIL_SENT,
+      null, null, { to: document.buyer_email, retried: true });
+    return { sent: true };
+  } catch (err) {
+    await documentModel.updateStatus(document.id, document.status, {
+      email_status: 'FAILED',
+      email_error: err.message,
+    });
+    await documentEventModel.create(document.id, EventType.EMAIL_FAILED,
+      null, null, { error: err.message, retried: true });
+    throw err;
+  }
+}
+
+async function getXml(accessKey) {
+  const document = await documentModel.findByAccessKey(accessKey);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+  const xml = document.authorization_xml || document.signed_xml;
+  return { xml, contentType: 'application/xml' };
+}
+
 function formatDocument(doc) {
   return {
     accessKey: doc.access_key,
@@ -307,4 +411,4 @@ function formatDocument(doc) {
   };
 }
 
-module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild };
+module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild, retryFailedEmails, retrySingleEmail, getXml };

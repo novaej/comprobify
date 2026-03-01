@@ -1,14 +1,14 @@
 const db = require('../config/database');
 const DocumentStatus = require('../constants/document-status');
 
-async function create({ issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload }, client) {
+async function create({ issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload, buyerEmail }, client) {
   const q = client || db;
   const { rows } = await q.query(
     `INSERT INTO documents
-      (issuer_id, document_type, access_key, sequential, branch_code, issue_point_code, issue_date, status, unsigned_xml, signed_xml, buyer_id, buyer_name, buyer_id_type, subtotal, total, request_payload)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      (issuer_id, document_type, access_key, sequential, branch_code, issue_point_code, issue_date, status, unsigned_xml, signed_xml, buyer_id, buyer_name, buyer_id_type, subtotal, total, request_payload, buyer_email)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
      RETURNING *`,
-    [issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status || DocumentStatus.SIGNED, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload ? JSON.stringify(requestPayload) : null]
+    [issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status || DocumentStatus.SIGNED, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload ? JSON.stringify(requestPayload) : null, buyerEmail || null]
   );
   return rows[0];
 }
@@ -41,4 +41,16 @@ async function updateStatus(id, status, extraFields = {}) {
   return rows[0] || null;
 }
 
-module.exports = { create, findByAccessKey, findById, updateStatus };
+async function findPendingEmails() {
+  const { rows } = await db.query(
+    `SELECT * FROM documents
+     WHERE  status = 'AUTHORIZED'
+       AND  email_status IN ('PENDING', 'FAILED')
+       AND  buyer_email IS NOT NULL
+     ORDER BY created_at ASC
+     LIMIT 100`
+  );
+  return rows;
+}
+
+module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails };
