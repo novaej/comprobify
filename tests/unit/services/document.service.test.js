@@ -249,7 +249,7 @@ describe('DocumentTransmissionService', () => {
     });
 
     await expect(documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer))
-      .rejects.toThrow('Cannot send document with status AUTHORIZED');
+      .rejects.toMatchObject({ statusCode: 400 });
   });
 
   test('checkAuthorization rejects when status is not RECEIVED', async () => {
@@ -259,6 +259,6 @@ describe('DocumentTransmissionService', () => {
     });
 
     await expect(documentTransmission.checkAuthorization('1234567890123456789012345678901234567890123456789', mockIssuer))
-      .rejects.toThrow('Cannot check authorization for document with status SIGNED');
+      .rejects.toMatchObject({ statusCode: 400 });
   });
 });

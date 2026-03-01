@@ -4,10 +4,10 @@ const documentEventModel = require('../models/document-event.model');
 const signingService = require('./signing.service');
 const xmlValidator = require('./xml-validator.service');
 const { getBuilder } = require('../builders');
-const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const ValidationError = require('../errors/validation-error');
 const DocumentStatus = require('../constants/document-status');
+const { assertTransition } = require('../constants/document-state-machine');
 const EventType = require('../constants/event-type');
 const { formatDocument } = require('../presenters/document.presenter');
 
@@ -18,13 +18,7 @@ async function rebuild(accessKey, body, issuer) {
   if (!document) {
     throw new NotFoundError('Document');
   }
-  const rebuildableStatuses = [DocumentStatus.RETURNED, DocumentStatus.NOT_AUTHORIZED];
-  if (!rebuildableStatuses.includes(document.status)) {
-    throw new AppError(
-      `Cannot rebuild document with status ${document.status}. Must be ${rebuildableStatuses.join(' or ')}.`,
-      400
-    );
-  }
+  assertTransition(document.status, DocumentStatus.SIGNED);
 
   // Preserve the original issue date, access key, and sequential — only the
   // invoice content (taxes, items, buyer, payments) is corrected by the caller

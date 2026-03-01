@@ -1,6 +1,16 @@
 const db = require('../config/database');
 const DocumentStatus = require('../constants/document-status');
 
+const MUTABLE_EXTRA_COLUMNS = new Set([
+  // Email tracking — always updatable
+  'email_status', 'email_sent_at', 'email_error',
+  // Authorization data — set once by checkAuthorization
+  'authorization_xml', 'authorization_number', 'authorization_date',
+  // Rebuild data — updated only when transitioning back to SIGNED
+  'unsigned_xml', 'signed_xml', 'request_payload', 'subtotal', 'total',
+  'buyer_id', 'buyer_name', 'buyer_id_type',
+]);
+
 async function create({ issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload, buyerEmail, idempotencyKey, payloadHash }, client) {
   const q = client || db;
   const { rows } = await q.query(
@@ -28,6 +38,12 @@ async function findById(id) {
 }
 
 async function updateStatus(id, status, extraFields = {}) {
+  for (const col of Object.keys(extraFields)) {
+    if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
+      throw new Error(`updateStatus: unknown column "${col}"`);
+    }
+  }
+
   const sets = ['status = $2', 'updated_at = NOW()'];
   const params = [id, status];
   let idx = 3;

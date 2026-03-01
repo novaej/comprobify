@@ -3,9 +3,9 @@ const documentEventModel = require('../models/document-event.model');
 const sriService = require('./sri.service');
 const sriResponseModel = require('../models/sri-response.model');
 const emailService = require('./email.service');
-const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
+const { assertTransition } = require('../constants/document-state-machine');
 const EventType = require('../constants/event-type');
 const OperationType = require('../constants/operation-type');
 const { formatDocument } = require('../presenters/document.presenter');
@@ -15,9 +15,7 @@ async function sendToSri(accessKey, issuer) {
   if (!document) {
     throw new NotFoundError('Document');
   }
-  if (document.status !== DocumentStatus.SIGNED) {
-    throw new AppError(`Cannot send document with status ${document.status}. Must be ${DocumentStatus.SIGNED}.`, 400);
-  }
+  assertTransition(document.status, DocumentStatus.RECEIVED);
 
   let result;
   try {
@@ -53,12 +51,7 @@ async function checkAuthorization(accessKey, issuer) {
   if (!document) {
     throw new NotFoundError('Document');
   }
-  if (document.status !== DocumentStatus.RECEIVED) {
-    throw new AppError(
-      `Cannot check authorization for document with status ${document.status}. Must be ${DocumentStatus.RECEIVED}.`,
-      400
-    );
-  }
+  assertTransition(document.status, DocumentStatus.AUTHORIZED);
 
   let result;
   try {
