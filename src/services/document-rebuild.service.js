@@ -1,0 +1,71 @@
+const moment = require('moment');
+const issuerModel = require('../models/issuer.model');
+const documentModel = require('../models/document.model');
+const documentEventModel = require('../models/document-event.model');
+const signingService = require('./signing.service');
+const xmlValidator = require('./xml-validator.service');
+const { getBuilder } = require('../builders');
+const AppError = require('../errors/app-error');
+const NotFoundError = require('../errors/not-found-error');
+const ValidationError = require('../errors/validation-error');
+const DocumentStatus = require('../constants/document-status');
+const EventType = require('../constants/event-type');
+const { formatDocument } = require('../presenters/document.presenter');
+
+const DOCUMENT_TYPE_INVOICE = '01';
+
+async function rebuild(accessKey, body) {
+  const document = await documentModel.findByAccessKey(accessKey);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+  const rebuildableStatuses = [DocumentStatus.RETURNED, DocumentStatus.NOT_AUTHORIZED];
+  if (!rebuildableStatuses.includes(document.status)) {
+    throw new AppError(
+      `Cannot rebuild document with status ${document.status}. Must be ${rebuildableStatuses.join(' or ')}.`,
+      400
+    );
+  }
+
+  const issuer = await issuerModel.findById(document.issuer_id);
+
+  // Preserve the original issue date, access key, and sequential — only the
+  // invoice content (taxes, items, buyer, payments) is corrected by the caller
+  const issueDate = moment(document.issue_date).format('DD/MM/YYYY');
+
+  const builder = getBuilder(DOCUMENT_TYPE_INVOICE, issuer);
+  const unsignedXml = builder.build({ ...body, issueDate }, document.access_key, document.sequential);
+
+  const paymentsTotal = parseFloat(
+    body.payments.reduce((sum, p) => sum + parseFloat(p.total), 0).toFixed(2)
+  );
+  if (paymentsTotal !== parseFloat(builder.total)) {
+    throw new ValidationError([
+      `payments total (${paymentsTotal.toFixed(2)}) does not match invoice total (${builder.total})`,
+    ]);
+  }
+
+  const xsdResult = await xmlValidator.validate(unsignedXml);
+  if (!xsdResult.valid) {
+    throw new ValidationError(xsdResult.errors);
+  }
+
+  const signedXml = signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc);
+
+  const updated = await documentModel.updateStatus(document.id, DocumentStatus.SIGNED, {
+    unsigned_xml: unsignedXml,
+    signed_xml: signedXml,
+    request_payload: JSON.stringify(body),
+    subtotal: builder.subtotal,
+    total: builder.total,
+    buyer_id: body.buyer.id,
+    buyer_name: body.buyer.name,
+    buyer_id_type: body.buyer.idType,
+  });
+
+  await documentEventModel.create(document.id, EventType.REBUILT, document.status, DocumentStatus.SIGNED, {});
+
+  return formatDocument(updated);
+}
+
+module.exports = { rebuild };

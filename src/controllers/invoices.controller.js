@@ -1,14 +1,18 @@
-const documentService = require('../services/document.service');
+const documentCreation = require('../services/document-creation.service');
+const documentTransmission = require('../services/document-transmission.service');
+const documentRebuild = require('../services/document-rebuild.service');
+const documentEmail = require('../services/document-email.service');
+const documentQuery = require('../services/document-query.service');
 const rideService = require('../services/ride.service');
 const NotFoundError = require('../errors/not-found-error');
 
 const create = async (req, res) => {
-  const { document, created } = await documentService.create(req.body, req.idempotencyKey);
+  const { document, created } = await documentCreation.create(req.body, req.idempotencyKey);
   res.status(created ? 201 : 200).json({ ok: true, document });
 };
 
 const getByAccessKey = async (req, res) => {
-  const document = await documentService.getByAccessKey(req.params.accessKey);
+  const document = await documentQuery.getByAccessKey(req.params.accessKey);
   if (!document) {
     throw new NotFoundError('Document');
   }
@@ -16,17 +20,17 @@ const getByAccessKey = async (req, res) => {
 };
 
 const sendToSri = async (req, res) => {
-  const result = await documentService.sendToSri(req.params.accessKey);
+  const result = await documentTransmission.sendToSri(req.params.accessKey);
   res.json({ ok: true, document: result });
 };
 
 const checkAuthorization = async (req, res) => {
-  const result = await documentService.checkAuthorization(req.params.accessKey);
+  const result = await documentTransmission.checkAuthorization(req.params.accessKey);
   res.json({ ok: true, document: result });
 };
 
 const rebuild = async (req, res) => {
-  const result = await documentService.rebuild(req.params.accessKey, req.body);
+  const result = await documentRebuild.rebuild(req.params.accessKey, req.body);
   res.json({ ok: true, document: result });
 };
 
@@ -38,18 +42,18 @@ const getRide = async (req, res) => {
 };
 
 const retryEmails = async (req, res) => {
-  const result = await documentService.retryFailedEmails();
+  const result = await documentEmail.retryFailedEmails();
   res.json({ ok: true, result });
 };
 
 const retrySingleEmail = async (req, res) => {
   const force = req.query.force === 'true';
-  const result = await documentService.retrySingleEmail(req.params.accessKey, { force });
+  const result = await documentEmail.retrySingleEmail(req.params.accessKey, { force });
   res.json({ ok: true, result });
 };
 
 const getXml = async (req, res) => {
-  const { xml } = await documentService.getXml(req.params.accessKey);
+  const { xml } = await documentQuery.getXml(req.params.accessKey);
   res.setHeader('Content-Type', 'application/xml');
   res.setHeader('Content-Disposition', `attachment; filename="${req.params.accessKey}.xml"`);
   res.send(xml);
