@@ -192,20 +192,24 @@ Step-by-step:
 6. signingService.signXml(unsignedXml, certPath, certPasswordEnc)
    → Decrypts the cert password, loads the P12, applies XAdES-BES digital signature.
 
-7. documentModel.create({...})
-   → Inserts the document row (both unsigned and signed XML stored).
+7. Extract buyerEmail from additionalInfo
+   → (body.additionalInfo || []).find(f => f.name.toLowerCase() === 'email')?.value
+   → Stored in documents.buyer_email for efficient batch queries later.
 
-8. invoiceDetailModel.bulkCreate(documentId, items)
+8. documentModel.create({...})
+   → Inserts the document row (both unsigned and signed XML stored, buyer_email included).
+
+9. invoiceDetailModel.bulkCreate(documentId, items)
    → Inserts one row per line item into invoice_details for structured querying.
 
-9. documentEventModel.create(documentId, 'CREATED', null, 'SIGNED', {...})
-   → Writes the first audit log entry.
+10. documentEventModel.create(documentId, 'CREATED', null, 'SIGNED', {...})
+    → Writes the first audit log entry.
 
-10. clientModel.findOrCreate(issuerId, buyer)  [non-blocking]
+11. clientModel.findOrCreate(issuerId, buyer)  [non-blocking]
     → Upserts the buyer into the clients table.
     → Fire-and-forget: a failure here does not abort the invoice response.
 
-11. Return formatDocument(document)
+12. Return formatDocument(document)
 ```
 
 **Why validate before signing?** Signing is the most expensive operation (P12 load + RSA crypto). Failing fast on XSD errors avoids wasting that time on a document that SRI would reject anyway.
@@ -238,14 +242,20 @@ If the SOAP call throws (network failure), an `ERROR` event is logged before re-
 ```
 1. Load document, assert status === 'RECEIVED'
 2. sriService.checkAuthorization(accessKey)   ← SOAP call with retry
+   → unescapeXml(comprobante) decodes &lt; &gt; &amp; etc. from the SOAP envelope
 3. sriResponseModel.create(...)
 4. documentModel.updateStatus('AUTHORIZED' | 'NOT_AUTHORIZED', extraFields)
    extraFields: authorization_number, authorization_date, authorization_xml
 5. documentEventModel.create('STATUS_CHANGED', oldStatus, newStatus, {...})
-6. Return formatted document
+6. [AUTHORIZED only] emailService.sendInvoiceAuthorized(updated)  [non-blocking]
+   → Generates RIDE PDF + XML buffer on the fly, sends via Mailgun
+   → On success: updateStatus({ email_status: 'SENT' }) + EMAIL_SENT event
+   → On no email: updateStatus({ email_status: 'SKIPPED' })
+   → On failure: updateStatus({ email_status: 'FAILED' }) + EMAIL_FAILED event + console.warn
+7. Return formatted document  (email outcome does not affect this response)
 ```
 
-The authorization XML returned by SRI is entity-encoded inside the SOAP `<comprobante>` element and stored as-is in `documents.authorization_xml`. Decode HTML entities before use (e.g. to render a PDF).
+**Why fire-and-forget for email?** The buyer notification is a convenience feature — it must not block or fail the authorization response. The document is already `AUTHORIZED` in the DB before the email is attempted. Failed sends are retried via `POST /email-retry` or `POST /:accessKey/email-retry`.
 
 ---
 
@@ -431,7 +441,7 @@ All models use parameterized queries exclusively (`$1, $2, ...`) — never strin
 | Model | Table | Key operations |
 |---|---|---|
 | `issuer.model` | `issuers` | `findFirst`, `findByRuc`, `create` |
-| `document.model` | `documents` | `create`, `findByAccessKey`, `updateStatus` |
+| `document.model` | `documents` | `create`, `findByAccessKey`, `findById`, `updateStatus`, `findPendingEmails` |
 | `sequential.model` | `sequential_numbers` | managed directly by `sequential.service` |
 | `sri-response.model` | `sri_responses` | `create`, `findByDocumentId` |
 | `client.model` | `clients` | `findOrCreate`, `findByIdentifier` |
@@ -465,6 +475,8 @@ Every state change in a document's lifecycle produces a row in `document_events`
 | `STATUS_CHANGED` | After `documentModel.updateStatus` in `checkAuthorization()` |
 | `ERROR` | In the catch block of both SRI service calls |
 | `REBUILT` | After `documentModel.updateStatus` in `rebuild()` |
+| `EMAIL_SENT` | After successful email delivery (fire-and-forget in `checkAuthorization`, or explicit retry) |
+| `EMAIL_FAILED` | After failed email delivery — `detail` contains `{ error }` or `{ to, error }` |
 
 The `from_status` / `to_status` columns make it possible to reconstruct the exact history of a document without reading multiple tables. The `detail` JSONB column carries context (access key, SRI status, authorization number, error message) without needing extra columns for every possible scenario.
 
@@ -557,10 +569,15 @@ POST /api/invoices/:key/send
 GET /api/invoices/:key/authorize
   └── documentService.checkAuthorization
         ├── assert status === 'RECEIVED'
-        ├── sriService.checkAuthorization()   fetchWithRetry → SOAP → parse estado
+        ├── sriService.checkAuthorization()   fetchWithRetry → SOAP → unescapeXml → parse estado
         ├── sriResponseModel.create()
         ├── documentModel.updateStatus('AUTHORIZED' | 'NOT_AUTHORIZED')
-        └── documentEventModel.create('STATUS_CHANGED')
+        ├── documentEventModel.create('STATUS_CHANGED')
+        └── [AUTHORIZED] emailService.sendInvoiceAuthorized()  [fire-and-forget]
+              ├── rideService.generate()     → PDF Buffer
+              ├── Buffer.from(authorization_xml)  → XML Buffer
+              ├── mailgunProvider.send(to, attachments)
+              └── documentModel.updateStatus({ email_status }) + EMAIL_SENT/EMAIL_FAILED event
 
 POST /api/invoices/:key/rebuild
   └── documentService.rebuild
@@ -579,6 +596,26 @@ GET /api/invoices/:key/ride
         └── rideBuilder.build(rideData)  → Buffer
 
 → 200 application/pdf (Content-Disposition: attachment; filename="RIDE-{accessKey}.pdf")
+
+GET /api/invoices/:key/xml
+  └── documentService.getXml
+        └── authorization_xml if AUTHORIZED, else signed_xml
+
+→ 200 application/xml (Content-Disposition: attachment; filename="{accessKey}.xml")
+
+POST /api/invoices/email-retry         ← batch
+  └── documentService.retryFailedEmails
+        └── documentModel.findPendingEmails()  (status=AUTHORIZED, email_status IN (PENDING,FAILED), max 100)
+              └── emailService.sendInvoiceAuthorized() per doc → updateStatus + event
+
+→ 200 { ok: true, result: { sent: N, failed: N } }
+
+POST /api/invoices/:key/email-retry    ← single
+  └── documentService.retrySingleEmail
+        ├── assert status === 'AUTHORIZED'
+        └── emailService.sendInvoiceAuthorized() → updateStatus + EMAIL_SENT/EMAIL_FAILED event
+
+→ 200 { ok: true, result: { sent: true } }
 
 Any unhandled throw →  errorHandler middleware
   ├── AppError subclass → specific status + message + (errors | sriMessages)

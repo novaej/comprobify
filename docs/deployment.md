@@ -26,8 +26,14 @@ All variables are required unless marked optional.
 | `DB_PASSWORD` | Database password |
 | `DB_SSL` | `true` to enable SSL (required in production) |
 | `ENCRYPTION_KEY` | 64-character hex string (32 bytes) — AES-256-GCM key for cert password encryption |
+| `EMAIL_PROVIDER` | Email provider (default `mailgun`; only `mailgun` supported today) |
+| `EMAIL_FROM` | Sender address shown to buyers, e.g. `Facturación <no-reply@mg.yourdomain.com>` |
+| `MAILGUN_API_KEY` | Mailgun private API key |
+| `MAILGUN_DOMAIN` | Mailgun sending domain, e.g. `mg.yourdomain.com` |
 
 > **Issuer-specific config** (RUC, branch code, issue point, SRI environment, certificate path and password) is stored per-issuer in the `issuers` database table. This enables multiple issuers to be configured independently without changing environment variables.
+
+> **Email is optional at startup** — if `EMAIL_FROM` / `MAILGUN_API_KEY` / `MAILGUN_DOMAIN` are unset the server starts normally. Email sends will fail at runtime and be recorded as `FAILED` in `documents.email_status`.
 
 Generate `ENCRYPTION_KEY`:
 ```bash
@@ -93,6 +99,8 @@ Store the output in the database. The P12 file itself lives at `cert/token.p12` 
 - [ ] API is behind HTTPS (reverse proxy: nginx, Caddy, or load balancer TLS termination)
 - [ ] PostgreSQL not exposed on a public port
 - [ ] `xmllint` installed on the server (`apt install libxml2-utils`)
+- [ ] `EMAIL_FROM`, `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` set and verified against a real Mailgun domain (not sandbox)
+- [ ] Mailgun sandbox authorized-recipient restriction removed (sandbox only allows pre-approved addresses)
 - [ ] Log aggregation configured — the API logs to stdout
 
 ---
@@ -109,6 +117,7 @@ Key log lines to monitor:
 | `SRI fetch attempt N failed, retrying in Nms` | Transient SRI network failure — being retried |
 | `Unexpected database pool error` | DB connection issue — check PostgreSQL |
 | `Failed to upsert client record` | Non-critical — buyer catalogue update failed |
+| `Invoice email failed: ...` | Non-critical — email send failed; `email_status` set to `FAILED`, retry via `/email-retry` |
 | `Unhandled error: ...` | Unexpected error — inspect stack trace |
 
 ---

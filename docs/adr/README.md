@@ -89,3 +89,4 @@ YYYY-MM-DD
 | [002](002-postgresql-sequential-locking.md) | PostgreSQL SELECT FOR UPDATE for Sequential Numbers | Accepted | 2026-02-26 |
 | [003](003-xmllint-xsd-validation.md) | xmllint for XSD Validation | Accepted | 2026-02-27 |
 | [004](004-xades-bes-signature-profile.md) | XAdES-BES Signature Profile | Accepted | 2026-02-28 |
+| [005](005-email-delivery.md) | Email Delivery via Mailgun | Accepted | 2026-03-01 |
