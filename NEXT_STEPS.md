@@ -32,17 +32,12 @@ Builders for document type codes:
 - `06` — Guía de remisión
 - `07` — Comprobante de retención
 
-## RIDE (PDF Representation)
-
-- Generate PDF representation of signed invoices
-- Use a template engine (PDFKit or puppeteer)
-- Endpoint: `GET /api/invoices/:accessKey/ride`
-
 ## Email Delivery
 
 - Send signed XML + RIDE PDF to buyer email on authorization
 - Configurable SMTP (nodemailer)
 - Retry queue for failed deliveries
+- Attach `logo_path` per issuer (column already exists in `issuers` via migration 018)
 
 ## Reporting Module
 

@@ -38,8 +38,8 @@ src/services/      business logic and orchestration
 src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError
-helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11)
-db/migrations/     SQL migration files 001–017
+helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
+db/migrations/     SQL migration files 001–018
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -81,6 +81,7 @@ POST /api/invoices        → SIGNED
 POST /:key/send           → RECEIVED | RETURNED
 GET  /:key/authorize      → AUTHORIZED | NOT_AUTHORIZED
 POST /:key/rebuild        → SIGNED  (from RETURNED or NOT_AUTHORIZED)
+GET  /:key/ride           → application/pdf  (AUTHORIZED only)
 ```
 
 `rebuild` corrects invoice content (taxes, items, buyer, payments) and re-signs using the same `access_key`, `sequential`, and `issue_date`. Used when SRI returns RETURNED or NOT_AUTHORIZED.
@@ -147,10 +148,12 @@ chore: update express to 4.22.1
 | `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
 | `docs/adr/` | Architecture Decision Records |
 | `src/services/document.service.js` | Main orchestrator — invoice lifecycle |
+| `src/services/ride.service.js` | RIDE PDF generation — on-demand, not persisted |
 | `src/services/sri.service.js` | SRI SOAP integration + retry logic |
 | `src/services/xml-validator.service.js` | XSD pre-validation via xmllint |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
 | `src/builders/index.js` | Builder registry |
-| `db/migrations/` | All 10 SQL migrations |
+| `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
+| `db/migrations/` | SQL migration files 001–018 |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

@@ -45,12 +45,14 @@ POST /api/invoices
     SIGNED
        │
 POST /:key/send  ──→  RETURNED (SRI rejected)
-       │
-    RECEIVED
-       │
-GET /:key/authorize  ──→  NOT_AUTHORIZED
+       │                  │
+    RECEIVED         POST /:key/rebuild ─┐
+       │                                │
+GET /:key/authorize  ──→  NOT_AUTHORIZED┘
        │
     AUTHORIZED
+       │
+GET /:key/ride  →  RIDE PDF (application/pdf)
 ```
 
 ---
@@ -63,6 +65,8 @@ GET /:key/authorize  ──→  NOT_AUTHORIZED
 | `GET` | `/api/invoices/:accessKey` | Retrieve document metadata by access key |
 | `POST` | `/api/invoices/:accessKey/send` | Submit signed XML to SRI reception service |
 | `GET` | `/api/invoices/:accessKey/authorize` | Poll SRI authorization service for final status |
+| `POST` | `/api/invoices/:accessKey/rebuild` | Correct and re-sign a RETURNED or NOT_AUTHORIZED invoice |
+| `GET` | `/api/invoices/:accessKey/ride` | Download RIDE PDF for an AUTHORIZED invoice |
 
 ---
 
@@ -88,6 +92,9 @@ Every lifecycle transition writes a row to `document_events` (type, from/to stat
 
 **Structured line items**
 Invoice details are persisted to `invoice_details` (one row per item) alongside the full signed XML, enabling future reporting queries without re-parsing the XML.
+
+**RIDE PDF generation**
+`GET /:accessKey/ride` generates the official *Representación Impresa del Documento Electrónico* on-the-fly for any `AUTHORIZED` document. Built with PDFKit (A4) and bwip-js (Code 128 barcode). Includes all SRI-mandatory fields: issuer data, buyer, line items, tax breakdown separated by legal category (15%, 0%, No objeto, Exento), payment methods, authorization number, access key barcode, and ESTADO: AUTORIZADO.
 
 ---
 

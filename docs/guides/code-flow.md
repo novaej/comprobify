@@ -487,6 +487,41 @@ All child tables reference `issuers(id)` directly or via `documents(id)`, enabli
 
 ---
 
+## 21. RideService — `src/services/ride.service.js`
+
+Generates the RIDE (Representación Impresa del Documento Electrónico) PDF for an `AUTHORIZED` document on demand. No PDF is persisted — it is generated fresh on every request.
+
+```
+1. documentModel.findByAccessKey(accessKey)
+   → Throws NotFoundError 404 if not found.
+   → Throws AppError 400 if status !== 'AUTHORIZED'.
+
+2. issuerModel.findById(document.issuer_id)
+   → Loads issuer fields (RUC, business_name, trade_name, addresses,
+     logo_path, special_taxpayer, required_accounting, emission_type).
+
+3. Resolve catalog labels (one-time DB query per table, then Map cache):
+   → catalogModel.getIdTypeLabel(buyer_id_type)        → e.g. 'Cédula'
+   → catalogModel.getPaymentMethodLabel(method)         → per payment
+   → catalogModel.getTaxRateDescription(code, rateCode) → per distinct tax key
+
+4. Assemble rideData plain object from document, issuer, and document.request_payload
+
+5. rideBuilder.build(rideData)   → Promise<Buffer>
+   → PDFKit A4 renderer (see helpers/ride-builder.js)
+   → Returns raw PDF bytes as a Node Buffer
+
+6. Return buffer to controller → sent as application/pdf
+```
+
+**Why generate on-the-fly?** RIDE PDFs are only needed for `AUTHORIZED` documents. Generating on demand avoids storage overhead and ensures the PDF always reflects the current DB state (authorization number, date). PDFs are typically small (< 100 KB) and generation is fast.
+
+**Tax computation** — amounts are re-derived from payload fields (`qty × unitPrice − discount`) rather than stored pre-computed values. Rate codes (`'0'`=0%, `'6'`=No objeto, `'7'`=Exento) are used as the authoritative classifier — never rate values, which are the same (0) for all three categories.
+
+**`helpers/ride-builder.js`** — PDFKit A4 layout engine. Uses `doc.heightOfString()` to pre-measure all variable-height content (additional info rows, payment labels) before drawing enclosing boxes, preventing overflow. All coordinates are explicit (x, y) — the internal PDFKit cursor is never relied upon for multi-column layout.
+
+---
+
 ## Request lifecycle summary
 
 ```
@@ -535,6 +570,15 @@ POST /api/invoices/:key/rebuild
         ├── signingService.signXml()
         ├── documentModel.updateStatus('SIGNED', { xml, payload, totals, buyer })
         └── documentEventModel.create('REBUILT')
+
+GET /api/invoices/:key/ride
+  └── rideService.generate
+        ├── assert status === 'AUTHORIZED'
+        ├── issuerModel.findById()
+        ├── catalogModel label lookups (getIdTypeLabel, getPaymentMethodLabel, getTaxRateDescription)
+        └── rideBuilder.build(rideData)  → Buffer
+
+→ 200 application/pdf (Content-Disposition: attachment; filename="RIDE-{accessKey}.pdf")
 
 Any unhandled throw →  errorHandler middleware
   ├── AppError subclass → specific status + message + (errors | sriMessages)
