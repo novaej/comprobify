@@ -384,7 +384,7 @@ async function retryFailedEmails() {
   return result;
 }
 
-async function retrySingleEmail(accessKey) {
+async function retrySingleEmail(accessKey, { force = false } = {}) {
   const document = await documentModel.findByAccessKey(accessKey);
   if (!document) {
     throw new NotFoundError('Document');
@@ -395,6 +395,9 @@ async function retrySingleEmail(accessKey) {
   if (!document.buyer_email) {
     await documentModel.updateStatus(document.id, document.status, { email_status: 'SKIPPED' });
     return { sent: false, reason: 'no_email' };
+  }
+  if (document.email_status === 'SENT' && !force) {
+    return { sent: false, reason: 'already_sent' };
   }
 
   try {
@@ -436,6 +439,11 @@ function formatDocument(doc) {
     total: doc.total,
     ...(doc.authorization_number && { authorizationNumber: doc.authorization_number }),
     ...(doc.authorization_date && { authorizationDate: doc.authorization_date }),
+    email: {
+      status: doc.email_status || 'PENDING',
+      ...(doc.email_sent_at && { sentAt: doc.email_sent_at }),
+      ...(doc.email_error && { error: doc.email_error }),
+    },
   };
 }
 

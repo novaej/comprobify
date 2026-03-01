@@ -43,7 +43,8 @@ const retryEmails = async (req, res) => {
 };
 
 const retrySingleEmail = async (req, res) => {
-  const result = await documentService.retrySingleEmail(req.params.accessKey);
+  const force = req.query.force === 'true';
+  const result = await documentService.retrySingleEmail(req.params.accessKey, { force });
   res.json({ ok: true, result });
 };
 
