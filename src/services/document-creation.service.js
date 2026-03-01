@@ -15,7 +15,7 @@ const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
 const { formatDocument } = require('../presenters/document.presenter');
 
-const DOCUMENT_TYPE_INVOICE = '01';
+const DEFAULT_DOCUMENT_TYPE = '01';
 
 function hashPayload(body) {
   return crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
@@ -36,6 +36,7 @@ async function create(body, idempotencyKey = null, issuer) {
 
   const payloadHash = idempotencyKey ? hashPayload(body) : null;
 
+  const documentType = body.documentType || DEFAULT_DOCUMENT_TYPE;
   const issueDate = body.issueDate || moment().format('DD/MM/YYYY');
 
   // Open a single transaction that covers sequential assignment, XML build/validate/sign,
@@ -53,14 +54,14 @@ async function create(body, idempotencyKey = null, issuer) {
       issuer.id,
       issuer.branch_code,
       issuer.issue_point_code,
-      DOCUMENT_TYPE_INVOICE,
+      documentType,
       client
     );
 
     // Generate 49-digit SRI access key
     const accessKey = await accessKeyService.generate({
       issueDate,
-      documentType: DOCUMENT_TYPE_INVOICE,
+      documentType: documentType,
       ruc: issuer.ruc,
       environment: issuer.environment,
       branchCode: issuer.branch_code,
@@ -70,7 +71,7 @@ async function create(body, idempotencyKey = null, issuer) {
     });
 
     // Build XML
-    const builder = getBuilder(DOCUMENT_TYPE_INVOICE, issuer);
+    const builder = getBuilder(documentType, issuer);
     const unsignedXml = builder.build({ ...body, issueDate }, accessKey, sequential);
 
     // Validate that payments sum matches the calculated invoice total
@@ -100,7 +101,7 @@ async function create(body, idempotencyKey = null, issuer) {
     // Save document within the same transaction
     document = await documentModel.create({
       issuerId: issuer.id,
-      documentType: DOCUMENT_TYPE_INVOICE,
+      documentType: documentType,
       accessKey,
       sequential,
       branchCode: issuer.branch_code,

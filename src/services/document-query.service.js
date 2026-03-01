@@ -1,4 +1,5 @@
 const documentModel = require('../models/document.model');
+const documentEventModel = require('../models/document-event.model');
 const NotFoundError = require('../errors/not-found-error');
 const { formatDocument } = require('../presenters/document.presenter');
 
@@ -17,4 +18,20 @@ async function getXml(accessKey, issuer) {
   return { xml, contentType: 'application/xml' };
 }
 
-module.exports = { getByAccessKey, getXml };
+async function getEvents(accessKey, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+  const rows = await documentEventModel.findByDocumentId(document.id);
+  return rows.map(e => ({
+    id: e.id,
+    eventType: e.event_type,
+    fromStatus: e.from_status,
+    toStatus: e.to_status,
+    detail: e.detail,
+    createdAt: e.created_at,
+  }));
+}
+
+module.exports = { getByAccessKey, getXml, getEvents };

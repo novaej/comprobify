@@ -3,6 +3,7 @@ const moment = require('moment');
 function formatDocument(doc) {
   return {
     accessKey: doc.access_key,
+    documentType: doc.document_type,
     sequential: String(doc.sequential).padStart(9, '0'),
     status: doc.status,
     issueDate: moment(doc.issue_date).format('DD/MM/YYYY'),

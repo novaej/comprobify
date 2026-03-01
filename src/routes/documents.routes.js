@@ -20,5 +20,6 @@ router.post('/:accessKey/rebuild', accessKeyParam, createInvoice, validateReques
 router.get('/:accessKey/ride', accessKeyParam, validateRequest, asyncHandler(controller.getRide));
 router.post('/:accessKey/email-retry', accessKeyParam, validateRequest, asyncHandler(controller.retrySingleEmail));
 router.get('/:accessKey/xml', accessKeyParam, validateRequest, asyncHandler(controller.getXml));
+router.get('/:accessKey/events', accessKeyParam, validateRequest, asyncHandler(controller.getEvents));
 
 module.exports = router;

@@ -2,6 +2,11 @@ const { body } = require('express-validator');
 const catalog = require('../models/catalog.model');
 
 const createInvoice = [
+  body('documentType')
+    .optional()
+    .isIn(['01'])
+    .withMessage('documentType must be a supported document type code'),
+
   body('issueDate')
     .optional()
     .matches(/^\d{2}\/\d{2}\/\d{4}$/)

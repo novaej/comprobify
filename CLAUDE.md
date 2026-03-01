@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–025
+db/migrations/     SQL migration files 001–027
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -74,7 +74,7 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry.
 
-**Idempotency key:** `POST /api/invoices` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
+**Idempotency key:** `POST /api/documents` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
 
 **Email delivery:** when a document becomes `AUTHORIZED`, `emailService.sendInvoiceAuthorized()` is called fire-and-forget. It generates the RIDE PDF and XML on the fly and sends both as attachments via Mailgun. Per-document status tracked in `documents.email_status` (`PENDING` → `SENT` / `FAILED` / `SKIPPED`). Failed sends retried via `POST /email-retry` (batch) or `POST /:key/email-retry` (single, add `?force=true` to resend an already-sent email). Provider swappable via `EMAIL_PROVIDER` env var + new file in `src/services/email/providers/`.
 
@@ -83,12 +83,13 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ## Document Lifecycle
 
 ```
-POST /api/invoices              → SIGNED   (Idempotency-Key header optional)
+POST /api/documents             → SIGNED   (Idempotency-Key header optional, documentType defaults to '01')
 POST /:key/send                 → RECEIVED | RETURNED
 GET  /:key/authorize            → AUTHORIZED | NOT_AUTHORIZED  (+fires email)
 POST /:key/rebuild              → SIGNED  (from RETURNED or NOT_AUTHORIZED)
 GET  /:key/ride                 → application/pdf  (AUTHORIZED only)
 GET  /:key/xml                  → application/xml  (authorization XML or signed XML)
+GET  /:key/events               → audit trail for the document
 POST /email-retry               → batch retry all PENDING/FAILED emails
 POST /:key/email-retry          → retry single email (?force=true to resend SENT)
 ```
@@ -179,6 +180,7 @@ chore: update express to 4.22.1
 | `src/errors/conflict-error.js` | AppError subclass for HTTP 409 |
 | `src/builders/index.js` | Builder registry |
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
-| `db/migrations/` | SQL migration files 001–025 |
+| `src/constants/document-state-machine.js` | `TRANSITIONS` map + `canTransition` / `assertTransition` |
+| `db/migrations/` | SQL migration files 001–027 |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

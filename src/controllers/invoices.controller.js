@@ -59,4 +59,9 @@ const getXml = async (req, res) => {
   res.send(xml);
 };
 
-module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml };
+const getEvents = async (req, res) => {
+  const events = await documentQuery.getEvents(req.params.accessKey, req.issuer);
+  res.json({ ok: true, events });
+};
+
+module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents };
