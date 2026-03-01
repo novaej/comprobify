@@ -12,5 +12,6 @@ router.get('/:accessKey', accessKeyParam, validateRequest, asyncHandler(controll
 router.post('/:accessKey/send', accessKeyParam, validateRequest, asyncHandler(controller.sendToSri));
 router.get('/:accessKey/authorize', accessKeyParam, validateRequest, asyncHandler(controller.checkAuthorization));
 router.post('/:accessKey/rebuild', accessKeyParam, createInvoice, validateRequest, asyncHandler(controller.rebuild));
+router.get('/:accessKey/ride', accessKeyParam, validateRequest, asyncHandler(controller.getRide));
 
 module.exports = router;
