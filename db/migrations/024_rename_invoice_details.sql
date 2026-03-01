@@ -1,0 +1,2 @@
+ALTER TABLE invoice_details RENAME TO document_line_items;
+ALTER INDEX idx_invoice_details_document_id RENAME TO idx_document_line_items_document_id;

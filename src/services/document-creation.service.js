@@ -2,9 +2,8 @@ const crypto = require('crypto');
 const moment = require('moment');
 const db = require('../config/database');
 const documentModel = require('../models/document.model');
-const invoiceDetailModel = require('../models/invoice-detail.model');
+const documentLineItemModel = require('../models/document-line-item.model');
 const documentEventModel = require('../models/document-event.model');
-const clientModel = require('../models/client.model');
 const sequentialService = require('./sequential.service');
 const accessKeyService = require('./access-key.service');
 const signingService = require('./signing.service');
@@ -122,7 +121,7 @@ async function create(body, idempotencyKey = null, issuer) {
     }, client);
 
     // Persist invoice line items within the same transaction
-    await invoiceDetailModel.bulkCreate(document.id, body.items, client);
+    await documentLineItemModel.bulkCreate(document.id, body.items, client);
 
     // Log audit event within the same transaction
     await documentEventModel.create(document.id, EventType.CREATED, null, DocumentStatus.SIGNED, {
@@ -143,11 +142,6 @@ async function create(body, idempotencyKey = null, issuer) {
   } finally {
     client.release();
   }
-
-  // Fire-and-forget buyer upsert — runs after commit, failure never affects the invoice
-  clientModel.findOrCreate(issuer.id, body.buyer).catch((err) => {
-    console.warn('Failed to upsert client record:', err.message);
-  });
 
   return { document: formatDocument(document), created: true };
 }

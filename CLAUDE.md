@@ -33,7 +33,7 @@ Route → Validator → Controller → Service → Model / Builder / Helper
 ```
 src/routes/        URL definitions + validator chains
 src/validators/    express-validator field rules
-src/middleware/    asyncHandler, validateRequest, errorHandler, idempotency
+src/middleware/    asyncHandler, validateRequest, errorHandler, idempotency, authenticate
 src/controllers/   thin HTTP handlers — one service call, one response
 src/services/      business logic and orchestration
 src/services/email/  email provider factory + Mailgun provider + templates
@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–021
+db/migrations/     SQL migration files 001–025
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -97,17 +97,16 @@ POST /:key/email-retry          → retry single email (?force=true to resend SE
 
 **Invoice generation steps:**
 1. Idempotency check — if key seen + hash matches, return existing doc immediately
-2. Load issuer (`issuers` table)
+2. Issuer provided via `req.issuer` (set by `authenticate` middleware from API key)
 3. `SELECT ... FOR UPDATE` → next sequential
 4. Generate 49-digit access key (Module 11 check digit)
 5. Build unsigned XML (`InvoiceBuilder`)
 6. Validate against XSD (`xmllint`)
 7. Sign XML (XAdES-BES, P12 cert)
-8. Extract `buyer_email` from `additionalInfo[name=Email]`
+8. Read `buyer_email` from `body.buyer.email` (required field)
 9. `INSERT` into `documents` (with `idempotency_key`, `payload_hash`, `buyer_email`)
-10. `bulkCreate` into `invoice_details`
+10. `bulkCreate` into `document_line_items`
 11. Log `CREATED` event to `document_events`
-12. Fire-and-forget upsert into `clients`
 
 ---
 
@@ -160,19 +159,26 @@ chore: update express to 4.22.1
 | `docs/guides/code-flow.md` | Layer-by-layer request walkthrough |
 | `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
 | `docs/adr/` | Architecture Decision Records |
-| `src/services/document.service.js` | Main orchestrator — invoice lifecycle |
+| `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.issuer` |
+| `src/middleware/idempotency.js` | Extracts + validates `Idempotency-Key` header |
+| `src/services/document-creation.service.js` | Invoice creation — sequential, XML, signing, persistence |
+| `src/services/document-transmission.service.js` | SRI send + authorization check + fire-and-forget email |
+| `src/services/document-rebuild.service.js` | Rebuild from RETURNED/NOT_AUTHORIZED |
+| `src/services/document-email.service.js` | Batch and single email retry |
+| `src/services/document-query.service.js` | Read-only document lookups |
 | `src/services/email.service.js` | Sends RIDE PDF + XML on authorization via provider |
 | `src/services/email/index.js` | Email provider factory (`EMAIL_PROVIDER` env var) |
 | `src/services/email/providers/mailgun.provider.js` | Mailgun SDK wrapper |
 | `src/services/email/templates/invoice-authorized.js` | Spanish email subject + text + HTML |
 | `src/services/ride.service.js` | RIDE PDF generation — on-demand, not persisted |
 | `src/services/sri.service.js` | SRI SOAP integration + retry logic |
-| `src/services/xml-validator.service.js` | XSD pre-validation via xmllint |
+| `src/services/xml-validator.service.js` | XSD pre-validation via xmllint (async) |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
-| `src/middleware/idempotency.js` | Extracts + validates `Idempotency-Key` header |
+| `src/presenters/document.presenter.js` | `formatDocument()` — shared response shape |
+| `src/models/api-key.model.js` | API key CRUD — `findByKeyHash`, `create`, `revoke` |
 | `src/errors/conflict-error.js` | AppError subclass for HTTP 409 |
 | `src/builders/index.js` | Builder registry |
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
-| `db/migrations/` | SQL migration files 001–021 |
+| `db/migrations/` | SQL migration files 001–025 |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

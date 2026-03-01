@@ -36,7 +36,7 @@ async function bulkCreate(documentId, items, client) {
   });
 
   const { rows } = await q.query(
-    `INSERT INTO invoice_details
+    `INSERT INTO document_line_items
       (document_id, main_code, aux_code, description, quantity, unit_price, discount, subtotal, taxes, line_total)
      VALUES ${placeholders.join(', ')}
      RETURNING *`,

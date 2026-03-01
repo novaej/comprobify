@@ -207,24 +207,18 @@ Step-by-step:
    → Inserts the document row (unsigned XML, signed XML, buyer_email, idempotency_key, payload_hash).
    → On 23505 unique violation (concurrent race): ROLLBACK, fetch winner, return created=false.
 
-9. invoiceDetailModel.bulkCreate(documentId, items)
-   → Inserts one row per line item into invoice_details for structured querying.
+9. documentLineItemModel.bulkCreate(documentId, items)
+   → Inserts one row per line item into document_line_items for structured querying.
 
 10. documentEventModel.create(documentId, 'CREATED', null, 'SIGNED', {...})
     → Writes the first audit log entry.
 
-11. clientModel.findOrCreate(issuerId, buyer)  [non-blocking]
-    → Upserts the buyer into the clients table.
-    → Fire-and-forget: a failure here does not abort the invoice response.
-
-12. Return { document: formatDocument(document), created: true }
+11. Return { document: formatDocument(document), created: true }
 ```
 
 **Why validate before signing?** Signing is the most expensive operation (P12 load + RSA crypto). Failing fast on XSD errors avoids wasting that time on a document that SRI would reject anyway.
 
 **Why store both unsigned and signed XML?** The unsigned XML is useful for debugging schema issues. The signed XML is what gets sent to SRI. Keeping both means you can re-inspect the document at any time without re-building.
-
-**Why is `clientModel.findOrCreate` fire-and-forget?** Buyer persistence is a convenience feature — it builds up a client catalogue over time. It is not part of the invoice creation contract. If it fails (e.g. a DB hiccup), the invoice has already been created and signed, so aborting would leave a dangling sequential number with no invoice row. The warning is logged so it is not silent.
 
 **Why SHA-256 for payload comparison?** Fetching the full JSONB `request_payload` from the DB and doing a deep JS equality check on every retry would be wasteful. A 64-character hex hash stored in a `TEXT` column is a constant-time comparison that adds zero query overhead.
 
@@ -452,13 +446,12 @@ All models use parameterized queries exclusively (`$1, $2, ...`) — never strin
 
 | Model | Table | Key operations |
 |---|---|---|
-| `issuer.model` | `issuers` | `findFirst`, `findByRuc`, `create` |
+| `issuer.model` | `issuers` | `findById`, `findByRuc`, `create` |
+| `api-key.model` | `api_keys` | `findByKeyHash`, `create`, `revoke` |
 | `document.model` | `documents` | `create`, `findByAccessKey`, `findById`, `updateStatus`, `findPendingEmails` |
 | (no model) | `sequential_numbers` | managed directly by `sequential.service` |
 | `sri-response.model` | `sri_responses` | `create`, `findByDocumentId` |
-| `client.model` | `clients` | `findOrCreate`, `findByIdentifier` |
-| `product.model` | `products` | `findByCode`, `upsert` |
-| `invoice-detail.model` | `invoice_details` | `bulkCreate` |
+| `document-line-item.model` | `document_line_items` | `bulkCreate` |
 | `document-event.model` | `document_events` | `create`, `findByDocumentId` |
 
 **Why raw `pg` instead of an ORM?** The queries are straightforward and the SRI lifecycle is domain-specific enough that the mapping overhead of an ORM adds more complexity than it removes. Raw `pg` queries are readable, debuggable, and do exactly what they say.
@@ -498,13 +491,12 @@ The `from_status` / `to_status` columns make it possible to reconstruct the exac
 
 ```
 issuers (1)
+  ├── api_keys (N)             ← one per API credential
   ├── documents (N)            ← one per invoice
-  │     ├── invoice_details    ← one per line item
+  │     ├── document_line_items ← one per line item
   │     ├── document_events    ← one per lifecycle transition
   │     └── sri_responses      ← one per SRI SOAP call
-  ├── sequential_numbers (N)   ← one per branch/point/docType combination
-  ├── clients (N)              ← buyers accumulated over time
-  └── products (N)             ← product catalogue
+  └── sequential_numbers (N)   ← one per branch/point/docType combination
 ```
 
 All child tables reference `issuers(id)` directly or via `documents(id)`, enabling multi-tenant filtering with a simple `WHERE issuer_id = $1`.
@@ -569,9 +561,8 @@ POST /api/invoices
                     ├── signingService.signXml()       decrypt password → XAdES-BES sign
                     ├── documentModel.create()         INSERT with idempotency_key + payload_hash
                     │     └── 23505 race → ROLLBACK, fetch winner, return 200 replay
-                    ├── invoiceDetailModel.bulkCreate() INSERT invoice_details rows
-                    ├── documentEventModel.create()    INSERT CREATED event
-                    └── clientModel.findOrCreate()     [fire-and-forget upsert]
+                    ├── documentLineItemModel.bulkCreate() INSERT document_line_items rows
+                    └── documentEventModel.create()    INSERT CREATED event
 
 → 201 { ok: true, document: {...} }   (new creation)
 → 200 { ok: true, document: {...} }   (idempotent replay)

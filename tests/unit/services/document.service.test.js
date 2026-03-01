@@ -1,8 +1,7 @@
 jest.mock('../../../src/models/issuer.model');
 jest.mock('../../../src/models/document.model');
-jest.mock('../../../src/models/invoice-detail.model');
+jest.mock('../../../src/models/document-line-item.model');
 jest.mock('../../../src/models/document-event.model');
-jest.mock('../../../src/models/client.model');
 jest.mock('../../../src/services/sequential.service');
 jest.mock('../../../src/services/access-key.service');
 jest.mock('../../../src/services/signing.service');
@@ -24,9 +23,8 @@ jest.mock('../../../src/config/database', () => ({
 
 const db = require('../../../src/config/database');
 const documentModel = require('../../../src/models/document.model');
-const invoiceDetailModel = require('../../../src/models/invoice-detail.model');
+const documentLineItemModel = require('../../../src/models/document-line-item.model');
 const documentEventModel = require('../../../src/models/document-event.model');
-const clientModel = require('../../../src/models/client.model');
 const sequentialService = require('../../../src/services/sequential.service');
 const accessKeyService = require('../../../src/services/access-key.service');
 const signingService = require('../../../src/services/signing.service');
@@ -83,9 +81,8 @@ describe('DocumentCreationService', () => {
     builders.getBuilder.mockReturnValue(mockBuilder);
     signingService.signXml.mockReturnValue('<factura>signed-xml</factura>');
     xmlValidator.validate.mockResolvedValue({ valid: true });
-    invoiceDetailModel.bulkCreate.mockResolvedValue([]);
+    documentLineItemModel.bulkCreate.mockResolvedValue([]);
     documentEventModel.create.mockResolvedValue({});
-    clientModel.findOrCreate.mockResolvedValue({});
 
     documentModel.create.mockResolvedValue({
       id: 1,
@@ -147,7 +144,7 @@ describe('DocumentCreationService', () => {
 
   test('create persists invoice_details and logs CREATED event', async () => {
     await documentCreation.create(validBody, null, mockIssuer);
-    expect(invoiceDetailModel.bulkCreate).toHaveBeenCalledWith(1, validBody.items, mockClient);
+    expect(documentLineItemModel.bulkCreate).toHaveBeenCalledWith(1, validBody.items, mockClient);
     expect(documentEventModel.create).toHaveBeenCalledWith(
       1, 'CREATED', null, 'SIGNED', expect.any(Object), mockClient
     );
