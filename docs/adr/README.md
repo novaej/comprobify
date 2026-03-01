@@ -88,3 +88,4 @@ YYYY-MM-DD
 | [001](001-layered-architecture.md) | Layered Express Architecture | Accepted | 2026-02-26 |
 | [002](002-postgresql-sequential-locking.md) | PostgreSQL SELECT FOR UPDATE for Sequential Numbers | Accepted | 2026-02-26 |
 | [003](003-xmllint-xsd-validation.md) | xmllint for XSD Validation | Accepted | 2026-02-27 |
+| [004](004-xades-bes-signature-profile.md) | XAdES-BES Signature Profile | Accepted | 2026-02-28 |
