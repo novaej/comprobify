@@ -89,11 +89,12 @@ The top-level `index.js` is a simple aggregator. Adding a new resource (e.g. `/a
 Each route in `invoices.routes.js` follows the same pattern:
 
 ```
-[validator chain]  →  validateRequest  →  asyncHandler(controller.fn)
+[optional middleware]  →  [validator chain]  →  validateRequest  →  asyncHandler(controller.fn)
 ```
 
 **Why this pattern?**
 
+- **Optional middleware** (e.g. `extractIdempotencyKey`): thin, synchronous header extraction that runs before body validation. Keeps HTTP-level concerns out of the controller.
 - **Validator chain** (`express-validator`): declarative field rules applied before the controller runs. Keeps validation logic out of the controller.
 - **`validateRequest` middleware**: reads the validation result from the chain and throws a `ValidationError` if any field failed. Keeps the controller clean — it never sees invalid input.
 - **`asyncHandler` wrapper**: wraps the async controller function in a try/catch that calls `next(err)` on rejection. Without this, unhandled promise rejections in async route handlers crash silently in older Express versions (Express 4 does not catch them automatically).
@@ -165,11 +166,17 @@ The `ok: false` / `ok: true` convention on all responses lets callers check a si
 
 This is the orchestrator. It coordinates all other services and models to implement the four operations of the invoice lifecycle.
 
-### `create(body)` — POST /api/invoices
+### `create(body, idempotencyKey)` — POST /api/invoices
 
 Step-by-step:
 
 ```
+0. [If Idempotency-Key header present]
+   documentModel.findByIdempotencyKey(key)
+   → Found + hash matches  → return existing document, created=false (200, no transaction opened)
+   → Found + hash differs  → throw ConflictError 409
+   → Not found             → compute payloadHash = SHA-256(body), continue
+
 1. issuerModel.findFirst()
    → Load the active issuer from the DB (RUC, cert path, environment, branch, etc.)
    → Throws AppError 500 if none configured.
@@ -196,8 +203,9 @@ Step-by-step:
    → (body.additionalInfo || []).find(f => f.name.toLowerCase() === 'email')?.value
    → Stored in documents.buyer_email for efficient batch queries later.
 
-8. documentModel.create({...})
-   → Inserts the document row (both unsigned and signed XML stored, buyer_email included).
+8. documentModel.create({ ..., idempotencyKey, payloadHash })
+   → Inserts the document row (unsigned XML, signed XML, buyer_email, idempotency_key, payload_hash).
+   → On 23505 unique violation (concurrent race): ROLLBACK, fetch winner, return created=false.
 
 9. invoiceDetailModel.bulkCreate(documentId, items)
    → Inserts one row per line item into invoice_details for structured querying.
@@ -209,7 +217,7 @@ Step-by-step:
     → Upserts the buyer into the clients table.
     → Fire-and-forget: a failure here does not abort the invoice response.
 
-12. Return formatDocument(document)
+12. Return { document: formatDocument(document), created: true }
 ```
 
 **Why validate before signing?** Signing is the most expensive operation (P12 load + RSA crypto). Failing fast on XSD errors avoids wasting that time on a document that SRI would reject anyway.
@@ -217,6 +225,10 @@ Step-by-step:
 **Why store both unsigned and signed XML?** The unsigned XML is useful for debugging schema issues. The signed XML is what gets sent to SRI. Keeping both means you can re-inspect the document at any time without re-building.
 
 **Why is `clientModel.findOrCreate` fire-and-forget?** Buyer persistence is a convenience feature — it builds up a client catalogue over time. It is not part of the invoice creation contract. If it fails (e.g. a DB hiccup), the invoice has already been created and signed, so aborting would leave a dangling sequential number with no invoice row. The warning is logged so it is not silent.
+
+**Why SHA-256 for payload comparison?** Fetching the full JSONB `request_payload` from the DB and doing a deep JS equality check on every retry would be wasteful. A 64-character hex hash stored in a `TEXT` column is a constant-time comparison that adds zero query overhead.
+
+**Why handle the 23505 race in the catch block?** Two concurrent requests with the same key can both pass the pre-transaction lookup (neither row exists yet) and race to the `INSERT`. The partial unique index guarantees only one wins. The loser catches the `23505` error code, rolls back, fetches the winner, and returns it — so the caller gets the correct `200` replay instead of a confusing `500`.
 
 ---
 
@@ -539,24 +551,30 @@ Generates the RIDE (Representación Impresa del Documento Electrónico) PDF for 
 ```
 POST /api/invoices
   │
-  ├── express.json()           parse JSON body
-  ├── createInvoice validator  check every field
-  ├── validateRequest          throw 400 if any field invalid
+  ├── express.json()              parse JSON body
+  ├── extractIdempotencyKey       read Idempotency-Key header → req.idempotencyKey
+  ├── createInvoice validator     check every field
+  ├── validateRequest             throw 400 if any field invalid
   └── asyncHandler
         └── controller.create
-              └── documentService.create
+              └── documentService.create(body, idempotencyKey)
+                    ├── [key present] documentModel.findByIdempotencyKey()
+                    │     ├── found + hash match  → return existing doc (200, no transaction)
+                    │     └── found + hash diff   → ConflictError 409
                     ├── issuerModel.findFirst()        load issuer
                     ├── sequentialService.getNext()    BEGIN / SELECT FOR UPDATE / COMMIT
                     ├── accessKeyService.generate()    49-digit key + check digit
                     ├── InvoiceBuilder.build()         build unsigned XML
                     ├── xmlValidator.validate()        XSD check → 400 if invalid
                     ├── signingService.signXml()       decrypt password → XAdES-BES sign
-                    ├── documentModel.create()         INSERT documents row
+                    ├── documentModel.create()         INSERT with idempotency_key + payload_hash
+                    │     └── 23505 race → ROLLBACK, fetch winner, return 200 replay
                     ├── invoiceDetailModel.bulkCreate() INSERT invoice_details rows
                     ├── documentEventModel.create()    INSERT CREATED event
                     └── clientModel.findOrCreate()     [fire-and-forget upsert]
 
-→ 201 { ok: true, document: { accessKey, sequential, status, issueDate, total } }
+→ 201 { ok: true, document: {...} }   (new creation)
+→ 200 { ok: true, document: {...} }   (idempotent replay)
 
 POST /api/invoices/:key/send
   └── documentService.sendToSri

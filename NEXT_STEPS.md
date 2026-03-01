@@ -2,18 +2,13 @@
 
 Features deferred from the SRI gap analysis. Implement when the core lifecycle is stable and in production.
 
-## Idempotency Key ⚠️ Priority
+## ~~Idempotency Key~~ ✅ Done
 
-Submitting the same request body twice creates two separate invoices — each gets a new sequential and access key. There is currently no duplicate detection on content.
-
-To prevent this, callers should send a unique idempotency key per intended invoice (e.g. their internal order ID). The API would:
-
-- Accept an `Idempotency-Key` header (or `idempotencyKey` body field)
-- Store it in a dedicated `idempotency_key` column on `documents` (with a UNIQUE constraint)
-- On a duplicate key: return the existing document with `200` instead of creating a new one
-- On a key conflict with a different payload: return `409 Conflict`
-
-**Now more urgent with email delivery live:** a network retry on `POST /api/invoices` creates a second invoice that, once authorized, fires a second email to the buyer — duplicating both the document and the notification. This must be implemented before enabling the async queue, where retries are frequent by design.
+Implemented in migration 021 and `src/middleware/idempotency.js`:
+- `Idempotency-Key` header on `POST /api/invoices`
+- SHA-256 payload hash stored alongside the key — same key + same body → `200` replay; same key + different body → `409 Conflict`
+- Concurrent race handled: `23505` unique violation caught in the transaction rollback path, fetches the winner and returns it as a replay
+- `src/errors/conflict-error.js` — new `AppError` subclass (409)
 
 ---
 
@@ -54,7 +49,6 @@ Remaining: issuer logo (`logo_path`) not yet rendered in emails (column exists i
 - Background worker for send + authorize steps (bull or pg-boss)
 - Removes SRI network latency from HTTP response path
 - Dead-letter queue for permanently failed documents
-- **Requires idempotency key first** — retries would otherwise create duplicate invoices and duplicate emails
 
 ## Docker / Containers
 

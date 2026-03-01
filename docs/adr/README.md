@@ -90,3 +90,4 @@ YYYY-MM-DD
 | [003](003-xmllint-xsd-validation.md) | xmllint for XSD Validation | Accepted | 2026-02-27 |
 | [004](004-xades-bes-signature-profile.md) | XAdES-BES Signature Profile | Accepted | 2026-02-28 |
 | [005](005-email-delivery.md) | Email Delivery via Mailgun | Accepted | 2026-03-01 |
+| [006](006-idempotency-key.md) | Idempotency Key for Invoice Creation | Accepted | 2026-03-01 |
