@@ -1,5 +1,4 @@
 const moment = require('moment');
-const issuerModel = require('../models/issuer.model');
 const documentModel = require('../models/document.model');
 const documentEventModel = require('../models/document-event.model');
 const signingService = require('./signing.service');
@@ -14,8 +13,8 @@ const { formatDocument } = require('../presenters/document.presenter');
 
 const DOCUMENT_TYPE_INVOICE = '01';
 
-async function rebuild(accessKey, body) {
-  const document = await documentModel.findByAccessKey(accessKey);
+async function rebuild(accessKey, body, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
   if (!document) {
     throw new NotFoundError('Document');
   }
@@ -26,8 +25,6 @@ async function rebuild(accessKey, body) {
       400
     );
   }
-
-  const issuer = await issuerModel.findById(document.issuer_id);
 
   // Preserve the original issue date, access key, and sequential — only the
   // invoice content (taxes, items, buyer, payments) is corrected by the caller

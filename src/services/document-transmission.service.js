@@ -1,4 +1,3 @@
-const issuerModel = require('../models/issuer.model');
 const documentModel = require('../models/document.model');
 const documentEventModel = require('../models/document-event.model');
 const sriService = require('./sri.service');
@@ -11,8 +10,8 @@ const EventType = require('../constants/event-type');
 const OperationType = require('../constants/operation-type');
 const { formatDocument } = require('../presenters/document.presenter');
 
-async function sendToSri(accessKey) {
-  const document = await documentModel.findByAccessKey(accessKey);
+async function sendToSri(accessKey, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
   if (!document) {
     throw new NotFoundError('Document');
   }
@@ -20,7 +19,6 @@ async function sendToSri(accessKey) {
     throw new AppError(`Cannot send document with status ${document.status}. Must be ${DocumentStatus.SIGNED}.`, 400);
   }
 
-  const issuer = await issuerModel.findById(document.issuer_id);
   let result;
   try {
     result = await sriService.sendReceipt(document.signed_xml, issuer.environment);
@@ -50,8 +48,8 @@ async function sendToSri(accessKey) {
   return formatDocument(updated);
 }
 
-async function checkAuthorization(accessKey) {
-  const document = await documentModel.findByAccessKey(accessKey);
+async function checkAuthorization(accessKey, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
   if (!document) {
     throw new NotFoundError('Document');
   }
@@ -62,7 +60,6 @@ async function checkAuthorization(accessKey) {
     );
   }
 
-  const issuer = await issuerModel.findById(document.issuer_id);
   let result;
   try {
     result = await sriService.checkAuthorization(accessKey, issuer.environment);

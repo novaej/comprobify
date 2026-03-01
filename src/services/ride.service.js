@@ -6,9 +6,9 @@ const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
 
-async function generate(accessKeyOrDocument) {
+async function generate(accessKeyOrDocument, issuerOverride = null) {
   const document = typeof accessKeyOrDocument === 'string'
-    ? await documentModel.findByAccessKey(accessKeyOrDocument)
+    ? await documentModel.findByAccessKey(accessKeyOrDocument, issuerOverride?.id || null)
     : accessKeyOrDocument;
 
   if (!document) {
@@ -21,7 +21,7 @@ async function generate(accessKeyOrDocument) {
     );
   }
 
-  const issuer = await issuerModel.findById(document.issuer_id);
+  const issuer = issuerOverride || await issuerModel.findById(document.issuer_id);
   const payload = document.request_payload;
 
   // Resolve catalog labels for buyer id type

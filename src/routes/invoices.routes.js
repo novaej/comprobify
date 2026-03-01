@@ -3,10 +3,13 @@ const controller = require('../controllers/invoices.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const extractIdempotencyKey = require('../middleware/idempotency');
+const authenticate = require('../middleware/authenticate');
 const { createInvoice } = require('../validators/invoice.validator');
 const { accessKeyParam } = require('../validators/common.validator');
 
 const router = Router();
+
+router.use(asyncHandler(authenticate));
 
 router.post('/', extractIdempotencyKey, createInvoice, validateRequest, asyncHandler(controller.create));
 router.post('/email-retry', asyncHandler(controller.retryEmails));

@@ -13,8 +13,12 @@ async function create({ issuerId, documentType, accessKey, sequential, branchCod
   return rows[0];
 }
 
-async function findByAccessKey(accessKey) {
-  const { rows } = await db.query('SELECT * FROM documents WHERE access_key = $1', [accessKey]);
+async function findByAccessKey(accessKey, issuerId = null) {
+  const query = issuerId
+    ? 'SELECT * FROM documents WHERE access_key = $1 AND issuer_id = $2'
+    : 'SELECT * FROM documents WHERE access_key = $1';
+  const params = issuerId ? [accessKey, issuerId] : [accessKey];
+  const { rows } = await db.query(query, params);
   return rows[0] || null;
 }
 
@@ -49,14 +53,16 @@ async function findByIdempotencyKey(key) {
   return rows[0] || null;
 }
 
-async function findPendingEmails() {
+async function findPendingEmails(issuerId) {
   const { rows } = await db.query(
     `SELECT * FROM documents
-     WHERE  status = 'AUTHORIZED'
+     WHERE  issuer_id = $1
+       AND  status = 'AUTHORIZED'
        AND  email_status IN ('PENDING', 'FAILED')
        AND  buyer_email IS NOT NULL
      ORDER BY created_at ASC
-     LIMIT 100`
+     LIMIT 100`,
+    [issuerId]
   );
   return rows;
 }

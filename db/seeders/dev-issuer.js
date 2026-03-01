@@ -16,6 +16,7 @@
 
 require('dotenv').config();
 
+const crypto = require('crypto');
 const { Pool } = require('pg');
 const config = require('../../src/config');
 const cryptoService = require('../../src/services/crypto.service');
@@ -91,6 +92,21 @@ async function seed() {
 
     const issuer = rows[0];
     console.log(`✓ Dev issuer seeded — id: ${issuer.id}, ruc: ${issuer.ruc}, env: ${issuer.environment}`);
+
+    // Generate a dev API key and store its hash
+    const plainKey = crypto.randomBytes(32).toString('hex');
+    const keyHash = crypto.createHash('sha256').update(plainKey).digest('hex');
+
+    await client.query(
+      `INSERT INTO api_keys (issuer_id, key_hash, label)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (key_hash) DO NOTHING`,
+      [issuer.id, keyHash, 'dev']
+    );
+
+    console.log(`✓ Dev API key created`);
+    console.log(`  Bearer token: ${plainKey}`);
+    console.log(`  (Store this — it cannot be recovered from the DB)`);
   } finally {
     client.release();
     await pool.end();

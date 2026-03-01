@@ -1,7 +1,6 @@
 const crypto = require('crypto');
 const moment = require('moment');
 const db = require('../config/database');
-const issuerModel = require('../models/issuer.model');
 const documentModel = require('../models/document.model');
 const invoiceDetailModel = require('../models/invoice-detail.model');
 const documentEventModel = require('../models/document-event.model');
@@ -11,7 +10,6 @@ const accessKeyService = require('./access-key.service');
 const signingService = require('./signing.service');
 const xmlValidator = require('./xml-validator.service');
 const { getBuilder } = require('../builders');
-const AppError = require('../errors/app-error');
 const ValidationError = require('../errors/validation-error');
 const ConflictError = require('../errors/conflict-error');
 const DocumentStatus = require('../constants/document-status');
@@ -24,15 +22,7 @@ function hashPayload(body) {
   return crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
 }
 
-async function getIssuer() {
-  const issuer = await issuerModel.findFirst();
-  if (!issuer) {
-    throw new AppError('No active issuer configured', 500);
-  }
-  return issuer;
-}
-
-async function create(body, idempotencyKey = null) {
+async function create(body, idempotencyKey = null, issuer) {
   if (idempotencyKey) {
     const existing = await documentModel.findByIdempotencyKey(idempotencyKey);
     if (existing) {
@@ -47,7 +37,6 @@ async function create(body, idempotencyKey = null) {
 
   const payloadHash = idempotencyKey ? hashPayload(body) : null;
 
-  const issuer = await getIssuer();
   const issueDate = body.issueDate || moment().format('DD/MM/YYYY');
 
   // Open a single transaction that covers sequential assignment, XML build/validate/sign,
@@ -163,4 +152,4 @@ async function create(body, idempotencyKey = null) {
   return { document: formatDocument(document), created: true };
 }
 
-module.exports = { create, hashPayload, getIssuer };
+module.exports = { create, hashPayload };

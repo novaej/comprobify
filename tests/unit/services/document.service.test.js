@@ -23,7 +23,6 @@ jest.mock('../../../src/config/database', () => ({
 }));
 
 const db = require('../../../src/config/database');
-const issuerModel = require('../../../src/models/issuer.model');
 const documentModel = require('../../../src/models/document.model');
 const invoiceDetailModel = require('../../../src/models/invoice-detail.model');
 const documentEventModel = require('../../../src/models/document-event.model');
@@ -73,7 +72,6 @@ describe('DocumentCreationService', () => {
     db.getClient.mockResolvedValue(mockClient);
     mockClient.query.mockResolvedValue({});
 
-    issuerModel.findFirst.mockResolvedValue(mockIssuer);
     sequentialService.getNext.mockResolvedValue(263);
     accessKeyService.generate.mockResolvedValue('2602202601171234567800110010010000002630000026311');
 
@@ -101,10 +99,9 @@ describe('DocumentCreationService', () => {
   });
 
   test('create calls services in correct order and saves document', async () => {
-    const { document, created } = await documentCreation.create(validBody);
+    const { document, created } = await documentCreation.create(validBody, null, mockIssuer);
 
-    expect(issuerModel.findFirst).toHaveBeenCalled();
-    // sequential is called with the transaction client as the 5th argument
+    // issuer is now passed in — no DB lookup
     expect(sequentialService.getNext).toHaveBeenCalledWith(1, '001', '001', '01', mockClient);
     expect(accessKeyService.generate).toHaveBeenCalled();
     expect(builders.getBuilder).toHaveBeenCalledWith('01', mockIssuer);
@@ -121,7 +118,7 @@ describe('DocumentCreationService', () => {
   });
 
   test('create commits the transaction on success', async () => {
-    await documentCreation.create(validBody);
+    await documentCreation.create(validBody, null, mockIssuer);
     expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
     expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
     expect(mockClient.release).toHaveBeenCalled();
@@ -132,14 +129,9 @@ describe('DocumentCreationService', () => {
       valid: false,
       errors: [{ message: 'Element infoFactura is not valid' }],
     });
-    await expect(documentCreation.create(validBody)).rejects.toMatchObject({ statusCode: 400 });
+    await expect(documentCreation.create(validBody, null, mockIssuer)).rejects.toMatchObject({ statusCode: 400 });
     expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
     expect(mockClient.release).toHaveBeenCalled();
-  });
-
-  test('create throws when no issuer configured', async () => {
-    issuerModel.findFirst.mockResolvedValue(null);
-    await expect(documentCreation.create(validBody)).rejects.toThrow('No active issuer configured');
   });
 
   test('create throws ValidationError when XSD validation fails', async () => {
@@ -147,14 +139,14 @@ describe('DocumentCreationService', () => {
       valid: false,
       errors: [{ message: 'Element infoFactura is not valid' }],
     });
-    await expect(documentCreation.create(validBody)).rejects.toMatchObject({
+    await expect(documentCreation.create(validBody, null, mockIssuer)).rejects.toMatchObject({
       statusCode: 400,
       errors: [{ message: 'Element infoFactura is not valid' }],
     });
   });
 
   test('create persists invoice_details and logs CREATED event', async () => {
-    await documentCreation.create(validBody);
+    await documentCreation.create(validBody, null, mockIssuer);
     expect(invoiceDetailModel.bulkCreate).toHaveBeenCalledWith(1, validBody.items, mockClient);
     expect(documentEventModel.create).toHaveBeenCalledWith(
       1, 'CREATED', null, 'SIGNED', expect.any(Object), mockClient
@@ -180,7 +172,7 @@ describe('DocumentCreationService', () => {
     test('returns existing document with created=false when key and payload match', async () => {
       documentModel.findByIdempotencyKey.mockResolvedValue(existingDoc);
 
-      const result = await documentCreation.create(validBody, IDEM_KEY);
+      const result = await documentCreation.create(validBody, IDEM_KEY, mockIssuer);
 
       expect(result.created).toBe(false);
       expect(result.document.accessKey).toBe(existingDoc.access_key);
@@ -194,12 +186,12 @@ describe('DocumentCreationService', () => {
         payload_hash: 'completely-different-hash',
       });
 
-      await expect(documentCreation.create(validBody, IDEM_KEY))
+      await expect(documentCreation.create(validBody, IDEM_KEY, mockIssuer))
         .rejects.toMatchObject({ statusCode: 409 });
     });
 
     test('creates new document with created=true when no idempotency key provided', async () => {
-      const result = await documentCreation.create(validBody);
+      const result = await documentCreation.create(validBody, null, mockIssuer);
 
       expect(result.created).toBe(true);
       expect(documentModel.findByIdempotencyKey).not.toHaveBeenCalled();
@@ -207,7 +199,7 @@ describe('DocumentCreationService', () => {
     });
 
     test('creates new document with created=true when key is new', async () => {
-      const result = await documentCreation.create(validBody, IDEM_KEY);
+      const result = await documentCreation.create(validBody, IDEM_KEY, mockIssuer);
 
       expect(result.created).toBe(true);
       expect(documentModel.create).toHaveBeenCalledWith(
@@ -232,14 +224,17 @@ describe('DocumentQueryService', () => {
       total: '112.00',
     });
 
-    const result = await documentQuery.getByAccessKey('2602202601171234567800110010010000002630000026311');
+    const result = await documentQuery.getByAccessKey('2602202601171234567800110010010000002630000026311', mockIssuer);
     expect(result.accessKey).toBe('2602202601171234567800110010010000002630000026311');
     expect(result.status).toBe('SIGNED');
+    expect(documentModel.findByAccessKey).toHaveBeenCalledWith(
+      '2602202601171234567800110010010000002630000026311', mockIssuer.id
+    );
   });
 
   test('getByAccessKey returns null for unknown key', async () => {
     documentModel.findByAccessKey.mockResolvedValue(null);
-    const result = await documentQuery.getByAccessKey('0000000000000000000000000000000000000000000000000');
+    const result = await documentQuery.getByAccessKey('0000000000000000000000000000000000000000000000000', mockIssuer);
     expect(result).toBeNull();
   });
 });
@@ -256,17 +251,17 @@ describe('DocumentTransmissionService', () => {
       signed_xml: '<xml/>',
     });
 
-    await expect(documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789'))
+    await expect(documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer))
       .rejects.toThrow('Cannot send document with status AUTHORIZED');
   });
 
-  test('checkAuthorization rejects when status is not RECEIVED or NOT_AUTHORIZED', async () => {
+  test('checkAuthorization rejects when status is not RECEIVED', async () => {
     documentModel.findByAccessKey.mockResolvedValue({
       id: 1,
       status: 'SIGNED',
     });
 
-    await expect(documentTransmission.checkAuthorization('1234567890123456789012345678901234567890123456789'))
+    await expect(documentTransmission.checkAuthorization('1234567890123456789012345678901234567890123456789', mockIssuer))
       .rejects.toThrow('Cannot check authorization for document with status SIGNED');
   });
 });

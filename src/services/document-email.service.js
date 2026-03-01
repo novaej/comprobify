@@ -6,8 +6,8 @@ const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
 
-async function retryFailedEmails() {
-  const documents = await documentModel.findPendingEmails();
+async function retryFailedEmails(issuer) {
+  const documents = await documentModel.findPendingEmails(issuer.id);
   const result = { sent: 0, failed: 0 };
 
   for (const doc of documents) {
@@ -35,8 +35,8 @@ async function retryFailedEmails() {
   return result;
 }
 
-async function retrySingleEmail(accessKey, { force = false } = {}) {
-  const document = await documentModel.findByAccessKey(accessKey);
+async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
   if (!document) {
     throw new NotFoundError('Document');
   }
