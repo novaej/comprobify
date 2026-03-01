@@ -2,12 +2,13 @@ const { Router } = require('express');
 const controller = require('../controllers/invoices.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
+const extractIdempotencyKey = require('../middleware/idempotency');
 const { createInvoice } = require('../validators/invoice.validator');
 const { accessKeyParam } = require('../validators/common.validator');
 
 const router = Router();
 
-router.post('/', createInvoice, validateRequest, asyncHandler(controller.create));
+router.post('/', extractIdempotencyKey, createInvoice, validateRequest, asyncHandler(controller.create));
 router.post('/email-retry', asyncHandler(controller.retryEmails));
 router.get('/:accessKey', accessKeyParam, validateRequest, asyncHandler(controller.getByAccessKey));
 router.post('/:accessKey/send', accessKeyParam, validateRequest, asyncHandler(controller.sendToSri));

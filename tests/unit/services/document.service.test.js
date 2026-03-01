@@ -92,10 +92,11 @@ describe('DocumentService', () => {
       issue_date: new Date('2026-02-26'),
       total: '112.00',
     });
+    documentModel.findByIdempotencyKey.mockResolvedValue(null);
   });
 
   test('create calls services in correct order and saves document', async () => {
-    const result = await documentService.create(validBody);
+    const { document, created } = await documentService.create(validBody);
 
     expect(issuerModel.findFirst).toHaveBeenCalled();
     // sequential is now called with the transaction client as the 5th argument
@@ -108,9 +109,10 @@ describe('DocumentService', () => {
       'encrypted-password'
     );
     expect(documentModel.create).toHaveBeenCalled();
-    expect(result.status).toBe('SIGNED');
-    expect(result.accessKey).toBeDefined();
-    expect(result.sequential).toBe('000000263');
+    expect(created).toBe(true);
+    expect(document.status).toBe('SIGNED');
+    expect(document.accessKey).toBeDefined();
+    expect(document.sequential).toBe('000000263');
   });
 
   test('create commits the transaction on success', async () => {
@@ -152,6 +154,62 @@ describe('DocumentService', () => {
     expect(documentEventModel.create).toHaveBeenCalledWith(
       1, 'CREATED', null, 'SIGNED', expect.any(Object), mockClient
     );
+  });
+
+  describe('Idempotency', () => {
+    const IDEM_KEY = 'order-abc-123';
+    const crypto = require('crypto');
+    const payloadHash = crypto.createHash('sha256').update(JSON.stringify(validBody)).digest('hex');
+
+    const existingDoc = {
+      id: 99,
+      access_key: '2602202601171234567800110010010000002630000026311',
+      sequential: 263,
+      status: 'SIGNED',
+      issue_date: new Date('2026-02-26'),
+      total: '112.00',
+      idempotency_key: IDEM_KEY,
+      payload_hash: payloadHash,
+    };
+
+    test('returns existing document with created=false when key and payload match', async () => {
+      documentModel.findByIdempotencyKey.mockResolvedValue(existingDoc);
+
+      const result = await documentService.create(validBody, IDEM_KEY);
+
+      expect(result.created).toBe(false);
+      expect(result.document.accessKey).toBe(existingDoc.access_key);
+      expect(documentModel.create).not.toHaveBeenCalled();
+      expect(sequentialService.getNext).not.toHaveBeenCalled();
+    });
+
+    test('throws ConflictError when key exists but payload differs', async () => {
+      documentModel.findByIdempotencyKey.mockResolvedValue({
+        ...existingDoc,
+        payload_hash: 'completely-different-hash',
+      });
+
+      await expect(documentService.create(validBody, IDEM_KEY))
+        .rejects.toMatchObject({ statusCode: 409 });
+    });
+
+    test('creates new document with created=true when no idempotency key provided', async () => {
+      const result = await documentService.create(validBody);
+
+      expect(result.created).toBe(true);
+      expect(documentModel.findByIdempotencyKey).not.toHaveBeenCalled();
+      expect(documentModel.create).toHaveBeenCalled();
+    });
+
+    test('creates new document with created=true when key is new', async () => {
+      const result = await documentService.create(validBody, IDEM_KEY);
+
+      expect(result.created).toBe(true);
+      expect(documentModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: IDEM_KEY }),
+        mockClient
+      );
+    });
   });
 
   test('getByAccessKey returns formatted document', async () => {

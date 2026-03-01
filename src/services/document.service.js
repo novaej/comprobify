@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const moment = require('moment');
 const config = require('../config');
 const db = require('../config/database');
@@ -14,6 +15,7 @@ const { getBuilder } = require('../builders');
 const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const ValidationError = require('../errors/validation-error');
+const ConflictError = require('../errors/conflict-error');
 const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
 const OperationType = require('../constants/operation-type');
@@ -21,6 +23,10 @@ const SriErrorCodes = require('../constants/sri-error-codes');
 const emailService = require('./email.service');
 
 const DOCUMENT_TYPE_INVOICE = '01';
+
+function hashPayload(body) {
+  return crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
+}
 
 async function getIssuer() {
   const issuer = await issuerModel.findFirst();
@@ -30,7 +36,21 @@ async function getIssuer() {
   return issuer;
 }
 
-async function create(body) {
+async function create(body, idempotencyKey = null) {
+  if (idempotencyKey) {
+    const existing = await documentModel.findByIdempotencyKey(idempotencyKey);
+    if (existing) {
+      if (hashPayload(body) !== existing.payload_hash) {
+        throw new ConflictError(
+          'Idempotency-Key reuse: the request body does not match the original request'
+        );
+      }
+      return { document: formatDocument(existing), created: false };
+    }
+  }
+
+  const payloadHash = idempotencyKey ? hashPayload(body) : null;
+
   const issuer = await getIssuer();
   const issueDate = body.issueDate || moment().format('DD/MM/YYYY');
 
@@ -111,6 +131,8 @@ async function create(body) {
       total: builder.total,
       requestPayload: body,
       buyerEmail,
+      idempotencyKey,
+      payloadHash,
     }, client);
 
     // Persist invoice line items within the same transaction
@@ -125,6 +147,12 @@ async function create(body) {
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
+    // Two concurrent requests with the same idempotency key — the second one lost the
+    // race to the UNIQUE index. Fetch the winner and return it as a replay.
+    if (idempotencyKey && err.code === '23505') {
+      const winner = await documentModel.findByIdempotencyKey(idempotencyKey);
+      if (winner) return { document: formatDocument(winner), created: false };
+    }
     throw err;
   } finally {
     client.release();
@@ -135,7 +163,7 @@ async function create(body) {
     console.warn('Failed to upsert client record:', err.message);
   });
 
-  return formatDocument(document);
+  return { document: formatDocument(document), created: true };
 }
 
 async function getByAccessKey(accessKey) {

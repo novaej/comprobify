@@ -3,8 +3,8 @@ const rideService = require('../services/ride.service');
 const NotFoundError = require('../errors/not-found-error');
 
 const create = async (req, res) => {
-  const document = await documentService.create(req.body);
-  res.status(201).json({ ok: true, document });
+  const { document, created } = await documentService.create(req.body, req.idempotencyKey);
+  res.status(created ? 201 : 200).json({ ok: true, document });
 };
 
 const getByAccessKey = async (req, res) => {
