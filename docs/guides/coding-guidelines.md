@@ -29,9 +29,30 @@ Route → Validator → Controller → Service → Model / Builder / Helper
 
 ---
 
+## Document state transitions
+
+When a service operation changes document status, use `assertTransition` instead of a manual `if` check:
+
+```js
+const { assertTransition } = require('../constants/document-state-machine');
+const DocumentStatus = require('../constants/document-status');
+
+// ✅ correct — uses the canonical state machine
+assertTransition(document.status, DocumentStatus.RECEIVED);
+
+// ❌ never do this — duplicates the state graph in ad-hoc logic
+if (document.status !== DocumentStatus.SIGNED) {
+  throw new AppError('...', 400);
+}
+```
+
+`assertTransition(from, to)` throws `AppError(400)` with `"Invalid state transition: X → Y"` if the transition is not in the allowed graph defined in `src/constants/document-state-machine.js`. The same graph is enforced at the DB level by `trg_document_state_transition`.
+
+---
+
 ## Adding a new document type
 
-The builder registry makes this a four-step process:
+The builder registry makes this a five-step process:
 
 **1. Create the builder** — extend `BaseDocumentBuilder`:
 
@@ -66,6 +87,8 @@ const builders = {
 **3. Add the XSD** for the new document type to `assets/` (download from SRI).
 
 **4. Update `xml-validator.service.js`** to select the correct schema by document type code.
+
+**5. Add the type code** to the `isIn([...])` list in `src/validators/invoice.validator.js` (`documentType` field).
 
 ---
 
@@ -203,7 +226,7 @@ await documentEventModel.create(document.id, 'STATUS_CHANGED', 'RECEIVED', 'AUTH
 });
 ```
 
-Use these event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`. Always log an `ERROR` event in the catch block before re-throwing.
+Use these event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`, `EMAIL_SENT`, `EMAIL_FAILED`. Always log an `ERROR` event in the catch block before re-throwing.
 
 ---
 

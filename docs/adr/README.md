@@ -91,3 +91,5 @@ YYYY-MM-DD
 | [004](004-xades-bes-signature-profile.md) | XAdES-BES Signature Profile | Accepted | 2026-02-28 |
 | [005](005-email-delivery.md) | Email Delivery via Mailgun | Accepted | 2026-03-01 |
 | [006](006-idempotency-key.md) | Idempotency Key for Invoice Creation | Accepted | 2026-03-01 |
+| [007](007-api-key-authentication.md) | Bearer API Key Authentication for Multi-Tenancy | Accepted | 2026-03-01 |
+| [008](008-document-state-machine.md) | Document State Machine with Dual-Layer Enforcement | Accepted | 2026-03-01 |
