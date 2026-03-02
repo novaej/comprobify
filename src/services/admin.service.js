@@ -2,8 +2,11 @@ const crypto = require('crypto');
 const forge = require('node-forge');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
+const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
 const AppError = require('../errors/app-error');
+
+const DEFAULT_DOCUMENT_TYPE = '01';
 
 /**
  * Parses a P12 buffer and extracts the signing key and certificate.
@@ -128,6 +131,17 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     certFingerprint,
     certExpiry,
   });
+
+  // Seed the sequential counter if the caller specified a starting value
+  if (fields.initialSequential) {
+    await sequentialService.initialize(
+      newIssuer.id,
+      newIssuer.branch_code,
+      newIssuer.issue_point_code,
+      DEFAULT_DOCUMENT_TYPE,
+      parseInt(fields.initialSequential, 10),
+    );
+  }
 
   // Generate API key — plaintext printed once, never stored
   const plainToken = crypto.randomBytes(32).toString('hex');

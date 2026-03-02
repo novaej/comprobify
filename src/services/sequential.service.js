@@ -54,4 +54,30 @@ async function getNext(issuerId, branchCode, issuePointCode, documentType, clien
   }
 }
 
-module.exports = { getNext };
+/**
+ * Seeds the starting position for a sequential counter.
+ *
+ * Sets current_value to startingValue - 1 so that the first call to getNext()
+ * returns exactly startingValue. Use when migrating an issuer that has already
+ * issued documents — pass the next unused sequential to avoid gaps or conflicts.
+ *
+ * Safe to call on a new issuer (no row yet) or to override an existing counter
+ * before any documents have been created.
+ *
+ * @param {number} issuerId
+ * @param {string} branchCode
+ * @param {string} issuePointCode
+ * @param {string} documentType
+ * @param {number} startingValue - The first sequential that getNext() will return
+ */
+async function initialize(issuerId, branchCode, issuePointCode, documentType, startingValue) {
+  await db.query(
+    `INSERT INTO sequential_numbers (issuer_id, branch_code, issue_point_code, document_type, current_value)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (issuer_id, branch_code, issue_point_code, document_type)
+     DO UPDATE SET current_value = $5, updated_at = NOW()`,
+    [issuerId, branchCode, issuePointCode, documentType, startingValue - 1]
+  );
+}
+
+module.exports = { getNext, initialize };

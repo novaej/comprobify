@@ -33,6 +33,11 @@ const createIssuer = [
     .isBoolean()
     .withMessage('requiredAccounting must be a boolean'),
 
+  body('initialSequential')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('initialSequential must be a positive integer'),
+
   // Either a cert file upload or sourceIssuerId must be provided, but not both
   body().custom((_, { req }) => {
     const hasFile = !!req.file;
