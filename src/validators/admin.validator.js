@@ -33,15 +33,25 @@ const createIssuer = [
     .isBoolean()
     .withMessage('requiredAccounting must be a boolean'),
 
-  body('initialSequential')
+  body('initialSequentials')
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('initialSequential must be a positive integer'),
+    .customSanitizer(value => {
+      if (typeof value === 'string') {
+        try { return JSON.parse(value); } catch { return value; }
+      }
+      return value;
+    })
+    .isArray({ min: 1 })
+    .withMessage('initialSequentials must be a non-empty array'),
 
-  body('documentType')
-    .if(body('initialSequential').exists())
+  body('initialSequentials.*.documentType')
     .notEmpty()
-    .withMessage('documentType is required when initialSequential is provided'),
+    .isString()
+    .withMessage('each initialSequentials entry must have a non-empty documentType string'),
+
+  body('initialSequentials.*.sequential')
+    .isInt({ min: 1 })
+    .withMessage('each initialSequentials entry must have a sequential >= 1'),
 
   // Either a cert file upload or sourceIssuerId must be provided, but not both
   body().custom((_, { req }) => {
@@ -63,6 +73,11 @@ const createApiKey = [
     .isString()
     .isLength({ max: 100 })
     .withMessage('label must be a string of max 100 characters'),
+
+  body('revokeExisting')
+    .optional()
+    .isBoolean()
+    .withMessage('revokeExisting must be a boolean'),
 ];
 
 const revokeApiKey = [

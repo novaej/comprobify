@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const controller = require('../controllers/invoices.controller');
+const controller = require('../controllers/documents.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const extractIdempotencyKey = require('../middleware/idempotency');

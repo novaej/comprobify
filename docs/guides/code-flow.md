@@ -547,7 +547,7 @@ All models use parameterized queries exclusively (`$1, $2, ...`) — never strin
 | Model | Table | Key operations |
 |---|---|---|
 | `issuer.model` | `issuers` | `findById`, `findByRuc`, `create` |
-| `api-key.model` | `api_keys` | `findByKeyHash` (JOINs issuers), `create`, `revoke` |
+| `api-key.model` | `api_keys` | `findByKeyHash` (JOINs issuers), `create`, `revoke`, `revokeAllByIssuerId` |
 | `document.model` | `documents` | `create`, `findByAccessKey(accessKey, issuerId)`, `findById`, `updateStatus` (column-whitelisted), `findPendingEmails(issuerId)`, `findByIdempotencyKey` |
 | (no model) | `sequential_numbers` | managed directly by `sequential.service` |
 | `sri-response.model` | `sri_responses` | `create`, `findByDocumentId` |

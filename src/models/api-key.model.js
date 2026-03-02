@@ -31,4 +31,12 @@ async function revoke(id) {
   return rows[0] || null;
 }
 
-module.exports = { findByKeyHash, create, revoke };
+async function revokeAllByIssuerId(issuerId) {
+  await db.query(
+    `UPDATE api_keys SET active = false, revoked_at = NOW()
+     WHERE issuer_id = $1 AND active = true`,
+    [issuerId]
+  );
+}
+
+module.exports = { findByKeyHash, create, revoke, revokeAllByIssuerId };

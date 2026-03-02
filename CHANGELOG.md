@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `revokeExisting` option on `POST /api/admin/issuers/:id/api-keys` — pass `true` to revoke all active keys for the issuer atomically before issuing the new one, enabling safe key rotation and lost-key recovery in a single request.
+- `revokeAllByIssuerId` on `api-key.model`.
+
+### Changed
+- `src/controllers/invoices.controller.js` renamed to `src/controllers/documents.controller.js` to match the document-agnostic route and service layer.
+- `POST /api/admin/issuers` now returns `409 Conflict` with a descriptive message when a duplicate `(ruc, branch_code, issue_point_code)` combination is submitted, instead of a generic 500.
+- `initialSequentials` (array of `{ documentType, sequential }`) replaces the flat `initialSequential` + `documentType` pair on `POST /api/admin/issuers`, allowing counters for multiple document types to be seeded in one request.
+
 ---
 
 ## [3.0.0] — 2026-03-01
@@ -24,7 +33,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - **Admin API** — `POST /api/admin/issuers`, `GET /api/admin/issuers`, `POST /api/admin/issuers/:id/api-keys`, `DELETE /api/admin/api-keys/:id` protected by `ADMIN_SECRET` (constant-time comparison). Replaces the dev seeder for issuer provisioning.
 - **PEM-in-database certificate storage** — P12 uploaded via the admin API is parsed in-process; private key PEM is AES-256-GCM encrypted and stored in `issuers.encrypted_private_key`; certificate PEM stored plaintext in `issuers.certificate_pem`. No filesystem certificate files required.
 - **Multi-branch issuer support** — `POST /api/admin/issuers` accepts `sourceIssuerId` to copy cert material from an existing issuer row, supporting multiple `(branch_code, issue_point_code)` pairs under the same RUC without re-uploading the P12.
-- **Sequential counter seeding** — `POST /api/admin/issuers` accepts optional `initialSequential` + `documentType` to pre-seed the counter, enabling migrating issuers that have already issued documents outside this system.
+- **Sequential counter seeding** — `POST /api/admin/issuers` accepts optional `initialSequentials` (array of `{ documentType, sequential }`) to pre-seed counters for one or more document types, enabling migrating issuers that have already issued documents outside this system.
 - **Multi-tenancy via Bearer API key authentication** — each request is authenticated by `Authorization: Bearer <token>`; the token resolves to an issuer row attached as `req.issuer`. Replaces the single-tenant `issuerModel.findFirst()` pattern.
 - **Document state machine** — `src/constants/document-state-machine.js` defines the allowed transition graph; `assertTransition(from, to)` is called at the top of each service operation. Enforced at the DB level by `trg_document_state_transition` (migration 027) as defence in depth.
 - **Document immutability triggers** — `trg_document_immutability` (migration 026) protects permanently immutable columns (`access_key`, `sequential`, `issuer_id`) and set-once authorization fields at the PostgreSQL level.

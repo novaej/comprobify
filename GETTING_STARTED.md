@@ -131,6 +131,8 @@ curl -s -X POST http://localhost:8080/api/admin/issuers \
   -H "Authorization: Bearer $ADMIN_SECRET" \
   -F "ruc=1700000000001" \
   -F "businessName=Acme S.A." \
+  -F "tradeName=Acme" \
+  -F "mainAddress=Test Address" \
   -F "branchCode=001" \
   -F "issuePointCode=001" \
   -F "environment=1" \
@@ -151,6 +153,29 @@ Response:
 ```
 
 **Save the `apiKey`** — it is printed once and never stored in plaintext. Use it as `Authorization: Bearer <apiKey>` on every `POST /api/documents` request.
+
+### Seeding sequential counters (migrating an existing issuer)
+
+If the issuer has already issued documents outside this system, pass `initialSequentials` to pre-seed the counters so the next document picks up from the right number. Each entry takes a `documentType` code and the **next** sequential you want the system to issue:
+
+```bash
+curl -s -X POST http://localhost:8080/api/admin/issuers \
+  -H "Authorization: Bearer $ADMIN_SECRET" \
+  -F "ruc=1700000000001" \
+  -F "businessName=Acme S.A." \
+  -F "branchCode=001" \
+  -F "issuePointCode=001" \
+  -F "environment=1" \
+  -F "emissionType=1" \
+  -F "requiredAccounting=false" \
+  -F "certPassword=YOUR_P12_PASSWORD" \
+  -F "cert=@/path/to/token.p12" \
+  -F 'initialSequentials=[{"documentType":"01","sequential":500},{"documentType":"04","sequential":12}]' | jq
+```
+
+This seeds the invoice counter (`01`) so the first document created will be `000000500`, and the credit note counter (`04`) so the first will be `000000012`. Omit `initialSequentials` entirely if starting from `000000001`.
+
+---
 
 ### Additional branch (reuse existing certificate)
 
@@ -319,8 +344,20 @@ npm run migrate
 **`Missing or invalid Authorization header`**
 Every request requires `Authorization: Bearer <token>`. Use `POST /api/admin/issuers` to create an issuer and receive its initial API key.
 
-**`Invalid or revoked API key`**
-The token does not match any active key in `api_keys`. Use `POST /api/admin/issuers/:id/api-keys` to generate a new key for an existing issuer.
+**`Invalid or revoked API key` / lost API key**
+The token does not match any active key in `api_keys`. Generate a replacement key — pass `revokeExisting: true` to revoke all current keys for that issuer atomically:
+
+```bash
+# Find the issuer ID
+curl -s http://localhost:8080/api/admin/issuers \
+  -H "Authorization: Bearer $ADMIN_SECRET" | jq '.[].id'
+
+# Generate a replacement key (revokes all existing keys)
+curl -s -X POST http://localhost:8080/api/admin/issuers/<id>/api-keys \
+  -H "Authorization: Bearer $ADMIN_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"label": "Replacement key", "revokeExisting": true}' | jq
+```
 
 **`ENCRYPTION_KEY must be a 64-character hex string`**
 The `ENCRYPTION_KEY` in `.env` is missing or wrong length. Re-run step 4.

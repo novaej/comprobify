@@ -17,7 +17,7 @@ const listIssuers = async (req, res) => {
 
 const createApiKey = async (req, res) => {
   const issuerId = parseInt(req.params.id, 10);
-  const apiKey = await adminService.createApiKey(issuerId, req.body.label);
+  const apiKey = await adminService.createApiKey(issuerId, req.body.label, req.body.revokeExisting === true);
   res.status(201).json({ ok: true, apiKey });
 };
 

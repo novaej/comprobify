@@ -5,6 +5,7 @@ const apiKeyModel = require('../models/api-key.model');
 const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
 const AppError = require('../errors/app-error');
+const ConflictError = require('../errors/conflict-error');
 
 
 /**
@@ -113,33 +114,43 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     certExpiry = source.cert_expiry;
   }
 
-  const newIssuer = await issuerModel.create({
-    ruc: fields.ruc,
-    businessName: fields.businessName,
-    tradeName: fields.tradeName || null,
-    mainAddress: fields.mainAddress || null,
-    branchCode: fields.branchCode,
-    issuePointCode: fields.issuePointCode,
-    environment: fields.environment,
-    emissionType: fields.emissionType,
-    requiredAccounting: fields.requiredAccounting,
-    specialTaxpayer: fields.specialTaxpayer || null,
-    branchAddress: fields.branchAddress || null,
-    encryptedPrivateKey,
-    certificatePem,
-    certFingerprint,
-    certExpiry,
-  });
+  let newIssuer;
+  try {
+    newIssuer = await issuerModel.create({
+      ruc: fields.ruc,
+      businessName: fields.businessName,
+      tradeName: fields.tradeName || null,
+      mainAddress: fields.mainAddress || null,
+      branchCode: fields.branchCode,
+      issuePointCode: fields.issuePointCode,
+      environment: fields.environment,
+      emissionType: fields.emissionType,
+      requiredAccounting: [true, 'true', '1', 1].includes(fields.requiredAccounting) ? 'SI' : 'NO',
+      specialTaxpayer: fields.specialTaxpayer || null,
+      branchAddress: fields.branchAddress || null,
+      encryptedPrivateKey,
+      certificatePem,
+      certFingerprint,
+      certExpiry,
+    });
+  } catch (err) {
+    if (err.code === '23505') {
+      throw new ConflictError(`Issuer with RUC ${fields.ruc}, branch ${fields.branchCode}, issue point ${fields.issuePointCode} already exists`);
+    }
+    throw err;
+  }
 
-  // Seed the sequential counter if the caller specified a starting value
-  if (fields.initialSequential) {
-    await sequentialService.initialize(
-      newIssuer.id,
-      newIssuer.branch_code,
-      newIssuer.issue_point_code,
-      fields.documentType,
-      parseInt(fields.initialSequential, 10),
-    );
+  // Seed sequential counters for each document type specified
+  if (Array.isArray(fields.initialSequentials)) {
+    for (const entry of fields.initialSequentials) {
+      await sequentialService.initialize(
+        newIssuer.id,
+        newIssuer.branch_code,
+        newIssuer.issue_point_code,
+        entry.documentType,
+        parseInt(entry.sequential, 10),
+      );
+    }
   }
 
   // Generate API key — plaintext printed once, never stored
@@ -161,7 +172,10 @@ async function listIssuers() {
   return rows;
 }
 
-async function createApiKey(issuerId, label) {
+async function createApiKey(issuerId, label, revokeExisting = false) {
+  if (revokeExisting) {
+    await apiKeyModel.revokeAllByIssuerId(issuerId);
+  }
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     issuerId,
