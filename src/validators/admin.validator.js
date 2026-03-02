@@ -38,6 +38,11 @@ const createIssuer = [
     .isInt({ min: 1 })
     .withMessage('initialSequential must be a positive integer'),
 
+  body('documentType')
+    .if(body('initialSequential').exists())
+    .notEmpty()
+    .withMessage('documentType is required when initialSequential is provided'),
+
   // Either a cert file upload or sourceIssuerId must be provided, but not both
   body().custom((_, { req }) => {
     const hasFile = !!req.file;

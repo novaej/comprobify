@@ -50,6 +50,7 @@ const mockIssuer = {
 };
 
 const validBody = {
+  documentType: '01',
   issueDate: '26/02/2026',
   buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
   items: [{

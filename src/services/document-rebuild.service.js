@@ -11,8 +11,6 @@ const { assertTransition } = require('../constants/document-state-machine');
 const EventType = require('../constants/event-type');
 const { formatDocument } = require('../presenters/document.presenter');
 
-const DOCUMENT_TYPE_INVOICE = '01';
-
 async function rebuild(accessKey, body, issuer) {
   const document = await documentModel.findByAccessKey(accessKey, issuer.id);
   if (!document) {
@@ -20,11 +18,11 @@ async function rebuild(accessKey, body, issuer) {
   }
   assertTransition(document.status, DocumentStatus.SIGNED);
 
-  // Preserve the original issue date, access key, and sequential — only the
-  // invoice content (taxes, items, buyer, payments) is corrected by the caller
+  // Preserve the original issue date, access key, sequential, and document type —
+  // only the invoice content (taxes, items, buyer, payments) is corrected by the caller
   const issueDate = moment(document.issue_date).format('DD/MM/YYYY');
 
-  const builder = getBuilder(DOCUMENT_TYPE_INVOICE, issuer);
+  const builder = getBuilder(document.document_type, issuer);
   const unsignedXml = builder.build({ ...body, issueDate }, document.access_key, document.sequential);
 
   const paymentsTotal = parseFloat(

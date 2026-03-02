@@ -15,8 +15,6 @@ const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
 const { formatDocument } = require('../presenters/document.presenter');
 
-const DEFAULT_DOCUMENT_TYPE = '01';
-
 function hashPayload(body) {
   return crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
 }
@@ -36,7 +34,7 @@ async function create(body, idempotencyKey = null, issuer) {
 
   const payloadHash = idempotencyKey ? hashPayload(body) : null;
 
-  const documentType = body.documentType || DEFAULT_DOCUMENT_TYPE;
+  const documentType = body.documentType;
   const issueDate = body.issueDate || moment().format('DD/MM/YYYY');
 
   // Open a single transaction that covers sequential assignment, XML build/validate/sign,

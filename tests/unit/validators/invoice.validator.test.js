@@ -23,6 +23,7 @@ async function runValidation(body) {
 
 describe('Invoice Validator', () => {
   const validBody = {
+    documentType: '01',
     issueDate: '26/02/2026',
     buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
     items: [{
@@ -45,6 +46,19 @@ describe('Invoice Validator', () => {
     const { issueDate, ...body } = validBody;
     const result = await runValidation(body);
     expect(result.isEmpty()).toBe(true);
+  });
+
+  test('rejects missing documentType', async () => {
+    const { documentType, ...body } = validBody;
+    const result = await runValidation(body);
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'documentType')).toBe(true);
+  });
+
+  test('rejects unsupported documentType', async () => {
+    const result = await runValidation({ ...validBody, documentType: '04' });
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'documentType')).toBe(true);
   });
 
   test('rejects invalid date format', async () => {

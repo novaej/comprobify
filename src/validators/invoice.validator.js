@@ -3,9 +3,9 @@ const catalog = require('../models/catalog.model');
 
 const createInvoice = [
   body('documentType')
-    .optional()
+    .notEmpty()
     .isIn(['01'])
-    .withMessage('documentType must be a supported document type code'),
+    .withMessage('documentType is required and must be a supported document type code'),
 
   body('issueDate')
     .optional()

@@ -6,7 +6,6 @@ const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
 const AppError = require('../errors/app-error');
 
-const DEFAULT_DOCUMENT_TYPE = '01';
 
 /**
  * Parses a P12 buffer and extracts the signing key and certificate.
@@ -138,7 +137,7 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
       newIssuer.id,
       newIssuer.branch_code,
       newIssuer.issue_point_code,
-      DEFAULT_DOCUMENT_TYPE,
+      fields.documentType,
       parseInt(fields.initialSequential, 10),
     );
   }
