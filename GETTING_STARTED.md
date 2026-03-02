@@ -19,7 +19,7 @@ Get the API running locally from scratch.
 
 ```bash
 git clone <repo-url>
-cd node-sri-fe
+cd comprobify
 ```
 
 ---
