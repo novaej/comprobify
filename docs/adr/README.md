@@ -93,3 +93,4 @@ YYYY-MM-DD
 | [006](006-idempotency-key.md) | Idempotency Key for Invoice Creation | Accepted | 2026-03-01 |
 | [007](007-api-key-authentication.md) | Bearer API Key Authentication for Multi-Tenancy | Accepted | 2026-03-01 |
 | [008](008-document-state-machine.md) | Document State Machine with Dual-Layer Enforcement | Accepted | 2026-03-01 |
+| [009](009-pem-in-database-cert-storage.md) | PEM-in-Database Certificate Storage and Admin API | Accepted | 2026-03-01 |

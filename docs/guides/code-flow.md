@@ -121,7 +121,7 @@ Authorization: Bearer <token>
   ├── SHA-256(token) → keyHash
   ├── apiKeyModel.findByKeyHash(keyHash)  (JOINs api_keys with issuers)
   │     └── not found → AppError 401
-  └── req.issuer = full issuer row (id, ruc, cert_path, cert_password_enc, ...)
+  └── req.issuer = full issuer row (id, ruc, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry, ...)
 ```
 
 Every protected route calls this middleware before anything else. It reads the `Authorization` header, computes `SHA-256(token)` as `keyHash`, and calls `apiKeyModel.findByKeyHash(keyHash)` which performs a JOIN between `api_keys` and `issuers`. If the key exists, the full issuer row is attached to `req.issuer` for downstream use.
@@ -129,6 +129,8 @@ Every protected route calls this middleware before anything else. It reads the `
 **Why SHA-256 and not bcrypt?** API keys are 256-bit random strings — they are not guessable like user passwords. The bcrypt slowdown exists to prevent brute-force dictionary attacks, which are not a concern for a token with `2^256` possible values. SHA-256 comparison is fast and secure for long random tokens, while bcrypt would add 100–300 ms of unnecessary latency to every request.
 
 **Why set `req.issuer` here?** It eliminates `issuerModel.findFirst()` from every service. Each service receives the issuer as a parameter and never queries the DB for it — the tenant is already known by the time the controller runs.
+
+**Why store `encrypted_private_key` and `certificate_pem` in `issuers`?** Moving from filesystem-based P12 files to database-stored PEM eliminates the need to ship certificate files with deployments, simplifies multi-branch cert sharing (copy the encrypted columns, no file duplication), and keeps all issuer configuration in one place. The private key PEM is AES-256-GCM encrypted at rest; the certificate PEM is stored plaintext (public material). The plaintext password for the P12 is never persisted — only the extracted and encrypted private key PEM is stored.
 
 ---
 
@@ -219,8 +221,8 @@ Step-by-step:
    → Writes tmp file, runs xmllint --schema, deletes tmp file.
    → Throws ValidationError with XSD errors if invalid.
 
-7. signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc)
-   → Decrypt cert password → XAdES-BES sign.
+7. signingService.signXml(unsignedXml, issuer.encrypted_private_key, issuer.certificate_pem)
+   → Decrypt private key PEM → XAdES-BES sign.
 
 8. documentModel.create({ ..., idempotencyKey, payloadHash }, client)
    → INSERT into documents with all fields including buyer_email from body.buyer.email.
@@ -236,7 +238,7 @@ Step-by-step:
 12. Return { document: formatDocument(document), created: true }
 ```
 
-**Why `documentType` from the payload?** The creation service reads `body.documentType || '01'` — the document type comes from the caller, not a hardcoded constant. The builder registry maps the code to the correct builder class.
+**Why `documentType` from the payload?** The document type is a required field — the creation service reads it directly from `body.documentType` with no default fallback. The builder registry maps the code to the correct builder class.
 
 **Why buyer email is a required top-level field:** `body.buyer.email` is validated by the validator chain. It is no longer buried in `additionalInfo` — that extraction was a workaround removed in Phase 0.
 
@@ -303,8 +305,8 @@ Used when SRI returns `RETURNED` (structural issue) or `NOT_AUTHORIZED` (content
 1. findByAccessKey(accessKey, issuer.id)
 2. assertTransition(document.status, DocumentStatus.SIGNED)
    → Valid from RETURNED or NOT_AUTHORIZED only
-3. Preserve issue_date, access_key, sequential from stored document
-4. getBuilder('01', issuer).build({ ...body, issueDate }, access_key, sequential)
+3. Preserve issue_date, access_key, sequential, document_type from stored document
+4. getBuilder(document.document_type, issuer).build({ ...body, issueDate }, access_key, sequential)
 5. Validate payments total matches builder total
 6. xmlValidator.validate(unsignedXml)
 7. signingService.signXml(...)
@@ -479,13 +481,13 @@ function validate(xmlString) {
 ## 16. SigningService — `src/services/signing.service.js`
 
 ```js
-function signXml(xmlString, certPath, certPasswordEnc) {
-  const password = cryptoService.decrypt(certPasswordEnc);
-  return sign(certPath, password, xmlString);
+function signXml(xmlString, encryptedPrivateKey, certPem) {
+  const privateKeyPem = cryptoService.decrypt(encryptedPrivateKey);
+  return sign(privateKeyPem, certPem, xmlString);
 }
 ```
 
-Thin wrapper around `helpers/signer.js` (XAdES-BES signing via `node-forge`). Its only responsibility is to decrypt the certificate password before passing it to the signing helper.
+Thin wrapper around `helpers/signer.js` (XAdES-BES signing via `node-forge`). Its only responsibility is to decrypt the AES-256-GCM-encrypted private key PEM before passing it (together with the plaintext certificate PEM) to the signing helper.
 
 `helpers/signer.js` produces a valid XAdES-BES signature with:
 - **RSA-SHA256** for the signature and all digests (not SHA-1)
@@ -507,7 +509,7 @@ Stored format: hex(iv) + ':' + hex(authTag) + ':' + hex(ciphertext)
 
 **Why AES-256-GCM?** GCM mode provides both encryption and authenticated integrity — any tampering with the stored ciphertext causes decryption to throw rather than silently returning garbage. The 256-bit key makes brute-force infeasible. A fresh random IV is generated for every `encrypt()` call so the same password never produces the same ciphertext twice.
 
-**Why store the cert password encrypted instead of using the P12 passphrase directly?** The P12 file is a static file on disk. If someone gains read access to the disk they could copy the P12. Without the encrypted password in the DB they cannot use it. The encryption key lives in an environment variable (`ENCRYPTION_KEY`), so access requires both DB access and server environment access.
+**Why store the private key PEM encrypted instead of the P12 on disk?** The P12 file on disk combines the private key and certificate in a single password-protected bundle. Once extracted, the private key PEM is encrypted with AES-256-GCM keyed by `ENCRYPTION_KEY` (env var) and stored in `issuers.encrypted_private_key`. The certificate PEM (public material) is stored plaintext in `issuers.certificate_pem`. This removes the need to ship certificate files with deployments, makes multi-branch cert sharing a simple column copy, and means exploiting the DB alone is not sufficient — the attacker also needs the `ENCRYPTION_KEY` from the server environment.
 
 ---
 
@@ -659,7 +661,7 @@ POST /api/documents
                     ├── accessKeyService.generate()    49-digit key + check digit
                     ├── getBuilder(documentType, issuer).build()  unsigned XML
                     ├── xmlValidator.validate()        XSD check → 400 if invalid
-                    ├── signingService.signXml()       decrypt password → XAdES-BES sign
+                    ├── signingService.signXml()       decrypt private key PEM → XAdES-BES sign
                     ├── documentModel.create()         INSERT with idempotency_key + payload_hash
                     │     └── 23505 race → ROLLBACK, fetch winner, return 200 replay
                     ├── documentLineItemModel.bulkCreate()  single multi-row INSERT
@@ -696,7 +698,7 @@ POST /api/documents/:key/rebuild
   └── authenticate → req.issuer
         └── documentRebuild.rebuild(accessKey, body, issuer)
               ├── assertTransition(status, SIGNED)  [throws 400 if not RETURNED/NOT_AUTHORIZED]
-              ├── getBuilder('01', issuer).build(body, stored access_key, stored sequential)
+              ├── getBuilder(document.document_type, issuer).build(body, stored access_key, stored sequential)
               ├── xmlValidator.validate()
               ├── signingService.signXml()
               ├── documentModel.updateStatus(SIGNED, { xml, payload, totals, buyer })

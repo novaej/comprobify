@@ -11,6 +11,50 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [3.0.0] — 2026-03-01
+
+### Breaking Changes
+
+- **`documentType` is now required** on `POST /api/documents` — no silent default. Callers that previously omitted this field and relied on the implicit `'01'` default will receive a `400` validation error.
+- **API routes renamed** from `/api/invoices/*` to `/api/documents/*`. All client integrations must update their base path.
+- **`cert_path` and `cert_password_enc` columns removed** from `issuers` (migration 028). The database schema must be migrated before upgrading. These are replaced by `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, and `cert_expiry`.
+
+### Added
+
+- **Admin API** — `POST /api/admin/issuers`, `GET /api/admin/issuers`, `POST /api/admin/issuers/:id/api-keys`, `DELETE /api/admin/api-keys/:id` protected by `ADMIN_SECRET` (constant-time comparison). Replaces the dev seeder for issuer provisioning.
+- **PEM-in-database certificate storage** — P12 uploaded via the admin API is parsed in-process; private key PEM is AES-256-GCM encrypted and stored in `issuers.encrypted_private_key`; certificate PEM stored plaintext in `issuers.certificate_pem`. No filesystem certificate files required.
+- **Multi-branch issuer support** — `POST /api/admin/issuers` accepts `sourceIssuerId` to copy cert material from an existing issuer row, supporting multiple `(branch_code, issue_point_code)` pairs under the same RUC without re-uploading the P12.
+- **Sequential counter seeding** — `POST /api/admin/issuers` accepts optional `initialSequential` + `documentType` to pre-seed the counter, enabling migrating issuers that have already issued documents outside this system.
+- **Multi-tenancy via Bearer API key authentication** — each request is authenticated by `Authorization: Bearer <token>`; the token resolves to an issuer row attached as `req.issuer`. Replaces the single-tenant `issuerModel.findFirst()` pattern.
+- **Document state machine** — `src/constants/document-state-machine.js` defines the allowed transition graph; `assertTransition(from, to)` is called at the top of each service operation. Enforced at the DB level by `trg_document_state_transition` (migration 027) as defence in depth.
+- **Document immutability triggers** — `trg_document_immutability` (migration 026) protects permanently immutable columns (`access_key`, `sequential`, `issuer_id`) and set-once authorization fields at the PostgreSQL level.
+- **Email delivery** — when a document becomes `AUTHORIZED`, `emailService.sendInvoiceAuthorized()` is called fire-and-forget. Sends RIDE PDF + signed XML as attachments via Mailgun. Per-document `email_status` tracked (`PENDING` → `SENT` / `FAILED` / `SKIPPED`).
+- **Email retry** — `POST /api/documents/email-retry` (batch, up to 100 docs) and `POST /api/documents/:key/email-retry` (single, `?force=true` to resend an already-sent email).
+- **Idempotency key** — `POST /api/documents` accepts an optional `Idempotency-Key` header. Duplicate key + matching body → 200 replay. Duplicate key + different body → 409. Concurrent races handled via `23505` catch-and-fetch.
+- **Audit trail endpoint** — `GET /api/documents/:key/events` returns the full `document_events` history for a document.
+- **Rebuild** — `POST /api/documents/:key/rebuild` re-signs a `RETURNED` or `NOT_AUTHORIZED` document with corrected content, reusing the same access key and sequential.
+- `ConflictError` (409) error class added to the hierarchy.
+- `multer` dependency (memory storage, P12 never written to disk).
+- Migrations 019–028.
+
+### Changed
+
+- `helpers/signer.js` signature changed from `sign(certPath, password, xml)` to `sign(privateKeyPem, certPem, xml)` — no longer reads any file from disk.
+- `signing.service.js` now decrypts `issuer.encrypted_private_key` (private key PEM) instead of `issuer.cert_password_enc` (cert password).
+- `document.service.js` split into five focused services: `document-creation`, `document-transmission`, `document-rebuild`, `document-email`, `document-query`.
+- `invoice_details` table renamed to `document_line_items`.
+- Master data tables (`clients`, `products`) removed — buyer information is stored directly on `documents`.
+- `issuers` unique constraint changed from `(ruc)` to `(ruc, branch_code, issue_point_code)`.
+- `document-rebuild.service.js` now reads `document.document_type` from the stored record instead of hardcoding `'01'`.
+
+### Removed
+
+- `cert_path`, `cert_password_enc` columns from `issuers`.
+- `db/seeders/dev-issuer.js` and `seed:dev` npm script.
+- `issuerModel.findFirst()` — issuers are resolved exclusively via `apiKeyModel.findByKeyHash()` during authentication.
+
+---
+
 ## [2.2.0] — 2026-02-28
 
 ### Added

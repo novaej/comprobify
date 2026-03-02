@@ -210,6 +210,7 @@ curl -s -X POST http://localhost:8080/api/documents \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
+    "documentType": "01",
     "issueDate": "01/03/2026",
     "buyer": {
       "idType": "04",

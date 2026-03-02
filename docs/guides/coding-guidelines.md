@@ -88,7 +88,7 @@ const builders = {
 
 **4. Update `xml-validator.service.js`** to select the correct schema by document type code.
 
-**5. Add the type code** to the `isIn([...])` list in `src/validators/invoice.validator.js` (`documentType` field).
+**5. Add the type code** to the `isIn([...])` list in `src/validators/invoice.validator.js` (`documentType` field — this field is **required** on every `POST /api/documents` call; there is no default).
 
 ---
 
@@ -288,3 +288,5 @@ npm test                   # all tests
 8. **Not logging an ERROR audit event before re-throwing** — the document history will have a gap.
 9. **Hard-deleting database rows** — update status or set `active = false` instead.
 10. **Reading `process.env` directly** — always import from `src/config/index.js`.
+11. **Omitting `documentType` from `POST /api/documents`** — it is a required field with no default. Callers must always supply it (e.g. `"01"` for a factura).
+12. **Using `cert_path` / `cert_password_enc` from `req.issuer`** — these columns were removed in migration 028. Use `issuer.encrypted_private_key` and `issuer.certificate_pem` instead.
