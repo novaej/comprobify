@@ -91,7 +91,7 @@ async function create(body, idempotencyKey = null, issuer) {
     }
 
     // Sign XML — throws if certificate is expired or invalid, rolls back transaction
-    const signedXml = signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc);
+    const signedXml = signingService.signXml(unsignedXml, issuer.encrypted_private_key, issuer.certificate_pem);
 
     // Prefer buyer.email from payload, fall back to additionalInfo for backward compat
     const buyerEmail = body.buyer.email

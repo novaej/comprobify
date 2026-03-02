@@ -44,8 +44,8 @@ const mockIssuer = {
   issue_point_code: '001',
   environment: '1',
   emission_type: '1',
-  cert_path: 'cert/token.p12',
-  cert_password_enc: 'encrypted-password',
+  encrypted_private_key: 'encrypted-private-key',
+  certificate_pem: '-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----',
   branch_address: 'AV. TEST',
 };
 
@@ -104,8 +104,8 @@ describe('DocumentCreationService', () => {
     expect(builders.getBuilder).toHaveBeenCalledWith('01', mockIssuer);
     expect(signingService.signXml).toHaveBeenCalledWith(
       '<factura>xml</factura>',
-      'cert/token.p12',
-      'encrypted-password'
+      'encrypted-private-key',
+      '-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----'
     );
     expect(documentModel.create).toHaveBeenCalled();
     expect(created).toBe(true);

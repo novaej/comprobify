@@ -15,14 +15,23 @@ async function findFirst() {
   return rows[0] || null;
 }
 
-async function create({ ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, certPath, certPasswordEnc }) {
+async function create({ ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry }) {
   const { rows } = await db.query(
-    `INSERT INTO issuers (ruc, business_name, trade_name, main_address, branch_code, issue_point_code, environment, emission_type, required_accounting, special_taxpayer, branch_address, cert_path, cert_password_enc)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    `INSERT INTO issuers (ruc, business_name, trade_name, main_address, branch_code, issue_point_code, environment, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
-    [ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, certPath, certPasswordEnc]
+    [ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry]
   );
   return rows[0];
 }
 
-module.exports = { findById, findByRuc, findFirst, create };
+async function findAll() {
+  const { rows } = await db.query(
+    `SELECT id, ruc, business_name, trade_name, environment, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active
+     FROM issuers
+     ORDER BY id`
+  );
+  return rows;
+}
+
+module.exports = { findById, findByRuc, findFirst, create, findAll };

@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–027
+db/migrations/     SQL migration files 001–028
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -64,7 +64,11 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Sequential numbers:** `SELECT ... FOR UPDATE` inside an explicit transaction — guarantees no duplicate sequential numbers under concurrent load. See `src/services/sequential.service.js`.
 
-**Certificate password:** stored AES-256-GCM encrypted in `issuers.cert_password_enc`. Decrypted at signing time only. Key lives in `ENCRYPTION_KEY` env var.
+**Certificate storage:** private key PEM stored AES-256-GCM encrypted in `issuers.encrypted_private_key`; certificate PEM stored plaintext in `issuers.certificate_pem`. Decrypted at signing time only. Encryption key lives in `ENCRYPTION_KEY` env var.
+
+**Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the admin service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. See `POST /api/admin/issuers`.
+
+**Admin API:** `ADMIN_SECRET` env var (64-char hex) protects all `/api/admin/*` routes via `src/middleware/authenticate-admin.js` (constant-time comparison). Admin routes: create issuer (P12 upload or branch copy), list issuers, create API key, revoke API key.
 
 **XSD validation:** `xmllint` CLI via `execFileSync` against `assets/factura_V2.1.0.xsd`. Must be pre-validation (before signing). `xmllint` must be installed on the server.
 
@@ -103,7 +107,7 @@ POST /:key/email-retry          → retry single email (?force=true to resend SE
 4. Generate 49-digit access key (Module 11 check digit)
 5. Build unsigned XML (`InvoiceBuilder`)
 6. Validate against XSD (`xmllint`)
-7. Sign XML (XAdES-BES, P12 cert)
+7. Sign XML (XAdES-BES, PEM private key + cert from `issuers` row)
 8. Read `buyer_email` from `body.buyer.email` (required field)
 9. `INSERT` into `documents` (with `idempotency_key`, `payload_hash`, `buyer_email`)
 10. `bulkCreate` into `document_line_items`
@@ -161,6 +165,7 @@ chore: update express to 4.22.1
 | `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
 | `docs/adr/` | Architecture Decision Records |
 | `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.issuer` |
+| `src/middleware/authenticate-admin.js` | `ADMIN_SECRET` constant-time check for `/api/admin/*` |
 | `src/middleware/idempotency.js` | Extracts + validates `Idempotency-Key` header |
 | `src/services/document-creation.service.js` | Invoice creation — sequential, XML, signing, persistence |
 | `src/services/document-transmission.service.js` | SRI send + authorization check + fire-and-forget email |
@@ -176,11 +181,14 @@ chore: update express to 4.22.1
 | `src/services/xml-validator.service.js` | XSD pre-validation via xmllint (async) |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
 | `src/presenters/document.presenter.js` | `formatDocument()` — shared response shape |
+| `src/services/admin.service.js` | Issuer creation (P12 parse + PEM storage), API key management |
+| `src/controllers/admin.controller.js` | Thin HTTP handlers for admin routes |
+| `src/routes/admin.routes.js` | `/api/admin/*` — multer upload, admin auth, CRUD |
 | `src/models/api-key.model.js` | API key CRUD — `findByKeyHash`, `create`, `revoke` |
 | `src/errors/conflict-error.js` | AppError subclass for HTTP 409 |
 | `src/builders/index.js` | Builder registry |
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
 | `src/constants/document-state-machine.js` | `TRANSITIONS` map + `canTransition` / `assertTransition` |
-| `db/migrations/` | SQL migration files 001–027 |
+| `db/migrations/` | SQL migration files 001–028 (028: multi-branch unique key + PEM columns) |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

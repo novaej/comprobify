@@ -10,19 +10,18 @@ describe('SigningService', () => {
     jest.clearAllMocks();
   });
 
-  test('decrypts cert password and calls sign with correct args', () => {
-    cryptoService.decrypt.mockReturnValue('plain-password');
+  test('decrypts private key and calls sign with correct args', () => {
+    cryptoService.decrypt.mockReturnValue('-----BEGIN RSA PRIVATE KEY-----\nkey\n-----END RSA PRIVATE KEY-----');
     sign.mockReturnValue('<signed-xml/>');
 
-    const result = signingService.signXml('<xml/>', 'cert/token.p12', 'encrypted-pwd');
+    const result = signingService.signXml('<xml/>', 'encrypted-private-key', '-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----');
 
-    expect(cryptoService.decrypt).toHaveBeenCalledWith('encrypted-pwd');
-    expect(sign).toHaveBeenCalledWith('cert/token.p12', 'plain-password', '<xml/>');
+    expect(cryptoService.decrypt).toHaveBeenCalledWith('encrypted-private-key');
+    expect(sign).toHaveBeenCalledWith(
+      '-----BEGIN RSA PRIVATE KEY-----\nkey\n-----END RSA PRIVATE KEY-----',
+      '-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----',
+      '<xml/>'
+    );
     expect(result).toBe('<signed-xml/>');
-  });
-
-  test('throws when cert password is not provided', () => {
-    expect(() => signingService.signXml('<xml/>', 'cert/token.p12', undefined))
-      .toThrow('Certificate password not configured');
   });
 });

@@ -41,7 +41,7 @@ async function rebuild(accessKey, body, issuer) {
     throw new ValidationError(xsdResult.errors);
   }
 
-  const signedXml = signingService.signXml(unsignedXml, issuer.cert_path, issuer.cert_password_enc);
+  const signedXml = signingService.signXml(unsignedXml, issuer.encrypted_private_key, issuer.certificate_pem);
 
   const updated = await documentModel.updateStatus(document.id, DocumentStatus.SIGNED, {
     unsigned_xml: unsignedXml,

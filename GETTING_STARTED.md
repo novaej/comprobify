@@ -63,8 +63,11 @@ DB_USER=postgres
 DB_PASSWORD=
 DB_SSL=false
 
-# 32-byte AES encryption key for certificate passwords stored in the database
+# 32-byte AES encryption key for private keys stored in the database
 ENCRYPTION_KEY=             # see step 4
+
+# Admin API secret — protects /admin/* endpoints (see step 5)
+ADMIN_SECRET=               # see step 5
 
 # Email delivery (optional — omit to disable buyer notifications)
 EMAIL_PROVIDER=mailgun
@@ -73,7 +76,7 @@ MAILGUN_API_KEY=
 MAILGUN_DOMAIN=mg.yourdomain.com
 ```
 
-> **Issuer data (RUC, branch code, issue point, SRI environment, certificate path/password) is stored per-issuer in the `issuers` database table — not in `.env`.** The seeder in step 8 populates it.
+> **Issuer data (RUC, branch code, issue point, SRI environment, certificate) is stored per-issuer in the `issuers` database table — not in `.env`.** The admin API in step 8 populates it.
 
 > **Email delivery is optional.** If `MAILGUN_API_KEY` or `MAILGUN_DOMAIN` are not set, the server still runs normally — emails are simply not sent and `email_status` stays `PENDING`.
 
@@ -89,23 +92,13 @@ Copy the output into `ENCRYPTION_KEY` in `.env`.
 
 ---
 
-## 5. Place your P12 certificate
-
-Copy your `.p12` digital certificate to `cert/token.p12`.
-
-> The `cert/` directory is gitignored — the certificate will never be committed.
-
-To encrypt the certificate password for storage in the database, use the crypto service:
+## 5. Generate admin secret
 
 ```bash
-node -e "
-  require('dotenv').config();
-  const c = require('./src/services/crypto.service');
-  console.log(c.encrypt('YOUR_P12_PASSWORD'));
-"
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Store the output in the `cert_password_enc` column of the `issuers` table.
+Copy the output into `ADMIN_SECRET` in `.env`. This secret protects all `/admin/*` endpoints — treat it like a password. Keep it behind an internal firewall and never expose it on the public internet.
 
 ---
 
@@ -123,32 +116,58 @@ npm install
 npm run migrate
 ```
 
-This applies all 27 migrations, creating tables: `issuers`, `api_keys`, `documents`, `sequential_numbers`, `sri_responses`, `document_line_items`, `document_events`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`). Also installs two PostgreSQL triggers for document state machine and immutability enforcement. Already-applied migrations are skipped automatically.
+This applies all 28 migrations, creating tables: `issuers`, `api_keys`, `documents`, `sequential_numbers`, `sri_responses`, `document_line_items`, `document_events`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`). Also installs two PostgreSQL triggers for document state machine and immutability enforcement. Already-applied migrations are skipped automatically.
 
 ---
 
-## 8. Seed the development issuer and API key
+## 8. Create your first issuer and API key
 
-Fill in the `DEV_ISSUER_*` variables in your `.env` file (copied from `.example.env` in step 3), then run:
+Use the admin API to upload your P12 certificate, extract and store the keys, and generate your first Bearer token — all in one request.
+
+### New certificate (first issuer or new RUC)
 
 ```bash
-CERT_PASSWORD=your_p12_password npm run seed:dev
+curl -s -X POST http://localhost:8080/api/admin/issuers \
+  -H "Authorization: Bearer $ADMIN_SECRET" \
+  -F "ruc=1700000000001" \
+  -F "businessName=Acme S.A." \
+  -F "branchCode=001" \
+  -F "issuePointCode=001" \
+  -F "environment=1" \
+  -F "emissionType=1" \
+  -F "requiredAccounting=false" \
+  -F "certPassword=YOUR_P12_PASSWORD" \
+  -F "cert=@/path/to/token.p12" | jq
 ```
 
-Output:
+Response:
 
+```json
+{
+  "ok": true,
+  "issuer": { "id": 1, "ruc": "1700000000001", ... },
+  "apiKey": "a3f8c2...64 hex chars..."
+}
 ```
-✓ Dev issuer seeded — id: 1, ruc: 1700000000001, env: 1
-✓ Dev API key created
-  Bearer token: a3f8c2...64 hex chars...
-  (Store this — it cannot be recovered from the DB)
+
+**Save the `apiKey`** — it is printed once and never stored in plaintext. Use it as `Authorization: Bearer <apiKey>` on every `POST /api/documents` request.
+
+### Additional branch (reuse existing certificate)
+
+If the same RUC has multiple branch/issue-point combinations, copy the certificate from an existing issuer row instead of re-uploading the P12:
+
+```bash
+curl -s -X POST http://localhost:8080/api/admin/issuers \
+  -H "Authorization: Bearer $ADMIN_SECRET" \
+  -F "ruc=1700000000001" \
+  -F "businessName=Acme S.A." \
+  -F "branchCode=002" \
+  -F "issuePointCode=001" \
+  -F "environment=1" \
+  -F "emissionType=1" \
+  -F "requiredAccounting=false" \
+  -F "sourceIssuerId=1" | jq
 ```
-
-**Save the Bearer token** — it is printed once and never stored in plaintext. You will use it as `Authorization: Bearer <token>` on every API request.
-
-> Safe to run multiple times — the issuer is upserted on RUC. Each run creates a new API key.
-
-> For production, insert the issuer directly via SQL with a real encrypted password (see step 5 for how to encrypt it), then use the admin API (or direct SQL) to create an API key.
 
 ---
 
@@ -165,7 +184,7 @@ The API is available at: **http://localhost:8080**
 ## 10. Verify
 
 ```bash
-# Replace <token> with the Bearer token printed by the seeder
+# Replace <token> with the Bearer token returned by POST /api/admin/issuers
 curl -s http://localhost:8080/api/documents/0000000000000000000000000000000000000000000000000 \
   -H "Authorization: Bearer <token>" | jq
 # → { "ok": false, "message": "Document not found" }
@@ -289,7 +308,7 @@ To wipe all data and start fresh:
 ```bash
 npm run db:reset
 npm run migrate
-CERT_PASSWORD=your_p12_password npm run seed:dev
+# Then re-create your issuer via the admin API (see step 8 above)
 ```
 
 ---
@@ -297,10 +316,10 @@ CERT_PASSWORD=your_p12_password npm run seed:dev
 ## Troubleshooting
 
 **`Missing or invalid Authorization header`**
-Every request requires `Authorization: Bearer <token>`. Run `npm run seed:dev` to generate a token if you don't have one.
+Every request requires `Authorization: Bearer <token>`. Use `POST /api/admin/issuers` to create an issuer and receive its initial API key.
 
 **`Invalid or revoked API key`**
-The token does not match any active key in `api_keys`. Run `npm run seed:dev` to create a new one.
+The token does not match any active key in `api_keys`. Use `POST /api/admin/issuers/:id/api-keys` to generate a new key for an existing issuer.
 
 **`ENCRYPTION_KEY must be a 64-character hex string`**
 The `ENCRYPTION_KEY` in `.env` is missing or wrong length. Re-run step 4.

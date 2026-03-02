@@ -1,6 +1,7 @@
 const config = {
   port: process.env.PORT || 8080,
   encryptionKey: process.env.ENCRYPTION_KEY || '',
+  adminSecret: process.env.ADMIN_SECRET || '',
   db: {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT, 10) || 5432,
