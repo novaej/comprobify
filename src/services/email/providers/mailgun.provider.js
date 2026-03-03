@@ -26,7 +26,8 @@ async function send({ to, subject, text, html, attachments }) {
     })),
   };
 
-  await client.messages.create(config.email.mailgunDomain, messageData);
+  const response = await client.messages.create(config.email.mailgunDomain, messageData);
+  return { messageId: response.id };
 }
 
 module.exports = { send };

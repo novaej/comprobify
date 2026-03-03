@@ -3,7 +3,7 @@ const DocumentStatus = require('../constants/document-status');
 
 const MUTABLE_EXTRA_COLUMNS = new Set([
   // Email tracking — always updatable
-  'email_status', 'email_sent_at', 'email_error',
+  'email_status', 'email_sent_at', 'email_error', 'email_message_id',
   // Authorization data — set once by checkAuthorization
   'authorization_xml', 'authorization_number', 'authorization_date',
   // Rebuild data — updated only when transitioning back to SIGNED
@@ -69,6 +69,22 @@ async function findByIdempotencyKey(key) {
   return rows[0] || null;
 }
 
+async function findByEmailMessageId(messageId) {
+  const { rows } = await db.query(
+    'SELECT * FROM documents WHERE email_message_id = $1',
+    [messageId]
+  );
+  return rows[0] || null;
+}
+
+async function updateEmailStatus(id, emailStatus) {
+  const { rows } = await db.query(
+    `UPDATE documents SET email_status = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [id, emailStatus]
+  );
+  return rows[0] || null;
+}
+
 async function findPendingEmails(issuerId) {
   const { rows } = await db.query(
     `SELECT * FROM documents
@@ -83,4 +99,4 @@ async function findPendingEmails(issuerId) {
   return rows;
 }
 
-module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey };
+module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus };

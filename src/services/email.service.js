@@ -23,7 +23,7 @@ async function sendInvoiceAuthorized(document) {
   const { subject, text, html } = template.render(document, issuer);
   const provider = emailFactory.getProvider();
 
-  await provider.send({
+  const { messageId } = await provider.send({
     to: document.buyer_email,
     subject,
     text,
@@ -34,7 +34,7 @@ async function sendInvoiceAuthorized(document) {
     ],
   });
 
-  return { sent: true };
+  return { sent: true, messageId };
 }
 
 module.exports = { sendInvoiceAuthorized };

@@ -12,11 +12,12 @@ async function retryFailedEmails(issuer) {
 
   for (const doc of documents) {
     try {
-      await emailService.sendInvoiceAuthorized(doc);
+      const { messageId } = await emailService.sendInvoiceAuthorized(doc);
       await documentModel.updateStatus(doc.id, doc.status, {
         email_status: 'SENT',
         email_sent_at: new Date(),
         email_error: null,
+        email_message_id: messageId,
       });
       await documentEventModel.create(doc.id, EventType.EMAIL_SENT,
         null, null, { to: doc.buyer_email, retried: true });
@@ -52,11 +53,12 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
   }
 
   try {
-    await emailService.sendInvoiceAuthorized(document);
+    const { messageId } = await emailService.sendInvoiceAuthorized(document);
     await documentModel.updateStatus(document.id, document.status, {
       email_status: 'SENT',
       email_sent_at: new Date(),
       email_error: null,
+      email_message_id: messageId,
     });
     await documentEventModel.create(document.id, EventType.EMAIL_SENT,
       null, null, { to: document.buyer_email, retried: true });

@@ -107,9 +107,9 @@ async function checkAuthorization(accessKey, issuer) {
 
     if (newStatus === DocumentStatus.AUTHORIZED) {
       emailService.sendInvoiceAuthorized(updated)
-        .then(({ sent }) => {
+        .then(({ sent, messageId }) => {
           const emailFields = sent
-            ? { email_status: 'SENT', email_sent_at: new Date() }
+            ? { email_status: 'SENT', email_sent_at: new Date(), email_message_id: messageId }
             : { email_status: 'SKIPPED' };
           return Promise.all([
             documentModel.updateStatus(updated.id, updated.status, emailFields),
@@ -120,7 +120,7 @@ async function checkAuthorization(accessKey, issuer) {
         })
         .catch(err => {
           console.warn('Invoice email failed:', err.message);
-          Promise.all([
+          return Promise.all([
             documentModel.updateStatus(updated.id, updated.status, {
               email_status: 'FAILED',
               email_error: err.message,
