@@ -30,6 +30,8 @@ const accessKeyService = require('../../../src/services/access-key.service');
 const signingService = require('../../../src/services/signing.service');
 const xmlValidator = require('../../../src/services/xml-validator.service');
 const builders = require('../../../src/builders');
+const sriService = require('../../../src/services/sri.service');
+const sriResponseModel = require('../../../src/models/sri-response.model');
 const documentCreation = require('../../../src/services/document-creation.service');
 const documentTransmission = require('../../../src/services/document-transmission.service');
 const documentQuery = require('../../../src/services/document-query.service');
@@ -251,6 +253,57 @@ describe('DocumentTransmissionService', () => {
 
     await expect(documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer))
       .rejects.toMatchObject({ statusCode: 400 });
+  });
+
+  test('sends and sets RECEIVED when SRI returns code 70', async () => {
+    const doc = { id: 1, status: 'SIGNED', signed_xml: '<xml/>' };
+    documentModel.findByAccessKey.mockResolvedValue(doc);
+    sriService.sendReceipt.mockResolvedValue({
+      status: 'DEVUELTA',
+      messages: [{ identifier: '70', message: 'CLAVE DE ACCESO EN PROCESAMIENTO' }],
+      rawResponse: '<raw/>',
+    });
+    sriResponseModel.create.mockResolvedValue({});
+    documentModel.updateStatus.mockResolvedValue({ ...doc, status: 'RECEIVED' });
+    documentEventModel.create.mockResolvedValue({});
+
+    const result = await documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer);
+
+    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RECEIVED');
+    expect(documentEventModel.create).toHaveBeenCalledWith(
+      1, 'SENT', 'SIGNED', 'RECEIVED',
+      expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
+    );
+    expect(result.status).toBe('RECEIVED');
+    expect(result.sriStatus).toBe('DEVUELTA');
+    expect(result.processingRetry).toBe(true);
+    expect(result.sriMessages).toEqual([{ identifier: '70', message: 'CLAVE DE ACCESO EN PROCESAMIENTO' }]);
+  });
+
+  test('sends and sets RETURNED for non-70 DEVUELTA', async () => {
+    const doc = { id: 1, status: 'SIGNED', signed_xml: '<xml/>' };
+    documentModel.findByAccessKey.mockResolvedValue(doc);
+    const messages = [{ identifier: '43', message: 'SOME OTHER ERROR' }];
+    sriService.sendReceipt.mockResolvedValue({
+      status: 'DEVUELTA',
+      messages,
+      rawResponse: '<raw/>',
+    });
+    sriResponseModel.create.mockResolvedValue({});
+    documentModel.updateStatus.mockResolvedValue({ ...doc, status: 'RETURNED' });
+    documentEventModel.create.mockResolvedValue({});
+
+    const result = await documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer);
+
+    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RETURNED');
+    expect(documentEventModel.create).toHaveBeenCalledWith(
+      1, 'SENT', 'SIGNED', 'RETURNED',
+      { sriStatus: 'DEVUELTA' },
+    );
+    expect(result.status).toBe('RETURNED');
+    expect(result.sriStatus).toBe('DEVUELTA');
+    expect(result.processingRetry).toBeUndefined();
+    expect(result.sriMessages).toEqual(messages);
   });
 
   test('checkAuthorization rejects when status is not RECEIVED', async () => {

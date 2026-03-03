@@ -36,14 +36,23 @@ async function sendToSri(accessKey, issuer) {
     rawResponse: result.rawResponse,
   });
 
-  const newStatus = result.status === 'RECIBIDA' ? DocumentStatus.RECEIVED : DocumentStatus.RETURNED;
+  const isProcessing = result.messages.some(m => m.identifier === '70');
+  const newStatus = (result.status === 'RECIBIDA' || isProcessing)
+    ? DocumentStatus.RECEIVED
+    : DocumentStatus.RETURNED;
   const updated = await documentModel.updateStatus(document.id, newStatus);
 
   await documentEventModel.create(document.id, EventType.SENT, document.status, newStatus, {
     sriStatus: result.status,
+    ...(isProcessing && { processingRetry: true, sriIdentifier: '70' }),
   });
 
-  return formatDocument(updated);
+  return {
+    ...formatDocument(updated),
+    sriStatus: result.status,
+    ...(isProcessing && { processingRetry: true }),
+    sriMessages: result.messages,
+  };
 }
 
 async function checkAuthorization(accessKey, issuer) {
