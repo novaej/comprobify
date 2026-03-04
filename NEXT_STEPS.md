@@ -24,6 +24,10 @@ Implemented in migration 021 and `src/middleware/idempotency.js`. Same key + sam
 
 RIDE PDF + authorization XML sent fire-and-forget on `AUTHORIZED`. Per-document `email_status` tracking. Batch retry `POST /api/documents/email-retry`, single retry `POST /api/documents/:accessKey/email-retry`. Provider swappable via `EMAIL_PROVIDER` env var.
 
+## ~~Email Delivery Tracking~~ ✅ Done
+
+Mailgun webhook (`POST /api/mailgun/webhook`) receives delivery events and updates `email_status` to `DELIVERED`, `FAILED`, or `COMPLAINED`. Temporary failures logged without status change. HMAC-SHA256 verified. See ADR-010.
+
 Remaining: issuer logo (`logo_path`) not yet rendered in emails (column exists in `issuers`).
 
 ---

@@ -74,6 +74,8 @@ EMAIL_PROVIDER=mailgun
 EMAIL_FROM=Facturación <no-reply@mg.yourdomain.com>
 MAILGUN_API_KEY=
 MAILGUN_DOMAIN=mg.yourdomain.com
+# From Mailgun dashboard → Sending → Webhooks → Webhook signing key
+MAILGUN_WEBHOOK_SIGNING_KEY=
 ```
 
 > **Issuer data (RUC, branch code, issue point, SRI environment, certificate) is stored per-issuer in the `issuers` database table — not in `.env`.** The admin API in step 8 populates it.
@@ -116,7 +118,7 @@ npm install
 npm run migrate
 ```
 
-This applies all 28 migrations, creating tables: `issuers`, `api_keys`, `documents`, `sequential_numbers`, `sri_responses`, `document_line_items`, `document_events`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`). Also installs two PostgreSQL triggers for document state machine and immutability enforcement. Already-applied migrations are skipped automatically.
+This applies all 29 migrations, creating tables: `issuers`, `api_keys`, `documents`, `sequential_numbers`, `sri_responses`, `document_line_items`, `document_events`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`). Also installs two PostgreSQL triggers for document state machine and immutability enforcement. Already-applied migrations are skipped automatically.
 
 ---
 
@@ -132,12 +134,14 @@ curl -s -X POST http://localhost:8080/api/admin/issuers \
   -F "ruc=1700000000001" \
   -F "businessName=Acme S.A." \
   -F "tradeName=Acme" \
-  -F "mainAddress=Test Address" \
+  -F "mainAddress=123 Test Street" \
   -F "branchCode=001" \
   -F "issuePointCode=001" \
   -F "environment=1" \
   -F "emissionType=1" \
   -F "requiredAccounting=false" \
+  -F "specialTaxpayer=" \
+  -F "branchAddress=123 Test Street" \
   -F "certPassword=YOUR_P12_PASSWORD" \
   -F "cert=@/path/to/token.p12" | jq
 ```
@@ -163,11 +167,15 @@ curl -s -X POST http://localhost:8080/api/admin/issuers \
   -H "Authorization: Bearer $ADMIN_SECRET" \
   -F "ruc=1700000000001" \
   -F "businessName=Acme S.A." \
+  -F "tradeName=Acme" \
+  -F "mainAddress=123 Test Street" \
   -F "branchCode=001" \
   -F "issuePointCode=001" \
   -F "environment=1" \
   -F "emissionType=1" \
   -F "requiredAccounting=false" \
+  -F "specialTaxpayer=" \
+  -F "branchAddress=123 Test Street" \
   -F "certPassword=YOUR_P12_PASSWORD" \
   -F "cert=@/path/to/token.p12" \
   -F 'initialSequentials=[{"documentType":"01","sequential":500},{"documentType":"04","sequential":12}]' | jq
@@ -186,11 +194,15 @@ curl -s -X POST http://localhost:8080/api/admin/issuers \
   -H "Authorization: Bearer $ADMIN_SECRET" \
   -F "ruc=1700000000001" \
   -F "businessName=Acme S.A." \
+  -F "tradeName=Acme" \
+  -F "mainAddress=123 Test Street" \
   -F "branchCode=002" \
   -F "issuePointCode=001" \
   -F "environment=1" \
   -F "emissionType=1" \
   -F "requiredAccounting=false" \
+  -F "specialTaxpayer=" \
+  -F "branchAddress=Warehouse Location" \
   -F "sourceIssuerId=1" | jq
 ```
 
@@ -252,13 +264,13 @@ curl -s -X POST http://localhost:8080/api/documents \
       "discount": "0.00",
       "taxes": [{
         "code": "2",
-        "rateCode": "2",
-        "rate": "12.00",
+        "rateCode": "4",
+        "rate": "15.00",
         "taxBase": "100.00",
-        "value": "12.00"
+        "value": "15.00"
       }]
     }],
-    "payments": [{ "method": "20", "total": "112.00" }]
+    "payments": [{ "method": "20", "total": "115.00" }]
   }' | jq
 ```
 
@@ -336,6 +348,46 @@ npm run db:reset
 npm run migrate
 # Then re-create your issuer via the admin API (see step 8 above)
 ```
+
+---
+
+## Mailgun webhook (email delivery tracking)
+
+When a document is authorized, the system sends the RIDE PDF and XML to the buyer's email via Mailgun and records the queued message ID in `documents.email_message_id`. To track actual delivery, configure a Mailgun webhook so Mailgun calls back with the result.
+
+### Setup
+
+1. Get the signing key: **Mailgun dashboard → Sending → Webhooks → Webhook signing key**. Copy it into `MAILGUN_WEBHOOK_SIGNING_KEY` in `.env`.
+
+2. Register the webhook URL in Mailgun for your domain. Check the following event types:
+   - Delivered messages
+   - Permanent failure
+   - Temporary failure
+   - Spam complaints
+
+   **Dev:** use [ngrok](https://ngrok.com) to expose your local server:
+   ```bash
+   ngrok http 8080
+   # Use the printed HTTPS URL, e.g.:
+   # https://abc123.ngrok-free.app/api/mailgun/webhook
+   ```
+   **Production:** use your server's public URL:
+   ```
+   https://yourdomain.com/api/mailgun/webhook
+   ```
+
+3. Restart the server so it picks up `MAILGUN_WEBHOOK_SIGNING_KEY`.
+
+### How it works
+
+| Mailgun event | Severity | `email_status` | `document_events` entry |
+|---|---|---|---|
+| `delivered` | — | `DELIVERED` | `EMAIL_DELIVERED` |
+| `failed` | `permanent` | `FAILED` | `EMAIL_FAILED` |
+| `failed` | `temporary` | *(unchanged — Mailgun retries)* | `EMAIL_TEMP_FAILED` |
+| `complained` | — | `COMPLAINED` | `EMAIL_COMPLAINED` |
+
+All requests are verified with HMAC-SHA256 and rejected with 401 if the signature is invalid or the timestamp is more than 5 minutes old.
 
 ---
 

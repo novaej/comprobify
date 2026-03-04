@@ -94,3 +94,4 @@ YYYY-MM-DD
 | [007](007-api-key-authentication.md) | Bearer API Key Authentication for Multi-Tenancy | Accepted | 2026-03-01 |
 | [008](008-document-state-machine.md) | Document State Machine with Dual-Layer Enforcement | Accepted | 2026-03-01 |
 | [009](009-pem-in-database-cert-storage.md) | PEM-in-Database Certificate Storage and Admin API | Accepted | 2026-03-01 |
+| [010](010-mailgun-webhook-delivery-tracking.md) | Mailgun Webhook for Email Delivery Tracking | Accepted | 2026-03-03 |

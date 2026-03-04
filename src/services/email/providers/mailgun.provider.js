@@ -27,7 +27,11 @@ async function send({ to, subject, text, html, attachments }) {
   };
 
   const response = await client.messages.create(config.email.mailgunDomain, messageData);
-  return { messageId: response.id };
+  // Mailgun returns the ID wrapped in angle brackets (<abc@mg.example.com>)
+  // but webhook event-data.message.headers.message-id arrives without them.
+  // Strip here so the stored value matches what the webhook delivers.
+  const messageId = response.id ? response.id.replace(/^<|>$/g, '') : response.id;
+  return { messageId };
 }
 
 module.exports = { send };

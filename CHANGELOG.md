@@ -10,6 +10,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Mailgun webhook delivery tracking** — `POST /api/mailgun/webhook` receives Mailgun delivery events and updates `email_status` accordingly. Handles four event types: `delivered` → `DELIVERED`, `failed` (permanent) → `FAILED`, `failed` (temporary, no status change) → logs `EMAIL_TEMP_FAILED`, `complained` → `COMPLAINED`. All requests are verified with HMAC-SHA256 (`MAILGUN_WEBHOOK_SIGNING_KEY`) with 5-minute replay protection.
+- `email_message_id` column on `documents` — stores Mailgun's queued message ID (angle brackets stripped) so webhook events can be correlated back to the right document.
+- `DELIVERED` and `COMPLAINED` added to the `documents_email_status_check` constraint.
+- `EMAIL_DELIVERED`, `EMAIL_TEMP_FAILED`, `EMAIL_COMPLAINED` added to `chk_document_events_event_type` constraint.
+- `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable (Mailgun dashboard → Sending → Webhooks → Webhook signing key).
 - `revokeExisting` option on `POST /api/admin/issuers/:id/api-keys` — pass `true` to revoke all active keys for the issuer atomically before issuing the new one, enabling safe key rotation and lost-key recovery in a single request.
 - `revokeAllByIssuerId` on `api-key.model`.
 
@@ -17,6 +22,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `src/controllers/invoices.controller.js` renamed to `src/controllers/documents.controller.js` to match the document-agnostic route and service layer.
 - `POST /api/admin/issuers` now returns `409 Conflict` with a descriptive message when a duplicate `(ruc, branch_code, issue_point_code)` combination is submitted, instead of a generic 500.
 - `initialSequentials` (array of `{ documentType, sequential }`) replaces the flat `initialSequential` + `documentType` pair on `POST /api/admin/issuers`, allowing counters for multiple document types to be seeded in one request.
+- `mailgun.provider.send()` now returns `{ messageId }` (angle brackets stripped from Mailgun's response `id`) instead of `void`.
+- `email.service.sendInvoiceAuthorized()` now returns `{ sent: true, messageId }` on success.
+- `email_status` on send success now also stores `email_message_id` so subsequent webhook calls can look up the document.
+
+### Fixed
+- Missing `return` before `Promise.all(...)` in the `.catch()` block of `checkAuthorization()` fire-and-forget email path.
 
 ---
 

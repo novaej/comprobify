@@ -33,7 +33,7 @@ Route → Validator → Controller → Service → Model / Builder / Helper
 ```
 src/routes/        URL definitions + validator chains
 src/validators/    express-validator field rules
-src/middleware/    asyncHandler, validateRequest, errorHandler, idempotency, authenticate
+src/middleware/    asyncHandler, validateRequest, errorHandler, idempotency, authenticate, verify-mailgun-webhook
 src/controllers/   thin HTTP handlers — one service call, one response
 src/services/      business logic and orchestration
 src/services/email/  email provider factory + Mailgun provider + templates
@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–028
+db/migrations/     SQL migration files 001–029
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -74,13 +74,15 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Retry logic:** `fetchWithRetry` in `sri.service.js` — retries only on `fetch` throws (network), never on HTTP-level SRI responses.
 
-**Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`, `EMAIL_SENT`, `EMAIL_FAILED`.
+**Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`, `EMAIL_SENT`, `EMAIL_FAILED`, `EMAIL_DELIVERED`, `EMAIL_TEMP_FAILED`, `EMAIL_COMPLAINED`.
 
 **Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry.
 
 **Idempotency key:** `POST /api/documents` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
 
-**Email delivery:** when a document becomes `AUTHORIZED`, `emailService.sendInvoiceAuthorized()` is called fire-and-forget. It generates the RIDE PDF and XML on the fly and sends both as attachments via Mailgun. Per-document status tracked in `documents.email_status` (`PENDING` → `SENT` / `FAILED` / `SKIPPED`). Failed sends retried via `POST /email-retry` (batch) or `POST /:key/email-retry` (single, add `?force=true` to resend an already-sent email). Provider swappable via `EMAIL_PROVIDER` env var + new file in `src/services/email/providers/`.
+**Email delivery:** when a document becomes `AUTHORIZED`, `emailService.sendInvoiceAuthorized()` is called fire-and-forget. It generates the RIDE PDF and XML on the fly and sends both as attachments via Mailgun. The Mailgun message ID (angle brackets stripped) is stored in `documents.email_message_id`. Per-document status tracked in `documents.email_status` (`PENDING` → `SENT` / `FAILED` / `SKIPPED`). Failed sends retried via `POST /email-retry` (batch) or `POST /:key/email-retry` (single, add `?force=true` to resend an already-sent email). Provider swappable via `EMAIL_PROVIDER` env var + new file in `src/services/email/providers/`.
+
+**Mailgun webhook:** `POST /api/mailgun/webhook` receives Mailgun delivery events and updates `email_status`: `delivered` → `DELIVERED`, `failed`+`permanent` → `FAILED`, `failed`+`temporary` → status unchanged + `EMAIL_TEMP_FAILED` event (Mailgun retries), `complained` → `COMPLAINED`. All requests verified with HMAC-SHA256 via `verify-mailgun-webhook.js` middleware (`MAILGUN_WEBHOOK_SIGNING_KEY` config key). Lookup is by `documents.email_message_id`. See ADR-010.
 
 ---
 
@@ -96,6 +98,7 @@ GET  /:key/xml                  → application/xml  (authorization XML or signe
 GET  /:key/events               → audit trail for the document
 POST /email-retry               → batch retry all PENDING/FAILED emails
 POST /:key/email-retry          → retry single email (?force=true to resend SENT)
+POST /api/mailgun/webhook       → Mailgun delivery event → update email_status (HMAC-verified)
 ```
 
 `rebuild` corrects invoice content (taxes, items, buyer, payments) and re-signs using the same `access_key`, `sequential`, and `issue_date`. Used when SRI returns RETURNED or NOT_AUTHORIZED.
@@ -167,14 +170,18 @@ chore: update express to 4.22.1
 | `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.issuer` |
 | `src/middleware/authenticate-admin.js` | `ADMIN_SECRET` constant-time check for `/api/admin/*` |
 | `src/middleware/idempotency.js` | Extracts + validates `Idempotency-Key` header |
+| `src/middleware/verify-mailgun-webhook.js` | HMAC-SHA256 + replay protection for Mailgun webhook |
 | `src/services/document-creation.service.js` | Invoice creation — sequential, XML, signing, persistence |
 | `src/services/document-transmission.service.js` | SRI send + authorization check + fire-and-forget email |
 | `src/services/document-rebuild.service.js` | Rebuild from RETURNED/NOT_AUTHORIZED |
 | `src/services/document-email.service.js` | Batch and single email retry |
 | `src/services/document-query.service.js` | Read-only document lookups |
-| `src/services/email.service.js` | Sends RIDE PDF + XML on authorization via provider |
+| `src/services/email.service.js` | Sends RIDE PDF + XML on authorization via provider; returns `{ sent, messageId }` |
 | `src/services/email/index.js` | Email provider factory (`EMAIL_PROVIDER` env var) |
-| `src/services/email/providers/mailgun.provider.js` | Mailgun SDK wrapper |
+| `src/services/email/providers/mailgun.provider.js` | Mailgun SDK wrapper; returns `{ messageId }` (angle brackets stripped) |
+| `src/services/mailgun-webhook.service.js` | Normalises Mailgun v3/legacy payload, looks up doc by `email_message_id`, updates status |
+| `src/controllers/mailgun-webhook.controller.js` | Thin handler for `POST /api/mailgun/webhook` |
+| `src/routes/mailgun-webhook.routes.js` | Mounts webhook route with HMAC verification |
 | `src/services/email/templates/invoice-authorized.js` | Spanish email subject + text + HTML |
 | `src/services/ride.service.js` | RIDE PDF generation — on-demand, not persisted |
 | `src/services/sri.service.js` | SRI SOAP integration + retry logic |
@@ -189,6 +196,6 @@ chore: update express to 4.22.1
 | `src/builders/index.js` | Builder registry |
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
 | `src/constants/document-state-machine.js` | `TRANSITIONS` map + `canTransition` / `assertTransition` |
-| `db/migrations/` | SQL migration files 001–028 (028: multi-branch unique key + PEM columns) |
+| `db/migrations/` | SQL migration files 001–029 (029: email_message_id, DELIVERED/COMPLAINED status, webhook event types) |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

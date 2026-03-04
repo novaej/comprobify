@@ -16,24 +16,28 @@
 
 All variables are required unless marked optional.
 
-| Variable | Description |
-|----------|-------------|
-| `PORT` | HTTP port (default `8080`) |
-| `DB_HOST` | PostgreSQL host |
-| `DB_PORT` | PostgreSQL port (default `5432`) |
-| `DB_NAME` | Database name |
-| `DB_USER` | Database user |
-| `DB_PASSWORD` | Database password |
-| `DB_SSL` | `true` to enable SSL (required in production) |
-| `ENCRYPTION_KEY` | 64-character hex string (32 bytes) — AES-256-GCM key for cert password encryption |
-| `EMAIL_PROVIDER` | Email provider (default `mailgun`; only `mailgun` supported today) |
-| `EMAIL_FROM` | Sender address shown to buyers, e.g. `Facturación <no-reply@mg.yourdomain.com>` |
-| `MAILGUN_API_KEY` | Mailgun private API key |
-| `MAILGUN_DOMAIN` | Mailgun sending domain, e.g. `mg.yourdomain.com` |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `PORT` | No | HTTP port (default `8080`) |
+| `DB_HOST` | Yes | PostgreSQL host |
+| `DB_PORT` | No | PostgreSQL port (default `5432`) |
+| `DB_NAME` | Yes | Database name |
+| `DB_USER` | Yes | Database user |
+| `DB_PASSWORD` | Yes | Database password |
+| `DB_SSL` | Yes | `true` to enable SSL (required in production) |
+| `ENCRYPTION_KEY` | Yes | 64-character hex string — AES-256-GCM key for private key encryption |
+| `ADMIN_SECRET` | Yes | 64-character hex string — protects all `/api/admin/*` endpoints |
+| `EMAIL_PROVIDER` | No | Email provider (default `mailgun`; only `mailgun` supported today) |
+| `EMAIL_FROM` | No | Sender address shown to buyers, e.g. `Facturación <no-reply@mg.yourdomain.com>` |
+| `MAILGUN_API_KEY` | No | Mailgun private API key |
+| `MAILGUN_DOMAIN` | No | Mailgun sending domain, e.g. `mg.yourdomain.com` |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` | No | From Mailgun dashboard → Sending → Webhooks → Webhook signing key |
 
-> **Issuer-specific config** (RUC, branch code, issue point, SRI environment, certificate path and password) is stored per-issuer in the `issuers` database table. This enables multiple issuers to be configured independently without changing environment variables.
+> **Issuer-specific config** (RUC, branch code, issue point, SRI environment, certificate) is stored per-issuer in the `issuers` database table via the Admin API. This enables multiple issuers to be configured independently without changing environment variables.
 
-> **Email is optional at startup** — if `EMAIL_FROM` / `MAILGUN_API_KEY` / `MAILGUN_DOMAIN` are unset the server starts normally. Email sends will fail at runtime and be recorded as `FAILED` in `documents.email_status`.
+> **Email is optional at startup** — if `MAILGUN_API_KEY` / `MAILGUN_DOMAIN` are unset the server starts normally. Email sends will fail at runtime and be recorded as `FAILED` in `documents.email_status`.
+
+> **Webhook tracking is optional** — if `MAILGUN_WEBHOOK_SIGNING_KEY` is unset the webhook endpoint returns 401 for all requests. `email_status` stays at `SENT` permanently (no delivery confirmation).
 
 Generate `ENCRYPTION_KEY`:
 ```bash
@@ -74,18 +78,28 @@ The runner tracks applied migrations in a `migrations` table — already-applied
 
 ## Certificate management
 
-The P12 certificate password is stored AES-256-GCM encrypted in the `issuers.cert_password_enc` column. The plaintext password never appears in the codebase, logs, or config files.
+P12 certificates are uploaded via the Admin API (`POST /api/admin/issuers`). The API extracts the private key and certificate PEM in-process (never written to disk), then stores them in the `issuers` table:
 
-To encrypt a new password:
+- `issuers.encrypted_private_key` — private key PEM encrypted with AES-256-GCM using `ENCRYPTION_KEY`
+- `issuers.certificate_pem` — certificate PEM stored plaintext
+
+The plaintext private key only exists in memory during the request and at signing time. No P12 file or plaintext private key is ever persisted to disk or the database.
+
+To provision a new issuer:
 ```bash
-node -e "
-  require('dotenv').config();
-  const c = require('./src/services/crypto.service');
-  console.log(c.encrypt('PLAINTEXT_PASSWORD'));
-"
+curl -s -X POST https://yourserver/api/admin/issuers \
+  -H "Authorization: Bearer $ADMIN_SECRET" \
+  -F "ruc=1700000000001" \
+  -F "businessName=Acme S.A." \
+  -F "branchCode=001" \
+  -F "issuePointCode=001" \
+  -F "environment=2" \
+  -F "emissionType=1" \
+  -F "certPassword=YOUR_P12_PASSWORD" \
+  -F "cert=@/path/to/token.p12" | jq
 ```
 
-Store the output in the database. The P12 file itself lives at `cert/token.p12` (path configurable via `CERT_PATH`).
+See `GETTING_STARTED.md` for the full admin API reference.
 
 ---
 
@@ -93,14 +107,16 @@ Store the output in the database. The P12 file itself lives at `cert/token.p12` 
 
 - [ ] `DB_SSL=true` with a valid certificate
 - [ ] `ENCRYPTION_KEY` is unique per environment — never share between staging and production
-- [ ] `cert/token.p12` has restricted file permissions (`chmod 600`)
+- [ ] `ADMIN_SECRET` is unique per environment and kept behind an internal firewall
 - [ ] `.env` file is not world-readable and never committed
-- [ ] `ENVIRONMENT=2` only in the production deployment
+- [ ] `issuers.environment` set to `2` only on production issuer rows
 - [ ] API is behind HTTPS (reverse proxy: nginx, Caddy, or load balancer TLS termination)
 - [ ] PostgreSQL not exposed on a public port
 - [ ] `xmllint` installed on the server (`apt install libxml2-utils`)
 - [ ] `EMAIL_FROM`, `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` set and verified against a real Mailgun domain (not sandbox)
 - [ ] Mailgun sandbox authorized-recipient restriction removed (sandbox only allows pre-approved addresses)
+- [ ] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard for all 4 event types
+- [ ] Webhook endpoint (`/api/mailgun/webhook`) reachable on the public HTTPS URL
 - [ ] Log aggregation configured — the API logs to stdout
 
 ---
@@ -117,7 +133,7 @@ Key log lines to monitor:
 | `SRI fetch attempt N failed, retrying in Nms` | Transient SRI network failure — being retried |
 | `Unexpected database pool error` | DB connection issue — check PostgreSQL |
 | `Failed to upsert client record` | Non-critical — buyer catalogue update failed |
-| `Invoice email failed: ...` | Non-critical — email send failed; `email_status` set to `FAILED`, retry via `/email-retry` |
+| `Invoice email failed: ...` | Non-critical — email send failed; `email_status` set to `FAILED`, retry via `POST /api/documents/:key/email-retry` |
 | `Unhandled error: ...` | Unexpected error — inspect stack trace |
 
 ---
@@ -127,7 +143,7 @@ Key log lines to monitor:
 There is no dedicated `/health` endpoint yet (see `NEXT_STEPS.md`). A lightweight check:
 
 ```bash
-curl -s http://localhost:8080/api/invoices/0000000000000000000000000000000000000000000000000
+curl -s http://localhost:8080/api/documents/0000000000000000000000000000000000000000000000000
 # → {"ok":false,"message":"Document not found"}   ← server up, DB connected
 ```
 
