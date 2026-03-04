@@ -71,7 +71,9 @@ ADMIN_SECRET=               # see step 5
 
 # Email delivery (optional — omit to disable buyer notifications)
 EMAIL_PROVIDER=mailgun
-EMAIL_FROM=Facturación <no-reply@mg.yourdomain.com>
+# Bare email address only — display name is built dynamically:
+# "{Issuer Business Name} via Comprobify <EMAIL_FROM>"
+EMAIL_FROM=comprobantes@mg.yourdomain.com
 MAILGUN_API_KEY=
 MAILGUN_DOMAIN=mg.yourdomain.com
 # From Mailgun dashboard → Sending → Webhooks → Webhook signing key

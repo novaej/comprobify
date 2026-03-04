@@ -2,6 +2,7 @@ const issuerModel = require('../models/issuer.model');
 const rideService = require('./ride.service');
 const emailFactory = require('./email');
 const template = require('./email/templates/invoice-authorized');
+const config = require('../config');
 
 /**
  * Generate and send the authorized invoice email with RIDE PDF and XML attached.
@@ -23,7 +24,10 @@ async function sendInvoiceAuthorized(document) {
   const { subject, text, html } = template.render(document, issuer);
   const provider = emailFactory.getProvider();
 
+  const from = `${issuer.business_name} via Comprobify <${config.email.from}>`;
+
   const { messageId } = await provider.send({
+    from,
     to: document.buyer_email,
     subject,
     text,

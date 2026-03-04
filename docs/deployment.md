@@ -28,7 +28,7 @@ All variables are required unless marked optional.
 | `ENCRYPTION_KEY` | Yes | 64-character hex string — AES-256-GCM key for private key encryption |
 | `ADMIN_SECRET` | Yes | 64-character hex string — protects all `/api/admin/*` endpoints |
 | `EMAIL_PROVIDER` | No | Email provider (default `mailgun`; only `mailgun` supported today) |
-| `EMAIL_FROM` | No | Sender address shown to buyers, e.g. `Facturación <no-reply@mg.yourdomain.com>` |
+| `EMAIL_FROM` | No | Bare sender email address, e.g. `comprobantes@mg.yourdomain.com`. Display name is built dynamically as `{Issuer Business Name} via Comprobify <EMAIL_FROM>`. |
 | `MAILGUN_API_KEY` | No | Mailgun private API key |
 | `MAILGUN_DOMAIN` | No | Mailgun sending domain, e.g. `mg.yourdomain.com` |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | No | From Mailgun dashboard → Sending → Webhooks → Webhook signing key |

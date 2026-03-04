@@ -37,6 +37,8 @@ function render(document, issuer) {
     '',
     issuerName,
     `RUC: ${issuerRuc}`,
+    '',
+    'No responder — este es un mensaje automático.',
   ].join('\n');
 
   const html = `
@@ -63,6 +65,7 @@ function render(document, issuer) {
     <strong>${escapeHtml(issuerName)}</strong><br>
     RUC: ${escapeHtml(issuerRuc)}
   </p>
+  <p style="font-size: 11px; color: #999;">No responder — este es un mensaje automático.</p>
 </body>
 </html>`.trim();
 

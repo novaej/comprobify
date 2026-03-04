@@ -10,11 +10,11 @@ function getClient() {
 /**
  * @param {{ to: string, subject: string, text: string, html: string, attachments: Array<{ filename: string, data: Buffer, contentType: string }> }} options
  */
-async function send({ to, subject, text, html, attachments }) {
+async function send({ from, to, subject, text, html, attachments }) {
   const client = getClient();
 
   const messageData = {
-    from: config.email.from,
+    from,
     to,
     subject,
     text,
