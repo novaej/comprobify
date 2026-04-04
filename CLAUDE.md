@@ -74,6 +74,8 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Retry logic:** `fetchWithRetry` in `sri.service.js` — retries only on `fetch` throws (network), never on HTTP-level SRI responses.
 
+**Error responses:** all `4xx`/`5xx` responses use RFC 7807 Problem Details (`Content-Type: application/problem+json`) with `type`, `title`, `status`, `code` (stable SCREAMING_SNAKE_CASE i18n key), `detail`, and `instance` (request URL). `AppError` derives `code`/`type`/`title` from the HTTP status automatically; `ValidationError` and `SriError` override with domain-specific values. Field-level errors in `ValidationError.errors[]` each carry a `code` derived from the field path with array indices stripped. See ADR-011.
+
 **Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`, `EMAIL_SENT`, `EMAIL_FAILED`, `EMAIL_DELIVERED`, `EMAIL_TEMP_FAILED`, `EMAIL_COMPLAINED`.
 
 **Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry.

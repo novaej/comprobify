@@ -95,3 +95,4 @@ YYYY-MM-DD
 | [008](008-document-state-machine.md) | Document State Machine with Dual-Layer Enforcement | Accepted | 2026-03-01 |
 | [009](009-pem-in-database-cert-storage.md) | PEM-in-Database Certificate Storage and Admin API | Accepted | 2026-03-01 |
 | [010](010-mailgun-webhook-delivery-tracking.md) | Mailgun Webhook for Email Delivery Tracking | Accepted | 2026-03-03 |
+| [011](011-rfc7807-error-format.md) | RFC 7807 Problem Details for Error Responses | Accepted | 2026-04-04 |

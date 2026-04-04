@@ -198,18 +198,49 @@ router.post('/', createSomething, validateRequest, asyncHandler(controller.creat
 Use the typed error classes — never call `res.status()` directly in a service:
 
 ```js
-const AppError = require('../errors/app-error');         // 500 by default
+const AppError = require('../errors/app-error');            // HTTP status-based defaults
 const NotFoundError = require('../errors/not-found-error'); // 404
 const ValidationError = require('../errors/validation-error'); // 400, carries errors[]
-const SriError = require('../errors/sri-error');            // 502, carries sriMessages[]
+const ConflictError = require('../errors/conflict-error');   // 409
+const SriError = require('../errors/sri-error');             // 502, carries sriMessages[]
 
 // throw from anywhere — the error handler middleware catches it
 throw new NotFoundError('Document');
-throw new ValidationError([{ message: 'Access key must be 49 digits' }]);
+throw new ValidationError([{ field: 'buyer.email', message: 'Invalid email', code: 'buyer.email' }]);
 throw new SriError('SRI service unavailable', sriMessages);
+throw new AppError('Invalid state for this operation', 400); // code derived from status → BAD_REQUEST
 ```
 
-The `error-handler.js` middleware maps `AppError` subclasses to their status codes and formats the response as `{ ok: false, message, errors?, sriMessages? }`.
+All errors are serialised as [RFC 7807 Problem Details](../adr/011-rfc7807-error-format.md) with `Content-Type: application/problem+json`:
+
+```json
+{
+  "type":     "/problems/not-found",
+  "title":    "Not Found",
+  "status":   404,
+  "code":     "NOT_FOUND",
+  "detail":   "Document not found",
+  "instance": "/api/documents/123abc/send"
+}
+```
+
+The `code` field is a stable SCREAMING_SNAKE_CASE key for client i18n lookups. `AppError` derives `code`, `type`, and `title` automatically from the HTTP status (see `src/errors/app-error.js`). `ValidationError` and `SriError` override with domain-specific values.
+
+For `ValidationError`, each item in `errors[]` also carries a `code` derived from the field path with array indices stripped (`items[0].taxes[1].code` → `items.taxes.code`):
+
+```json
+{
+  "type":   "/problems/validation-error",
+  "title":  "Validation Failed",
+  "status": 400,
+  "code":   "VALIDATION_FAILED",
+  "detail": "Validation failed",
+  "instance": "/api/documents",
+  "errors": [
+    { "field": "buyer.email", "message": "Buyer email is required", "code": "buyer.email" }
+  ]
+}
+```
 
 ---
 
