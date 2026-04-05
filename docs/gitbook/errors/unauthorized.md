@@ -9,7 +9,7 @@ The request did not include a valid API key, or the key has been revoked.
 
 ```json
 {
-  "type":     "https://docs.comprobify.com/errors/unauthorized",
+  "type":     "https://novaej.gitbook.io/comprobify-api-docs/errors/unauthorized",
   "title":    "Unauthorized",
   "status":   401,
   "code":     "UNAUTHORIZED",

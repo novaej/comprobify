@@ -9,7 +9,7 @@ The requested document does not exist, or it belongs to a different issuer than 
 
 ```json
 {
-  "type":     "https://docs.comprobify.com/errors/not-found",
+  "type":     "https://novaej.gitbook.io/comprobify-api-docs/errors/not-found",
   "title":    "Not Found",
   "status":   404,
   "code":     "NOT_FOUND",

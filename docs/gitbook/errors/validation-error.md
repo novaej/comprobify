@@ -9,7 +9,7 @@ One or more fields in the request body failed validation.
 
 ```json
 {
-  "type":     "https://docs.comprobify.com/errors/validation-error",
+  "type":     "https://novaej.gitbook.io/comprobify-api-docs/errors/validation-error",
   "title":    "Validation Failed",
   "status":   400,
   "code":     "VALIDATION_FAILED",

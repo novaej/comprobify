@@ -9,7 +9,7 @@ A network error occurred while communicating with the SRI SOAP service. This is 
 
 ```json
 {
-  "type":     "https://docs.comprobify.com/errors/sri-error",
+  "type":     "https://novaej.gitbook.io/comprobify-api-docs/errors/sri-error",
   "title":    "SRI Submission Failed",
   "status":   502,
   "code":     "SRI_SUBMISSION_FAILED",

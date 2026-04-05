@@ -13,7 +13,7 @@ The request is syntactically valid but cannot be processed in the current contex
 
 ```json
 {
-  "type":     "https://docs.comprobify.com/errors/bad-request",
+  "type":     "https://novaej.gitbook.io/comprobify-api-docs/errors/bad-request",
   "title":    "Bad Request",
   "status":   400,
   "code":     "BAD_REQUEST",
