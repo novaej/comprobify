@@ -5,7 +5,7 @@ class ValidationError extends AppError {
     super('Validation failed', 400);
     this.errors = errors;
     this.code = 'VALIDATION_FAILED';
-    this.type = '/problems/validation-error';
+    this.typeSlug = 'validation-error';
     this.title = 'Validation Failed';
   }
 }

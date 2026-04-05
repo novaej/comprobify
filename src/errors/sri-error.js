@@ -5,7 +5,7 @@ class SriError extends AppError {
     super(message, 502);
     this.sriMessages = messages;
     this.code = 'SRI_SUBMISSION_FAILED';
-    this.type = '/problems/sri-error';
+    this.typeSlug = 'sri-error';
     this.title = 'SRI Submission Failed';
   }
 }

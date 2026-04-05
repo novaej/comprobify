@@ -1,9 +1,16 @@
 const AppError = require('../errors/app-error');
+const config = require('../config');
+
+function buildTypeUrl(slug) {
+  return config.docsBaseUrl
+    ? `${config.docsBaseUrl}/errors/${slug}`
+    : `/problems/${slug}`;
+}
 
 const errorHandler = (err, req, res, _next) => {
   if (err instanceof AppError) {
     const body = {
-      type: err.type,
+      type: buildTypeUrl(err.typeSlug),
       title: err.title,
       status: err.statusCode,
       code: err.code,
@@ -29,7 +36,7 @@ const errorHandler = (err, req, res, _next) => {
     .set('Content-Type', 'application/problem+json')
     .status(500)
     .json({
-      type: '/problems/internal-error',
+      type: buildTypeUrl('internal-error'),
       title: 'Internal Server Error',
       status: 500,
       code: 'INTERNAL_ERROR',
