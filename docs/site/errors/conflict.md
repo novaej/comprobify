@@ -9,7 +9,7 @@ An `Idempotency-Key` header was supplied with a value that has already been used
 
 ```json
 {
-  "type":     "https://novaej.gitbook.io/comprobify-api-docs/errors/conflict",
+  "type":     "https://novaej.github.io/comprobify/errors/conflict",
   "title":    "Conflict",
   "status":   409,
   "code":     "CONFLICT",

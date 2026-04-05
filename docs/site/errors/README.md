@@ -6,7 +6,7 @@ All error responses use [RFC 7807 Problem Details](https://www.rfc-editor.org/rf
 
 ```json
 {
-  "type":     "https://novaej.gitbook.io/comprobify-api-docs/errors/validation-error",
+  "type":     "https://novaej.github.io/comprobify/errors/validation-error",
   "title":    "Validation Failed",
   "status":   400,
   "code":     "VALIDATION_FAILED",
@@ -47,7 +47,7 @@ When `code` is `VALIDATION_FAILED`, an additional `errors` array lists each fiel
 
 ```json
 {
-  "type":   "https://novaej.gitbook.io/comprobify-api-docs/errors/validation-error",
+  "type":   "https://novaej.github.io/comprobify/errors/validation-error",
   "title":  "Validation Failed",
   "status": 400,
   "code":   "VALIDATION_FAILED",
@@ -79,7 +79,7 @@ When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contai
 
 ```json
 {
-  "type":   "https://novaej.gitbook.io/comprobify-api-docs/errors/sri-error",
+  "type":   "https://novaej.github.io/comprobify/errors/sri-error",
   "title":  "SRI Submission Failed",
   "status": 502,
   "code":   "SRI_SUBMISSION_FAILED",

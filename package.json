@@ -10,7 +10,10 @@
     "db:reset": "NODE_ENV=development node db/reset.js",
     "test": "jest",
     "test:unit": "jest tests/unit",
-    "test:integration": "jest tests/integration --runInBand"
+    "test:integration": "jest tests/integration --runInBand",
+    "docs:dev": "vitepress dev docs/site",
+    "docs:build": "vitepress build docs/site",
+    "docs:preview": "vitepress preview docs/site"
   },
   "keywords": [],
   "author": "",
@@ -33,6 +36,7 @@
   },
   "devDependencies": {
     "jest": "^30.2.0",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "vitepress": "^1.6.3"
   }
 }

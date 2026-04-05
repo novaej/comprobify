@@ -7,3 +7,6 @@ cert/token.p12
 
 .DS_Store
 .idea/
+
+docs/site/.vitepress/dist
+docs/site/.vitepress/cache
