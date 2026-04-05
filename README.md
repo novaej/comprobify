@@ -142,7 +142,7 @@ When a document becomes `AUTHORIZED`, an email is sent to the buyer with the RID
 │   └── ride-builder.js        PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js)
 ├── db/
 │   ├── migrate.js             Migration runner
-│   └── migrations/            SQL migration files (001–029)
+│   └── migrations/            SQL migration files (001–030)
 ├── assets/
 │   ├── factura_V2.1.0.xsd     Official SRI invoice schema
 │   └── xmldsig-core-schema.xsd  W3C XML-DSig schema (imported by factura XSD)
