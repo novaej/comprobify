@@ -39,4 +39,4 @@ See [Getting Started](getting-started.md) for details.
 
 ## Response format
 
-Successful responses return `200` or `201` with a JSON body. Error responses follow [RFC 7807 Problem Details](errors/README.md) — every error has a stable `code` field you can use for localization.
+Successful responses return `200` or `201` with a JSON body. Error responses follow [RFC 7807 Problem Details](errors/index.md) — every error has a stable `code` field you can use for localization.

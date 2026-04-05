@@ -1,11 +1,11 @@
 # Table of Contents
 
-* [Overview](README.md)
+* [Overview](index.md)
 * [Getting Started](getting-started.md)
 
 ## Endpoints
 
-* [Documents](endpoints/README.md)
+* [Documents](endpoints/index.md)
   * [Create Invoice](endpoints/create-invoice.md)
   * [Get Document](endpoints/get-document.md)
   * [Send to SRI](endpoints/send-to-sri.md)
@@ -20,7 +20,7 @@
 
 ## Error Reference
 
-* [Error Format](errors/README.md)
+* [Error Format](errors/index.md)
   * [Validation Error](errors/validation-error.md)
   * [Bad Request](errors/bad-request.md)
   * [Unauthorized](errors/unauthorized.md)
