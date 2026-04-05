@@ -2,6 +2,8 @@
 
 All document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints require `Authorization: Bearer <admin-secret>`.
 
+[![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/comprobify)
+
 ## Documents
 
 | Method | Path | Description |

@@ -1,5 +1,15 @@
 # Getting Started
 
+## Postman collection
+
+Import the full collection to test every endpoint directly from Postman — all requests are pre-configured with variables for your base URL, API key, and access key.
+
+[![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/comprobify)
+
+> **First time setup:** after importing, open the collection, go to **Variables**, and set `base_url`, `api_key`, and `admin_secret`. After creating an invoice, copy the returned `accessKey` into the `access_key` variable.
+
+You can also download the collection JSON directly: [`comprobify.postman_collection.json`](https://raw.githubusercontent.com/novaej/comprobify/main/postman/comprobify.postman_collection.json)
+
 ## 1. Obtain an API key
 
 API keys are issued by the admin. Each key is scoped to one issuer (RUC + branch + issue point combination).
