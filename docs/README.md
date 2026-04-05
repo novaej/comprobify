@@ -18,7 +18,7 @@
 - [adr/README.md](adr/README.md) — ADR index, template, and guidelines
 
 ### Deployment
-- [deployment.md](deployment.md) — Production deployment, environment variables, security checklist
+- [deployment.md](deployment.md) — Branching strategy, CI/CD, environment variables, security checklist
 
 ### Root-level files
 - [README.md](../README.md) — Project overview, architecture, feature summary
@@ -57,4 +57,4 @@ Defines the conventions for adding new features: how to structure a service, how
 Index of Architecture Decision Records — the significant design choices made during development, their context, and the alternatives that were considered. Start here to understand *why* the system is built the way it is, not just how.
 
 ### `deployment.md`
-Everything needed to deploy and operate the API in production: required environment variables, `xmllint` system dependency, database migration strategy, SRI environment switching, security checklist, and log monitoring.
+Branching strategy and git flow (feature → main → staging → prod), CI/CD pipeline, environment variables, `xmllint` system dependency, database migration strategy, SRI environment switching, security checklist, and log monitoring.

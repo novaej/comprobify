@@ -2,6 +2,115 @@
 
 ---
 
+## Branching strategy
+
+Three long-lived branches map directly to environments. Feature branches are always cut from `main` and merged back into `main` via pull request.
+
+```
+main  ──►  staging  ──►  prod
+ ▲
+ │
+feature/*  (short-lived, PR → main)
+```
+
+| Branch | Environment | How it gets updated |
+|--------|-------------|---------------------|
+| `main` | Local / CI tests | All feature PRs merge here |
+| `staging` | Staging (DigitalOcean) | Merge `main` → `staging` manually |
+| `prod` | Production (DigitalOcean) | Merge `staging` → `prod` manually (or cherry-pick) |
+
+### Feature workflow
+
+```bash
+# 1. Start a feature
+git checkout main && git pull
+git checkout -b feature/my-feature
+
+# 2. Work, commit, push
+git add <files>
+git commit -m "feat: describe the change"
+git push -u origin feature/my-feature
+
+# 3. Open a PR → main on GitHub, get review, merge
+
+# 4. Clean up
+git checkout main && git pull
+git branch -d feature/my-feature
+```
+
+### Deploy to staging
+
+```bash
+git checkout staging
+git merge main
+git push
+# GitHub Actions runs deploy-staging.yml → DigitalOcean App Platform (comprobify-staging)
+git checkout main
+```
+
+### Deploy to production
+
+```bash
+git checkout prod
+git merge staging
+git push
+# (production workflow — to be added in a future PR)
+git checkout main
+```
+
+### Hotfix workflow
+
+Always fix in `main` first, then forward-port. Never commit directly to `staging` or `prod`.
+
+```bash
+# 1. Fix in main
+git checkout main && git pull
+git checkout -b fix/critical-bug
+# ... make the fix ...
+git commit -m "fix: describe the fix"
+git push -u origin fix/critical-bug
+# PR → main, merge
+
+# 2. Cherry-pick to prod (if the fix is urgent)
+git checkout prod && git pull
+git cherry-pick <commit-sha>
+git push
+
+# 3. Keep staging in sync
+git checkout staging && git pull
+git cherry-pick <commit-sha>
+git push
+git checkout main
+```
+
+> **Cherry-pick caveat:** cherry-picking creates a new commit SHA. When you later merge `main` → `staging` → `prod`, Git will see the fix as already applied (same diff) and skip it cleanly, but you may need to resolve minor conflicts if the surrounding code changed.
+
+### GitHub repository setup
+
+Perform these steps once after creating the `staging` and `prod` branches:
+
+1. **Create branches:**
+   ```bash
+   git checkout -b staging && git push -u origin staging
+   git checkout -b prod && git push -u origin prod
+   git checkout main
+   ```
+
+2. **Branch protection (GitHub → Settings → Branches):**
+   - `main`: require PR, require 1 approval, no direct push
+   - `staging`: require PR or restrict to maintainers, no force-push
+   - `prod`: require PR or restrict to maintainers, no force-push
+
+3. **Secrets (GitHub → Settings → Secrets and variables → Actions):**
+   - `DIGITALOCEAN_ACCESS_TOKEN` — personal access token from DigitalOcean dashboard (API → Generate New Token, write scope)
+
+4. **DigitalOcean App Platform:**
+   - Create two apps: `comprobify-staging` and `comprobify-prod`
+   - Link each to the corresponding branch in your GitHub repo
+   - Add all environment variables from the table below to each app's environment
+
+---
+
 ## System requirements
 
 | Dependency | Notes |
