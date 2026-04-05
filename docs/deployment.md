@@ -7,107 +7,209 @@
 Three long-lived branches map directly to environments. Feature branches are always cut from `main` and merged back into `main` via pull request.
 
 ```
-main  ──►  staging  ──►  prod
- ▲
- │
-feature/*  (short-lived, PR → main)
+  feature/xyz              main               staging                prod
+      │                     │                    │                     │
+      │  PR + merge         │                    │                     │
+      │────────────────────▶│                    │                     │
+      │                     │  merge main →      │                     │
+      │                     │  staging           │                     │
+      │                     │───────────────────▶│──▶ GitHub Actions ──▶ comprobify-staging
+      │                     │                    │                     │
+      │                     │  merge staging →   │                     │
+      │                     │  prod (full release)                     │
+      │                     │────────────────────┼────────────────────▶│──▶ GitHub Actions ──▶ comprobify-prod
+      │                     │                    │                     │
+      │                     │  cherry-pick       │                     │
+      │                     │  (selective deploy)│                     │
+      │                     │────────────────────┼── commit SHA ──────▶│──▶ GitHub Actions ──▶ comprobify-prod
+      │                     │                    │                     │
+  hotfix/xyz                │                    │                     │
+      │  PR + merge         │                    │                     │
+      │────────────────────▶│                    │                     │
+      │                     │  cherry-pick       │                     │
+      │                     │  to prod           │                     │
+      │                     │────────────────────┼── commit SHA ──────▶│──▶ GitHub Actions ──▶ comprobify-prod
+      │                     │                    │                     │
+      │                     │  cherry-pick       │                     │
+      │                     │  to staging (sync) │                     │
+      │                     │───────────────────▶│                     │
 ```
 
-| Branch | Environment | How it gets updated |
-|--------|-------------|---------------------|
-| `main` | Local / CI tests | All feature PRs merge here |
-| `staging` | Staging (DigitalOcean) | Merge `main` → `staging` manually |
-| `prod` | Production (DigitalOcean) | Merge `staging` → `prod` manually (or cherry-pick) |
+| Branch | Environment | Trigger |
+|--------|-------------|---------|
+| `main` | Local / CI tests | — |
+| `staging` | Staging (DigitalOcean) | Push to `staging` |
+| `prod` | Production (DigitalOcean) | Push to `prod` |
 
-### Feature workflow
+**Rules:**
+- All development work happens in `feature/*` branches off `main`
+- Never commit directly to `staging` or `prod`
+- Always flow commits **downward**: `main` → `staging` → `prod`
+- For hotfixes: fix in `main` first, then cherry-pick to `prod`
+
+---
+
+## Git workflow & commands
+
+### Daily development
 
 ```bash
-# 1. Start a feature
-git checkout main && git pull
+# Start a new feature
+git checkout main
+git pull origin main
 git checkout -b feature/my-feature
 
-# 2. Work, commit, push
+# Work, commit, push
 git add <files>
 git commit -m "feat: describe the change"
-git push -u origin feature/my-feature
+git push origin feature/my-feature
 
-# 3. Open a PR → main on GitHub, get review, merge
+# Open a PR to main in GitHub, review, merge
 
-# 4. Clean up
-git checkout main && git pull
+# Clean up
+git checkout main && git pull origin main
 git branch -d feature/my-feature
 ```
 
 ### Deploy to staging
 
 ```bash
+# Merge main into staging — triggers the staging deploy automatically
 git checkout staging
+git pull origin staging
 git merge main
-git push
-# GitHub Actions runs deploy-staging.yml → DigitalOcean App Platform (comprobify-staging)
+git push origin staging
 git checkout main
 ```
 
 ### Deploy to production
 
 ```bash
+# Full release: merge staging into prod
 git checkout prod
+git pull origin prod
 git merge staging
-git push
-# (production workflow — to be added in a future PR)
+git push origin prod
+
+# Or: cherry-pick specific commits from main to prod
+git checkout prod
+git pull origin prod
+git cherry-pick <commit-sha>   # repeat for each commit needed
+git push origin prod
 git checkout main
 ```
 
-### Hotfix workflow
+> **Cherry-pick caveat:** cherry-picked commits get a new SHA. If you later do a full `merge staging → prod`, git won't recognise them as already merged and may produce conflicts. To avoid this, after cherry-picking into prod always cherry-pick the same commits into staging so all three branches stay consistent. Periodically do a full merge from staging to prod to reset the debt.
 
-Always fix in `main` first, then forward-port. Never commit directly to `staging` or `prod`.
+### Sync after cherry-picking
 
 ```bash
-# 1. Fix in main
-git checkout main && git pull
-git checkout -b fix/critical-bug
-# ... make the fix ...
-git commit -m "fix: describe the fix"
-git push -u origin fix/critical-bug
-# PR → main, merge
-
-# 2. Cherry-pick to prod (if the fix is urgent)
-git checkout prod && git pull
-git cherry-pick <commit-sha>
-git push
-
-# 3. Keep staging in sync
-git checkout staging && git pull
-git cherry-pick <commit-sha>
-git push
+# After cherry-picking to prod, keep staging consistent
+git checkout staging
+git cherry-pick <commit-sha>   # same commit(s)
+git push origin staging
 git checkout main
 ```
 
-> **Cherry-pick caveat:** cherry-picking creates a new commit SHA. When you later merge `main` → `staging` → `prod`, Git will see the fix as already applied (same diff) and skip it cleanly, but you may need to resolve minor conflicts if the surrounding code changed.
+### Hotfix on production
 
-### GitHub repository setup
+```bash
+# Always fix in main first
+git checkout main
+git pull origin main
+git checkout -b hotfix/critical-fix
+# fix, commit, push
+git push origin hotfix/critical-fix
+# PR → main, merge
 
-Perform these steps once after creating the `staging` and `prod` branches:
+# Then cherry-pick to prod (and staging to keep in sync)
+git checkout prod
+git pull origin prod
+git cherry-pick <hotfix-commit-sha>
+git push origin prod
 
-1. **Create branches:**
-   ```bash
-   git checkout -b staging && git push -u origin staging
-   git checkout -b prod && git push -u origin prod
-   git checkout main
-   ```
+git checkout staging
+git pull origin staging
+git cherry-pick <hotfix-commit-sha>
+git push origin staging
 
-2. **Branch protection (GitHub → Settings → Branches):**
-   - `main`: require PR, require 1 approval, no direct push
-   - `staging`: require PR or restrict to maintainers, no force-push
-   - `prod`: require PR or restrict to maintainers, no force-push
+git checkout main
+```
 
-3. **Secrets (GitHub → Settings → Secrets and variables → Actions):**
-   - `DIGITALOCEAN_ACCESS_TOKEN` — personal access token from DigitalOcean dashboard (API → Generate New Token, write scope)
+---
 
-4. **DigitalOcean App Platform:**
-   - Create two apps: `comprobify-staging` and `comprobify-prod`
-   - Link each to the corresponding branch in your GitHub repo
-   - Add all environment variables from the table below to each app's environment
+## CI/CD pipeline
+
+### Workflow files
+
+| File | Trigger | Deploys to |
+|------|---------|------------|
+| `.github/workflows/deploy-staging.yml` | Push to `staging` | `comprobify-staging` (DigitalOcean App Platform) |
+| `.github/workflows/deploy-production.yml` | Push to `prod` | `comprobify-prod` *(to be added)* |
+
+### Pipeline stages (staging)
+
+1. **Checkout** — fetch latest commit from `staging` branch
+2. **Deploy** — authenticate to DigitalOcean with `DIGITALOCEAN_ACCESS_TOKEN` and trigger a new deployment of the `comprobify-staging` app
+
+DigitalOcean App Platform handles the rest: installs dependencies (`npm ci`), runs the start command (`npm start`), and runs database migrations (`npm run migrate`) if configured as a pre-deploy job.
+
+### Adding the production workflow
+
+When ready, create `.github/workflows/deploy-production.yml` by copying `deploy-staging.yml` and changing only:
+1. The workflow `name` to `Deploy to Production`
+2. The `branches` trigger from `staging` to `prod`
+3. The `app_name` from `comprobify-staging` to `comprobify-prod`
+
+---
+
+## GitHub repository setup
+
+One-time setup after creating the `staging` and `prod` branches.
+
+### 1. Create the branches
+
+```bash
+git checkout main
+git pull origin main
+
+git checkout -b staging
+git push -u origin staging
+
+git checkout main
+git checkout -b prod
+git push -u origin prod
+
+git checkout main
+```
+
+### 2. Protect `main` (Settings → Branches → Add rule)
+
+- **Branch name pattern:** `main`
+- ✅ Require a pull request before merging
+- ✅ Require approvals: 1
+- ✅ Dismiss stale pull request approvals when new commits are pushed
+- ✅ Do not allow bypassing the above settings
+
+### 3. Protect `prod` (Settings → Branches → Add rule)
+
+- **Branch name pattern:** `prod`
+- ✅ Restrict who can push — add only yourself
+- ✅ Do not allow force pushes
+
+### 4. Leave `staging` open
+
+`staging` does not need branch protection. Merges from `main` are fast and frequent. Direct push is fine.
+
+### 5. Add secrets (Settings → Secrets and variables → Actions)
+
+- `DIGITALOCEAN_ACCESS_TOKEN` — personal access token from DigitalOcean dashboard (API → Generate New Token, write scope). Used by both staging and production workflows.
+
+### 6. DigitalOcean App Platform
+
+- Create two apps: `comprobify-staging` (linked to `staging` branch) and `comprobify-prod` (linked to `prod` branch)
+- Add all environment variables from the table below to each app's environment configuration
+- Configure a pre-deploy job: `npm run migrate` — this runs migrations automatically on each deployment before traffic is switched
 
 ---
 
