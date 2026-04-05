@@ -176,7 +176,8 @@ See **[GETTING_STARTED.md](GETTING_STARTED.md)** for full local setup instructio
 
 ## Documentation
 
-See **[docs/README.md](docs/README.md)** for the full documentation index.
+- **[API Docs](https://novaej.github.io/comprobify)** — public endpoint and error reference (VitePress, hosted on GitHub Pages)
+- **[docs/README.md](docs/README.md)** — internal documentation index (ADRs, coding guidelines, deployment guide)
 
 ---
 
