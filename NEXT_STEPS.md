@@ -1,61 +1,35 @@
 # Next Steps
 
-Post-refactoring roadmap for the SRI Tax Core service. Each item is independent and can be delivered as its own PR. Items are ordered by value-to-effort ratio.
+Remaining work ordered by value-to-effort ratio. Each item is independent and can be delivered as its own PR.
 
 ---
 
-## ~~Authentication & Multi-Tenancy~~ ✅ Done (Phase 2)
+## 1. Rate Limiting
 
-Implemented in migration 023 and `src/middleware/authenticate.js`:
-- Bearer API key → SHA-256 hash → `api_keys` JOIN `issuers` → `req.issuer`
-- Full tenant isolation: all DB queries scoped by `issuer_id`
-- Dev seeder creates a dev API key and prints the plaintext token to console
-- See ADR-007 for the decision rationale
+**Priority: High — do before exposing to additional clients**
 
----
-
-## ~~Idempotency Key~~ ✅ Done (Phase 0)
-
-Implemented in migration 021 and `src/middleware/idempotency.js`. Same key + same body → `200` replay; same key + different body → `409`. Concurrent race handled via `23505` in the rollback path.
-
----
-
-## ~~Email Delivery~~ ✅ Done
-
-RIDE PDF + authorization XML sent fire-and-forget on `AUTHORIZED`. Per-document `email_status` tracking. Batch retry `POST /api/documents/email-retry`, single retry `POST /api/documents/:accessKey/email-retry`. Provider swappable via `EMAIL_PROVIDER` env var.
-
-## ~~Email Delivery Tracking~~ ✅ Done
-
-Mailgun webhook (`POST /api/mailgun/webhook`) receives delivery events and updates `email_status` to `DELIVERED`, `FAILED`, or `COMPLAINED`. Temporary failures logged without status change. HMAC-SHA256 verified. See ADR-010.
-
-Remaining: issuer logo (`logo_path`) not yet rendered in emails (column exists in `issuers`).
-
----
-
-## 1. Async Worker Foundation
-
-**Why:** `POST /:key/send` and `GET /:key/authorize` are synchronous — the caller blocks waiting for SRI's SOAP response (5–30 s, unreliable). An async worker decouples the caller from SRI latency.
+Without per-key rate limits a compromised or misbehaving API key can exhaust sequential numbers and SRI quota for all tenants.
 
 **What:**
-- Add `PENDING_SEND` status: queued for transmission (between `SIGNED` and `RECEIVED`)
-- `PROCESSING_MODE` env var: `sync` (current, default) | `async`
-- In async mode: `POST /:key/send` → `PENDING_SEND` immediately, returns 202
-- Worker: `SELECT ... FOR UPDATE SKIP LOCKED` on `PENDING_SEND` → submit to SRI → `RECEIVED|RETURNED`
-- Worker also polls `RECEIVED` documents older than N minutes and checks authorization
-- Update state machine constants + migration 027 trigger: add `SIGNED → PENDING_SEND` and `PENDING_SEND → RECEIVED|RETURNED`
+- `express-rate-limit` keyed by `keyHash` (available on `req` after `authenticate`)
+- Defaults: 60 req/min per key on write endpoints, 300/min on read endpoints
+- `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` env vars
+- 429 response already handled — `TOO_MANY_REQUESTS` code is already in the `AppError` status map
 
-**Files:** new `src/workers/transmission.worker.js`, new migration (alter trigger), update `document-state-machine.js`
+**Effort:** Low — one middleware file and two config entries.
 
 ---
 
 ## 2. Additional Document Types
 
-**Why:** SRI compliance requires more than invoices. Credit notes and retention vouchers are the most commonly needed.
+**Priority: High — required for full SRI compliance**
+
+Only facturas (`01`) are currently supported. The builder registry pattern already makes adding new types straightforward.
 
 **Priority order:**
 - `04` — Nota de crédito (credit note)
-- `05` — Nota de débito (debit note)
 - `07` — Comprobante de retención (retention voucher)
+- `05` — Nota de débito (debit note)
 - `03` — Liquidación de compra
 - `06` — Guía de remisión
 
@@ -66,71 +40,98 @@ Remaining: issuer logo (`logo_path`) not yet rendered in emails (column exists i
 4. Update `xml-validator.service.js` to select schema by `documentType`
 5. Add the type code to the `isIn([...])` validator in `invoice.validator.js`
 
-Creation, transmission, rebuild, and query services need zero changes — the builder registry handles dispatch.
+Creation, transmission, rebuild, and query services need zero changes.
 
 ---
 
-## 3. Admin API
+## 3. Health Endpoint
 
-**Why:** No HTTP interface exists to manage issuers or API keys — currently done via direct SQL or the dev seeder.
+**Priority: High — required for any production deployment**
+
+No `/health` endpoint exists. Needed for load balancers, uptime monitors, and container orchestration liveness checks.
 
 **What:**
-- `POST /admin/issuers` — create issuer (RUC, cert upload, addresses, environment)
-- `GET  /admin/issuers/:id` — read issuer
-- `POST /admin/issuers/:id/api-keys` — generate API key (returns plaintext once)
-- `DELETE /admin/api-keys/:id` — revoke a key
-- Protected by a separate `ADMIN_SECRET` env var or a scoped API key (`api_keys.scopes` column)
+- `GET /health` — checks DB connectivity, returns `{ status: "ok", uptime }` or `503`
+- No authentication required
+- Add to `src/routes/index.js` outside the authenticated router
 
-**Files:** new `src/routes/admin.routes.js`, controller, service; extend `api-key.model.js`
+**Effort:** Very low — one route, one DB ping query.
 
 ---
 
-## 4. Rate Limiting
+## 4. Outbound Webhook Notifications
 
-**Why:** Without per-key limits, a compromised or misbehaving key could exhaust sequential numbers and SRI quota.
+**Priority: Medium — important for client integrations**
 
-**What:**
-- `express-rate-limit` keyed by `keyHash` (available on `req` after `authenticate`)
-- Defaults: 60 req/min per key on write endpoints, 300/min on read endpoints
-- `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` env vars
-- 429 response with `Retry-After` header
-
-**Files:** `npm install express-rate-limit`, new config, mount after `authenticate`
-
----
-
-## 5. Webhook Notifications
-
-**Why:** In async mode, callers cannot know when a document becomes `AUTHORIZED` or `RETURNED` without polling. Webhooks push status changes.
+Client systems currently have to poll `GET /:key/authorize` to know when a document becomes `AUTHORIZED` or `RETURNED`. Webhooks push status changes instead.
 
 **What:**
-- `webhook_url` column on `issuers`
+- `webhook_url` column on `issuers` (set via admin API)
 - `src/services/webhook.service.js` — `POST webhook_url` with `{ accessKey, status, previousStatus, timestamp }` signed with `HMAC-SHA256(WEBHOOK_SECRET, body)`
 - Called fire-and-forget after every `STATUS_CHANGED` event
-- Exponential backoff retry on failure
-- New `WEBHOOK_DELIVERED` / `WEBHOOK_FAILED` event types — update `chk_document_events_event_type` CHECK constraint
+- Retry on failure (3 attempts, exponential backoff)
+- `WEBHOOK_DELIVERED` / `WEBHOOK_FAILED` event types — requires updating the `chk_document_events_event_type` CHECK constraint
 
-**Files:** new migration (column + constraint update), new webhook service, update transmission service
+**Effort:** Medium — new migration, new service, update transmission service.
 
 ---
 
-## 6. Document Archival
+## 5. Async Worker for SRI Submission
 
-**Why:** 7-year SRI retention requirement. Active table will degrade without partitioning.
+**Priority: Medium — important for production reliability**
+
+`POST /:key/send` and `GET /:key/authorize` block the HTTP request while waiting for SRI's SOAP response (typically 5–30 s, can time out). This causes long-hanging requests and poor client experience under load.
 
 **What:**
-- Partition `documents` by `issue_date` (range by year)
-- Migration to convert to partitioned table + initial partitions
-- Archival job: documents older than 7 years → S3 → delete from DB
-- `GET /:key/xml` and `GET /:key/ride` fall back to S3 if not in DB
+- `PROCESSING_MODE` env var: `sync` (current default) | `async`
+- New `PENDING_SEND` status: document queued for transmission
+- In async mode: `POST /:key/send` → sets `PENDING_SEND`, returns 202 immediately
+- Worker polls `PENDING_SEND` documents with `SELECT ... FOR UPDATE SKIP LOCKED` → submits to SRI → updates status
+- Worker also polls `RECEIVED` documents older than N minutes to check authorization
+- State machine and DB trigger must be updated to allow `SIGNED → PENDING_SEND`
 
-**Files:** new migrations, new archival worker, update query service
+**Effort:** High — new worker process, new status, migration, state machine update. Pairs well with outbound webhooks (item 4) to notify clients of async results.
 
 ---
 
-## Other Items (lower priority)
+## 6. Issuer Logo in Emails
 
-- **OpenAPI / Swagger** — `openapi.yaml` spec + Swagger UI at `/docs`
-- **Docker / Containers** — `Dockerfile` + `docker-compose.yml` + `GET /health` endpoint
-- **Reporting** — revenue summaries, document counts by status/date, CSV export
-- **Issuer logo in emails** — `logo_path` column exists in `issuers`, not yet rendered in RIDE email
+**Priority: Low — cosmetic improvement**
+
+The `logo_path` column exists on `issuers` but is not rendered in the authorization email or the RIDE PDF.
+
+**What:**
+- Read `issuer.logo_path` in `src/services/email/templates/invoice-authorized.js` and embed the image inline if present
+- Optionally also render in the RIDE PDF header (currently a blank space is reserved)
+
+**Effort:** Low.
+
+---
+
+## 7. Docker / Containerisation
+
+**Priority: Low — depends on deployment target**
+
+Not needed if deploying to a PaaS (Railway, Render, Fly.io). Useful for self-hosted VPS deployments or local onboarding.
+
+**What:**
+- `Dockerfile` (multi-stage: build → production image)
+- `docker-compose.yml` with app + PostgreSQL services for local development
+- Health endpoint (item 3) required for container liveness probes
+
+**Effort:** Low.
+
+---
+
+## 8. Reporting
+
+**Priority: Low — depends on client requirements**
+
+Not a core API feature. Only worth building once a client explicitly needs it.
+
+**What:**
+- Revenue summaries by issuer, date range, document type
+- Document counts by status
+- CSV export
+
+**Effort:** Medium — multiple query endpoints, no architectural changes needed.
