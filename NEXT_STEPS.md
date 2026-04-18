@@ -2,9 +2,31 @@
 
 Remaining work ordered by value-to-effort ratio. Each item is independent and can be delivered as its own PR.
 
+See [STRATEGY.md](STRATEGY.md) for product context, pricing model, and phased roadmap.
+
 ---
 
-## 1. Rate Limiting
+## 1. Document List Endpoint
+
+**Priority: High — required before the frontend can launch**
+
+No `GET /api/documents` endpoint exists. The frontend dashboard needs a paginated, filtered
+list of documents for the authenticated issuer. Currently documents are only accessible
+individually by access key.
+
+**What:**
+- `GET /api/documents` — returns paginated list scoped to `req.issuer.id`
+- Query params: `status`, `from` (date), `to` (date), `page`, `limit`
+- Response: `{ data: [...], pagination: { total, page, limit } }`
+- Each item uses the existing `formatDocument()` presenter
+- Route goes in `src/routes/document.routes.js`, handler in `src/controllers/document.controller.js`,
+  query in `src/services/document-query.service.js` and `src/models/document.model.js`
+
+**Effort:** Low — follows existing patterns exactly.
+
+---
+
+## 2. Rate Limiting
 
 **Priority: High — do before exposing to additional clients**
 
@@ -20,7 +42,7 @@ Without per-key rate limits a compromised or misbehaving API key can exhaust seq
 
 ---
 
-## 2. Additional Document Types
+## 3. Additional Document Types
 
 **Priority: High — required for full SRI compliance**
 
@@ -44,7 +66,7 @@ Creation, transmission, rebuild, and query services need zero changes.
 
 ---
 
-## 3. Health Endpoint
+## 4. Health Endpoint
 
 **Priority: High — required for any production deployment**
 
@@ -59,7 +81,31 @@ No `/health` endpoint exists. Needed for load balancers, uptime monitors, and co
 
 ---
 
-## 4. Outbound Webhook Notifications
+## 5. PostgreSQL Row-Level Security (RLS)
+
+**Priority: High — implement before onboarding paying clients**
+
+Current tenant isolation is enforced only at the application layer (`issuer_id` filter in
+every query). A bug that omits a filter could expose another tenant's data. RLS adds a
+second, independent enforcement layer at the database level.
+
+**What:**
+- Enable RLS on all tenant-scoped tables (`documents`, `document_line_items`,
+  `document_events`, `sequentials`, `api_keys`)
+- Create a policy per table: `USING (issuer_id = current_setting('app.current_issuer_id')::bigint)`
+- Set `app.current_issuer_id` at the start of each request (e.g., in a `db.js` wrapper
+  or via a transaction-scoped `SET LOCAL`)
+- Superuser/admin connections bypass RLS by default — ensure the app connects as a
+  non-superuser role
+
+**Why it matters:** even a SQL bug that forgets `WHERE issuer_id = $1` cannot return
+another tenant's rows. The database enforces the policy independently of application code.
+
+**Effort:** Medium — migration to enable RLS + policy definitions + connection/query layer change.
+
+---
+
+## 6. Outbound Webhook Notifications
 
 **Priority: Medium — important for client integrations**
 
@@ -76,7 +122,7 @@ Client systems currently have to poll `GET /:key/authorize` to know when a docum
 
 ---
 
-## 5. Async Worker for SRI Submission
+## 7. Async Worker for SRI Submission
 
 **Priority: Medium — important for production reliability**
 
@@ -90,11 +136,11 @@ Client systems currently have to poll `GET /:key/authorize` to know when a docum
 - Worker also polls `RECEIVED` documents older than N minutes to check authorization
 - State machine and DB trigger must be updated to allow `SIGNED → PENDING_SEND`
 
-**Effort:** High — new worker process, new status, migration, state machine update. Pairs well with outbound webhooks (item 4) to notify clients of async results.
+**Effort:** High — new worker process, new status, migration, state machine update. Pairs well with outbound webhooks (item 6) to notify clients of async results.
 
 ---
 
-## 6. Issuer Logo in Emails
+## 8. Issuer Logo in Emails
 
 **Priority: Low — cosmetic improvement**
 
@@ -108,7 +154,7 @@ The `logo_path` column exists on `issuers` but is not rendered in the authorizat
 
 ---
 
-## 7. Docker / Containerisation
+## 9. Docker / Containerisation
 
 **Priority: Low — depends on deployment target**
 
@@ -123,7 +169,7 @@ Not needed if deploying to a PaaS (Railway, Render, Fly.io). Useful for self-hos
 
 ---
 
-## 8. Reporting
+## 10. Reporting
 
 **Priority: Low — depends on client requirements**
 
