@@ -99,4 +99,61 @@ async function findPendingEmails(issuerId) {
   return rows;
 }
 
-module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus };
+async function findByIssuerId(issuerId, filters = {}) {
+  const page = Math.max(1, parseInt(filters.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
+  const offset = (page - 1) * limit;
+
+  const conditions = ['issuer_id = $1'];
+  const params = [issuerId];
+  let paramIndex = 2;
+
+  if (filters.status) {
+    conditions.push(`status = $${paramIndex}`);
+    params.push(filters.status);
+    paramIndex++;
+  }
+
+  if (filters.documentType) {
+    conditions.push(`document_type = $${paramIndex}`);
+    params.push(filters.documentType);
+    paramIndex++;
+  }
+
+  if (filters.from) {
+    conditions.push(`issue_date >= $${paramIndex}`);
+    params.push(filters.from);
+    paramIndex++;
+  }
+
+  if (filters.to) {
+    conditions.push(`issue_date <= $${paramIndex}`);
+    params.push(filters.to);
+    paramIndex++;
+  }
+
+  const whereClause = conditions.join(' AND ');
+  const limitParamIndex = paramIndex;
+  const offsetParamIndex = paramIndex + 1;
+
+  // Get total count
+  const countResult = await db.query(
+    `SELECT COUNT(*) as count FROM documents WHERE ${whereClause}`,
+    params
+  );
+  const total = parseInt(countResult.rows[0].count, 10);
+
+  // Get paginated documents
+  const params2 = [...params, limit, offset];
+  const { rows } = await db.query(
+    `SELECT * FROM documents
+     WHERE ${whereClause}
+     ORDER BY created_at DESC
+     LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`.replace(/\$\$/g, '$'),
+    params2
+  );
+
+  return { documents: rows, pagination: { total, page, limit } };
+}
+
+module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId };

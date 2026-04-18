@@ -34,4 +34,10 @@ async function getEvents(accessKey, issuer) {
   }));
 }
 
-module.exports = { getByAccessKey, getXml, getEvents };
+async function list(issuer, filters = {}) {
+  const { documents, pagination } = await documentModel.findByIssuerId(issuer.id, filters);
+  const formattedDocuments = documents.map(formatDocument);
+  return { data: formattedDocuments, pagination };
+}
+
+module.exports = { getByAccessKey, getXml, getEvents, list };
