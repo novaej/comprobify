@@ -8,6 +8,7 @@ All document endpoints require `Authorization: Bearer <api-key>`. Admin endpoint
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/api/documents` | List documents with filtering and pagination |
 | `POST` | `/api/documents` | Create and sign an invoice |
 | `GET` | `/api/documents/:accessKey` | Get a document by access key |
 | `POST` | `/api/documents/:accessKey/send` | Submit signed document to SRI |
