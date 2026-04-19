@@ -6,27 +6,7 @@ See [STRATEGY.md](STRATEGY.md) for product context, pricing model, and phased ro
 
 ---
 
-## 1. Document List Endpoint
-
-**Priority: High — required before the frontend can launch**
-
-No `GET /api/documents` endpoint exists. The frontend dashboard needs a paginated, filtered
-list of documents for the authenticated issuer. Currently documents are only accessible
-individually by access key.
-
-**What:**
-- `GET /api/documents` — returns paginated list scoped to `req.issuer.id`
-- Query params: `status`, `from` (date), `to` (date), `page`, `limit`
-- Response: `{ data: [...], pagination: { total, page, limit } }`
-- Each item uses the existing `formatDocument()` presenter
-- Route goes in `src/routes/document.routes.js`, handler in `src/controllers/document.controller.js`,
-  query in `src/services/document-query.service.js` and `src/models/document.model.js`
-
-**Effort:** Low — follows existing patterns exactly.
-
----
-
-## 2. Rate Limiting
+## 1. Rate Limiting
 
 **Priority: High — do before exposing to additional clients**
 
@@ -42,7 +22,7 @@ Without per-key rate limits a compromised or misbehaving API key can exhaust seq
 
 ---
 
-## 3. Additional Document Types
+## 2. Additional Document Types
 
 **Priority: High — required for full SRI compliance**
 
@@ -66,7 +46,7 @@ Creation, transmission, rebuild, and query services need zero changes.
 
 ---
 
-## 4. Health Endpoint
+## 3. Health Endpoint
 
 **Priority: High — required for any production deployment**
 
@@ -81,7 +61,7 @@ No `/health` endpoint exists. Needed for load balancers, uptime monitors, and co
 
 ---
 
-## 5. PostgreSQL Row-Level Security (RLS)
+## 4. PostgreSQL Row-Level Security (RLS)
 
 **Priority: High — implement before onboarding paying clients**
 
@@ -105,7 +85,7 @@ another tenant's rows. The database enforces the policy independently of applica
 
 ---
 
-## 6. Outbound Webhook Notifications
+## 5. Outbound Webhook Notifications
 
 **Priority: Medium — important for client integrations**
 
@@ -122,7 +102,7 @@ Client systems currently have to poll `GET /:key/authorize` to know when a docum
 
 ---
 
-## 7. Async Worker for SRI Submission
+## 6. Async Worker for SRI Submission
 
 **Priority: Medium — important for production reliability**
 
@@ -136,11 +116,11 @@ Client systems currently have to poll `GET /:key/authorize` to know when a docum
 - Worker also polls `RECEIVED` documents older than N minutes to check authorization
 - State machine and DB trigger must be updated to allow `SIGNED → PENDING_SEND`
 
-**Effort:** High — new worker process, new status, migration, state machine update. Pairs well with outbound webhooks (item 6) to notify clients of async results.
+**Effort:** High — new worker process, new status, migration, state machine update. Pairs well with outbound webhooks (item 5) to notify clients of async results.
 
 ---
 
-## 8. Issuer Logo in Emails
+## 7. Issuer Logo in Emails
 
 **Priority: Low — cosmetic improvement**
 
@@ -154,7 +134,7 @@ The `logo_path` column exists on `issuers` but is not rendered in the authorizat
 
 ---
 
-## 9. Docker / Containerisation
+## 8. Docker / Containerisation
 
 **Priority: Low — depends on deployment target**
 
@@ -163,13 +143,13 @@ Not needed if deploying to a PaaS (Railway, Render, Fly.io). Useful for self-hos
 **What:**
 - `Dockerfile` (multi-stage: build → production image)
 - `docker-compose.yml` with app + PostgreSQL services for local development
-- Health endpoint (item 3) required for container liveness probes
+- Health endpoint (item 2) required for container liveness probes
 
 **Effort:** Low.
 
 ---
 
-## 10. Reporting
+## 9. Reporting
 
 **Priority: Low — depends on client requirements**
 
