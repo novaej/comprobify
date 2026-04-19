@@ -22,6 +22,7 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: 'Overview', link: '/endpoints/' },
+          { text: 'List Documents', link: '/endpoints/list-documents' },
           { text: 'Create Invoice', link: '/endpoints/create-invoice' },
           { text: 'Get Document', link: '/endpoints/get-document' },
           { text: 'Send to SRI', link: '/endpoints/send-to-sri' },
