@@ -114,6 +114,9 @@ When a document becomes `AUTHORIZED`, an email is sent to the buyer with the RID
 **Idempotency key**
 `POST /api/documents` accepts an optional `Idempotency-Key` header. If the same key is sent again with the same body, the original document is returned (HTTP 200) instead of creating a duplicate. If the body differs, a 409 Conflict is returned. Concurrent requests with the same key are safe — uniqueness is enforced at the database level via a partial index, and the race-losing request receives the winning document as a replay.
 
+**Per-API-key rate limiting**
+All authenticated endpoints are rate-limited to prevent abuse and quota exhaustion. Write endpoints (POST) are limited to 60 requests per minute; read endpoints (GET) to 300 per minute. Limits are per API key — a compromised or misbehaving key cannot exhaust resources for other tenants. Rate limit exceeded responses return RFC 7807 formatted 429 errors. Configurable via environment variables.
+
 ---
 
 ## Project Structure
@@ -133,7 +136,7 @@ When a document becomes `AUTHORIZED`, an email is sent to the buyer with the RID
 │   ├── models/                PostgreSQL CRUD (parameterised queries only)
 │   ├── builders/              XML document construction (builder registry)
 │   ├── validators/            express-validator chains
-│   ├── middleware/            asyncHandler, validateRequest, errorHandler, idempotency, authenticate, verify-mailgun-webhook
+│   ├── middleware/            asyncHandler, validateRequest, errorHandler, idempotency, authenticate, rate-limit, verify-mailgun-webhook
 │   ├── presenters/            formatDocument() shared response shape
 │   └── errors/                Typed error classes (AppError hierarchy)
 ├── helpers/
