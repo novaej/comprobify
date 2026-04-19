@@ -104,5 +104,6 @@ When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contai
 | [`UNAUTHORIZED`](unauthorized.md) | 401 | Missing or invalid API key |
 | [`NOT_FOUND`](not-found.md) | 404 | Requested resource does not exist |
 | [`CONFLICT`](conflict.md) | 409 | Idempotency key conflict |
+| [`TOO_MANY_REQUESTS`](too-many-requests.md) | 429 | Rate limit exceeded for this API key |
 | [`SRI_SUBMISSION_FAILED`](sri-error.md) | 502 | Error communicating with or receiving from SRI |
 | [`INTERNAL_ERROR`](internal-error.md) | 500 | Unexpected server error |

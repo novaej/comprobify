@@ -21,11 +21,13 @@ function runMiddleware(req) {
 describe('authenticate middleware', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  test('sets req.issuer and calls next when token is valid', async () => {
+  test('sets req.issuer and req.keyHash and calls next when token is valid', async () => {
     apiKeyModel.findByKeyHash.mockResolvedValue(mockIssuer);
     const req = makeReq('Bearer mytoken');
     await runMiddleware(req);
     expect(req.issuer).toEqual(mockIssuer);
+    expect(req.keyHash).toBeDefined();
+    expect(typeof req.keyHash).toBe('string');
   });
 
   test('passes 401 error when Authorization header is missing', async () => {

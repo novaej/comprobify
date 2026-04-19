@@ -13,6 +13,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - All primary key columns (`id`) and their referencing foreign key columns migrated from `INT` (`SERIAL`) to `BIGINT` (`BIGSERIAL`) across all tables — migration 030. Sequences updated to `BIGINT` maxvalue. No application code changes required.
 
 ### Added
+- **Per-API-key rate limiting** — all authenticated endpoints are rate-limited to prevent abuse and quota exhaustion. Write endpoints (POST) limited to 60 requests/minute; read endpoints (GET) to 300 requests/minute per API key. Limits are configurable via `RATE_LIMIT_WINDOW_MS` and `RATE_LIMIT_MAX` environment variables. Exceeded limits return `429 Too Many Requests` with RFC 7807 Problem Details format. See `/docs/site/errors/too-many-requests.md` for client retry guidance.
 - **Mailgun webhook delivery tracking** — `POST /api/mailgun/webhook` receives Mailgun delivery events and updates `email_status` accordingly. Handles four event types: `delivered` → `DELIVERED`, `failed` (permanent) → `FAILED`, `failed` (temporary, no status change) → logs `EMAIL_TEMP_FAILED`, `complained` → `COMPLAINED`. All requests are verified with HMAC-SHA256 (`MAILGUN_WEBHOOK_SIGNING_KEY`) with 5-minute replay protection.
 - `email_message_id` column on `documents` — stores Mailgun's queued message ID (angle brackets stripped) so webhook events can be correlated back to the right document.
 - `DELIVERED` and `COMPLAINED` added to the `documents_email_status_check` constraint.

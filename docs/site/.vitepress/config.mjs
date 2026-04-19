@@ -46,6 +46,7 @@ export default defineConfig({
           { text: 'Unauthorized', link: '/errors/unauthorized' },
           { text: 'Not Found', link: '/errors/not-found' },
           { text: 'Conflict', link: '/errors/conflict' },
+          { text: 'Too Many Requests', link: '/errors/too-many-requests' },
           { text: 'SRI Submission Failed', link: '/errors/sri-error' },
           { text: 'Internal Server Error', link: '/errors/internal-error' },
         ],

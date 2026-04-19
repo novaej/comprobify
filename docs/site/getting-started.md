@@ -79,6 +79,21 @@ Queries the SRI for the authorization result. On success the document moves to `
 
 `POST /api/documents` accepts an optional `Idempotency-Key` header. If you retry the same request after a timeout, send the same key — the API returns the existing document instead of creating a duplicate. Use a unique key per intended invoice (e.g. a UUID), and keep it consistent across retries for the same invoice.
 
+## Rate Limiting
+
+All API requests are rate-limited per API key to prevent abuse:
+
+- **Write endpoints** (POST): 60 requests per minute
+- **Read endpoints** (GET): 300 requests per minute
+
+When you exceed the limit, the API returns [`429 Too Many Requests`](errors/too-many-requests.md). Implement exponential backoff and retry logic in your client.
+
+**Best practices:**
+- Batch operations when possible (e.g., avoid polling a single document repeatedly)
+- Implement exponential backoff: wait 1s, then 2s, then 4s, etc. before retrying
+- Cache read results to reduce GET request volume
+- Contact support if you have sustained high-volume needs
+
 ## Document statuses
 
 | Status | Meaning |
