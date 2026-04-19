@@ -168,6 +168,7 @@ chore: update express to 4.22.1
 | File | Purpose |
 |------|---------|
 | `GETTING_STARTED.md` | Local setup guide |
+| `docs/guides/documentation-checklist.md` | **Master reference: what docs to update for each change type** |
 | `docs/guides/code-flow.md` | Layer-by-layer request walkthrough |
 | `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
 | `docs/adr/` | Architecture Decision Records |
