@@ -89,14 +89,15 @@ The top-level `index.js` is a simple aggregator. Adding a new resource (e.g. `/a
 Each route in `documents.routes.js` follows the same pattern:
 
 ```
-authenticate  →  [optional middleware]  →  [validator chain]  →  validateRequest  →  asyncHandler(controller.fn)
+authenticate  →  [rate limit]  →  [optional middleware]  →  [validator chain]  →  validateRequest  →  asyncHandler(controller.fn)
 ```
 
-`authenticate` is mounted first via `router.use(asyncHandler(authenticate))` at the top of the router, so every endpoint in the file requires a valid API key before any other middleware runs.
+`authenticate` is mounted first via `router.use(asyncHandler(authenticate))` at the top of the router, so every endpoint in the file requires a valid API key before any other middleware runs. Rate limiting is applied per-route: `readLimiter` on GET endpoints (300 req/min per key), `writeLimiter` on POST endpoints (60 req/min per key).
 
 **Why this pattern?**
 
 - **`authenticate`**: verifies the `Authorization: Bearer <token>` header and sets `req.issuer` before any business logic runs. Centralising authentication at the router level means no endpoint can accidentally be reached unauthenticated.
+- **`[rate limit]`** (`readLimiter` or `writeLimiter`): per-API-key rate limiting prevents abuse. Applied immediately after authentication so the rate limit key (`req.keyHash`) is available. See `src/middleware/rate-limit.js`.
 - **Optional middleware** (e.g. `extractIdempotencyKey`): thin, synchronous header extraction that runs before body validation. Keeps HTTP-level concerns out of the controller.
 - **Validator chain** (`express-validator`): declarative field rules applied before the controller runs. Keeps validation logic out of the controller.
 - **`validateRequest` middleware**: reads the validation result from the chain and throws a `ValidationError` if any field failed. Keeps the controller clean — it never sees invalid input.
