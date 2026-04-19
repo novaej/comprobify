@@ -6,23 +6,13 @@ See [STRATEGY.md](STRATEGY.md) for product context, pricing model, and phased ro
 
 ---
 
-## 1. Rate Limiting
+## ✅ 1. Rate Limiting — COMPLETED
 
-**Priority: High — do before exposing to additional clients**
-
-Without per-key rate limits a compromised or misbehaving API key can exhaust sequential numbers and SRI quota for all tenants.
-
-**What:**
-- `express-rate-limit` keyed by `keyHash` (available on `req` after `authenticate`)
-- Defaults: 60 req/min per key on write endpoints, 300/min on read endpoints
-- `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` env vars
-- 429 response already handled — `TOO_MANY_REQUESTS` code is already in the `AppError` status map
-
-**Effort:** Low — one middleware file and two config entries.
+Per-API-key rate limiting implemented (60 req/min write, 300 req/min read). See `src/middleware/rate-limit.js` and `docs/site/errors/too-many-requests.md`.
 
 ---
 
-## 2. Additional Document Types
+## 1. Additional Document Types
 
 **Priority: High — required for full SRI compliance**
 
@@ -46,7 +36,7 @@ Creation, transmission, rebuild, and query services need zero changes.
 
 ---
 
-## 3. Health Endpoint
+## 2. Health Endpoint
 
 **Priority: High — required for any production deployment**
 
@@ -61,7 +51,7 @@ No `/health` endpoint exists. Needed for load balancers, uptime monitors, and co
 
 ---
 
-## 4. PostgreSQL Row-Level Security (RLS)
+## 3. PostgreSQL Row-Level Security (RLS)
 
 **Priority: High — implement before onboarding paying clients**
 
@@ -85,7 +75,7 @@ another tenant's rows. The database enforces the policy independently of applica
 
 ---
 
-## 5. Outbound Webhook Notifications
+## 4. Outbound Webhook Notifications
 
 **Priority: Medium — important for client integrations**
 
@@ -102,7 +92,7 @@ Client systems currently have to poll `GET /:key/authorize` to know when a docum
 
 ---
 
-## 6. Async Worker for SRI Submission
+## 5. Async Worker for SRI Submission
 
 **Priority: Medium — important for production reliability**
 
@@ -116,11 +106,11 @@ Client systems currently have to poll `GET /:key/authorize` to know when a docum
 - Worker also polls `RECEIVED` documents older than N minutes to check authorization
 - State machine and DB trigger must be updated to allow `SIGNED → PENDING_SEND`
 
-**Effort:** High — new worker process, new status, migration, state machine update. Pairs well with outbound webhooks (item 5) to notify clients of async results.
+**Effort:** High — new worker process, new status, migration, state machine update. Pairs well with outbound webhooks (item 4) to notify clients of async results.
 
 ---
 
-## 7. Issuer Logo in Emails
+## 6. Issuer Logo in Emails
 
 **Priority: Low — cosmetic improvement**
 
@@ -134,7 +124,7 @@ The `logo_path` column exists on `issuers` but is not rendered in the authorizat
 
 ---
 
-## 8. Docker / Containerisation
+## 7. Docker / Containerisation
 
 **Priority: Low — depends on deployment target**
 
@@ -149,7 +139,7 @@ Not needed if deploying to a PaaS (Railway, Render, Fly.io). Useful for self-hos
 
 ---
 
-## 9. Reporting
+## 8. Reporting
 
 **Priority: Low — depends on client requirements**
 
