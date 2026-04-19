@@ -33,7 +33,7 @@ Route → Validator → Controller → Service → Model / Builder / Helper
 ```
 src/routes/        URL definitions + validator chains
 src/validators/    express-validator field rules
-src/middleware/    asyncHandler, validateRequest, errorHandler, idempotency, authenticate, verify-mailgun-webhook
+src/middleware/    asyncHandler, validateRequest, errorHandler, idempotency, authenticate, rate-limit, verify-mailgun-webhook
 src/controllers/   thin HTTP handlers — one service call, one response
 src/services/      business logic and orchestration
 src/services/email/  email provider factory + Mailgun provider + templates
@@ -85,6 +85,8 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 **Email delivery:** when a document becomes `AUTHORIZED`, `emailService.sendInvoiceAuthorized()` is called fire-and-forget. It generates the RIDE PDF and XML on the fly and sends both as attachments via Mailgun. The Mailgun message ID (angle brackets stripped) is stored in `documents.email_message_id`. Per-document status tracked in `documents.email_status` (`PENDING` → `SENT` / `FAILED` / `SKIPPED`). Failed sends retried via `POST /email-retry` (batch) or `POST /:key/email-retry` (single, add `?force=true` to resend an already-sent email). Provider swappable via `EMAIL_PROVIDER` env var + new file in `src/services/email/providers/`.
 
 **Mailgun webhook:** `POST /api/mailgun/webhook` receives Mailgun delivery events and updates `email_status`: `delivered` → `DELIVERED`, `failed`+`permanent` → `FAILED`, `failed`+`temporary` → status unchanged + `EMAIL_TEMP_FAILED` event (Mailgun retries), `complained` → `COMPLAINED`. All requests verified with HMAC-SHA256 via `verify-mailgun-webhook.js` middleware (`MAILGUN_WEBHOOK_SIGNING_KEY` config key). Lookup is by `documents.email_message_id`. See ADR-010.
+
+**Rate limiting:** per-API-key request rate limits prevent abuse and quota exhaustion. Applied via `src/middleware/rate-limit.js` using `express-rate-limit`: 60 req/min on write endpoints (POST), 300 req/min on read endpoints (GET). Keyed by `req.keyHash` (SHA-256 token hash). Returns RFC 7807 `429 TOO_MANY_REQUESTS` response. Configurable via `RATE_LIMIT_WINDOW_MS` (default: 60000ms) and `RATE_LIMIT_MAX` (default: 60) env vars. See `docs/site/errors/too-many-requests.md` for client retry guidance.
 
 ---
 
@@ -171,6 +173,7 @@ chore: update express to 4.22.1
 | `docs/adr/` | Architecture Decision Records |
 | `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.issuer` |
 | `src/middleware/authenticate-admin.js` | `ADMIN_SECRET` constant-time check for `/api/admin/*` |
+| `src/middleware/rate-limit.js` | Per-API-key rate limiting (60 write/min, 300 read/min via `express-rate-limit`) |
 | `src/middleware/idempotency.js` | Extracts + validates `Idempotency-Key` header |
 | `src/middleware/verify-mailgun-webhook.js` | HMAC-SHA256 + replay protection for Mailgun webhook |
 | `src/services/document-creation.service.js` | Invoice creation — sequential, XML, signing, persistence |
