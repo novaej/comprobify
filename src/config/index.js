@@ -22,6 +22,10 @@ const config = {
     mailgunDomain:            process.env.MAILGUN_DOMAIN                 || '',
     mailgunWebhookSigningKey: process.env.MAILGUN_WEBHOOK_SIGNING_KEY    || '',
   },
+  rateLimit: {
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60000,
+    maxRequests: parseInt(process.env.RATE_LIMIT_MAX, 10) || 60,
+  },
 };
 
 module.exports = config;

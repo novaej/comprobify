@@ -22,6 +22,7 @@ const authenticate = async (req, _res, next) => {
   }
 
   req.issuer = row;
+  req.keyHash = keyHash;
   next();
 };
 
