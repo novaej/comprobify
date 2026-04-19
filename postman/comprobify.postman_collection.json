@@ -72,6 +72,26 @@
           }
         },
         {
+          "name": "List Documents",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/documents?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "documents"],
+              "query": [
+                { "key": "page", "value": "1", "description": "Page number (default: 1)", "disabled": true },
+                { "key": "limit", "value": "10", "description": "Results per page, 1-100 (default: 10)", "disabled": true },
+                { "key": "status", "value": "AUTHORIZED", "description": "Filter by status: SIGNED, RECEIVED, RETURNED, AUTHORIZED, NOT_AUTHORIZED", "disabled": true },
+                { "key": "documentType", "value": "01", "description": "Filter by document type code (e.g., 01)", "disabled": true },
+                { "key": "from", "value": "01/01/2026", "description": "Filter by issue date >= DD/MM/YYYY", "disabled": true },
+                { "key": "to", "value": "31/12/2026", "description": "Filter by issue date <= DD/MM/YYYY", "disabled": true }
+              ]
+            },
+            "description": "Lists documents for the authenticated issuer with optional filtering and pagination. Returns documents sorted by creation date (newest first)."
+          }
+        },
+        {
           "name": "Get Document",
           "request": {
             "method": "GET",
