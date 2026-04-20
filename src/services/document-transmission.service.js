@@ -24,7 +24,7 @@ async function sendToSri(accessKey, issuer) {
     await documentEventModel.create(document.id, EventType.ERROR, document.status, null, {
       operation: 'SEND',
       message: err.message,
-    });
+    }, null, issuer.id);
     throw err;
   }
 
@@ -40,12 +40,12 @@ async function sendToSri(accessKey, issuer) {
   const newStatus = (result.status === 'RECIBIDA' || isProcessing)
     ? DocumentStatus.RECEIVED
     : DocumentStatus.RETURNED;
-  const updated = await documentModel.updateStatus(document.id, newStatus);
+  const updated = await documentModel.updateStatus(document.id, newStatus, {}, issuer.id);
 
   await documentEventModel.create(document.id, EventType.SENT, document.status, newStatus, {
     sriStatus: result.status,
     ...(isProcessing && { processingRetry: true, sriIdentifier: '70' }),
-  });
+  }, null, issuer.id);
 
   return {
     ...formatDocument(updated),
@@ -69,7 +69,7 @@ async function checkAuthorization(accessKey, issuer) {
     await documentEventModel.create(document.id, EventType.ERROR, document.status, null, {
       operation: 'AUTHORIZE',
       message: err.message,
-    });
+    }, null, issuer.id);
     throw err;
   }
 
@@ -98,12 +98,12 @@ async function checkAuthorization(accessKey, issuer) {
       if (result.authorizationXml)    extraFields.authorization_xml    = result.authorizationXml;
     }
 
-    updated = await documentModel.updateStatus(document.id, newStatus, extraFields);
+    updated = await documentModel.updateStatus(document.id, newStatus, extraFields, issuer.id);
 
     await documentEventModel.create(document.id, EventType.STATUS_CHANGED, document.status, newStatus, {
       sriStatus: result.status,
       authorizationNumber: result.authorizationNumber || null,
-    });
+    }, null, issuer.id);
 
     if (newStatus === DocumentStatus.AUTHORIZED) {
       emailService.sendInvoiceAuthorized(updated)
@@ -112,10 +112,10 @@ async function checkAuthorization(accessKey, issuer) {
             ? { email_status: 'SENT', email_sent_at: new Date(), email_message_id: messageId }
             : { email_status: 'SKIPPED' };
           return Promise.all([
-            documentModel.updateStatus(updated.id, updated.status, emailFields),
+            documentModel.updateStatus(updated.id, updated.status, emailFields, updated.issuer_id),
             documentEventModel.create(updated.id,
               sent ? EventType.EMAIL_SENT : EventType.EMAIL_FAILED,
-              null, null, { to: updated.buyer_email }),
+              null, null, { to: updated.buyer_email }, null, updated.issuer_id),
           ]);
         })
         .catch(err => {
@@ -124,9 +124,9 @@ async function checkAuthorization(accessKey, issuer) {
             documentModel.updateStatus(updated.id, updated.status, {
               email_status: 'FAILED',
               email_error: err.message,
-            }),
+            }, updated.issuer_id),
             documentEventModel.create(updated.id, EventType.EMAIL_FAILED,
-              null, null, { error: err.message }),
+              null, null, { error: err.message }, null, updated.issuer_id),
           ]).catch(() => {});
         });
     }

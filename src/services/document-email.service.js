@@ -18,17 +18,17 @@ async function retryFailedEmails(issuer) {
         email_sent_at: new Date(),
         email_error: null,
         email_message_id: messageId,
-      });
+      }, issuer.id);
       await documentEventModel.create(doc.id, EventType.EMAIL_SENT,
-        null, null, { to: doc.buyer_email, retried: true });
+        null, null, { to: doc.buyer_email, retried: true }, null, issuer.id);
       result.sent++;
     } catch (err) {
       await documentModel.updateStatus(doc.id, doc.status, {
         email_status: 'FAILED',
         email_error: err.message,
-      });
+      }, issuer.id);
       await documentEventModel.create(doc.id, EventType.EMAIL_FAILED,
-        null, null, { error: err.message, retried: true });
+        null, null, { error: err.message, retried: true }, null, issuer.id);
       result.failed++;
     }
   }
@@ -45,7 +45,7 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
     throw new AppError(`Cannot send email for document with status ${document.status}. Must be ${DocumentStatus.AUTHORIZED}.`, 400);
   }
   if (!document.buyer_email) {
-    await documentModel.updateStatus(document.id, document.status, { email_status: 'SKIPPED' });
+    await documentModel.updateStatus(document.id, document.status, { email_status: 'SKIPPED' }, issuer.id);
     return { sent: false, reason: 'no_email' };
   }
   if (document.email_status === 'SENT' && !force) {
@@ -59,17 +59,17 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
       email_sent_at: new Date(),
       email_error: null,
       email_message_id: messageId,
-    });
+    }, issuer.id);
     await documentEventModel.create(document.id, EventType.EMAIL_SENT,
-      null, null, { to: document.buyer_email, retried: true });
+      null, null, { to: document.buyer_email, retried: true }, null, issuer.id);
     return { sent: true };
   } catch (err) {
     await documentModel.updateStatus(document.id, document.status, {
       email_status: 'FAILED',
       email_error: err.message,
-    });
+    }, issuer.id);
     await documentEventModel.create(document.id, EventType.EMAIL_FAILED,
-      null, null, { error: err.message, retried: true });
+      null, null, { error: err.message, retried: true }, null, issuer.id);
     throw err;
   }
 }

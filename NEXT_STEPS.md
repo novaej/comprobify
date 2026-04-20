@@ -42,27 +42,9 @@ Creation, transmission, rebuild, and query services need zero changes.
 
 ---
 
-## 3. PostgreSQL Row-Level Security (RLS)
+## ✅ 3. PostgreSQL Row-Level Security (RLS) — COMPLETED
 
-**Priority: High — implement before onboarding paying clients**
-
-Current tenant isolation is enforced only at the application layer (`issuer_id` filter in
-every query). A bug that omits a filter could expose another tenant's data. RLS adds a
-second, independent enforcement layer at the database level.
-
-**What:**
-- Enable RLS on all tenant-scoped tables (`documents`, `document_line_items`,
-  `document_events`, `sequentials`, `api_keys`)
-- Create a policy per table: `USING (issuer_id = current_setting('app.current_issuer_id')::bigint)`
-- Set `app.current_issuer_id` at the start of each request (e.g., in a `db.js` wrapper
-  or via a transaction-scoped `SET LOCAL`)
-- Superuser/admin connections bypass RLS by default — ensure the app connects as a
-  non-superuser role
-
-**Why it matters:** even a SQL bug that forgets `WHERE issuer_id = $1` cannot return
-another tenant's rows. The database enforces the policy independently of application code.
-
-**Effort:** Medium — migration to enable RLS + policy definitions + connection/query layer change.
+Migration 031 enables RLS + `FORCE ROW LEVEL SECURITY` on `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `api_keys`. Policies restrict rows to `issuer_id = current_setting('app.current_issuer_id', true)::bigint`. The `db.setIssuerContext()` and `db.queryAsIssuer()` helpers in `src/config/database.js` set this context for all authenticated code paths. Webhook/admin/health paths operate without issuer context and are covered by the policy's null bypass. **The application database user must not be a PostgreSQL superuser.**
 
 ---
 

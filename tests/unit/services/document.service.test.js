@@ -19,6 +19,8 @@ const mockClient = {
 jest.mock('../../../src/config/database', () => ({
   query: jest.fn(),
   getClient: jest.fn(),
+  setIssuerContext: jest.fn().mockResolvedValue({}),
+  queryAsIssuer: jest.fn(),
 }));
 
 const db = require('../../../src/config/database');
@@ -269,10 +271,11 @@ describe('DocumentTransmissionService', () => {
 
     const result = await documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer);
 
-    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RECEIVED');
+    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RECEIVED', {}, mockIssuer.id);
     expect(documentEventModel.create).toHaveBeenCalledWith(
       1, 'SENT', 'SIGNED', 'RECEIVED',
       expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
+      null, mockIssuer.id
     );
     expect(result.status).toBe('RECEIVED');
     expect(result.sriStatus).toBe('DEVUELTA');
@@ -295,10 +298,11 @@ describe('DocumentTransmissionService', () => {
 
     const result = await documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer);
 
-    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RETURNED');
+    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RETURNED', {}, mockIssuer.id);
     expect(documentEventModel.create).toHaveBeenCalledWith(
       1, 'SENT', 'SIGNED', 'RETURNED',
       { sriStatus: 'DEVUELTA' },
+      null, mockIssuer.id
     );
     expect(result.status).toBe('RETURNED');
     expect(result.sriStatus).toBe('DEVUELTA');
