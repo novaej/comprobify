@@ -34,3 +34,9 @@ All document endpoints require `Authorization: Bearer <api-key>`. Admin endpoint
 | `GET` | `/api/admin/issuers` | List all issuers |
 | `POST` | `/api/admin/issuers/:id/api-keys` | Create API key for an issuer |
 | `DELETE` | `/api/admin/api-keys/:id` | Revoke an API key |
+
+## Monitoring
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/health` | None | DB connectivity check for liveness probes |

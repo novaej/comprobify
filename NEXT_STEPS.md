@@ -36,18 +36,9 @@ Creation, transmission, rebuild, and query services need zero changes.
 
 ---
 
-## 2. Health Endpoint
+## ✅ 2. Health Endpoint — COMPLETED
 
-**Priority: High — required for any production deployment**
-
-No `/health` endpoint exists. Needed for load balancers, uptime monitors, and container orchestration liveness checks.
-
-**What:**
-- `GET /health` — checks DB connectivity, returns `{ status: "ok", uptime }` or `503`
-- No authentication required
-- Add to `src/routes/index.js` outside the authenticated router
-
-**Effort:** Very low — one route, one DB ping query.
+`GET /health` checks DB connectivity and returns `{ status: "ok", uptime }` (200) or `{ status: "error", uptime }` (503). No authentication. Mounted outside `/api`. See `src/routes/health.routes.js`, `src/controllers/health.controller.js`, `src/services/health.service.js`.
 
 ---
 
