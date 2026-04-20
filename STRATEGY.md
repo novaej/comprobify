@@ -331,6 +331,7 @@ XAdES-BES digital signatures, P12 certificate management. A competent developer 
 | Async SRI submission | Planned | Unknown |
 | Multi-branch support | Yes | Unknown |
 | Email with RIDE PDF on authorization | Yes — included | Unlikely |
+| Sandbox / test environment per issuer | Planned | Unknown |
 | PostgreSQL RLS | Planned | Unknown |
 | Self-hosted option | Possible | No |
 
@@ -374,14 +375,15 @@ a legal problem with SRI and an accounting problem with the buyer.
 See [NEXT_STEPS.md](NEXT_STEPS.md) for implementation details on each item.
 
 1. **Rate limiting** (NEXT_STEPS #1) — required before multi-tenant; design tier-aware
-2. **Health endpoint** (NEXT_STEPS #3) — table stakes for production
-3. **PostgreSQL RLS** — not in NEXT_STEPS yet; highest-leverage data isolation improvement
-4. **Webhooks** (NEXT_STEPS #4) — clearest paid-tier differentiator
-5. **Additional document types** (NEXT_STEPS #2) — gate behind Growth tier
-6. **Async worker** (NEXT_STEPS #5) — pairs with webhooks; makes the async model usable
-7. **DPA template** — required before Phase 3; legal, not code
-8. **Kushki billing integration** — when manual SPI transfers become unmanageable
-9. **Reporting** (NEXT_STEPS #8) — Business tier feature
+2. **Health endpoint** (NEXT_STEPS #2) — table stakes for production
+3. **PostgreSQL RLS** (NEXT_STEPS #3) — highest-leverage data isolation improvement
+4. **Sandbox environment** (NEXT_STEPS #4) — required before onboarding paying clients; users must be able to test against SRI pruebas before going live
+5. **Webhooks** (NEXT_STEPS #5) — clearest paid-tier differentiator
+6. **Additional document types** (NEXT_STEPS #1) — gate behind Growth tier
+7. **Async worker** (NEXT_STEPS #6) — pairs with webhooks; makes the async model usable
+8. **DPA template** — required before Phase 3; legal, not code
+9. **Kushki billing integration** — when manual SPI transfers become unmanageable
+10. **Reporting** (NEXT_STEPS #9) — Business tier feature
 
 The async worker + webhooks combination is the feature Datil almost certainly does not
 offer cleanly. Fire-and-forget submission with push notification on authorization is a

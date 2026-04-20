@@ -421,6 +421,7 @@ For MVP use **prefix routing** — simpler to set up, easy to change later.
 The first thing you see after login.
 
 **Contents:**
+- **Sandbox banner** — if the authenticated issuer has `sandbox = true`, show a persistent yellow banner: "Estás en modo sandbox — los comprobantes se envían al ambiente de pruebas del SRI." This prevents confusion between test and production invoices.
 - Summary cards: total invoices, authorized this month, pending (SIGNED/RECEIVED)
 - Invoice list (most recent first) with columns:
   - Sequential number
@@ -506,6 +507,7 @@ Shows full invoice state and available actions.
 ### 5. Settings
 
 - Issuer information (read-only in MVP — displayed from the API key's issuer)
+  - **Sandbox badge** — prominently label the issuer as "Sandbox (SRI pruebas)" or "Producción (SRI producción)" so the user always knows which environment their API key is pointed at
 - Certificate expiry date and fingerprint
 - API key display (masked, reveal button) — for users who also want to use the API directly
 - Change password form
@@ -565,7 +567,8 @@ to NEXT_STEPS as a prerequisite for the Dashboard.
 
 1. `GET /api/documents` — paginated list filtered by the authenticated issuer.
    This is the only API gap. Everything else already exists.
-2. Health endpoint (NEXT_STEPS #3) — needed for the frontend to check API availability.
+2. Health endpoint (NEXT_STEPS #2) — needed for the frontend to check API availability.
+3. Sandbox environment (NEXT_STEPS #4) — the `sandbox` field must be returned on the issuer so the frontend can show the sandbox banner and environment badge.
 
 ---
 
