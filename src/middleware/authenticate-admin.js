@@ -15,9 +15,6 @@ const authenticateAdmin = (req, _res, next) => {
   }
 
   const secret = config.adminSecret;
-  if (!secret) {
-    return next(new AppError('Admin secret not configured', 500));
-  }
 
   // Constant-time comparison prevents timing attacks
   const tokenBuf  = Buffer.from(token,  'utf8');

@@ -75,7 +75,42 @@ another tenant's rows. The database enforces the policy independently of applica
 
 ---
 
-## 4. Outbound Webhook Notifications
+## 4. Sandbox Environment (SRI Test/Production Routing)
+
+**Priority: High — implement before onboarding paying clients**
+
+Users need to validate their integration against SRI's test environment before switching to production. The `sandbox` flag on an issuer controls which SRI endpoint is used. A separate app-level safety rail ensures staging never hits SRI production regardless of the flag.
+
+**Routing logic:**
+
+| App env | `issuer.sandbox = true` | `issuer.sandbox = false` |
+|---|---|---|
+| staging | SRI test endpoint | SRI test endpoint |
+| production | SRI test endpoint | SRI production endpoint |
+
+**Schema separation:**
+
+Sandbox and production documents live in separate PostgreSQL schemas (`sandbox` and `public`) to prevent data mixing, protect sequential number sequences, and allow safe truncation of test data without touching production records.
+
+**What:**
+1. Migration: add `sandbox BOOLEAN NOT NULL DEFAULT true` to `issuers` — all existing issuers default to safe/test mode until explicitly promoted
+2. Create `sandbox` PostgreSQL schema with identical structure to `public` — all future migrations must be applied to both schemas
+3. `sri.service.js`: derive `const useTest = appEnv !== 'production' || issuer.sandbox` — select SRI WSDL URL accordingly
+4. `InvoiceBuilder` / `access-key-generator.js`: pass `ambiente` (`1` = pruebas, `2` = producción) using the same logic — this value is embedded in the 49-digit access key
+5. DB connection layer (`db.js`): set `search_path` to `sandbox` or `public` per request based on `req.issuer.sandbox`
+6. Admin API: expose `sandbox` field on issuer create and list endpoints
+7. Config: add `APP_ENV` env var (`staging` | `production`) read via `src/config/index.js`; add to `src/config/validate.js` required list
+
+**Why schema separation over a `sandbox` column on every table:**
+- Sequential numbers are naturally scoped to an issuer row, but the issuer itself spans both contexts — a column-per-table approach requires `WHERE sandbox = $1` on every query and risks sequence pollution
+- Test data can be freely truncated or reset without touching `public` schema
+- Production reporting queries on `public` never surface test invoices, even if a filter is accidentally omitted
+
+**Effort:** Medium — migration, `sandbox` schema creation, db connection routing, SRI endpoint selection, `ambiente` flag propagation through builder and access-key generator.
+
+---
+
+## 5. Outbound Webhook Notifications
 
 **Priority: Medium — important for client integrations**
 
@@ -92,7 +127,7 @@ Client systems currently have to poll `GET /:key/authorize` to know when a docum
 
 ---
 
-## 5. Async Worker for SRI Submission
+## 6. Async Worker for SRI Submission
 
 **Priority: Medium — important for production reliability**
 
@@ -110,7 +145,7 @@ Client systems currently have to poll `GET /:key/authorize` to know when a docum
 
 ---
 
-## 6. Issuer Logo in Emails
+## 7. Issuer Logo in Emails
 
 **Priority: Low — cosmetic improvement**
 
@@ -124,7 +159,7 @@ The `logo_path` column exists on `issuers` but is not rendered in the authorizat
 
 ---
 
-## 7. Docker / Containerisation
+## 8. Docker / Containerisation
 
 **Priority: Low — depends on deployment target**
 
@@ -139,7 +174,7 @@ Not needed if deploying to a PaaS (Railway, Render, Fly.io). Useful for self-hos
 
 ---
 
-## 8. Reporting
+## 9. Reporting
 
 **Priority: Low — depends on client requirements**
 

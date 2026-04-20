@@ -22,12 +22,12 @@ const AUTH_TAG_LENGTH = 16; // 128-bit authentication tag — GCM default
 
 /**
  * Parses and validates the ENCRYPTION_KEY env var into a 32-byte Buffer.
- * Called on every encrypt/decrypt so a misconfigured key fails immediately
- * rather than at startup when the variable might not yet be set.
+ * Presence is guaranteed by startup validation (src/config/validate.js);
+ * this checks that the key is the correct length (64-char hex string = 32 bytes).
  */
 function getKey() {
   const hex = config.encryptionKey;
-  if (!hex || hex.length !== 64) {
+  if (hex.length !== 64) {
     throw new Error('ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
   }
   return Buffer.from(hex, 'hex');

@@ -413,8 +413,8 @@ curl -s -X POST http://localhost:8080/api/admin/issuers/<id>/api-keys \
   -d '{"label": "Replacement key", "revokeExisting": true}' | jq
 ```
 
-**`ENCRYPTION_KEY must be a 64-character hex string`**
-The `ENCRYPTION_KEY` in `.env` is missing or wrong length. Re-run step 4.
+**`Missing required environment variable(s): ENCRYPTION_KEY, ADMIN_SECRET, ...`**
+The server validates critical config on startup. If any required env vars are missing or malformed, the server exits immediately before starting. Fix the values in `.env` and restart.
 
 **`Migration X failed`**
 Check that the database exists and credentials in `.env` are correct. Re-run `npm run migrate` — already-applied migrations are skipped.
