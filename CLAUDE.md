@@ -88,6 +88,8 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Rate limiting:** per-API-key request rate limits prevent abuse and quota exhaustion. Applied via `src/middleware/rate-limit.js` using `express-rate-limit`: 60 req/min on write endpoints (POST), 300 req/min on read endpoints (GET). Keyed by `req.keyHash` (SHA-256 token hash). Returns RFC 7807 `429 TOO_MANY_REQUESTS` response. Configurable via `RATE_LIMIT_WINDOW_MS` (default: 60000ms) and `RATE_LIMIT_MAX` (default: 60) env vars. See `docs/site/errors/too-many-requests.md` for client retry guidance.
 
+**Config validation:** critical environment variables are validated at startup in `src/config/validate.js` and called from `app.js` before `Server` construction. Always-required: `ENCRYPTION_KEY` (64-char hex format), `ADMIN_SECRET`. Email-required when `EMAIL_PROVIDER` is set to anything other than `'none'`: `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_WEBHOOK_SIGNING_KEY`, `EMAIL_FROM`. If any are missing or malformed, the process throws immediately with a clear error message before accepting any HTTP requests. This prevents silent failures like unsigned webhooks or unencrypted P12 storage.
+
 ---
 
 ## Document Lifecycle
@@ -172,6 +174,7 @@ chore: update express to 4.22.1
 | `docs/guides/code-flow.md` | Layer-by-layer request walkthrough |
 | `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
 | `docs/adr/` | Architecture Decision Records |
+| `src/config/validate.js` | Startup config validation — throws if critical env vars are missing or malformed |
 | `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.issuer` |
 | `src/middleware/authenticate-admin.js` | `ADMIN_SECRET` constant-time check for `/api/admin/*` |
 | `src/middleware/rate-limit.js` | Per-API-key rate limiting (60 write/min, 300 read/min via `express-rate-limit`) |
