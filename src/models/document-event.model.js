@@ -1,21 +1,28 @@
 const db = require('../config/database');
 
-async function create(documentId, eventType, fromStatus, toStatus, detail, client) {
-  const q = client || db;
-  const { rows } = await q.query(
-    `INSERT INTO document_events (document_id, event_type, from_status, to_status, detail)
+async function create(documentId, eventType, fromStatus, toStatus, detail, client, issuerId = null) {
+  const sql = `INSERT INTO document_events (document_id, event_type, from_status, to_status, detail)
      VALUES ($1, $2, $3, $4, $5)
-     RETURNING *`,
-    [documentId, eventType, fromStatus || null, toStatus || null, detail ? JSON.stringify(detail) : null]
-  );
+     RETURNING *`;
+  const params = [documentId, eventType, fromStatus || null, toStatus || null, detail ? JSON.stringify(detail) : null];
+
+  let rows;
+  if (client) {
+    ({ rows } = await client.query(sql, params));
+  } else if (issuerId != null) {
+    ({ rows } = await db.queryAsIssuer(issuerId, sql, params));
+  } else {
+    // Bypass mode: webhook or other non-issuer-scoped callers
+    ({ rows } = await db.query(sql, params));
+  }
   return rows[0];
 }
 
-async function findByDocumentId(documentId) {
-  const { rows } = await db.query(
-    'SELECT * FROM document_events WHERE document_id = $1 ORDER BY created_at ASC',
-    [documentId]
-  );
+async function findByDocumentId(documentId, issuerId = null) {
+  const sql = 'SELECT * FROM document_events WHERE document_id = $1 ORDER BY created_at ASC';
+  const { rows } = issuerId != null
+    ? await db.queryAsIssuer(issuerId, sql, [documentId])
+    : await db.query(sql, [documentId]);
   return rows;
 }
 

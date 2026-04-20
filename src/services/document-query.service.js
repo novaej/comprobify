@@ -23,7 +23,7 @@ async function getEvents(accessKey, issuer) {
   if (!document) {
     throw new NotFoundError('Document');
   }
-  const rows = await documentEventModel.findByDocumentId(document.id);
+  const rows = await documentEventModel.findByDocumentId(document.id, issuer.id);
   return rows.map(e => ({
     id: e.id,
     eventType: e.event_type,

@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–030
+db/migrations/     SQL migration files 001–031
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -87,6 +87,11 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 **Mailgun webhook:** `POST /api/mailgun/webhook` receives Mailgun delivery events and updates `email_status`: `delivered` → `DELIVERED`, `failed`+`permanent` → `FAILED`, `failed`+`temporary` → status unchanged + `EMAIL_TEMP_FAILED` event (Mailgun retries), `complained` → `COMPLAINED`. All requests verified with HMAC-SHA256 via `verify-mailgun-webhook.js` middleware (`MAILGUN_WEBHOOK_SIGNING_KEY` config key). Lookup is by `documents.email_message_id`. See ADR-010.
 
 **Rate limiting:** per-API-key request rate limits prevent abuse and quota exhaustion. Applied via `src/middleware/rate-limit.js` using `express-rate-limit`: 60 req/min on write endpoints (POST), 300 req/min on read endpoints (GET). Keyed by `req.keyHash` (SHA-256 token hash). Returns RFC 7807 `429 TOO_MANY_REQUESTS` response. Configurable via `RATE_LIMIT_WINDOW_MS` (default: 60000ms) and `RATE_LIMIT_MAX` (default: 60) env vars. See `docs/site/errors/too-many-requests.md` for client retry guidance.
+
+**Row-Level Security (RLS):** all tenant-scoped tables (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `api_keys`) have RLS enabled via migration 031. The policy restricts every query to the current issuer by reading `app.current_issuer_id` — a transaction-local PostgreSQL setting. Two helpers in `src/config/database.js` manage this:
+- `db.setIssuerContext(client, issuerId)` — call after `BEGIN` on an existing transaction client; uses `set_config(..., true)` so the setting rolls back automatically if the transaction aborts.
+- `db.queryAsIssuer(issuerId, sql, params)` — wraps a single query in a mini BEGIN / set_config / query / COMMIT for non-transactional reads.
+All authenticated service code paths must use one of these two helpers. Only the Mailgun webhook, admin API, and health check are exempt — they authenticate by other means and operate without an issuer context (the policy's null bypass allows it). The application DB user must **not** be a PostgreSQL superuser; superusers always bypass RLS regardless of policies.
 
 **Config validation:** critical environment variables are validated at startup in `src/config/validate.js` and called from `app.js` before `Server` construction. Always-required: `ENCRYPTION_KEY` (64-char hex format), `ADMIN_SECRET`. Email-required when `EMAIL_PROVIDER` is set to anything other than `'none'`: `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_WEBHOOK_SIGNING_KEY`, `EMAIL_FROM`. If any are missing or malformed, the process throws immediately with a clear error message before accepting any HTTP requests. This prevents silent failures like unsigned webhooks or unencrypted P12 storage.
 
@@ -162,6 +167,7 @@ chore: update express to 4.22.1
 10. Hardcoding Spanish identifiers in new code — use English everywhere except SRI XML elements.
 11. Generating a new idempotency key on every retry — the key must be generated once and reused across retries for the same intended invoice.
 12. Adding a new `document_events` event type without updating the `chk_document_events_event_type` CHECK constraint — the INSERT will fail silently if the constraint is not updated in a migration.
+13. Calling `db.query()` directly in an authenticated service or model — use `db.queryAsIssuer(issuerId, ...)` instead so RLS is enforced. `db.query()` (no issuer context) is only correct for the webhook, admin, and health code paths.
 
 ---
 
@@ -205,6 +211,7 @@ chore: update express to 4.22.1
 | `src/builders/index.js` | Builder registry |
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
 | `src/constants/document-state-machine.js` | `TRANSITIONS` map + `canTransition` / `assertTransition` |
-| `db/migrations/` | SQL migration files 001–030 (030: BIGINT primary and foreign keys) |
+| `src/config/database.js` | pg Pool + `query` (bypass) + `setIssuerContext` + `queryAsIssuer` (RLS helpers) |
+| `db/migrations/` | SQL migration files 001–031 (031: Row-Level Security policies) |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

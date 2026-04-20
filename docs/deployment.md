@@ -317,6 +317,7 @@ See `GETTING_STARTED.md` for the full admin API reference.
 ## Production security checklist
 
 - [ ] `DB_SSL=true` with a valid certificate
+- [ ] Database user is **not** a PostgreSQL superuser — Row-Level Security is bypassed unconditionally for superusers
 - [ ] `ENCRYPTION_KEY` is unique per environment — never share between staging and production
 - [ ] `ADMIN_SECRET` is unique per environment and kept behind an internal firewall
 - [ ] `.env` file is not world-readable and never committed
@@ -351,11 +352,10 @@ Key log lines to monitor:
 
 ## Health check
 
-There is no dedicated `/health` endpoint yet (see `NEXT_STEPS.md`). A lightweight check:
-
 ```bash
-curl -s http://localhost:8080/api/documents/0000000000000000000000000000000000000000000000000
-# → {"ok":false,"message":"Document not found"}   ← server up, DB connected
+curl -s http://localhost:8080/health
+# → {"status":"ok","uptime":42.3}         ← server up, DB connected
+# → {"status":"error","uptime":42.3}      ← server up, DB unreachable (HTTP 503)
 ```
 
-A `500` response or connection refusal indicates a problem.
+No authentication required. Suitable for load balancer health checks and container liveness probes. A connection refusal indicates the process is down.

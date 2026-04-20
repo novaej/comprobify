@@ -66,7 +66,10 @@ The SRI URLs are derived at startup based on `environment` (`'1'` = test, `'2'` 
 const pool = new Pool({ ...config.db, max: 20, idleTimeoutMillis: 30000 });
 const query = (text, params) => pool.query(text, params);
 const getClient = () => pool.connect();
-module.exports = { pool, query, getClient };
+const setIssuerContext = (client, issuerId) =>
+  client.query("SELECT set_config('app.current_issuer_id', $1, true)", [String(issuerId)]);
+const queryAsIssuer = async (issuerId, text, params) => { /* BEGIN + set_config + query + COMMIT */ };
+module.exports = { pool, query, getClient, setIssuerContext, queryAsIssuer };
 ```
 
 A single `pg.Pool` is created once and shared across the entire process. The pool maintains up to 20 idle connections and reuses them across requests.
@@ -74,6 +77,14 @@ A single `pg.Pool` is created once and shared across the entire process. The poo
 **Why a pool and not a single client?** A single client would be blocked while waiting for slow queries (e.g. SRI SOAP responses that arrive before a DB write). The pool lets concurrent requests each get their own connection.
 
 `query` wraps `pool.query` — good for single statements where automatic connection management is fine. `getClient` returns a dedicated connection that the caller controls — required for explicit transactions (`BEGIN / COMMIT / ROLLBACK`).
+
+**Row-Level Security helpers:**
+
+`setIssuerContext(client, issuerId)` sets `app.current_issuer_id` as a transaction-local PostgreSQL config value. It must be called after `BEGIN` on a transaction client. The setting is automatically rolled back if the transaction aborts, so there is no cleanup needed.
+
+`queryAsIssuer(issuerId, text, params)` is the non-transactional equivalent. It opens a dedicated connection, starts a mini-transaction, calls `set_config`, runs the query, commits, and releases the connection — all in one call. Use this in model functions that do a single read outside an explicit transaction.
+
+**Why `set_config` and not `SET LOCAL`?** `SET LOCAL` does not accept parameterized values in PostgreSQL (prepared statement parameters are not valid in `SET` statements). `set_config('app.current_issuer_id', $1, true)` is a regular function call that accepts a parameter, making it safe from injection without string concatenation. The third argument `true` makes the setting transaction-local, equivalent to `SET LOCAL`.
 
 ---
 
@@ -206,6 +217,7 @@ Step-by-step:
    → Not found             → compute payloadHash = SHA-256(body), continue
 
 1. Open explicit PostgreSQL transaction (BEGIN)
+   `db.setIssuerContext(client, issuer.id)` — sets `app.current_issuer_id` for RLS enforcement.
 
 2. sequentialService.getNext(issuerId, branchCode, issuePointCode, documentType, client)
    → SELECT FOR UPDATE inside the transaction — guarantees no duplicate sequentials.
@@ -604,6 +616,8 @@ issuers (1)
 
 All child tables reference `issuers(id)` directly or via `documents(id)`, enabling multi-tenant filtering with a simple `WHERE issuer_id = $1`.
 
+**Row-Level Security** (migration 031) adds a second, database-enforced layer. Every query on `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `api_keys` is automatically filtered to the current issuer via the `app.current_issuer_id` session setting. A bug that forgets the `WHERE issuer_id = $1` clause still cannot expose another tenant's data — the RLS policy blocks it. The application DB user must not be a PostgreSQL superuser; superusers bypass RLS unconditionally.
+
 ---
 
 ## 22. RideService — `src/services/ride.service.js`
@@ -654,10 +668,11 @@ POST /api/documents
   └── asyncHandler
         └── controller.create
               └── documentCreation.create(body, idempotencyKey, req.issuer)
-                    ├── [key present] documentModel.findByIdempotencyKey()
+                    ├── [key present] documentModel.findByIdempotencyKey()  [queryAsIssuer]
                     │     ├── found + hash match  → return existing doc (200, no transaction)
                     │     └── found + hash diff   → ConflictError 409
                     ├── BEGIN
+                    ├── db.setIssuerContext()           SET app.current_issuer_id (RLS)
                     ├── sequentialService.getNext()    SELECT FOR UPDATE
                     ├── accessKeyService.generate()    49-digit key + check digit
                     ├── getBuilder(documentType, issuer).build()  unsigned XML

@@ -50,9 +50,9 @@ async function rebuild(accessKey, body, issuer) {
     buyer_id: body.buyer.id,
     buyer_name: body.buyer.name,
     buyer_id_type: body.buyer.idType,
-  });
+  }, issuer.id);
 
-  await documentEventModel.create(document.id, EventType.REBUILT, document.status, DocumentStatus.SIGNED, {});
+  await documentEventModel.create(document.id, EventType.REBUILT, document.status, DocumentStatus.SIGNED, {}, null, issuer.id);
 
   return formatDocument(updated);
 }

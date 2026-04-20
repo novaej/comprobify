@@ -24,11 +24,16 @@ async function create({ issuerId, documentType, accessKey, sequential, branchCod
 }
 
 async function findByAccessKey(accessKey, issuerId = null) {
-  const query = issuerId
-    ? 'SELECT * FROM documents WHERE access_key = $1 AND issuer_id = $2'
-    : 'SELECT * FROM documents WHERE access_key = $1';
-  const params = issuerId ? [accessKey, issuerId] : [accessKey];
-  const { rows } = await db.query(query, params);
+  if (issuerId != null) {
+    const { rows } = await db.queryAsIssuer(
+      issuerId,
+      'SELECT * FROM documents WHERE access_key = $1 AND issuer_id = $2',
+      [accessKey, issuerId]
+    );
+    return rows[0] || null;
+  }
+  // Bypass mode: webhook or other non-issuer-scoped lookups
+  const { rows } = await db.query('SELECT * FROM documents WHERE access_key = $1', [accessKey]);
   return rows[0] || null;
 }
 
@@ -37,7 +42,7 @@ async function findById(id) {
   return rows[0] || null;
 }
 
-async function updateStatus(id, status, extraFields = {}) {
+async function updateStatus(id, status, extraFields = {}, issuerId = null) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
       throw new Error(`updateStatus: unknown column "${col}"`);
@@ -54,14 +59,23 @@ async function updateStatus(id, status, extraFields = {}) {
     idx++;
   }
 
-  const { rows } = await db.query(
-    `UPDATE documents SET ${sets.join(', ')} WHERE id = $1 RETURNING *`,
-    params
-  );
+  const sql = `UPDATE documents SET ${sets.join(', ')} WHERE id = $1 RETURNING *`;
+
+  const { rows } = issuerId != null
+    ? await db.queryAsIssuer(issuerId, sql, params)
+    : await db.query(sql, params);
   return rows[0] || null;
 }
 
-async function findByIdempotencyKey(key) {
+async function findByIdempotencyKey(key, issuerId = null) {
+  if (issuerId != null) {
+    const { rows } = await db.queryAsIssuer(
+      issuerId,
+      'SELECT * FROM documents WHERE idempotency_key = $1',
+      [key]
+    );
+    return rows[0] || null;
+  }
   const { rows } = await db.query(
     'SELECT * FROM documents WHERE idempotency_key = $1',
     [key]
@@ -86,7 +100,8 @@ async function updateEmailStatus(id, emailStatus) {
 }
 
 async function findPendingEmails(issuerId) {
-  const { rows } = await db.query(
+  const { rows } = await db.queryAsIssuer(
+    issuerId,
     `SELECT * FROM documents
      WHERE  issuer_id = $1
        AND  status = 'AUTHORIZED'
@@ -135,25 +150,34 @@ async function findByIssuerId(issuerId, filters = {}) {
   const whereClause = conditions.join(' AND ');
   const limitParamIndex = paramIndex;
   const offsetParamIndex = paramIndex + 1;
-
-  // Get total count
-  const countResult = await db.query(
-    `SELECT COUNT(*) as count FROM documents WHERE ${whereClause}`,
-    params
-  );
-  const total = parseInt(countResult.rows[0].count, 10);
-
-  // Get paginated documents
   const params2 = [...params, limit, offset];
-  const { rows } = await db.query(
-    `SELECT * FROM documents
-     WHERE ${whereClause}
-     ORDER BY created_at DESC
-     LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`.replace(/\$\$/g, '$'),
-    params2
-  );
 
-  return { documents: rows, pagination: { total, page, limit } };
+  // Both queries run inside the same mini-transaction with issuer context so their
+  // results are consistent and RLS is enforced for both.
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await db.setIssuerContext(client, issuerId);
+
+    const countResult = await client.query(
+      `SELECT COUNT(*) as count FROM documents WHERE ${whereClause}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0].count, 10);
+
+    const { rows } = await client.query(
+      `SELECT * FROM documents WHERE ${whereClause} ORDER BY created_at DESC LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
+      params2
+    );
+
+    await client.query('COMMIT');
+    return { documents: rows, pagination: { total, page, limit } };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId };

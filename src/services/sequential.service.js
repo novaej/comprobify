@@ -17,7 +17,10 @@ async function getNext(issuerId, branchCode, issuePointCode, documentType, clien
   const conn = client || await db.getClient();
 
   try {
-    if (ownTransaction) await conn.query('BEGIN');
+    if (ownTransaction) {
+      await conn.query('BEGIN');
+      await db.setIssuerContext(conn, issuerId);
+    }
 
     const { rows } = await conn.query(
       `SELECT current_value FROM sequential_numbers

@@ -32,6 +32,18 @@ cd comprobify
 psql -U postgres -c "CREATE DATABASE sri_invoicing;"
 ```
 
+> **Row-Level Security requirement:** the database user that the application connects as must **not** be a PostgreSQL superuser. Superusers bypass Row-Level Security unconditionally. For local development, create a dedicated non-superuser role:
+>
+> ```bash
+> psql -U postgres -c "CREATE ROLE sri_app LOGIN PASSWORD 'changeme';"
+> psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE sri_invoicing TO sri_app;"
+> psql -U postgres -d sri_invoicing -c "GRANT ALL ON SCHEMA public TO sri_app;"
+> psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO sri_app;"
+> psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO sri_app;"
+> ```
+>
+> Then set `DB_USER=sri_app` and `DB_PASSWORD=changeme` in `.env`. Run `npm run migrate` as a superuser (or grant the `sri_app` role enough privileges to create tables) by connecting once with a superuser account for the migration step, then switch the app config to `sri_app`.
+
 ### Option B — Docker
 
 ```bash

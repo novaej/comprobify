@@ -21,7 +21,7 @@ function hashPayload(body) {
 
 async function create(body, idempotencyKey = null, issuer) {
   if (idempotencyKey) {
-    const existing = await documentModel.findByIdempotencyKey(idempotencyKey);
+    const existing = await documentModel.findByIdempotencyKey(idempotencyKey, issuer.id);
     if (existing) {
       if (hashPayload(body) !== existing.payload_hash) {
         throw new ConflictError(
@@ -46,6 +46,7 @@ async function create(body, idempotencyKey = null, issuer) {
   let document;
   try {
     await client.query('BEGIN');
+    await db.setIssuerContext(client, issuer.id);
 
     // Get next sequential within this transaction (FOR UPDATE, not yet committed)
     const sequential = await sequentialService.getNext(
@@ -134,7 +135,7 @@ async function create(body, idempotencyKey = null, issuer) {
     // Two concurrent requests with the same idempotency key — the second one lost the
     // race to the UNIQUE index. Fetch the winner and return it as a replay.
     if (idempotencyKey && err.code === '23505') {
-      const winner = await documentModel.findByIdempotencyKey(idempotencyKey);
+      const winner = await documentModel.findByIdempotencyKey(idempotencyKey, issuer.id);
       if (winner) return { document: formatDocument(winner), created: false };
     }
     throw err;
