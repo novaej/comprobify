@@ -34,6 +34,7 @@ export default defineConfig({
           { text: 'Retry Emails (Batch)', link: '/endpoints/retry-emails' },
           { text: 'Retry Email (Single)', link: '/endpoints/retry-single-email' },
           { text: 'Mailgun Webhook', link: '/endpoints/webhooks' },
+          { text: 'Health Check', link: '/endpoints/health' },
         ],
       },
       {

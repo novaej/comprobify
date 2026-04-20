@@ -319,6 +319,25 @@
           }
         }
       ]
+    },
+    {
+      "name": "Health",
+      "description": "Monitoring endpoint. No authentication required.",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Returns `{ status: \"ok\", uptime }` (200) when the database is reachable, or `{ status: \"error\", uptime }` (503) when it is not. Use for load balancer health checks and container liveness probes."
+          }
+        }
+      ]
     }
   ]
 }

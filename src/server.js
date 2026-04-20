@@ -20,6 +20,7 @@ class Server {
   }
 
   routes() {
+    this.app.use('/health', require('./routes/health.routes'));
     this.app.use('/api', require('./routes'));
   }
 
