@@ -14,8 +14,8 @@ const { Pool } = require('pg');
 const config = require('../src/config');
 const migrate = require('./migrate');
 
-if (process.env.NODE_ENV === 'production') {
-  console.error('db:reset must not run in production.');
+if (config.appEnv === 'production') {
+  console.error('db:reset must not run in production (APP_ENV=production).');
   process.exit(1);
 }
 
@@ -31,10 +31,11 @@ const pool = new Pool({
 async function reset() {
   const client = await pool.connect();
   try {
-    console.log('Dropping schema...');
+    console.log('Dropping schemas...');
+    await client.query('DROP SCHEMA IF EXISTS sandbox CASCADE');
     await client.query('DROP SCHEMA public CASCADE');
     await client.query('CREATE SCHEMA public');
-    console.log('Schema recreated.');
+    console.log('Schemas recreated.');
   } finally {
     client.release();
     await pool.end();

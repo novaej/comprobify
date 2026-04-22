@@ -132,6 +132,8 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
       certificatePem,
       certFingerprint,
       certExpiry,
+      // Default to sandbox = true (safe mode) unless explicitly set to false
+      sandbox: fields.sandbox === false || fields.sandbox === 'false' || fields.sandbox === 0 || fields.sandbox === '0' ? false : true,
     });
   } catch (err) {
     if (err.code === '23505') {
@@ -140,7 +142,7 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     throw err;
   }
 
-  // Seed sequential counters for each document type specified
+  // Seed sequential counters in the correct schema for the issuer's sandbox flag
   if (Array.isArray(fields.initialSequentials)) {
     for (const entry of fields.initialSequentials) {
       await sequentialService.initialize(
@@ -149,6 +151,7 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
         newIssuer.issue_point_code,
         entry.documentType,
         parseInt(entry.sequential, 10),
+        newIssuer.sandbox,
       );
     }
   }
@@ -204,6 +207,7 @@ function formatIssuer(row) {
     issuePointCode: row.issue_point_code,
     certFingerprint: row.cert_fingerprint,
     certExpiry: row.cert_expiry,
+    sandbox: row.sandbox,
     active: row.active,
   };
 }

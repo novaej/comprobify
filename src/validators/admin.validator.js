@@ -33,6 +33,11 @@ const createIssuer = [
     .isBoolean()
     .withMessage('requiredAccounting must be a boolean'),
 
+  body('sandbox')
+    .optional()
+    .isBoolean()
+    .withMessage('sandbox must be a boolean (true = SRI test endpoint, false = SRI production endpoint)'),
+
   body('initialSequentials')
     .optional()
     .customSanitizer(value => {

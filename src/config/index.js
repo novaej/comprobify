@@ -1,5 +1,6 @@
 const config = {
   port: process.env.PORT || 8080,
+  appEnv: process.env.APP_ENV || 'staging',
   docsBaseUrl: process.env.DOCS_BASE_URL || '',
   encryptionKey: process.env.ENCRYPTION_KEY || '',
   adminSecret: process.env.ADMIN_SECRET || '',

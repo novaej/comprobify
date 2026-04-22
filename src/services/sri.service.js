@@ -87,16 +87,27 @@ function parseMessages(xml) {
   }));
 }
 
-function getSriUrls(environment) {
-  const base = environment === '2' ? config.sri.prodBaseUrl : config.sri.testBaseUrl;
+/**
+ * Derive which SRI endpoint set to use for a given issuer.
+ *
+ * Routing table:
+ *   app env    | issuer.sandbox = true  | issuer.sandbox = false
+ *   staging    | SRI test               | SRI test
+ *   production | SRI test               | SRI production
+ *
+ * @param {{ sandbox: boolean }} issuer
+ */
+function getSriUrls(issuer) {
+  const useTest = config.appEnv !== 'production' || issuer.sandbox;
+  const base = useTest ? config.sri.testBaseUrl : config.sri.prodBaseUrl;
   return {
     receptionUrl: `${base}/RecepcionComprobantesOffline?wsdl`,
     authorizationUrl: `${base}/AutorizacionComprobantesOffline?wsdl`,
   };
 }
 
-async function sendReceipt(signedXml, environment) {
-  const { receptionUrl } = getSriUrls(environment);
+async function sendReceipt(signedXml, issuer) {
+  const { receptionUrl } = getSriUrls(issuer);
   const xmlBase64 = Buffer.from(signedXml, 'utf8').toString('base64');
   const envelope = buildReceptionEnvelope(xmlBase64);
 
@@ -125,8 +136,8 @@ async function sendReceipt(signedXml, environment) {
   };
 }
 
-async function checkAuthorization(accessKey, environment) {
-  const { authorizationUrl } = getSriUrls(environment);
+async function checkAuthorization(accessKey, issuer) {
+  const { authorizationUrl } = getSriUrls(issuer);
   const envelope = buildAuthorizationEnvelope(accessKey);
 
   const response = await fetchWithRetry(authorizationUrl, {

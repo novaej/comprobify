@@ -1,8 +1,9 @@
 const db = require('../config/database');
 
-async function create({ documentId, operationType, status, messages, rawResponse }) {
+async function create({ documentId, operationType, status, messages, rawResponse, sandbox = false }) {
+  const table = sandbox ? 'sandbox.sri_responses' : 'sri_responses';
   const { rows } = await db.query(
-    `INSERT INTO sri_responses (document_id, operation_type, status, messages, raw_response)
+    `INSERT INTO ${table} (document_id, operation_type, status, messages, raw_response)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
     [documentId, operationType, status, messages ? JSON.stringify(messages) : null, rawResponse]

@@ -75,6 +75,11 @@ DB_USER=postgres
 DB_PASSWORD=
 DB_SSL=false
 
+# App environment — controls SRI endpoint routing
+# staging    → always hits the SRI test endpoint (safe default)
+# production → uses SRI production endpoint for issuers with sandbox=false
+APP_ENV=staging
+
 # 32-byte AES encryption key for private keys stored in the database
 ENCRYPTION_KEY=             # see step 4
 
@@ -92,7 +97,7 @@ MAILGUN_DOMAIN=mg.yourdomain.com
 MAILGUN_WEBHOOK_SIGNING_KEY=
 ```
 
-> **Issuer data (RUC, branch code, issue point, SRI environment, certificate) is stored per-issuer in the `issuers` database table — not in `.env`.** The admin API in step 8 populates it.
+> **Issuer data (RUC, branch code, issue point, certificate) is stored per-issuer in the `issuers` database table — not in `.env`.** The admin API in step 8 populates it. Each issuer has a `sandbox` flag (default `true` — test mode). Set `sandbox=false` only on production issuers and only when `APP_ENV=production` in `.env`.
 
 > **Email delivery is optional.** If `MAILGUN_API_KEY` or `MAILGUN_DOMAIN` are not set, the server still runs normally — emails are simply not sent and `email_status` stays `PENDING`.
 
@@ -132,7 +137,14 @@ npm install
 npm run migrate
 ```
 
-This applies all 29 migrations, creating tables: `issuers`, `api_keys`, `documents`, `sequential_numbers`, `sri_responses`, `document_line_items`, `document_events`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`). Also installs two PostgreSQL triggers for document state machine and immutability enforcement. Already-applied migrations are skipped automatically.
+This applies all 33 migrations, creating tables: `issuers`, `api_keys`, `documents`, `sequential_numbers`, `sri_responses`, `document_line_items`, `document_events`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`). It also installs two PostgreSQL triggers for document state machine and immutability enforcement, enables Row-Level Security on all tenant-scoped tables, and creates the `sandbox` schema (an identical copy of the tenant-scoped tables for test documents). Already-applied migrations are skipped automatically.
+
+> **Grant sandbox schema access after migration:** the `sandbox` schema is created by migration 033. Grant the app user the same privileges on it:
+> ```bash
+> psql -U postgres -d sri_invoicing -c "GRANT ALL ON SCHEMA sandbox TO sri_app;"
+> psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON TABLES TO sri_app;"
+> psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON SEQUENCES TO sri_app;"
+> ```
 
 ---
 

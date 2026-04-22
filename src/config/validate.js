@@ -12,6 +12,10 @@ function validateConfig(cfg) {
   const missing = [];
 
   // Always required
+  if (!['staging', 'production'].includes(cfg.appEnv)) {
+    throw new Error('APP_ENV must be "staging" or "production"');
+  }
+
   if (!cfg.encryptionKey) {
     missing.push('ENCRYPTION_KEY');
   } else if (cfg.encryptionKey.length !== 64) {

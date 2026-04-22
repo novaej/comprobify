@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–031
+db/migrations/     SQL migration files 001–033
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -88,12 +88,23 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Rate limiting:** per-API-key request rate limits prevent abuse and quota exhaustion. Applied via `src/middleware/rate-limit.js` using `express-rate-limit`: 60 req/min on write endpoints (POST), 300 req/min on read endpoints (GET). Keyed by `req.keyHash` (SHA-256 token hash). Returns RFC 7807 `429 TOO_MANY_REQUESTS` response. Configurable via `RATE_LIMIT_WINDOW_MS` (default: 60000ms) and `RATE_LIMIT_MAX` (default: 60) env vars. See `docs/site/errors/too-many-requests.md` for client retry guidance.
 
+**Sandbox environment + SRI routing:** `APP_ENV` (`staging` | `production`) combined with `issuers.sandbox` (boolean, default `true`) controls which SRI SOAP endpoint is used and what `ambiente` digit is embedded in the access key and XML.
+
+| `APP_ENV`    | `issuer.sandbox = true` | `issuer.sandbox = false` |
+|---|---|---|
+| `staging`    | SRI test, `ambiente = 1` | SRI test, `ambiente = 1` |
+| `production` | SRI test, `ambiente = 1` | SRI production, `ambiente = 2` |
+
+`document-creation.service.js` and `document-rebuild.service.js` compute `ambiente = (config.appEnv !== 'production' || issuer.sandbox) ? '1' : '2'` and pass an `effectiveIssuer` (with `environment` set to the computed value) to both the builder and `accessKeyService.generate()`. `sri.service.js` `getSriUrls(issuer)` applies the same logic. All existing issuers default to `sandbox = true` on upgrade — safe mode until explicitly promoted.
+
+**Sandbox PostgreSQL schema:** sandbox and production documents live in separate schemas (`sandbox` vs `public`) so sequential sequences are fully independent and test data can be truncated safely. The `sandbox` schema contains `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `sri_responses` with the same constraints, triggers, and RLS as `public`. **Every future migration that alters a tenant-scoped table must be applied to both schemas.**
+
 **Row-Level Security (RLS):** all tenant-scoped tables (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `api_keys`) have RLS enabled via migration 031. The policy restricts every query to the current issuer by reading `app.current_issuer_id` — a transaction-local PostgreSQL setting. Two helpers in `src/config/database.js` manage this:
-- `db.setIssuerContext(client, issuerId)` — call after `BEGIN` on an existing transaction client; uses `set_config(..., true)` so the setting rolls back automatically if the transaction aborts.
-- `db.queryAsIssuer(issuerId, sql, params)` — wraps a single query in a mini BEGIN / set_config / query / COMMIT for non-transactional reads.
+- `db.setIssuerContext(client, issuerId, sandbox)` — call after `BEGIN` on an existing transaction client; sets both `app.current_issuer_id` (for RLS) and `search_path` (`sandbox, public` or `public`), both rolled back automatically on abort.
+- `db.queryAsIssuer(issuerId, sql, params, sandbox)` — wraps a single query in a mini BEGIN / set_config / SET LOCAL search_path / query / COMMIT for non-transactional reads.
 All authenticated service code paths must use one of these two helpers. Only the Mailgun webhook, admin API, and health check are exempt — they authenticate by other means and operate without an issuer context (the policy's null bypass allows it). The application DB user must **not** be a PostgreSQL superuser; superusers always bypass RLS regardless of policies.
 
-**Config validation:** critical environment variables are validated at startup in `src/config/validate.js` and called from `app.js` before `Server` construction. Always-required: `ENCRYPTION_KEY` (64-char hex format), `ADMIN_SECRET`. Email-required when `EMAIL_PROVIDER` is set to anything other than `'none'`: `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_WEBHOOK_SIGNING_KEY`, `EMAIL_FROM`. If any are missing or malformed, the process throws immediately with a clear error message before accepting any HTTP requests. This prevents silent failures like unsigned webhooks or unencrypted P12 storage.
+**Config validation:** critical environment variables are validated at startup in `src/config/validate.js` and called from `app.js` before `Server` construction. Always-required: `APP_ENV` (`staging` | `production`), `ENCRYPTION_KEY` (64-char hex format), `ADMIN_SECRET`. Email-required when `EMAIL_PROVIDER` is set to anything other than `'none'`: `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_WEBHOOK_SIGNING_KEY`, `EMAIL_FROM`. If any are missing or malformed, the process throws immediately with a clear error message before accepting any HTTP requests. This prevents silent failures like unsigned webhooks or unencrypted P12 storage.
 
 ---
 
@@ -167,7 +178,9 @@ chore: update express to 4.22.1
 10. Hardcoding Spanish identifiers in new code — use English everywhere except SRI XML elements.
 11. Generating a new idempotency key on every retry — the key must be generated once and reused across retries for the same intended invoice.
 12. Adding a new `document_events` event type without updating the `chk_document_events_event_type` CHECK constraint — the INSERT will fail silently if the constraint is not updated in a migration.
-13. Calling `db.query()` directly in an authenticated service or model — use `db.queryAsIssuer(issuerId, ...)` instead so RLS is enforced. `db.query()` (no issuer context) is only correct for the webhook, admin, and health code paths.
+13. Calling `db.query()` directly in an authenticated service or model — use `db.queryAsIssuer(issuerId, sql, params, sandbox)` instead so both RLS and the correct `search_path` are set. `db.query()` (no issuer context) is only correct for the webhook, admin, and health code paths.
+14. Adding a migration that alters a tenant-scoped table (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `sri_responses`) without also applying the same DDL to the `sandbox` schema — the schemas must stay structurally identical.
+15. Passing `issuer.environment` directly to `accessKeyService.generate()` or the XML builder — always derive `ambiente` from `config.appEnv` and `issuer.sandbox` first, then build an `effectiveIssuer` with the computed value. Using the raw DB field bypasses the staging safety rail and could embed `ambiente = 2` in a document sent to the test endpoint.
 
 ---
 
@@ -211,7 +224,7 @@ chore: update express to 4.22.1
 | `src/builders/index.js` | Builder registry |
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
 | `src/constants/document-state-machine.js` | `TRANSITIONS` map + `canTransition` / `assertTransition` |
-| `src/config/database.js` | pg Pool + `query` (bypass) + `setIssuerContext` + `queryAsIssuer` (RLS helpers) |
-| `db/migrations/` | SQL migration files 001–031 (031: Row-Level Security policies) |
+| `src/config/database.js` | pg Pool + `query` (bypass) + `setIssuerContext(client, issuerId, sandbox)` + `queryAsIssuer(issuerId, sql, params, sandbox)` — sets both RLS context and `search_path` |
+| `db/migrations/` | SQL migration files 001–033 (031: RLS; 032: `sandbox` on issuers; 033: sandbox schema) |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

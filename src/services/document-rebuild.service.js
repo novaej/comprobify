@@ -1,4 +1,5 @@
 const moment = require('moment');
+const config = require('../config');
 const documentModel = require('../models/document.model');
 const documentEventModel = require('../models/document-event.model');
 const signingService = require('./signing.service');
@@ -12,7 +13,7 @@ const EventType = require('../constants/event-type');
 const { formatDocument } = require('../presenters/document.presenter');
 
 async function rebuild(accessKey, body, issuer) {
-  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) {
     throw new NotFoundError('Document');
   }
@@ -22,7 +23,10 @@ async function rebuild(accessKey, body, issuer) {
   // only the invoice content (taxes, items, buyer, payments) is corrected by the caller
   const issueDate = moment(document.issue_date).format('DD/MM/YYYY');
 
-  const builder = getBuilder(document.document_type, issuer);
+  // Use the same ambiente logic as document creation so the rebuilt XML is consistent
+  const ambiente = (config.appEnv !== 'production' || issuer.sandbox) ? '1' : '2';
+  const effectiveIssuer = { ...issuer, environment: ambiente };
+  const builder = getBuilder(document.document_type, effectiveIssuer);
   const unsignedXml = builder.build({ ...body, issueDate }, document.access_key, document.sequential);
 
   const paymentsTotal = parseFloat(
@@ -50,9 +54,9 @@ async function rebuild(accessKey, body, issuer) {
     buyer_id: body.buyer.id,
     buyer_name: body.buyer.name,
     buyer_id_type: body.buyer.idType,
-  }, issuer.id);
+  }, issuer.id, issuer.sandbox);
 
-  await documentEventModel.create(document.id, EventType.REBUILT, document.status, DocumentStatus.SIGNED, {}, null, issuer.id);
+  await documentEventModel.create(document.id, EventType.REBUILT, document.status, DocumentStatus.SIGNED, {}, null, issuer.id, issuer.sandbox);
 
   return formatDocument(updated);
 }

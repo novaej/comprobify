@@ -27,19 +27,19 @@
     {
       "key": "access_key",
       "value": "",
-      "description": "49-digit SRI access key — copy from Create Invoice response",
+      "description": "49-digit SRI access key \u2014 copy from Create Invoice response",
       "type": "string"
     },
     {
       "key": "issuer_id",
       "value": "",
-      "description": "Issuer ID — copy from Create Issuer response",
+      "description": "Issuer ID \u2014 copy from Create Issuer response",
       "type": "string"
     },
     {
       "key": "api_key_id",
       "value": "",
-      "description": "API key ID — copy from Create API Key response (used for revocation)",
+      "description": "API key ID \u2014 copy from Create API Key response (used for revocation)",
       "type": "string"
     }
   ],
@@ -50,7 +50,11 @@
       "auth": {
         "type": "bearer",
         "bearer": [
-          { "key": "token", "value": "{{api_key}}", "type": "string" }
+          {
+            "key": "token",
+            "value": "{{api_key}}",
+            "type": "string"
+          }
         ]
       },
       "item": [
@@ -59,14 +63,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Idempotency-Key", "value": "{{$guid}}", "description": "Optional — unique per intended invoice. Reuse on retries to avoid duplicates." }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "Optional \u2014 unique per intended invoice. Reuse on retries to avoid duplicates."
+              }
             ],
-            "url": { "raw": "{{base_url}}/api/documents", "host": ["{{base_url}}"], "path": ["api", "documents"] },
+            "url": {
+              "raw": "{{base_url}}/api/documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents"
+              ]
+            },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"documentType\": \"01\",\n  \"issueDate\": \"05/04/2026\",\n  \"buyer\": {\n    \"idType\": \"05\",\n    \"id\": \"1234567890\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"address\": \"Av. Amazonas 123\"\n  },\n  \"items\": [\n    {\n      \"mainCode\": \"PROD-001\",\n      \"auxiliaryCode\": \"AUX-001\",\n      \"description\": \"Web development service\",\n      \"quantity\": \"1.00\",\n      \"unitPrice\": \"100.00\",\n      \"discount\": \"0.00\",\n      \"taxes\": [\n        {\n          \"code\": \"2\",\n          \"rateCode\": \"2\",\n          \"rate\": \"15.00\",\n          \"taxableBase\": \"100.00\",\n          \"taxAmount\": \"15.00\"\n        }\n      ]\n    }\n  ],\n  \"payments\": [\n    {\n      \"method\": \"01\",\n      \"total\": \"115.00\",\n      \"term\": 30,\n      \"termUnit\": \"dias\"\n    }\n  ],\n  \"additionalInfo\": [\n    { \"name\": \"Contract\", \"value\": \"CTR-2026-001\" }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "description": "Creates, XSD-validates, and signs a new electronic invoice. Returns the document with status `SIGNED`.\n\nAfter a successful response, copy the `accessKey` value into the `access_key` collection variable."
           }
@@ -77,15 +101,50 @@
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/documents?page=1&limit=10",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents"
+              ],
               "query": [
-                { "key": "page", "value": "1", "description": "Page number (default: 1)", "disabled": true },
-                { "key": "limit", "value": "10", "description": "Results per page, 1-100 (default: 10)", "disabled": true },
-                { "key": "status", "value": "AUTHORIZED", "description": "Filter by status: SIGNED, RECEIVED, RETURNED, AUTHORIZED, NOT_AUTHORIZED", "disabled": true },
-                { "key": "documentType", "value": "01", "description": "Filter by document type code (e.g., 01)", "disabled": true },
-                { "key": "from", "value": "01/01/2026", "description": "Filter by issue date >= DD/MM/YYYY", "disabled": true },
-                { "key": "to", "value": "31/12/2026", "description": "Filter by issue date <= DD/MM/YYYY", "disabled": true }
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Results per page, 1-100 (default: 10)",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "AUTHORIZED",
+                  "description": "Filter by status: SIGNED, RECEIVED, RETURNED, AUTHORIZED, NOT_AUTHORIZED",
+                  "disabled": true
+                },
+                {
+                  "key": "documentType",
+                  "value": "01",
+                  "description": "Filter by document type code (e.g., 01)",
+                  "disabled": true
+                },
+                {
+                  "key": "from",
+                  "value": "01/01/2026",
+                  "description": "Filter by issue date >= DD/MM/YYYY",
+                  "disabled": true
+                },
+                {
+                  "key": "to",
+                  "value": "31/12/2026",
+                  "description": "Filter by issue date <= DD/MM/YYYY",
+                  "disabled": true
+                }
               ]
             },
             "description": "Lists documents for the authenticated issuer with optional filtering and pagination. Returns documents sorted by creation date (newest first)."
@@ -97,10 +156,16 @@
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/documents/{{access_key}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents", "{{access_key}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{access_key}}"
+              ]
             },
-            "description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates."
+            "description": "Retrieves document metadata by access key. Does not call the SRI \u2014 use Check Authorization for status updates."
           }
         },
         {
@@ -109,8 +174,15 @@
             "method": "POST",
             "url": {
               "raw": "{{base_url}}/api/documents/{{access_key}}/send",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents", "{{access_key}}", "send"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{access_key}}",
+                "send"
+              ]
             },
             "description": "Submits the signed XML to the SRI reception service. Document moves to `RECEIVED` or `RETURNED`."
           }
@@ -121,8 +193,15 @@
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/documents/{{access_key}}/authorize",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents", "{{access_key}}", "authorize"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{access_key}}",
+                "authorize"
+              ]
             },
             "description": "Queries the SRI authorization service. Document moves to `AUTHORIZED` or `NOT_AUTHORIZED`. On authorization, an email with the RIDE PDF is sent to the buyer."
           }
@@ -132,17 +211,31 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/documents/{{access_key}}/rebuild",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents", "{{access_key}}", "rebuild"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{access_key}}",
+                "rebuild"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"documentType\": \"01\",\n  \"buyer\": {\n    \"idType\": \"05\",\n    \"id\": \"1234567890\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"address\": \"Av. Amazonas 123\"\n  },\n  \"items\": [\n    {\n      \"mainCode\": \"PROD-001\",\n      \"description\": \"Web development service (corrected)\",\n      \"quantity\": \"1.00\",\n      \"unitPrice\": \"100.00\",\n      \"discount\": \"0.00\",\n      \"taxes\": [\n        {\n          \"code\": \"2\",\n          \"rateCode\": \"2\",\n          \"rate\": \"15.00\",\n          \"taxableBase\": \"100.00\",\n          \"taxAmount\": \"15.00\"\n        }\n      ]\n    }\n  ],\n  \"payments\": [\n    {\n      \"method\": \"01\",\n      \"total\": \"115.00\"\n    }\n  ]\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "description": "Corrects and re-signs a document in `RETURNED` or `NOT_AUTHORIZED` status. Keeps the original `accessKey`, `sequential`, and `issueDate`. Send again after rebuilding."
           }
@@ -153,8 +246,15 @@
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/documents/{{access_key}}/ride",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents", "{{access_key}}", "ride"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{access_key}}",
+                "ride"
+              ]
             },
             "description": "Downloads the RIDE PDF for an `AUTHORIZED` document. Returns `application/pdf`."
           }
@@ -165,8 +265,15 @@
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/documents/{{access_key}}/xml",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents", "{{access_key}}", "xml"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{access_key}}",
+                "xml"
+              ]
             },
             "description": "Downloads the authorization XML for an `AUTHORIZED` document, or the signed XML for earlier statuses. Returns `application/xml`."
           }
@@ -177,10 +284,17 @@
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/documents/{{access_key}}/events",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents", "{{access_key}}", "events"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{access_key}}",
+                "events"
+              ]
             },
-            "description": "Returns the full audit trail for the document — every lifecycle transition, SRI call, and email event."
+            "description": "Returns the full audit trail for the document \u2014 every lifecycle transition, SRI call, and email event."
           }
         },
         {
@@ -189,10 +303,22 @@
             "method": "POST",
             "url": {
               "raw": "{{base_url}}/api/documents/{{access_key}}/email-retry",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents", "{{access_key}}", "email-retry"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{access_key}}",
+                "email-retry"
+              ],
               "query": [
-                { "key": "force", "value": "true", "description": "Set to true to resend an email that was already successfully sent", "disabled": true }
+                {
+                  "key": "force",
+                  "value": "true",
+                  "description": "Set to true to resend an email that was already successfully sent",
+                  "disabled": true
+                }
               ]
             },
             "description": "Retries the authorization email for a single document. Document must be `AUTHORIZED` with `email_status` of `PENDING` or `FAILED`. Add `?force=true` to resend an already-delivered email."
@@ -204,8 +330,14 @@
             "method": "POST",
             "url": {
               "raw": "{{base_url}}/api/documents/email-retry",
-              "host": ["{{base_url}}"],
-              "path": ["api", "documents", "email-retry"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "email-retry"
+              ]
             },
             "description": "Retries all `PENDING` and `FAILED` authorization emails across all documents for this issuer. Maximum 100 per call."
           }
@@ -218,7 +350,11 @@
       "auth": {
         "type": "bearer",
         "bearer": [
-          { "key": "token", "value": "{{admin_secret}}", "type": "string" }
+          {
+            "key": "token",
+            "value": "{{admin_secret}}",
+            "type": "string"
+          }
         ]
       },
       "item": [
@@ -228,22 +364,82 @@
             "method": "POST",
             "url": {
               "raw": "{{base_url}}/api/admin/issuers",
-              "host": ["{{base_url}}"],
-              "path": ["api", "admin", "issuers"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "issuers"
+              ]
             },
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "ruc", "value": "1700000000001", "type": "text", "description": "13-digit RUC" },
-                { "key": "businessName", "value": "Acme S.A.", "type": "text" },
-                { "key": "tradeName", "value": "Acme", "type": "text", "description": "Optional trade name" },
-                { "key": "branchCode", "value": "001", "type": "text", "description": "3-digit branch code" },
-                { "key": "issuePointCode", "value": "001", "type": "text", "description": "3-digit issue point code" },
-                { "key": "address", "value": "Av. Amazonas 123, Quito", "type": "text" },
-                { "key": "environment", "value": "1", "type": "text", "description": "1 = test (celcer), 2 = production (cel)" },
-                { "key": "emissionType", "value": "1", "type": "text", "description": "Always 1 (normal emission)" },
-                { "key": "certPassword", "value": "your-p12-password", "type": "text" },
-                { "key": "cert", "type": "file", "src": "", "description": "P12 certificate file" }
+                {
+                  "key": "ruc",
+                  "value": "1700000000001",
+                  "type": "text",
+                  "description": "13-digit RUC"
+                },
+                {
+                  "key": "businessName",
+                  "value": "Acme S.A.",
+                  "type": "text"
+                },
+                {
+                  "key": "tradeName",
+                  "value": "Acme",
+                  "type": "text",
+                  "description": "Optional trade name"
+                },
+                {
+                  "key": "branchCode",
+                  "value": "001",
+                  "type": "text",
+                  "description": "3-digit branch code"
+                },
+                {
+                  "key": "issuePointCode",
+                  "value": "001",
+                  "type": "text",
+                  "description": "3-digit issue point code"
+                },
+                {
+                  "key": "address",
+                  "value": "Av. Amazonas 123, Quito",
+                  "type": "text"
+                },
+                {
+                  "key": "environment",
+                  "value": "1",
+                  "type": "text",
+                  "description": "1 = test (celcer), 2 = production (cel)"
+                },
+                {
+                  "key": "emissionType",
+                  "value": "1",
+                  "type": "text",
+                  "description": "Always 1 (normal emission)"
+                },
+                {
+                  "key": "certPassword",
+                  "value": "your-p12-password",
+                  "type": "text"
+                },
+                {
+                  "key": "cert",
+                  "type": "file",
+                  "src": "",
+                  "description": "P12 certificate file"
+                },
+                {
+                  "key": "sandbox",
+                  "value": "true",
+                  "description": "true = SRI test endpoint (default, safe). Set false only on production issuers when APP_ENV=production.",
+                  "type": "text",
+                  "disabled": true
+                }
               ]
             },
             "description": "Creates a new issuer by uploading a P12 certificate. Returns the issuer record and an initial API key.\n\nAfter a successful response, copy the issuer `id` into `issuer_id` and the API key value into `api_key`."
@@ -255,20 +451,67 @@
             "method": "POST",
             "url": {
               "raw": "{{base_url}}/api/admin/issuers",
-              "host": ["{{base_url}}"],
-              "path": ["api", "admin", "issuers"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "issuers"
+              ]
             },
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "sourceIssuerId", "value": "{{issuer_id}}", "type": "text", "description": "ID of the issuer to copy the certificate from" },
-                { "key": "ruc", "value": "1700000000001", "type": "text" },
-                { "key": "businessName", "value": "Acme S.A.", "type": "text" },
-                { "key": "branchCode", "value": "002", "type": "text", "description": "Different branch code" },
-                { "key": "issuePointCode", "value": "001", "type": "text" },
-                { "key": "address", "value": "Av. Naciones Unidas 456, Quito", "type": "text" },
-                { "key": "environment", "value": "1", "type": "text" },
-                { "key": "emissionType", "value": "1", "type": "text" }
+                {
+                  "key": "sourceIssuerId",
+                  "value": "{{issuer_id}}",
+                  "type": "text",
+                  "description": "ID of the issuer to copy the certificate from"
+                },
+                {
+                  "key": "ruc",
+                  "value": "1700000000001",
+                  "type": "text"
+                },
+                {
+                  "key": "businessName",
+                  "value": "Acme S.A.",
+                  "type": "text"
+                },
+                {
+                  "key": "branchCode",
+                  "value": "002",
+                  "type": "text",
+                  "description": "Different branch code"
+                },
+                {
+                  "key": "issuePointCode",
+                  "value": "001",
+                  "type": "text"
+                },
+                {
+                  "key": "address",
+                  "value": "Av. Naciones Unidas 456, Quito",
+                  "type": "text"
+                },
+                {
+                  "key": "environment",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "emissionType",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "sandbox",
+                  "value": "true",
+                  "description": "true = SRI test endpoint (default, safe). Set false only on production issuers when APP_ENV=production.",
+                  "type": "text",
+                  "disabled": true
+                }
               ]
             },
             "description": "Creates a new branch issuer by copying the certificate from an existing issuer. No P12 file needed."
@@ -280,8 +523,14 @@
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/api/admin/issuers",
-              "host": ["{{base_url}}"],
-              "path": ["api", "admin", "issuers"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "issuers"
+              ]
             },
             "description": "Returns all active issuers."
           }
@@ -291,19 +540,34 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "url": {
               "raw": "{{base_url}}/api/admin/issuers/{{issuer_id}}/api-keys",
-              "host": ["{{base_url}}"],
-              "path": ["api", "admin", "issuers", "{{issuer_id}}", "api-keys"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "issuers",
+                "{{issuer_id}}",
+                "api-keys"
+              ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\n  \"label\": \"Production key\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "description": "Generates a new Bearer API key for an issuer. The plaintext key is returned only once — store it immediately.\n\nCopy the returned key value into the `api_key` collection variable."
+            "description": "Generates a new Bearer API key for an issuer. The plaintext key is returned only once \u2014 store it immediately.\n\nCopy the returned key value into the `api_key` collection variable."
           }
         },
         {
@@ -312,8 +576,15 @@
             "method": "DELETE",
             "url": {
               "raw": "{{base_url}}/api/admin/api-keys/{{api_key_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["api", "admin", "api-keys", "{{api_key_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "api-keys",
+                "{{api_key_id}}"
+              ]
             },
             "description": "Revokes (soft-deletes) an API key by ID. The key stops working immediately."
           }
@@ -327,12 +598,18 @@
         {
           "name": "Health Check",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/health",
-              "host": ["{{base_url}}"],
-              "path": ["health"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
             },
             "description": "Returns `{ status: \"ok\", uptime }` (200) when the database is reachable, or `{ status: \"error\", uptime }` (503) when it is not. Use for load balancer health checks and container liveness probes."
           }

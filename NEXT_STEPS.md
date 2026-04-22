@@ -48,9 +48,7 @@ Migration 031 enables RLS + `FORCE ROW LEVEL SECURITY` on `documents`, `document
 
 ---
 
-## 4. Sandbox Environment (SRI Test/Production Routing)
-
-**Priority: High — implement before onboarding paying clients**
+## ✅ 4. Sandbox Environment (SRI Test/Production Routing) — COMPLETED
 
 Users need to validate their integration against SRI's test environment before switching to production. The `sandbox` flag on an issuer controls which SRI endpoint is used. A separate app-level safety rail ensures staging never hits SRI production regardless of the flag.
 

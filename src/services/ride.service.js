@@ -1,3 +1,4 @@
+const config = require('../config');
 const documentModel = require('../models/document.model');
 const issuerModel = require('../models/issuer.model');
 const catalogModel = require('../models/catalog.model');
@@ -8,7 +9,7 @@ const DocumentStatus = require('../constants/document-status');
 
 async function generate(accessKeyOrDocument, issuerOverride = null) {
   const document = typeof accessKeyOrDocument === 'string'
-    ? await documentModel.findByAccessKey(accessKeyOrDocument, issuerOverride?.id || null)
+    ? await documentModel.findByAccessKey(accessKeyOrDocument, issuerOverride?.id || null, issuerOverride?.sandbox || false)
     : accessKeyOrDocument;
 
   if (!document) {
@@ -51,7 +52,7 @@ async function generate(accessKeyOrDocument, issuerOverride = null) {
     // Authorization strip
     authorizationNumber: document.authorization_number,
     authorizationDate: document.authorization_date,
-    environment: issuer.environment, // '1' = PRUEBAS, '2' = PRODUCCIÓN
+    environment: (config.appEnv !== 'production' || issuer.sandbox) ? '1' : '2', // '1' = PRUEBAS, '2' = PRODUCCIÓN
 
     // Issuer
     ruc: issuer.ruc,

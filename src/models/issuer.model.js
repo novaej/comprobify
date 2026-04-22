@@ -15,19 +15,19 @@ async function findFirst() {
   return rows[0] || null;
 }
 
-async function create({ ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry }) {
+async function create({ ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, sandbox }) {
   const { rows } = await db.query(
-    `INSERT INTO issuers (ruc, business_name, trade_name, main_address, branch_code, issue_point_code, environment, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    `INSERT INTO issuers (ruc, business_name, trade_name, main_address, branch_code, issue_point_code, environment, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry, sandbox)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING *`,
-    [ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry]
+    [ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, sandbox !== false]
   );
   return rows[0];
 }
 
 async function findAll() {
   const { rows } = await db.query(
-    `SELECT id, ruc, business_name, trade_name, environment, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active
+    `SELECT id, ruc, business_name, trade_name, environment, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active, sandbox
      FROM issuers
      ORDER BY id`
   );
