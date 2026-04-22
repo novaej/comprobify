@@ -31,7 +31,7 @@ describe('SequentialService', () => {
 
     const result = await sequentialService.getNext(1, '001', '001', '01');
     expect(result).toBe(6);
-    expect(db.setIssuerContext).toHaveBeenCalledWith(mockClient, 1);
+    expect(db.setIssuerContext).toHaveBeenCalledWith(mockClient, 1, false);
     expect(mockClient.query).toHaveBeenCalledTimes(4);
     expect(mockClient.release).toHaveBeenCalled();
   });

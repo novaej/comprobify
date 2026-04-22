@@ -23,12 +23,13 @@ async function create({ issuerId, documentType, accessKey, sequential, branchCod
   return rows[0];
 }
 
-async function findByAccessKey(accessKey, issuerId = null) {
+async function findByAccessKey(accessKey, issuerId = null, sandbox = false) {
   if (issuerId != null) {
     const { rows } = await db.queryAsIssuer(
       issuerId,
       'SELECT * FROM documents WHERE access_key = $1 AND issuer_id = $2',
-      [accessKey, issuerId]
+      [accessKey, issuerId],
+      sandbox
     );
     return rows[0] || null;
   }
@@ -42,7 +43,7 @@ async function findById(id) {
   return rows[0] || null;
 }
 
-async function updateStatus(id, status, extraFields = {}, issuerId = null) {
+async function updateStatus(id, status, extraFields = {}, issuerId = null, sandbox = false) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
       throw new Error(`updateStatus: unknown column "${col}"`);
@@ -62,17 +63,18 @@ async function updateStatus(id, status, extraFields = {}, issuerId = null) {
   const sql = `UPDATE documents SET ${sets.join(', ')} WHERE id = $1 RETURNING *`;
 
   const { rows } = issuerId != null
-    ? await db.queryAsIssuer(issuerId, sql, params)
+    ? await db.queryAsIssuer(issuerId, sql, params, sandbox)
     : await db.query(sql, params);
   return rows[0] || null;
 }
 
-async function findByIdempotencyKey(key, issuerId = null) {
+async function findByIdempotencyKey(key, issuerId = null, sandbox = false) {
   if (issuerId != null) {
     const { rows } = await db.queryAsIssuer(
       issuerId,
       'SELECT * FROM documents WHERE idempotency_key = $1',
-      [key]
+      [key],
+      sandbox
     );
     return rows[0] || null;
   }
@@ -99,7 +101,7 @@ async function updateEmailStatus(id, emailStatus) {
   return rows[0] || null;
 }
 
-async function findPendingEmails(issuerId) {
+async function findPendingEmails(issuerId, sandbox = false) {
   const { rows } = await db.queryAsIssuer(
     issuerId,
     `SELECT * FROM documents
@@ -109,12 +111,13 @@ async function findPendingEmails(issuerId) {
        AND  buyer_email IS NOT NULL
      ORDER BY created_at ASC
      LIMIT 100`,
-    [issuerId]
+    [issuerId],
+    sandbox
   );
   return rows;
 }
 
-async function findByIssuerId(issuerId, filters = {}) {
+async function findByIssuerId(issuerId, filters = {}, sandbox = false) {
   const page = Math.max(1, parseInt(filters.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(filters.limit, 10) || 10));
   const offset = (page - 1) * limit;
@@ -157,7 +160,7 @@ async function findByIssuerId(issuerId, filters = {}) {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
-    await db.setIssuerContext(client, issuerId);
+    await db.setIssuerContext(client, issuerId, sandbox);
 
     const countResult = await client.query(
       `SELECT COUNT(*) as count FROM documents WHERE ${whereClause}`,

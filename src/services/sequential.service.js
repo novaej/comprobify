@@ -12,14 +12,14 @@ const db = require('../config/database');
  * When called without a client, the function manages its own transaction
  * (used in isolation, e.g. tests or scripts).
  */
-async function getNext(issuerId, branchCode, issuePointCode, documentType, client) {
+async function getNext(issuerId, branchCode, issuePointCode, documentType, client, sandbox = false) {
   const ownTransaction = !client;
   const conn = client || await db.getClient();
 
   try {
     if (ownTransaction) {
       await conn.query('BEGIN');
-      await db.setIssuerContext(conn, issuerId);
+      await db.setIssuerContext(conn, issuerId, sandbox);
     }
 
     const { rows } = await conn.query(
@@ -73,9 +73,10 @@ async function getNext(issuerId, branchCode, issuePointCode, documentType, clien
  * @param {string} documentType
  * @param {number} startingValue - The first sequential that getNext() will return
  */
-async function initialize(issuerId, branchCode, issuePointCode, documentType, startingValue) {
+async function initialize(issuerId, branchCode, issuePointCode, documentType, startingValue, sandbox = false) {
+  const table = sandbox ? 'sandbox.sequential_numbers' : 'sequential_numbers';
   await db.query(
-    `INSERT INTO sequential_numbers (issuer_id, branch_code, issue_point_code, document_type, current_value)
+    `INSERT INTO ${table} (issuer_id, branch_code, issue_point_code, document_type, current_value)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (issuer_id, branch_code, issue_point_code, document_type)
      DO UPDATE SET current_value = $5, updated_at = NOW()`,

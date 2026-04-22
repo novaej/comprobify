@@ -11,7 +11,7 @@ const OperationType = require('../constants/operation-type');
 const { formatDocument } = require('../presenters/document.presenter');
 
 async function sendToSri(accessKey, issuer) {
-  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) {
     throw new NotFoundError('Document');
   }
@@ -19,12 +19,12 @@ async function sendToSri(accessKey, issuer) {
 
   let result;
   try {
-    result = await sriService.sendReceipt(document.signed_xml, issuer.environment);
+    result = await sriService.sendReceipt(document.signed_xml, issuer);
   } catch (err) {
     await documentEventModel.create(document.id, EventType.ERROR, document.status, null, {
       operation: 'SEND',
       message: err.message,
-    }, null, issuer.id);
+    }, null, issuer.id, issuer.sandbox);
     throw err;
   }
 
@@ -34,18 +34,19 @@ async function sendToSri(accessKey, issuer) {
     status: result.status,
     messages: result.messages,
     rawResponse: result.rawResponse,
+    sandbox: issuer.sandbox,
   });
 
   const isProcessing = result.messages.some(m => m.identifier === '70');
   const newStatus = (result.status === 'RECIBIDA' || isProcessing)
     ? DocumentStatus.RECEIVED
     : DocumentStatus.RETURNED;
-  const updated = await documentModel.updateStatus(document.id, newStatus, {}, issuer.id);
+  const updated = await documentModel.updateStatus(document.id, newStatus, {}, issuer.id, issuer.sandbox);
 
   await documentEventModel.create(document.id, EventType.SENT, document.status, newStatus, {
     sriStatus: result.status,
     ...(isProcessing && { processingRetry: true, sriIdentifier: '70' }),
-  }, null, issuer.id);
+  }, null, issuer.id, issuer.sandbox);
 
   return {
     ...formatDocument(updated),
@@ -56,7 +57,7 @@ async function sendToSri(accessKey, issuer) {
 }
 
 async function checkAuthorization(accessKey, issuer) {
-  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) {
     throw new NotFoundError('Document');
   }
@@ -64,12 +65,12 @@ async function checkAuthorization(accessKey, issuer) {
 
   let result;
   try {
-    result = await sriService.checkAuthorization(accessKey, issuer.environment);
+    result = await sriService.checkAuthorization(accessKey, issuer);
   } catch (err) {
     await documentEventModel.create(document.id, EventType.ERROR, document.status, null, {
       operation: 'AUTHORIZE',
       message: err.message,
-    }, null, issuer.id);
+    }, null, issuer.id, issuer.sandbox);
     throw err;
   }
 
@@ -79,6 +80,7 @@ async function checkAuthorization(accessKey, issuer) {
     status: result.status,
     messages: result.messages,
     rawResponse: result.rawResponse,
+    sandbox: issuer.sandbox,
   });
 
   if (result.pending) {
@@ -98,12 +100,12 @@ async function checkAuthorization(accessKey, issuer) {
       if (result.authorizationXml)    extraFields.authorization_xml    = result.authorizationXml;
     }
 
-    updated = await documentModel.updateStatus(document.id, newStatus, extraFields, issuer.id);
+    updated = await documentModel.updateStatus(document.id, newStatus, extraFields, issuer.id, issuer.sandbox);
 
     await documentEventModel.create(document.id, EventType.STATUS_CHANGED, document.status, newStatus, {
       sriStatus: result.status,
       authorizationNumber: result.authorizationNumber || null,
-    }, null, issuer.id);
+    }, null, issuer.id, issuer.sandbox);
 
     if (newStatus === DocumentStatus.AUTHORIZED) {
       emailService.sendInvoiceAuthorized(updated)
@@ -112,10 +114,10 @@ async function checkAuthorization(accessKey, issuer) {
             ? { email_status: 'SENT', email_sent_at: new Date(), email_message_id: messageId }
             : { email_status: 'SKIPPED' };
           return Promise.all([
-            documentModel.updateStatus(updated.id, updated.status, emailFields, updated.issuer_id),
+            documentModel.updateStatus(updated.id, updated.status, emailFields, updated.issuer_id, issuer.sandbox),
             documentEventModel.create(updated.id,
               sent ? EventType.EMAIL_SENT : EventType.EMAIL_FAILED,
-              null, null, { to: updated.buyer_email }, null, updated.issuer_id),
+              null, null, { to: updated.buyer_email }, null, updated.issuer_id, issuer.sandbox),
           ]);
         })
         .catch(err => {
@@ -124,9 +126,9 @@ async function checkAuthorization(accessKey, issuer) {
             documentModel.updateStatus(updated.id, updated.status, {
               email_status: 'FAILED',
               email_error: err.message,
-            }, updated.issuer_id),
+            }, updated.issuer_id, issuer.sandbox),
             documentEventModel.create(updated.id, EventType.EMAIL_FAILED,
-              null, null, { error: err.message }, null, updated.issuer_id),
+              null, null, { error: err.message }, null, updated.issuer_id, issuer.sandbox),
           ]).catch(() => {});
         });
     }

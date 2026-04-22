@@ -4,13 +4,13 @@ const NotFoundError = require('../errors/not-found-error');
 const { formatDocument } = require('../presenters/document.presenter');
 
 async function getByAccessKey(accessKey, issuer) {
-  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) return null;
   return formatDocument(document);
 }
 
 async function getXml(accessKey, issuer) {
-  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) {
     throw new NotFoundError('Document');
   }
@@ -19,11 +19,11 @@ async function getXml(accessKey, issuer) {
 }
 
 async function getEvents(accessKey, issuer) {
-  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) {
     throw new NotFoundError('Document');
   }
-  const rows = await documentEventModel.findByDocumentId(document.id, issuer.id);
+  const rows = await documentEventModel.findByDocumentId(document.id, issuer.id, issuer.sandbox);
   return rows.map(e => ({
     id: e.id,
     eventType: e.event_type,
@@ -35,7 +35,7 @@ async function getEvents(accessKey, issuer) {
 }
 
 async function list(issuer, filters = {}) {
-  const { documents, pagination } = await documentModel.findByIssuerId(issuer.id, filters);
+  const { documents, pagination } = await documentModel.findByIssuerId(issuer.id, filters, issuer.sandbox);
   const formattedDocuments = documents.map(formatDocument);
   return { data: formattedDocuments, pagination };
 }

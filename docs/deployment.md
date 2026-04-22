@@ -230,6 +230,7 @@ All variables are required unless marked optional.
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `PORT` | No | HTTP port (default `8080`) |
+| `APP_ENV` | Yes | `staging` or `production`. Controls SRI endpoint routing — staging always uses the SRI test endpoint; production uses the production endpoint for issuers with `sandbox=false`. Default: `staging`. |
 | `DB_HOST` | Yes | PostgreSQL host |
 | `DB_PORT` | No | PostgreSQL port (default `5432`) |
 | `DB_NAME` | Yes | Database name |
@@ -259,14 +260,16 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## SRI environments
 
-The SRI endpoint is resolved per-issuer at runtime from `issuers.environment`:
+The SRI endpoint is determined at runtime by combining the `APP_ENV` variable with the per-issuer `sandbox` flag:
 
-| `issuers.environment` | SRI URLs used |
-|----------------------|--------------|
-| `1` (test) | `https://celcer.sri.gob.ec/comprobantes-electronicos-ws/...` |
-| `2` (production) | `https://cel.sri.gob.ec/comprobantes-electronicos-ws/...` |
+| `APP_ENV`    | `issuers.sandbox = true` | `issuers.sandbox = false` |
+|---|---|---|
+| `staging`    | SRI test endpoint, `ambiente = 1` | SRI test endpoint, `ambiente = 1` |
+| `production` | SRI test endpoint, `ambiente = 1` | SRI production endpoint, `ambiente = 2` |
 
-**Never set `environment = '2'` on a test issuer row, or `environment = '1'` on a production issuer row.**
+- **All existing issuers default to `sandbox = true`** after migration 032. They will continue hitting the SRI test endpoint until explicitly promoted.
+- **To promote an issuer to production:** update `issuers.sandbox = false` directly in the database (no API endpoint for this yet — admin-level operation). Only do this on the `APP_ENV=production` deployment.
+- `ambiente` is derived from the same logic and is embedded in both the 49-digit access key and the XML `infoTributaria/ambiente` field — it is not read directly from `issuers.environment`.
 
 ---
 
@@ -316,12 +319,14 @@ See `GETTING_STARTED.md` for the full admin API reference.
 
 ## Production security checklist
 
+- [ ] `APP_ENV=production` set on the production deployment; `APP_ENV=staging` on staging
 - [ ] `DB_SSL=true` with a valid certificate
 - [ ] Database user is **not** a PostgreSQL superuser — Row-Level Security is bypassed unconditionally for superusers
+- [ ] App user has been granted privileges on the `sandbox` schema (see `GETTING_STARTED.md` step 7)
 - [ ] `ENCRYPTION_KEY` is unique per environment — never share between staging and production
 - [ ] `ADMIN_SECRET` is unique per environment and kept behind an internal firewall
 - [ ] `.env` file is not world-readable and never committed
-- [ ] `issuers.environment` set to `2` only on production issuer rows
+- [ ] `issuers.sandbox` set to `false` only on issuer rows that are genuinely live on the production SRI system
 - [ ] API is behind HTTPS (reverse proxy: nginx, Caddy, or load balancer TLS termination)
 - [ ] PostgreSQL not exposed on a public port
 - [ ] `xmllint` installed on the server (`apt install libxml2-utils`)

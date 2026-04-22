@@ -48,6 +48,7 @@ const mockIssuer = {
   issue_point_code: '001',
   environment: '1',
   emission_type: '1',
+  sandbox: false,
   encrypted_private_key: 'encrypted-private-key',
   certificate_pem: '-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----',
   branch_address: 'AV. TEST',
@@ -230,7 +231,7 @@ describe('DocumentQueryService', () => {
     expect(result.accessKey).toBe('2602202601171234567800110010010000002630000026311');
     expect(result.status).toBe('SIGNED');
     expect(documentModel.findByAccessKey).toHaveBeenCalledWith(
-      '2602202601171234567800110010010000002630000026311', mockIssuer.id
+      '2602202601171234567800110010010000002630000026311', mockIssuer.id, mockIssuer.sandbox
     );
   });
 
@@ -271,11 +272,11 @@ describe('DocumentTransmissionService', () => {
 
     const result = await documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer);
 
-    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RECEIVED', {}, mockIssuer.id);
+    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RECEIVED', {}, mockIssuer.id, mockIssuer.sandbox);
     expect(documentEventModel.create).toHaveBeenCalledWith(
       1, 'SENT', 'SIGNED', 'RECEIVED',
       expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
-      null, mockIssuer.id
+      null, mockIssuer.id, mockIssuer.sandbox
     );
     expect(result.status).toBe('RECEIVED');
     expect(result.sriStatus).toBe('DEVUELTA');
@@ -298,11 +299,11 @@ describe('DocumentTransmissionService', () => {
 
     const result = await documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer);
 
-    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RETURNED', {}, mockIssuer.id);
+    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RETURNED', {}, mockIssuer.id, mockIssuer.sandbox);
     expect(documentEventModel.create).toHaveBeenCalledWith(
       1, 'SENT', 'SIGNED', 'RETURNED',
       { sriStatus: 'DEVUELTA' },
-      null, mockIssuer.id
+      null, mockIssuer.id, mockIssuer.sandbox
     );
     expect(result.status).toBe('RETURNED');
     expect(result.sriStatus).toBe('DEVUELTA');

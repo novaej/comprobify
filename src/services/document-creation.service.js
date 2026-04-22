@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const moment = require('moment');
+const config = require('../config');
 const db = require('../config/database');
 const documentModel = require('../models/document.model');
 const documentLineItemModel = require('../models/document-line-item.model');
@@ -21,7 +22,7 @@ function hashPayload(body) {
 
 async function create(body, idempotencyKey = null, issuer) {
   if (idempotencyKey) {
-    const existing = await documentModel.findByIdempotencyKey(idempotencyKey, issuer.id);
+    const existing = await documentModel.findByIdempotencyKey(idempotencyKey, issuer.id, issuer.sandbox);
     if (existing) {
       if (hashPayload(body) !== existing.payload_hash) {
         throw new ConflictError(
@@ -46,7 +47,7 @@ async function create(body, idempotencyKey = null, issuer) {
   let document;
   try {
     await client.query('BEGIN');
-    await db.setIssuerContext(client, issuer.id);
+    await db.setIssuerContext(client, issuer.id, issuer.sandbox);
 
     // Get next sequential within this transaction (FOR UPDATE, not yet committed)
     const sequential = await sequentialService.getNext(
@@ -57,20 +58,25 @@ async function create(body, idempotencyKey = null, issuer) {
       client
     );
 
-    // Generate 49-digit SRI access key
+    // Derive the effective ambiente: staging always uses test (1), production only uses
+    // the production endpoint (2) when the issuer has been explicitly promoted (sandbox = false).
+    const ambiente = (config.appEnv !== 'production' || issuer.sandbox) ? '1' : '2';
+
+    // Generate 49-digit SRI access key using the effective ambiente
     const accessKey = await accessKeyService.generate({
       issueDate,
       documentType: documentType,
       ruc: issuer.ruc,
-      environment: issuer.environment,
+      environment: ambiente,
       branchCode: issuer.branch_code,
       issuePointCode: issuer.issue_point_code,
       sequential,
       emissionType: issuer.emission_type,
     });
 
-    // Build XML
-    const builder = getBuilder(documentType, issuer);
+    // Build XML with the effective ambiente embedded in infoTributaria
+    const effectiveIssuer = { ...issuer, environment: ambiente };
+    const builder = getBuilder(documentType, effectiveIssuer);
     const unsignedXml = builder.build({ ...body, issueDate }, accessKey, sequential);
 
     // Validate that payments sum matches the calculated invoice total
@@ -135,7 +141,7 @@ async function create(body, idempotencyKey = null, issuer) {
     // Two concurrent requests with the same idempotency key — the second one lost the
     // race to the UNIQUE index. Fetch the winner and return it as a replay.
     if (idempotencyKey && err.code === '23505') {
-      const winner = await documentModel.findByIdempotencyKey(idempotencyKey, issuer.id);
+      const winner = await documentModel.findByIdempotencyKey(idempotencyKey, issuer.id, issuer.sandbox);
       if (winner) return { document: formatDocument(winner), created: false };
     }
     throw err;

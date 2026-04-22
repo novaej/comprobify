@@ -7,7 +7,7 @@ const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
 
 async function retryFailedEmails(issuer) {
-  const documents = await documentModel.findPendingEmails(issuer.id);
+  const documents = await documentModel.findPendingEmails(issuer.id, issuer.sandbox);
   const result = { sent: 0, failed: 0 };
 
   for (const doc of documents) {
@@ -18,17 +18,17 @@ async function retryFailedEmails(issuer) {
         email_sent_at: new Date(),
         email_error: null,
         email_message_id: messageId,
-      }, issuer.id);
+      }, issuer.id, issuer.sandbox);
       await documentEventModel.create(doc.id, EventType.EMAIL_SENT,
-        null, null, { to: doc.buyer_email, retried: true }, null, issuer.id);
+        null, null, { to: doc.buyer_email, retried: true }, null, issuer.id, issuer.sandbox);
       result.sent++;
     } catch (err) {
       await documentModel.updateStatus(doc.id, doc.status, {
         email_status: 'FAILED',
         email_error: err.message,
-      }, issuer.id);
+      }, issuer.id, issuer.sandbox);
       await documentEventModel.create(doc.id, EventType.EMAIL_FAILED,
-        null, null, { error: err.message, retried: true }, null, issuer.id);
+        null, null, { error: err.message, retried: true }, null, issuer.id, issuer.sandbox);
       result.failed++;
     }
   }
@@ -37,7 +37,7 @@ async function retryFailedEmails(issuer) {
 }
 
 async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
-  const document = await documentModel.findByAccessKey(accessKey, issuer.id);
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) {
     throw new NotFoundError('Document');
   }
@@ -45,7 +45,7 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
     throw new AppError(`Cannot send email for document with status ${document.status}. Must be ${DocumentStatus.AUTHORIZED}.`, 400);
   }
   if (!document.buyer_email) {
-    await documentModel.updateStatus(document.id, document.status, { email_status: 'SKIPPED' }, issuer.id);
+    await documentModel.updateStatus(document.id, document.status, { email_status: 'SKIPPED' }, issuer.id, issuer.sandbox);
     return { sent: false, reason: 'no_email' };
   }
   if (document.email_status === 'SENT' && !force) {
@@ -59,17 +59,17 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
       email_sent_at: new Date(),
       email_error: null,
       email_message_id: messageId,
-    }, issuer.id);
+    }, issuer.id, issuer.sandbox);
     await documentEventModel.create(document.id, EventType.EMAIL_SENT,
-      null, null, { to: document.buyer_email, retried: true }, null, issuer.id);
+      null, null, { to: document.buyer_email, retried: true }, null, issuer.id, issuer.sandbox);
     return { sent: true };
   } catch (err) {
     await documentModel.updateStatus(document.id, document.status, {
       email_status: 'FAILED',
       email_error: err.message,
-    }, issuer.id);
+    }, issuer.id, issuer.sandbox);
     await documentEventModel.create(document.id, EventType.EMAIL_FAILED,
-      null, null, { error: err.message, retried: true }, null, issuer.id);
+      null, null, { error: err.message, retried: true }, null, issuer.id, issuer.sandbox);
     throw err;
   }
 }

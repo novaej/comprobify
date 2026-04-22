@@ -7,6 +7,7 @@ const validateConfig = require('../../../src/config/validate');
 function validConfig(overrides = {}) {
   return {
     port: 8080,
+    appEnv: 'staging',
     docsBaseUrl: 'https://example.com',
     encryptionKey: 'a'.repeat(64),
     adminSecret: 'secret123',
@@ -38,6 +39,28 @@ function validConfig(overrides = {}) {
 }
 
 describe('validateConfig', () => {
+  describe('APP_ENV validation', () => {
+    test('does not throw when APP_ENV is "staging"', () => {
+      expect(() => validateConfig(validConfig({ appEnv: 'staging' }))).not.toThrow();
+    });
+
+    test('does not throw when APP_ENV is "production"', () => {
+      expect(() => validateConfig(validConfig({ appEnv: 'production' }))).not.toThrow();
+    });
+
+    test('throws when APP_ENV is an invalid value', () => {
+      expect(() => validateConfig(validConfig({ appEnv: 'prod' }))).toThrow(
+        'APP_ENV must be "staging" or "production"'
+      );
+    });
+
+    test('throws when APP_ENV is empty string', () => {
+      expect(() => validateConfig(validConfig({ appEnv: '' }))).toThrow(
+        'APP_ENV must be "staging" or "production"'
+      );
+    });
+  });
+
   describe('always-required variables', () => {
     test('throws listing ENCRYPTION_KEY when it is missing', () => {
       const config = validConfig({ encryptionKey: '' });
