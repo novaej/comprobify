@@ -1,6 +1,5 @@
 {
   "info": {
-    "_postman_id": "a3f8c2d1-7e4b-4a9f-b6c5-2d1e8f3a0b7c",
     "name": "Comprobify API",
     "description": "Electronic invoice API for Ecuador's SRI. Set `base_url`, `api_key`, and `admin_secret` in the collection variables before running requests. After creating an invoice, copy the returned `accessKey` into the `access_key` variable to use it across subsequent requests.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -27,19 +26,19 @@
     {
       "key": "access_key",
       "value": "",
-      "description": "49-digit SRI access key \u2014 copy from Create Invoice response",
+      "description": "49-digit SRI access key — copy from Create Invoice response",
       "type": "string"
     },
     {
       "key": "issuer_id",
       "value": "",
-      "description": "Issuer ID \u2014 copy from Create Issuer response",
+      "description": "Issuer ID — copy from Create Issuer response",
       "type": "string"
     },
     {
       "key": "api_key_id",
       "value": "",
-      "description": "API key ID \u2014 copy from Create API Key response (used for revocation)",
+      "description": "API key ID — copy from Create API Key response (used for revocation)",
       "type": "string"
     }
   ],
@@ -70,7 +69,7 @@
               {
                 "key": "Idempotency-Key",
                 "value": "{{$guid}}",
-                "description": "Optional \u2014 unique per intended invoice. Reuse on retries to avoid duplicates."
+                "description": "Optional — unique per intended invoice. Reuse on retries to avoid duplicates."
               }
             ],
             "url": {
@@ -165,7 +164,7 @@
                 "{{access_key}}"
               ]
             },
-            "description": "Retrieves document metadata by access key. Does not call the SRI \u2014 use Check Authorization for status updates."
+            "description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates."
           }
         },
         {
@@ -294,7 +293,7 @@
                 "events"
               ]
             },
-            "description": "Returns the full audit trail for the document \u2014 every lifecycle transition, SRI call, and email event."
+            "description": "Returns the full audit trail for the document — every lifecycle transition, SRI call, and email event."
           }
         },
         {
@@ -630,7 +629,7 @@
                 }
               }
             },
-            "description": "Generates a new Bearer API key for an issuer. The plaintext key is returned only once \u2014 store it immediately.\n\nCopy the returned key value into the `api_key` collection variable."
+            "description": "Generates a new Bearer API key for an issuer. The plaintext key is returned only once — store it immediately.\n\nCopy the returned key value into the `api_key` collection variable."
           }
         },
         {
