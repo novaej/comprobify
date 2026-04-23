@@ -26,33 +26,58 @@ cd comprobify
 
 ## 2. Database setup
 
-### Option A — Existing PostgreSQL (local install)
+> **RLS requirement:** the application user must **not** be a PostgreSQL superuser — superusers bypass Row-Level Security unconditionally. Always use a dedicated non-superuser role (e.g. `sri_app`).
+
+### Option A — Local PostgreSQL install (native, not Docker)
+
+> These `psql` commands connect via Unix socket to a locally-installed PostgreSQL. **If your PostgreSQL runs in Docker, use Option B instead** — `psql -U postgres` without `-h` will connect to the local socket (which doesn't exist in Docker) and your grants will silently target the wrong server.
 
 ```bash
+# Create the database and the application role
 psql -U postgres -c "CREATE DATABASE sri_invoicing;"
+psql -U postgres -c "CREATE ROLE sri_app LOGIN PASSWORD 'changeme';"
+
+# Grant database access
+psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE sri_invoicing TO sri_app;"
+
+# Grant schema access — required on PostgreSQL 15+ where the public schema
+# no longer has default CREATE/USAGE granted to all users
+psql -U postgres -d sri_invoicing -c "GRANT ALL ON SCHEMA public TO PUBLIC;"
+psql -U postgres -d sri_invoicing -c "GRANT ALL ON SCHEMA public TO sri_app;"
+
+# Grant access to objects created by superuser migrations
+psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO sri_app;"
+psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO sri_app;"
 ```
 
-> **Row-Level Security requirement:** the database user that the application connects as must **not** be a PostgreSQL superuser. Superusers bypass Row-Level Security unconditionally. For local development, create a dedicated non-superuser role:
->
-> ```bash
-> psql -U postgres -c "CREATE ROLE sri_app LOGIN PASSWORD 'changeme';"
-> psql -U postgres -c "GRANT ALL PRIVILEGES ON DATABASE sri_invoicing TO sri_app;"
-> psql -U postgres -d sri_invoicing -c "GRANT ALL ON SCHEMA public TO sri_app;"
-> psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO sri_app;"
-> psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO sri_app;"
-> ```
->
-> Then set `DB_USER=sri_app` and `DB_PASSWORD=changeme` in `.env`. Run `npm run migrate` as a superuser (or grant the `sri_app` role enough privileges to create tables) by connecting once with a superuser account for the migration step, then switch the app config to `sri_app`.
+Set `DB_USER=sri_app` and `DB_PASSWORD=changeme` in `.env`.
 
 ### Option B — Docker
 
 ```bash
-docker run --name sri-postgres \
+# Start the container
+docker run --name postgres16 \
   -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=sri_invoicing \
   -p 5432:5432 \
   -d postgres:16
+
+# Wait a moment for Postgres to initialise, then create the application role.
+# Role creation is run as a separate command so that if the role already exists
+# and errors, it does not abort the grant block below.
+docker exec -it postgres16 psql -U postgres -c "CREATE ROLE sri_app LOGIN PASSWORD 'changeme';"
+
+# Grant all required privileges:
+docker exec -it postgres16 psql -U postgres -d sri_invoicing -c "
+  GRANT ALL PRIVILEGES ON DATABASE sri_invoicing TO sri_app;
+  GRANT ALL ON SCHEMA public TO PUBLIC;
+  GRANT ALL ON SCHEMA public TO sri_app;
+  ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO sri_app;
+  ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO sri_app;
+"
 ```
+
+Set `DB_USER=sri_app` and `DB_PASSWORD=changeme` in `.env`.
 
 ---
 
@@ -139,11 +164,21 @@ npm run migrate
 
 This applies all 33 migrations, creating tables: `issuers`, `api_keys`, `documents`, `sequential_numbers`, `sri_responses`, `document_line_items`, `document_events`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`). It also installs two PostgreSQL triggers for document state machine and immutability enforcement, enables Row-Level Security on all tenant-scoped tables, and creates the `sandbox` schema (an identical copy of the tenant-scoped tables for test documents). Already-applied migrations are skipped automatically.
 
-> **Grant sandbox schema access after migration:** the `sandbox` schema is created by migration 033. Grant the app user the same privileges on it:
+> **After migrating — grant sandbox schema access:** migration 033 creates the `sandbox` schema. If the migration runner connects as `sri_app` (recommended), `sri_app` owns the schema and no extra grants are needed. If you ran migrations as a superuser (`postgres`), grant access manually:
+>
+> **Local:**
 > ```bash
 > psql -U postgres -d sri_invoicing -c "GRANT ALL ON SCHEMA sandbox TO sri_app;"
 > psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON TABLES TO sri_app;"
 > psql -U postgres -d sri_invoicing -c "ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON SEQUENCES TO sri_app;"
+> ```
+> **Docker:**
+> ```bash
+> docker exec -it postgres16 psql -U postgres -d sri_invoicing -c "
+>   GRANT ALL ON SCHEMA sandbox TO sri_app;
+>   ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON TABLES TO sri_app;
+>   ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON SEQUENCES TO sri_app;
+> "
 > ```
 
 ---
@@ -440,7 +475,29 @@ curl -s -X POST http://localhost:8080/api/admin/issuers/<id>/api-keys \
 **`Missing required environment variable(s): ENCRYPTION_KEY, ADMIN_SECRET, ...`**
 The server validates critical config on startup. If any required env vars are missing or malformed, the server exits immediately before starting. Fix the values in `.env` and restart.
 
-**`Migration X failed`**
+**`Migration error: no schema has been selected to create in`**
+The `public` schema is missing or the app user has no `USAGE` privilege on it. This happens on PostgreSQL 15+ after a `DROP SCHEMA public CASCADE` that was not followed by the correct grants. Fix it by running the grant commands as a superuser (see step 2 above), then re-run `npm run migrate`.
+
+**`Migration error: permission denied for schema public`**
+The app user exists but is missing `CREATE` on the `public` schema. This often happens when role creation and grants are combined in one psql `-c` block — if `CREATE ROLE` fails (role already exists), psql aborts before the grants run.
+
+Check what privileges the app user actually has:
+```bash
+# Local
+psql -U postgres -d sri_invoicing -c "SELECT has_schema_privilege('sri_app', 'public', 'USAGE') AS usage, has_schema_privilege('sri_app', 'public', 'CREATE') AS create;"
+# Docker
+docker exec -it postgres16 psql -U postgres -d sri_invoicing -c "SELECT has_schema_privilege('sri_app', 'public', 'USAGE') AS usage, has_schema_privilege('sri_app', 'public', 'CREATE') AS create;"
+```
+
+Both columns must be `t`. If `create` is `f`, run the missing grant:
+```bash
+# Local
+psql -U postgres -d sri_invoicing -c "GRANT ALL ON SCHEMA public TO sri_app;"
+# Docker
+docker exec -it postgres16 psql -U postgres -d sri_invoicing -c "GRANT ALL ON SCHEMA public TO sri_app;"
+```
+
+**`Migration X failed: ...`**
 Check that the database exists and credentials in `.env` are correct. Re-run `npm run migrate` — already-applied migrations are skipped.
 
 **`xmllint: command not found`**

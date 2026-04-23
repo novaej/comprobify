@@ -35,6 +35,12 @@ async function reset() {
     await client.query('DROP SCHEMA IF EXISTS sandbox CASCADE');
     await client.query('DROP SCHEMA public CASCADE');
     await client.query('CREATE SCHEMA public');
+    // Restore the pre-PostgreSQL-15 default grants so that the app user
+    // retains USAGE and CREATE on the freshly recreated public schema.
+    // Without this, PostgreSQL 15+ leaves the schema with no public grants,
+    // which causes "no schema has been selected to create in" on the next
+    // connection that tries to create objects there.
+    await client.query('GRANT ALL ON SCHEMA public TO PUBLIC');
     console.log('Schemas recreated.');
   } finally {
     client.release();

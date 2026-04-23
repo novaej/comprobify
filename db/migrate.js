@@ -17,6 +17,12 @@ const pool = new Pool({
 async function migrate() {
   const client = await pool.connect();
   try {
+    // Pin the search path so the migrations bookkeeping table is always
+    // created in and queried from the public schema, regardless of how the
+    // connecting role's default search_path is configured (e.g. after a
+    // DROP/CREATE of the public schema in PostgreSQL 15+).
+    await client.query('SET search_path TO public');
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS migrations (
         id SERIAL PRIMARY KEY,
