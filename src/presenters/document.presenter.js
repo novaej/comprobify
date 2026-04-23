@@ -8,6 +8,12 @@ function formatDocument(doc) {
     status: doc.status,
     issueDate: moment(doc.issue_date).format('DD/MM/YYYY'),
     total: doc.total,
+    buyer: {
+      id: doc.buyer_id,
+      idType: doc.buyer_id_type,
+      name: doc.buyer_name,
+      email: doc.buyer_email,
+    },
     ...(doc.authorization_number && { authorizationNumber: doc.authorization_number }),
     ...(doc.authorization_date && { authorizationDate: doc.authorization_date }),
     email: {
