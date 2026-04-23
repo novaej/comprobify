@@ -394,6 +394,19 @@
                   "description": "Optional trade name"
                 },
                 {
+                  "key": "mainAddress",
+                  "value": "Av. Amazonas 123, Quito",
+                  "type": "text",
+                  "description": "Main (fiscal) address"
+                },
+                {
+                  "key": "branchAddress",
+                  "value": "Av. Amazonas 123, Quito",
+                  "type": "text",
+                  "description": "Branch address (optional — defaults to mainAddress if omitted)",
+                  "disabled": true
+                },
+                {
                   "key": "branchCode",
                   "value": "001",
                   "type": "text",
@@ -406,21 +419,29 @@
                   "description": "3-digit issue point code"
                 },
                 {
-                  "key": "address",
-                  "value": "Av. Amazonas 123, Quito",
-                  "type": "text"
-                },
-                {
                   "key": "environment",
                   "value": "1",
                   "type": "text",
-                  "description": "1 = test (celcer), 2 = production (cel)"
+                  "description": "1 = test, 2 = production"
                 },
                 {
                   "key": "emissionType",
                   "value": "1",
                   "type": "text",
                   "description": "Always 1 (normal emission)"
+                },
+                {
+                  "key": "requiredAccounting",
+                  "value": "false",
+                  "type": "text",
+                  "description": "true if the issuer is required to keep accounting (obligado a llevar contabilidad)"
+                },
+                {
+                  "key": "specialTaxpayer",
+                  "value": "",
+                  "type": "text",
+                  "description": "Special taxpayer resolution number (optional)",
+                  "disabled": true
                 },
                 {
                   "key": "certPassword",
@@ -438,6 +459,13 @@
                   "value": "true",
                   "description": "true = SRI test endpoint (default, safe). Set false only on production issuers when APP_ENV=production.",
                   "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "initialSequentials",
+                  "value": "[{\"documentType\":\"01\",\"sequential\":1}]",
+                  "type": "text",
+                  "description": "Optional — pre-seed sequential counters for issuers migrating from another system. Each entry sets the NEXT sequential the system will issue. Example: [{\"documentType\":\"01\",\"sequential\":500}] means the first invoice will be 000000500.",
                   "disabled": true
                 }
               ]
@@ -480,10 +508,29 @@
                   "type": "text"
                 },
                 {
+                  "key": "tradeName",
+                  "value": "Acme",
+                  "type": "text",
+                  "description": "Optional trade name"
+                },
+                {
+                  "key": "mainAddress",
+                  "value": "Av. Naciones Unidas 456, Quito",
+                  "type": "text",
+                  "description": "Main (fiscal) address"
+                },
+                {
+                  "key": "branchAddress",
+                  "value": "Av. Naciones Unidas 456, Quito",
+                  "type": "text",
+                  "description": "Branch address (optional — defaults to mainAddress if omitted)",
+                  "disabled": true
+                },
+                {
                   "key": "branchCode",
                   "value": "002",
                   "type": "text",
-                  "description": "Different branch code"
+                  "description": "Different branch code from the source issuer"
                 },
                 {
                   "key": "issuePointCode",
@@ -491,14 +538,10 @@
                   "type": "text"
                 },
                 {
-                  "key": "address",
-                  "value": "Av. Naciones Unidas 456, Quito",
-                  "type": "text"
-                },
-                {
                   "key": "environment",
                   "value": "1",
-                  "type": "text"
+                  "type": "text",
+                  "description": "1 = test, 2 = production"
                 },
                 {
                   "key": "emissionType",
@@ -506,10 +549,30 @@
                   "type": "text"
                 },
                 {
+                  "key": "requiredAccounting",
+                  "value": "false",
+                  "type": "text",
+                  "description": "true if the issuer is required to keep accounting"
+                },
+                {
+                  "key": "specialTaxpayer",
+                  "value": "",
+                  "type": "text",
+                  "description": "Special taxpayer resolution number (optional)",
+                  "disabled": true
+                },
+                {
                   "key": "sandbox",
                   "value": "true",
                   "description": "true = SRI test endpoint (default, safe). Set false only on production issuers when APP_ENV=production.",
                   "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "initialSequentials",
+                  "value": "[{\"documentType\":\"01\",\"sequential\":1}]",
+                  "type": "text",
+                  "description": "Optional — pre-seed sequential counters. Example: [{\"documentType\":\"01\",\"sequential\":500}]",
                   "disabled": true
                 }
               ]
