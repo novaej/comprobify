@@ -32,6 +32,7 @@ All document endpoints require `Authorization: Bearer <api-key>`. Admin endpoint
 |---|---|---|
 | `POST` | `/api/admin/issuers` | Create issuer with P12 cert or branch copy |
 | `GET` | `/api/admin/issuers` | List all issuers |
+| `POST` | `/api/admin/issuers/:id/promote` | Promote issuer from sandbox to production (one-way) |
 | `POST` | `/api/admin/issuers/:id/api-keys` | Create API key for an issuer |
 | `DELETE` | `/api/admin/api-keys/:id` | Revoke an API key |
 

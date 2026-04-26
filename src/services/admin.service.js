@@ -162,6 +162,7 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     issuerId: newIssuer.id,
     keyHash: sha256Hex(plainToken),
     label: 'Initial key',
+    environment: newIssuer.sandbox ? 'sandbox' : 'production',
   });
 
   return {
@@ -176,6 +177,10 @@ async function listIssuers() {
 }
 
 async function createApiKey(issuerId, label, revokeExisting = false) {
+  const issuer = await issuerModel.findById(issuerId);
+  if (!issuer) {
+    throw new AppError('Issuer not found', 404);
+  }
   if (revokeExisting) {
     await apiKeyModel.revokeAllByIssuerId(issuerId);
   }
@@ -184,8 +189,24 @@ async function createApiKey(issuerId, label, revokeExisting = false) {
     issuerId,
     keyHash: sha256Hex(plainToken),
     label: label || null,
+    environment: issuer.sandbox ? 'sandbox' : 'production',
   });
   return plainToken;
+}
+
+async function promoteIssuer(id) {
+  const issuer = await issuerModel.findById(id);
+  if (!issuer) {
+    throw new AppError('Issuer not found', 404);
+  }
+  if (!issuer.sandbox) {
+    throw new ConflictError('Issuer is already in production');
+  }
+
+  await issuerModel.promote(id);
+  await apiKeyModel.revokeAllByIssuerIdAndEnvironment(id, 'sandbox');
+
+  return formatIssuer({ ...issuer, sandbox: false });
 }
 
 async function revokeApiKey(id) {
@@ -212,4 +233,4 @@ function formatIssuer(row) {
   };
 }
 
-module.exports = { createIssuer, listIssuers, createApiKey, revokeApiKey };
+module.exports = { createIssuer, listIssuers, createApiKey, revokeApiKey, promoteIssuer };

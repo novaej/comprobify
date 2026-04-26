@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–033
+db/migrations/     SQL migration files 001–034
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -68,7 +68,9 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the admin service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. See `POST /api/admin/issuers`.
 
-**Admin API:** `ADMIN_SECRET` env var (64-char hex) protects all `/api/admin/*` routes via `src/middleware/authenticate-admin.js` (constant-time comparison). Admin routes: create issuer (P12 upload or branch copy), list issuers, create API key, revoke API key.
+**Admin API:** `ADMIN_SECRET` env var (64-char hex) protects all `/api/admin/*` routes via `src/middleware/authenticate-admin.js` (constant-time comparison). Admin routes: create issuer (P12 upload or branch copy), list issuers, promote issuer sandbox→production (`POST /api/admin/issuers/:id/promote`, one-way, no body), create API key, revoke API key.
+
+**API key environment scoping:** every `api_keys` row has an `environment` column (`'sandbox'` or `'production'`) stamped at creation from the issuer's current `sandbox` flag. The `authenticate` middleware rejects a key whose `environment` no longer matches the issuer's current state — this fires automatically after `PATCH /api/admin/issuers/:id` promotes the issuer. Promotion is one-way: attempting to set `sandbox: true` on a production issuer returns 400; calling PATCH on an already-production issuer returns 409. All sandbox keys are revoked atomically in the same service call that flips `issuers.sandbox = false`.
 
 **XSD validation:** `xmllint` CLI via `execFileSync` against `assets/factura_V2.1.0.xsd`. Must be pre-validation (before signing). `xmllint` must be installed on the server.
 

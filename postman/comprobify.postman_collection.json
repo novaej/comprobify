@@ -26,19 +26,19 @@
     {
       "key": "access_key",
       "value": "",
-      "description": "49-digit SRI access key — copy from Create Invoice response",
+      "description": "49-digit SRI access key \u2014 copy from Create Invoice response",
       "type": "string"
     },
     {
       "key": "issuer_id",
       "value": "",
-      "description": "Issuer ID — copy from Create Issuer response",
+      "description": "Issuer ID \u2014 copy from Create Issuer response",
       "type": "string"
     },
     {
       "key": "api_key_id",
       "value": "",
-      "description": "API key ID — copy from Create API Key response (used for revocation)",
+      "description": "API key ID \u2014 copy from Create API Key response (used for revocation)",
       "type": "string"
     }
   ],
@@ -69,7 +69,7 @@
               {
                 "key": "Idempotency-Key",
                 "value": "{{$guid}}",
-                "description": "Optional — unique per intended invoice. Reuse on retries to avoid duplicates."
+                "description": "Optional \u2014 unique per intended invoice. Reuse on retries to avoid duplicates."
               }
             ],
             "url": {
@@ -164,7 +164,7 @@
                 "{{access_key}}"
               ]
             },
-            "description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates."
+            "description": "Retrieves document metadata by access key. Does not call the SRI \u2014 use Check Authorization for status updates."
           }
         },
         {
@@ -293,7 +293,7 @@
                 "events"
               ]
             },
-            "description": "Returns the full audit trail for the document — every lifecycle transition, SRI call, and email event."
+            "description": "Returns the full audit trail for the document \u2014 every lifecycle transition, SRI call, and email event."
           }
         },
         {
@@ -402,7 +402,7 @@
                   "key": "branchAddress",
                   "value": "Av. Amazonas 123, Quito",
                   "type": "text",
-                  "description": "Branch address (optional — defaults to mainAddress if omitted)",
+                  "description": "Branch address (optional \u2014 defaults to mainAddress if omitted)",
                   "disabled": true
                 },
                 {
@@ -464,7 +464,7 @@
                   "key": "initialSequentials",
                   "value": "[{\"documentType\":\"01\",\"sequential\":1}]",
                   "type": "text",
-                  "description": "Optional — pre-seed sequential counters for issuers migrating from another system. Each entry sets the NEXT sequential the system will issue. Example: [{\"documentType\":\"01\",\"sequential\":500}] means the first invoice will be 000000500.",
+                  "description": "Optional \u2014 pre-seed sequential counters for issuers migrating from another system. Each entry sets the NEXT sequential the system will issue. Example: [{\"documentType\":\"01\",\"sequential\":500}] means the first invoice will be 000000500.",
                   "disabled": true
                 }
               ]
@@ -522,7 +522,7 @@
                   "key": "branchAddress",
                   "value": "Av. Naciones Unidas 456, Quito",
                   "type": "text",
-                  "description": "Branch address (optional — defaults to mainAddress if omitted)",
+                  "description": "Branch address (optional \u2014 defaults to mainAddress if omitted)",
                   "disabled": true
                 },
                 {
@@ -571,7 +571,7 @@
                   "key": "initialSequentials",
                   "value": "[{\"documentType\":\"01\",\"sequential\":1}]",
                   "type": "text",
-                  "description": "Optional — pre-seed sequential counters. Example: [{\"documentType\":\"01\",\"sequential\":500}]",
+                  "description": "Optional \u2014 pre-seed sequential counters. Example: [{\"documentType\":\"01\",\"sequential\":500}]",
                   "disabled": true
                 }
               ]
@@ -595,6 +595,32 @@
               ]
             },
             "description": "Returns all active issuers."
+          }
+        },
+        {
+          "name": "Promote Issuer to Production",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/issuers/{{issuer_id}}/promote",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "issuers",
+                "{{issuer_id}}",
+                "promote"
+              ]
+            },
+            "description": "Promotes an issuer from sandbox to production. This is one-way \u2014 there is no going back.\n\nAll existing sandbox API keys for this issuer are revoked automatically. Create a new key after promotion to start sending production invoices."
           }
         },
         {
@@ -629,7 +655,7 @@
                 }
               }
             },
-            "description": "Generates a new Bearer API key for an issuer. The plaintext key is returned only once — store it immediately.\n\nCopy the returned key value into the `api_key` collection variable."
+            "description": "Generates a new Bearer API key for an issuer. The plaintext key is returned only once \u2014 store it immediately.\n\nCopy the returned key value into the `api_key` collection variable."
           }
         },
         {
