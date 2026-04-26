@@ -32,6 +32,11 @@ async function register(fields, p12Buffer, p12Password) {
     throw new ConflictError(`An account with email ${fields.email} already exists`);
   }
 
+  const existingIssuer = await issuerModel.findByRuc(fields.ruc);
+  if (existingIssuer) {
+    throw new ConflictError(`RUC ${fields.ruc} is already registered`);
+  }
+
   const parsed = certificateService.parseCertificate(p12Buffer, p12Password || '');
   const encryptedPrivateKey = cryptoService.encrypt(parsed.privateKeyPem);
 

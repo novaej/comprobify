@@ -47,4 +47,12 @@ const adminLimiter = rateLimit({
   handler,
 });
 
-module.exports = { writeLimiter, readLimiter, adminLimiter };
+// Strict IP-based limiter for registration: 5 req/hour
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  handler,
+});
+
+module.exports = { writeLimiter, readLimiter, adminLimiter, registrationLimiter };
