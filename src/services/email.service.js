@@ -1,7 +1,8 @@
 const issuerModel = require('../models/issuer.model');
 const rideService = require('./ride.service');
 const emailFactory = require('./email');
-const template = require('./email/templates/invoice-authorized');
+const invoiceAuthorizedTemplate = require('./email/templates/invoice-authorized');
+const verifyEmailTemplate = require('./email/templates/verify-email');
 const config = require('../config');
 
 /**
@@ -21,7 +22,7 @@ async function sendInvoiceAuthorized(document) {
   const ridePdf  = await rideService.generate(document);
   const xmlBytes = Buffer.from(document.authorization_xml, 'utf8');
 
-  const { subject, text, html } = template.render(document, issuer);
+  const { subject, text, html } = invoiceAuthorizedTemplate.render(document, issuer);
   const provider = emailFactory.getProvider();
 
   const from = `${issuer.business_name} via Comprobify <${config.email.from}>`;
@@ -41,4 +42,19 @@ async function sendInvoiceAuthorized(document) {
   return { sent: true, messageId };
 }
 
-module.exports = { sendInvoiceAuthorized };
+async function sendVerificationEmail(email, token) {
+  const verificationUrl = `${config.appBaseUrl}/api/verify-email?token=${token}`;
+  const { subject, text, html } = verifyEmailTemplate.render(verificationUrl);
+  const provider = emailFactory.getProvider();
+
+  await provider.send({
+    from: `Comprobify <${config.email.from}>`,
+    to: email,
+    subject,
+    text,
+    html,
+    attachments: [],
+  });
+}
+
+module.exports = { sendInvoiceAuthorized, sendVerificationEmail };

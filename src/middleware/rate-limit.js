@@ -1,37 +1,58 @@
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
 const config = require('../config');
+const TIERS = require('../constants/subscription-tiers');
 
-const createRateLimiter = (maxRequests) => rateLimit({
+const handler = (req, res) => {
+  res.status(429).json({
+    type: 'https://example.com/errors/too-many-requests',
+    title: 'Too Many Requests',
+    status: 429,
+    code: 'TOO_MANY_REQUESTS',
+    detail: 'Rate limit exceeded. See Retry-After header.',
+    instance: req.originalUrl,
+  });
+};
+
+const keyGenerator = (req) => req.keyHash || ipKeyGenerator(req);
+
+// Tier-aware limiters for document endpoints
+const writeLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
-  max: maxRequests,
-  keyGenerator: (req) => {
-    // Use keyHash as the key for rate limiting, fallback to IP with proper IPv6 handling
-    if (req.keyHash) {
-      return req.keyHash;
-    }
-    return ipKeyGenerator(req);
+  max: (req) => {
+    const tier = TIERS[req.tenant?.subscriptionTier];
+    return tier ? tier.writeRateLimit : TIERS.FREE.writeRateLimit;
   },
-  handler: (req, res) => {
-    res.status(429).json({
-      type: 'https://example.com/errors/too-many-requests',
-      title: 'Too Many Requests',
-      status: 429,
-      code: 'TOO_MANY_REQUESTS',
-      detail: 'Rate limit exceeded for this API key',
-      instance: req.originalUrl,
-    });
-  },
-  skip: (req) => {
-    // Skip rate limiting if no keyHash (e.g., webhook endpoints)
-    return !req.keyHash;
-  },
+  keyGenerator,
+  handler,
+  skip: (req) => !req.keyHash,
 });
 
-// Rate limiter for write endpoints: 60 req/min per key
-const writeLimiter = createRateLimiter(60);
+const readLimiter = rateLimit({
+  windowMs: config.rateLimit.windowMs,
+  max: (req) => {
+    const tier = TIERS[req.tenant?.subscriptionTier];
+    return tier ? tier.readRateLimit : TIERS.FREE.readRateLimit;
+  },
+  keyGenerator,
+  handler,
+  skip: (req) => !req.keyHash,
+});
 
-// Rate limiter for read endpoints: 300 req/min per key
-const readLimiter = createRateLimiter(300);
+// Fixed IP-based limiter for admin endpoints: 20 req/min
+const adminLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  handler,
+});
 
-module.exports = { writeLimiter, readLimiter };
+// Strict IP-based limiter for registration: 5 req/hour
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyGenerator: (req) => ipKeyGenerator(req),
+  handler,
+});
+
+module.exports = { writeLimiter, readLimiter, adminLimiter, registrationLimiter };

@@ -1,110 +1,122 @@
 const crypto = require('crypto');
-const forge = require('node-forge');
+const tenantModel = require('../models/tenant.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
+const certificateService = require('./certificate.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
-
-
-/**
- * Parses a P12 buffer and extracts the signing key and certificate.
- * Handles both Ecuadorian CAs (Banco Central, Security Data).
- *
- * @param {Buffer} p12Buffer  - Raw bytes of the .p12 file
- * @param {string} p12Password - Plaintext password for the .p12 file
- * @returns {{ privateKeyPem: string, certPem: string, certExpiry: Date, certFingerprint: string }}
- */
-function parseCertificate(p12Buffer, p12Password) {
-  const p12Der = p12Buffer.toString('binary');
-  const p12Asn1 = forge.asn1.fromDer(p12Der);
-  const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, p12Password);
-
-  const pkcs8Bags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
-  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
-  const certBag = certBags[forge.oids.certBag];
-  const friendlyName = certBag[1].attributes.friendlyName[0];
-
-  // Select end-entity cert (most extensions)
-  const cert = certBag.reduce((prev, curr) =>
-    curr.cert.extensions.length > prev.cert.extensions.length ? curr : prev
-  ).cert;
-
-  // Locate private key — CA-specific bag layout
-  let pkcs8;
-  if (/BANCO CENTRAL/i.test(friendlyName)) {
-    const keys = pkcs8Bags[forge.oids.pkcs8ShroudedKeyBag];
-    for (let i = 0; i < keys.length; i++) {
-      if (/Signing Key/i.test(keys[i].attributes.friendlyName[0])) {
-        pkcs8 = keys[i];
-      }
-    }
-  }
-
-  if (/SECURITY DATA/i.test(friendlyName)) {
-    pkcs8 = pkcs8Bags[forge.oids.pkcs8ShroudedKeyBag][0];
-  }
-
-  if (!pkcs8) {
-    throw new AppError('Could not locate signing key in P12 certificate', 400);
-  }
-
-  // Validate certificate validity period
-  const now = new Date();
-  if (now < cert.validity.notBefore || now > cert.validity.notAfter) {
-    throw new AppError('Certificate has expired', 400);
-  }
-
-  // Extract private key PEM
-  const privateKey = pkcs8.key ?? forge.pki.privateKeyFromAsn1(pkcs8.asn1);
-  const privateKeyPem = forge.pki.privateKeyToPem(privateKey);
-
-  // Extract certificate PEM
-  const certPem = forge.pki.certificateToPem(cert);
-
-  // Compute SHA-256 fingerprint of DER-encoded cert
-  const certAsn1 = forge.pki.certificateToAsn1(cert);
-  const certDer = forge.asn1.toDer(certAsn1).getBytes();
-  const md = forge.md.sha256.create();
-  md.update(certDer);
-  const certFingerprint = md.digest().toHex();
-
-  return {
-    privateKeyPem,
-    certPem,
-    certExpiry: cert.validity.notAfter,
-    certFingerprint,
-  };
-}
+const TIERS = require('../constants/subscription-tiers');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-/**
- * Creates a new issuer row and an initial API key.
- *
- * @param {object} fields - Issuer fields from the request body
- * @param {Buffer|undefined} p12Buffer - P12 file buffer (new cert path)
- * @param {string|undefined} p12Password - Plaintext P12 password
- * @param {number|undefined} sourceIssuerId - Copy cert from this issuer (branch path)
- * @returns {{ issuer: object, apiKey: string }}
- */
+function formatTenant(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    subscriptionTier: row.subscription_tier,
+    status: row.status,
+    invoiceQuota: row.invoice_quota,
+    invoiceCount: row.invoice_count,
+    createdAt: row.created_at,
+  };
+}
+
+function formatIssuer(row) {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    ruc: row.ruc,
+    businessName: row.business_name,
+    tradeName: row.trade_name,
+    environment: row.environment,
+    branchCode: row.branch_code,
+    issuePointCode: row.issue_point_code,
+    certFingerprint: row.cert_fingerprint,
+    certExpiry: row.cert_expiry,
+    sandbox: row.sandbox,
+    active: row.active,
+  };
+}
+
+// --- Tenant management ---
+
+async function createTenant(fields) {
+  const existing = await tenantModel.findByEmail(fields.email);
+  if (existing) {
+    throw new ConflictError(`A tenant with email ${fields.email} already exists`);
+  }
+  const tier = fields.subscriptionTier || 'FREE';
+  const row = await tenantModel.create({
+    email: fields.email,
+    subscriptionTier: tier,
+    status: 'ACTIVE',
+    invoiceQuota: TIERS[tier]?.invoiceQuota ?? 100,
+  });
+  return formatTenant(row);
+}
+
+async function listTenants() {
+  const rows = await tenantModel.findAll();
+  return rows.map(formatTenant);
+}
+
+async function updateTenantTier(id, tier) {
+  if (!TIERS[tier]) {
+    throw new AppError(`Unknown tier: ${tier}`, 400);
+  }
+  const row = await tenantModel.updateTier(id, tier, TIERS[tier].invoiceQuota);
+  if (!row) throw new AppError('Tenant not found', 404);
+  return formatTenant(row);
+}
+
+async function updateTenantStatus(id, status) {
+  const allowed = ['ACTIVE', 'SUSPENDED', 'PENDING_VERIFICATION'];
+  if (!allowed.includes(status)) {
+    throw new AppError(`Invalid status: ${status}`, 400);
+  }
+  const row = await tenantModel.updateStatus(id, status);
+  if (!row) throw new AppError('Tenant not found', 404);
+  return formatTenant(row);
+}
+
+async function verifyTenant(id) {
+  const row = await tenantModel.activate(id);
+  if (!row) throw new AppError('Tenant not found', 404);
+  return formatTenant(row);
+}
+
+// --- Issuer management ---
+
 async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
+  const tenant = await tenantModel.findById(fields.tenantId);
+  if (!tenant) throw new AppError('Tenant not found', 404);
+
+  const tierConfig = TIERS[tenant.subscription_tier];
+  if (tierConfig.maxIssuers !== null) {
+    const count = await tenantModel.countIssuersByTenantId(tenant.id);
+    if (count >= tierConfig.maxIssuers) {
+      throw new AppError(
+        `Tenant has reached the issuer limit for the ${tenant.subscription_tier} plan (${tierConfig.maxIssuers})`,
+        402
+      );
+    }
+  }
+
   let encryptedPrivateKey, certificatePem, certFingerprint, certExpiry;
 
   if (p12Buffer) {
-    const parsed = parseCertificate(p12Buffer, p12Password || '');
+    const parsed = certificateService.parseCertificate(p12Buffer, p12Password || '');
     encryptedPrivateKey = cryptoService.encrypt(parsed.privateKeyPem);
     certificatePem = parsed.certPem;
     certFingerprint = parsed.certFingerprint;
     certExpiry = parsed.certExpiry;
   } else {
     const source = await issuerModel.findById(sourceIssuerId);
-    if (!source) {
-      throw new AppError('Source issuer not found', 404);
-    }
+    if (!source) throw new AppError('Source issuer not found', 404);
     if (source.ruc !== fields.ruc) {
       throw new AppError('RUC mismatch: source issuer RUC does not match the supplied RUC', 400);
     }
@@ -117,6 +129,7 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
   let newIssuer;
   try {
     newIssuer = await issuerModel.create({
+      tenantId: tenant.id,
       ruc: fields.ruc,
       businessName: fields.businessName,
       tradeName: fields.tradeName || null,
@@ -132,7 +145,6 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
       certificatePem,
       certFingerprint,
       certExpiry,
-      // Default to sandbox = true (safe mode) unless explicitly set to false
       sandbox: fields.sandbox === false || fields.sandbox === 'false' || fields.sandbox === 0 || fields.sandbox === '0' ? false : true,
     });
   } catch (err) {
@@ -142,7 +154,6 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     throw err;
   }
 
-  // Seed sequential counters in the correct schema for the issuer's sandbox flag
   if (Array.isArray(fields.initialSequentials)) {
     for (const entry of fields.initialSequentials) {
       await sequentialService.initialize(
@@ -156,7 +167,6 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     }
   }
 
-  // Generate API key — plaintext printed once, never stored
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     issuerId: newIssuer.id,
@@ -165,22 +175,17 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     environment: newIssuer.sandbox ? 'sandbox' : 'production',
   });
 
-  return {
-    issuer: formatIssuer(newIssuer),
-    apiKey: plainToken,
-  };
+  return { issuer: formatIssuer(newIssuer), apiKey: plainToken };
 }
 
 async function listIssuers() {
   const rows = await issuerModel.findAll();
-  return rows;
+  return rows.map(formatIssuer);
 }
 
 async function createApiKey(issuerId, label, revokeExisting = false) {
   const issuer = await issuerModel.findById(issuerId);
-  if (!issuer) {
-    throw new AppError('Issuer not found', 404);
-  }
+  if (!issuer) throw new AppError('Issuer not found', 404);
   if (revokeExisting) {
     await apiKeyModel.revokeAllByIssuerId(issuerId);
   }
@@ -196,41 +201,30 @@ async function createApiKey(issuerId, label, revokeExisting = false) {
 
 async function promoteIssuer(id) {
   const issuer = await issuerModel.findById(id);
-  if (!issuer) {
-    throw new AppError('Issuer not found', 404);
-  }
-  if (!issuer.sandbox) {
-    throw new ConflictError('Issuer is already in production');
-  }
+  if (!issuer) throw new AppError('Issuer not found', 404);
+  if (!issuer.sandbox) throw new ConflictError('Issuer is already in production');
 
   await issuerModel.promote(id);
   await apiKeyModel.revokeAllByIssuerIdAndEnvironment(id, 'sandbox');
 
-  return formatIssuer({ ...issuer, sandbox: false });
+  const plainToken = crypto.randomBytes(32).toString('hex');
+  await apiKeyModel.create({
+    issuerId: id,
+    keyHash: sha256Hex(plainToken),
+    label: 'Production key',
+    environment: 'production',
+  });
+
+  return { issuer: formatIssuer({ ...issuer, sandbox: false }), apiKey: plainToken };
 }
 
 async function revokeApiKey(id) {
   const row = await apiKeyModel.revoke(id);
-  if (!row) {
-    throw new AppError('API key not found', 404);
-  }
+  if (!row) throw new AppError('API key not found', 404);
   return row;
 }
 
-function formatIssuer(row) {
-  return {
-    id: row.id,
-    ruc: row.ruc,
-    businessName: row.business_name,
-    tradeName: row.trade_name,
-    environment: row.environment,
-    branchCode: row.branch_code,
-    issuePointCode: row.issue_point_code,
-    certFingerprint: row.cert_fingerprint,
-    certExpiry: row.cert_expiry,
-    sandbox: row.sandbox,
-    active: row.active,
-  };
-}
-
-module.exports = { createIssuer, listIssuers, createApiKey, revokeApiKey, promoteIssuer };
+module.exports = {
+  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant,
+  createIssuer, listIssuers, createApiKey, revokeApiKey, promoteIssuer,
+};

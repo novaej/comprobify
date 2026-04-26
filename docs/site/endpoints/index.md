@@ -1,8 +1,21 @@
 # Endpoints
 
-All document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints require `Authorization: Bearer <admin-secret>`.
+Document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints require `Authorization: Bearer <admin-secret>`. Registration and email verification are public.
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
+
+## Registration (public)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/register` | Self-service: create tenant + issuer + sandbox API key |
+| `GET` | `/api/verify-email` | Verify email with token from registration email |
+
+## Issuers (authenticated)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/issuers/promote` | Promote issuer to production — returns new production API key |
 
 ## Documents
 
@@ -30,9 +43,14 @@ All document endpoints require `Authorization: Bearer <api-key>`. Admin endpoint
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/admin/issuers` | Create issuer with P12 cert or branch copy |
+| `POST` | `/api/admin/tenants` | Create tenant (manual onboarding, status ACTIVE) |
+| `GET` | `/api/admin/tenants` | List all tenants |
+| `PATCH` | `/api/admin/tenants/:id/tier` | Update tenant subscription tier |
+| `PATCH` | `/api/admin/tenants/:id/status` | Activate or suspend a tenant |
+| `POST` | `/api/admin/tenants/:id/verify` | Manually verify a tenant's email |
+| `POST` | `/api/admin/issuers` | Create issuer for a tenant (requires `tenantId`) |
 | `GET` | `/api/admin/issuers` | List all issuers |
-| `POST` | `/api/admin/issuers/:id/promote` | Promote issuer from sandbox to production (one-way) |
+| `POST` | `/api/admin/issuers/:id/promote` | Promote any issuer to production (admin override) |
 | `POST` | `/api/admin/issuers/:id/api-keys` | Create API key for an issuer |
 | `DELETE` | `/api/admin/api-keys/:id` | Revoke an API key |
 

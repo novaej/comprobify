@@ -2,9 +2,16 @@ const db = require('../config/database');
 
 async function findByKeyHash(keyHash) {
   const { rows } = await db.query(
-    `SELECT ak.id, ak.issuer_id, ak.label, ak.environment AS key_environment, i.*
+    `SELECT ak.id AS key_id, ak.issuer_id, ak.label, ak.environment AS key_environment,
+            i.*,
+            t.subscription_tier AS tenant_subscription_tier,
+            t.status            AS tenant_status,
+            t.email             AS tenant_email,
+            t.invoice_count     AS tenant_invoice_count,
+            t.invoice_quota     AS tenant_invoice_quota
      FROM api_keys ak
-     JOIN issuers i ON i.id = ak.issuer_id
+     JOIN issuers i  ON i.id = ak.issuer_id
+     JOIN tenants t  ON t.id = i.tenant_id
      WHERE ak.key_hash = $1
        AND ak.active = true
        AND i.active = true`,
