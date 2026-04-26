@@ -1,6 +1,7 @@
 const STATUS_METADATA = {
   400: { code: 'BAD_REQUEST',        title: 'Bad Request',           typeSlug: 'bad-request' },
   401: { code: 'UNAUTHORIZED',       title: 'Unauthorized',          typeSlug: 'unauthorized' },
+  402: { code: 'PAYMENT_REQUIRED',   title: 'Payment Required',      typeSlug: 'payment-required' },
   403: { code: 'FORBIDDEN',          title: 'Forbidden',             typeSlug: 'forbidden' },
   404: { code: 'NOT_FOUND',          title: 'Not Found',             typeSlug: 'not-found' },
   409: { code: 'CONFLICT',           title: 'Conflict',              typeSlug: 'conflict' },

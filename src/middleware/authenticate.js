@@ -21,6 +21,10 @@ const authenticate = async (req, _res, next) => {
     return next(new AppError('Invalid or revoked API key', 401));
   }
 
+  if (row.tenant_status === 'SUSPENDED') {
+    return next(new AppError('This account has been suspended. Contact support.', 403));
+  }
+
   const expectedEnv = row.sandbox ? 'sandbox' : 'production';
   if (row.key_environment !== expectedEnv) {
     return next(new AppError(
@@ -32,6 +36,15 @@ const authenticate = async (req, _res, next) => {
 
   req.issuer = row;
   req.keyHash = keyHash;
+  req.tenant = {
+    id: row.tenant_id,
+    email: row.tenant_email,
+    subscriptionTier: row.tenant_subscription_tier,
+    status: row.tenant_status,
+    invoiceCount: row.tenant_invoice_count,
+    invoiceQuota: row.tenant_invoice_quota,
+  };
+
   next();
 };
 

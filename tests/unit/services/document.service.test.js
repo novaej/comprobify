@@ -40,6 +40,7 @@ const documentQuery = require('../../../src/services/document-query.service');
 
 const mockIssuer = {
   id: 1,
+  tenant_id: 10,
   ruc: '1712345678001',
   business_name: 'TEST COMPANY',
   trade_name: 'TEST',
@@ -74,7 +75,7 @@ describe('DocumentCreationService', () => {
     jest.clearAllMocks();
 
     db.getClient.mockResolvedValue(mockClient);
-    mockClient.query.mockResolvedValue({});
+    mockClient.query.mockResolvedValue({ rows: [{ id: 1 }] });
 
     sequentialService.getNext.mockResolvedValue(263);
     accessKeyService.generate.mockResolvedValue('2602202601171234567800110010010000002630000026311');

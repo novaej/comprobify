@@ -15,19 +15,19 @@ async function findFirst() {
   return rows[0] || null;
 }
 
-async function create({ ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, sandbox }) {
+async function create({ tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, sandbox }) {
   const { rows } = await db.query(
-    `INSERT INTO issuers (ruc, business_name, trade_name, main_address, branch_code, issue_point_code, environment, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry, sandbox)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    `INSERT INTO issuers (tenant_id, ruc, business_name, trade_name, main_address, branch_code, issue_point_code, environment, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry, sandbox)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
      RETURNING *`,
-    [ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, sandbox !== false]
+    [tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, sandbox !== false]
   );
   return rows[0];
 }
 
 async function findAll() {
   const { rows } = await db.query(
-    `SELECT id, ruc, business_name, trade_name, environment, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active, sandbox
+    `SELECT id, tenant_id, ruc, business_name, trade_name, environment, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active, sandbox
      FROM issuers
      ORDER BY id`
   );

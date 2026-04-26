@@ -12,6 +12,7 @@ const xmlValidator = require('./xml-validator.service');
 const { getBuilder } = require('../builders');
 const ValidationError = require('../errors/validation-error');
 const ConflictError = require('../errors/conflict-error');
+const QuotaExceededError = require('../errors/quota-exceeded-error');
 const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
 const { formatDocument } = require('../presenters/document.presenter');
@@ -48,6 +49,17 @@ async function create(body, idempotencyKey = null, issuer) {
   try {
     await client.query('BEGIN');
     await db.setIssuerContext(client, issuer.id, issuer.sandbox);
+
+    // Atomically increment invoice count — rolls back with the transaction if anything fails
+    const quotaResult = await client.query(
+      `UPDATE tenants SET invoice_count = invoice_count + 1, updated_at = NOW()
+       WHERE id = $1 AND invoice_count < invoice_quota
+       RETURNING id`,
+      [issuer.tenant_id]
+    );
+    if (quotaResult.rows.length === 0) {
+      throw new QuotaExceededError();
+    }
 
     // Get next sequential within this transaction (FOR UPDATE, not yet committed)
     const sequential = await sequentialService.getNext(

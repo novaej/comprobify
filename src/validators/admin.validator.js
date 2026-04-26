@@ -1,6 +1,45 @@
 const { body, param } = require('express-validator');
+const TIERS = require('../constants/subscription-tiers');
 
+// Tenants
+const createTenant = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('email must be a valid email address'),
+
+  body('subscriptionTier')
+    .optional()
+    .isIn(Object.keys(TIERS))
+    .withMessage(`subscriptionTier must be one of: ${Object.keys(TIERS).join(', ')}`),
+];
+
+const updateTenantTier = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+
+  body('subscriptionTier')
+    .isIn(Object.keys(TIERS))
+    .withMessage(`subscriptionTier must be one of: ${Object.keys(TIERS).join(', ')}`),
+];
+
+const updateTenantStatus = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+
+  body('status')
+    .isIn(['ACTIVE', 'SUSPENDED', 'PENDING_VERIFICATION'])
+    .withMessage('status must be ACTIVE, SUSPENDED, or PENDING_VERIFICATION'),
+];
+
+const verifyTenant = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
+// Issuers
 const createIssuer = [
+  body('tenantId')
+    .isInt({ min: 1 })
+    .withMessage('tenantId must be a positive integer'),
+
   body('ruc')
     .notEmpty()
     .matches(/^\d{13}$/)
@@ -36,7 +75,7 @@ const createIssuer = [
   body('sandbox')
     .optional()
     .isBoolean()
-    .withMessage('sandbox must be a boolean (true = SRI test endpoint, false = SRI production endpoint)'),
+    .withMessage('sandbox must be a boolean'),
 
   body('initialSequentials')
     .optional()
@@ -58,20 +97,20 @@ const createIssuer = [
     .isInt({ min: 1 })
     .withMessage('each initialSequentials entry must have a sequential >= 1'),
 
-  // Either a cert file upload or sourceIssuerId must be provided, but not both
   body().custom((_, { req }) => {
     const hasFile = !!req.file;
     const hasSource = !!req.body.sourceIssuerId;
-    if (!hasFile && !hasSource) {
-      throw new Error('Either a cert file upload or sourceIssuerId must be provided');
-    }
-    if (hasFile && hasSource) {
-      throw new Error('Provide either a cert file upload or sourceIssuerId, not both');
-    }
+    if (!hasFile && !hasSource) throw new Error('Either a cert file upload or sourceIssuerId must be provided');
+    if (hasFile && hasSource) throw new Error('Provide either a cert file upload or sourceIssuerId, not both');
     return true;
   }),
 ];
 
+const promoteIssuer = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
+// API keys
 const createApiKey = [
   body('label')
     .optional()
@@ -86,15 +125,10 @@ const createApiKey = [
 ];
 
 const revokeApiKey = [
-  param('id')
-    .isInt({ min: 1 })
-    .withMessage('id must be a positive integer'),
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
-const promoteIssuer = [
-  param('id')
-    .isInt({ min: 1 })
-    .withMessage('id must be a positive integer'),
-];
-
-module.exports = { createIssuer, createApiKey, revokeApiKey, promoteIssuer };
+module.exports = {
+  createTenant, updateTenantTier, updateTenantStatus, verifyTenant,
+  createIssuer, promoteIssuer, createApiKey, revokeApiKey,
+};

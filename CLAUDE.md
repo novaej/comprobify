@@ -39,9 +39,9 @@ src/services/      business logic and orchestration
 src/services/email/  email provider factory + Mailgun provider + templates
 src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
-src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError
+src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError / QuotaExceededError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–034
+db/migrations/     SQL migration files 001–035
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -68,9 +68,21 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the admin service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. See `POST /api/admin/issuers`.
 
-**Admin API:** `ADMIN_SECRET` env var (64-char hex) protects all `/api/admin/*` routes via `src/middleware/authenticate-admin.js` (constant-time comparison). Admin routes: create issuer (P12 upload or branch copy), list issuers, promote issuer sandbox→production (`POST /api/admin/issuers/:id/promote`, one-way, no body), create API key, revoke API key.
+**Tenant model:** `tenants` is the root billing entity. One tenant owns one or more issuers (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `invoice_count`, `invoice_quota`. Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines quota, issuer limits, and rate limits per tier.
 
-**API key environment scoping:** every `api_keys` row has an `environment` column (`'sandbox'` or `'production'`) stamped at creation from the issuer's current `sandbox` flag. The `authenticate` middleware rejects a key whose `environment` no longer matches the issuer's current state — this fires automatically after `PATCH /api/admin/issuers/:id` promotes the issuer. Promotion is one-way: attempting to set `sandbox: true` on a production issuer returns 400; calling PATCH on an already-production issuer returns 409. All sandbox keys are revoked atomically in the same service call that flips `issuers.sandbox = false`.
+**Self-service registration:** `POST /api/register` (public) — creates tenant + issuer + sandbox API key in one call. Tenant starts PENDING_VERIFICATION. A verification email is sent (fire-and-forget). The returned API key is shown once. `GET /api/verify-email?token=xxx` activates the tenant. Unverified tenants can use sandbox but cannot promote to production.
+
+**User-facing promotion:** `POST /api/issuers/promote` (authenticated) — checks tenant is ACTIVE, promotes the issuer, revokes sandbox keys, creates and returns a new production key. This is one-way.
+
+**Admin API:** `ADMIN_SECRET` env var (64-char hex) protects all `/api/admin/*` routes via `src/middleware/authenticate-admin.js` (constant-time comparison) with a 20 req/min IP-based rate limiter. Admin tenant routes: create (status ACTIVE, no verification), list, update tier, update status (activate/suspend), manual verify. Admin issuer routes: create (requires `tenantId`), list, promote (override, no tenant status check). Admin key routes: create, revoke.
+
+**API key environment scoping:** every `api_keys` row has an `environment` column (`'sandbox'` or `'production'`) stamped at creation from the issuer's current `sandbox` flag. The `authenticate` middleware rejects a key whose environment no longer matches the issuer, and rejects requests from SUSPENDED tenants (403). `findByKeyHash` joins `tenants` and returns `tenant_*` columns; `authenticate` splits these into `req.tenant`.
+
+**Invoice quota enforcement:** at the start of every document creation transaction, `UPDATE tenants SET invoice_count = invoice_count + 1 WHERE id = $1 AND invoice_count < invoice_quota RETURNING id` runs atomically. If no row returns, a `QuotaExceededError` (402 QUOTA_EXCEEDED) is thrown and the transaction rolls back.
+
+**Tier-aware rate limiting:** `writeLimiter` and `readLimiter` in `src/middleware/rate-limit.js` read `req.tenant.subscriptionTier` and return the tier's limit dynamically. `adminLimiter` is a fixed 20 req/min IP-based limiter applied to all admin routes.
+
+**Certificate parsing:** extracted to `src/services/certificate.service.js` — used by both `registration.service.js` and `admin.service.js`.
 
 **XSD validation:** `xmllint` CLI via `execFileSync` against `assets/factura_V2.1.0.xsd`. Must be pre-validation (before signing). `xmllint` must be installed on the server.
 
@@ -196,9 +208,9 @@ chore: update express to 4.22.1
 | `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
 | `docs/adr/` | Architecture Decision Records |
 | `src/config/validate.js` | Startup config validation — throws if critical env vars are missing or malformed |
-| `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.issuer` |
+| `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.issuer` + `req.tenant`; checks suspension + env mismatch |
 | `src/middleware/authenticate-admin.js` | `ADMIN_SECRET` constant-time check for `/api/admin/*` |
-| `src/middleware/rate-limit.js` | Per-API-key rate limiting (60 write/min, 300 read/min via `express-rate-limit`) |
+| `src/middleware/rate-limit.js` | Tier-aware per-key rate limiting + `adminLimiter` (20 req/min IP-based) |
 | `src/middleware/idempotency.js` | Extracts + validates `Idempotency-Key` header |
 | `src/middleware/verify-mailgun-webhook.js` | HMAC-SHA256 + replay protection for Mailgun webhook |
 | `src/services/document-creation.service.js` | Invoice creation — sequential, XML, signing, persistence |
@@ -218,15 +230,23 @@ chore: update express to 4.22.1
 | `src/services/xml-validator.service.js` | XSD pre-validation via xmllint (async) |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
 | `src/presenters/document.presenter.js` | `formatDocument()` — shared response shape |
-| `src/services/admin.service.js` | Issuer creation (P12 parse + PEM storage), API key management |
+| `src/models/tenant.model.js` | Tenant CRUD — `create`, `findByEmail`, `findByVerificationToken`, `activate`, `updateTier`, `updateStatus`, `countIssuersByTenantId` |
+| `src/services/certificate.service.js` | P12 parsing — shared by registration and admin service |
+| `src/services/registration.service.js` | Self-service registration — creates tenant + issuer + sandbox API key |
+| `src/controllers/registration.controller.js` | Handlers for `POST /api/register` and `GET /api/verify-email` |
+| `src/routes/registration.routes.js` | Public registration + email verification routes |
+| `src/routes/issuers.routes.js` | `POST /api/issuers/promote` (authenticated) |
+| `src/constants/subscription-tiers.js` | Tier definitions: quota, issuer limits, rate limits |
+| `src/services/admin.service.js` | Tenant + issuer + API key management |
 | `src/controllers/admin.controller.js` | Thin HTTP handlers for admin routes |
-| `src/routes/admin.routes.js` | `/api/admin/*` — multer upload, admin auth, CRUD |
-| `src/models/api-key.model.js` | API key CRUD — `findByKeyHash`, `create`, `revoke` |
+| `src/routes/admin.routes.js` | `/api/admin/*` — admin auth + rate limit, tenant/issuer/key CRUD |
+| `src/models/api-key.model.js` | API key CRUD — `findByKeyHash` (joins tenants), `create`, `revoke` |
 | `src/errors/conflict-error.js` | AppError subclass for HTTP 409 |
+| `src/errors/quota-exceeded-error.js` | AppError subclass for HTTP 402 QUOTA_EXCEEDED |
 | `src/builders/index.js` | Builder registry |
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
 | `src/constants/document-state-machine.js` | `TRANSITIONS` map + `canTransition` / `assertTransition` |
 | `src/config/database.js` | pg Pool + `query` (bypass) + `setIssuerContext(client, issuerId, sandbox)` + `queryAsIssuer(issuerId, sql, params, sandbox)` — sets both RLS context and `search_path` |
-| `db/migrations/` | SQL migration files 001–033 (031: RLS; 032: `sandbox` on issuers; 033: sandbox schema) |
+| `db/migrations/` | SQL migration files 001–035 (031: RLS; 032: sandbox on issuers; 033: sandbox schema; 034: api_key environment; 035: tenants) |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

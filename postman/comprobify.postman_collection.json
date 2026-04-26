@@ -344,6 +344,137 @@
       ]
     },
     {
+      "name": "Registration",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "email",
+                  "value": "your@email.com",
+                  "type": "text"
+                },
+                {
+                  "key": "ruc",
+                  "value": "1712345678001",
+                  "type": "text"
+                },
+                {
+                  "key": "businessName",
+                  "value": "My Company S.A.",
+                  "type": "text"
+                },
+                {
+                  "key": "branchCode",
+                  "value": "001",
+                  "type": "text"
+                },
+                {
+                  "key": "issuePointCode",
+                  "value": "001",
+                  "type": "text"
+                },
+                {
+                  "key": "environment",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "emissionType",
+                  "value": "1",
+                  "type": "text"
+                },
+                {
+                  "key": "requiredAccounting",
+                  "value": "false",
+                  "type": "text"
+                },
+                {
+                  "key": "certPassword",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "cert",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` \u2014 it is shown only once.\n\nCopy `apiKey` into the `api_key` collection variable."
+          }
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/verify-email?token={{verification_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "verify-email"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{verification_token}}"
+                }
+              ]
+            },
+            "description": "Verify your email address using the token from the registration email. Required before promoting to production."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Issuers",
+      "item": [
+        {
+          "name": "Promote to Production",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/issuers/promote",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "issuers",
+                "promote"
+              ]
+            },
+            "description": "Promotes the issuer associated with your API key from sandbox to production. One-way \u2014 cannot be reversed.\n\nYour sandbox key is revoked automatically. The response includes a new production API key \u2014 copy it into the `api_key` variable."
+          }
+        }
+      ]
+    },
+    {
       "name": "Admin",
       "description": "Admin endpoints for managing issuers and API keys. Require the `ADMIN_SECRET` as a Bearer token.",
       "auth": {
@@ -357,6 +488,146 @@
         ]
       },
       "item": [
+        {
+          "name": "Create Tenant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/tenants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"client@example.com\",\n  \"subscriptionTier\": \"FREE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Create a tenant for manual onboarding. Status is set to ACTIVE automatically \u2014 no email verification required."
+          }
+        },
+        {
+          "name": "List Tenants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/tenants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Tenant Tier",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/tenants/{{tenant_id}}/tier",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants",
+                "{{tenant_id}}",
+                "tier"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subscriptionTier\": \"STARTER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update Tenant Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/tenants/{{tenant_id}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants",
+                "{{tenant_id}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"SUSPENDED\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Manually Verify Tenant",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/tenants/{{tenant_id}}/verify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "tenants",
+                "{{tenant_id}}",
+                "verify"
+              ]
+            },
+            "description": "Manually activate a tenant when email delivery is not configured or for support purposes."
+          }
+        },
         {
           "name": "Create Issuer (P12 upload)",
           "request": {
