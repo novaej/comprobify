@@ -26,4 +26,9 @@ const revokeApiKey = async (req, res) => {
   res.json({ ok: true });
 };
 
-module.exports = { createIssuer, listIssuers, createApiKey, revokeApiKey };
+const promoteIssuer = async (req, res) => {
+  const issuer = await adminService.promoteIssuer(parseInt(req.params.id, 10));
+  res.json({ ok: true, issuer });
+};
+
+module.exports = { createIssuer, listIssuers, createApiKey, revokeApiKey, promoteIssuer };

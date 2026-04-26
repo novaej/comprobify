@@ -91,4 +91,10 @@ const revokeApiKey = [
     .withMessage('id must be a positive integer'),
 ];
 
-module.exports = { createIssuer, createApiKey, revokeApiKey };
+const promoteIssuer = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('id must be a positive integer'),
+];
+
+module.exports = { createIssuer, createApiKey, revokeApiKey, promoteIssuer };

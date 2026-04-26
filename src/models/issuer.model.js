@@ -34,4 +34,12 @@ async function findAll() {
   return rows;
 }
 
-module.exports = { findById, findByRuc, findFirst, create, findAll };
+async function promote(id) {
+  const { rows } = await db.query(
+    `UPDATE issuers SET sandbox = false WHERE id = $1 AND active = true RETURNING *`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+module.exports = { findById, findByRuc, findFirst, create, findAll, promote };

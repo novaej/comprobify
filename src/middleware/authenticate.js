@@ -21,6 +21,15 @@ const authenticate = async (req, _res, next) => {
     return next(new AppError('Invalid or revoked API key', 401));
   }
 
+  const expectedEnv = row.sandbox ? 'sandbox' : 'production';
+  if (row.key_environment !== expectedEnv) {
+    return next(new AppError(
+      `This API key was created for the ${row.key_environment} environment. ` +
+      `The issuer is now in ${expectedEnv}. Create a new API key.`,
+      401
+    ));
+  }
+
   req.issuer = row;
   req.keyHash = keyHash;
   next();

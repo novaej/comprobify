@@ -19,7 +19,25 @@ POST /api/admin/issuers
 Authorization: Bearer <admin-secret>
 ```
 
-The response includes both the issuer record and an initial API key. Additional keys can be created later:
+The response includes both the issuer record and an initial **sandbox** API key. Additional keys can be created later:
+
+```http
+POST /api/admin/issuers/:id/api-keys
+Authorization: Bearer <admin-secret>
+```
+
+### Sandbox vs production keys
+
+Every API key is stamped with the environment of its issuer at creation time (`sandbox` or `production`). A sandbox key will be rejected if used against a production issuer, and vice versa.
+
+New issuers start in sandbox mode. To go live, promote the issuer to production:
+
+```http
+POST /api/admin/issuers/:id/promote
+Authorization: Bearer <admin-secret>
+```
+
+**This is one-way — there is no going back to sandbox.** When promotion succeeds, all existing sandbox keys are revoked automatically. You must create a new key to begin sending production invoices:
 
 ```http
 POST /api/admin/issuers/:id/api-keys
