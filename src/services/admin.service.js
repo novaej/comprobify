@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const tenantModel = require('../models/tenant.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
+const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
@@ -154,17 +155,26 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     throw err;
   }
 
+  const documentTypes = Array.isArray(fields.documentTypes) && fields.documentTypes.length > 0
+    ? [...new Set(fields.documentTypes)]
+    : ['01'];
+  await issuerDocumentTypeModel.bulkCreate(newIssuer.id, documentTypes);
+
+  const sequentialMap = {};
   if (Array.isArray(fields.initialSequentials)) {
     for (const entry of fields.initialSequentials) {
-      await sequentialService.initialize(
-        newIssuer.id,
-        newIssuer.branch_code,
-        newIssuer.issue_point_code,
-        entry.documentType,
-        parseInt(entry.sequential, 10),
-        newIssuer.sandbox,
-      );
+      sequentialMap[entry.documentType] = parseInt(entry.sequential, 10);
     }
+  }
+  for (const docType of documentTypes) {
+    await sequentialService.initialize(
+      newIssuer.id,
+      newIssuer.branch_code,
+      newIssuer.issue_point_code,
+      docType,
+      sequentialMap[docType] || 1,
+      newIssuer.sandbox,
+    );
   }
 
   const plainToken = crypto.randomBytes(32).toString('hex');
@@ -199,13 +209,29 @@ async function createApiKey(issuerId, label, revokeExisting = false) {
   return plainToken;
 }
 
-async function promoteIssuer(id) {
+async function promoteIssuer(id, initialSequentials = []) {
   const issuer = await issuerModel.findById(id);
   if (!issuer) throw new AppError('Issuer not found', 404);
   if (!issuer.sandbox) throw new ConflictError('Issuer is already in production');
 
   await issuerModel.promote(id);
   await apiKeyModel.revokeAllByIssuerIdAndEnvironment(id, 'sandbox');
+
+  const documentTypes = await issuerDocumentTypeModel.findActiveByIssuerId(id);
+  const sequentialMap = {};
+  for (const entry of initialSequentials) {
+    sequentialMap[entry.documentType] = parseInt(entry.sequential, 10);
+  }
+  for (const docType of documentTypes) {
+    await sequentialService.initialize(
+      id,
+      issuer.branch_code,
+      issuer.issue_point_code,
+      docType,
+      sequentialMap[docType] || 1,
+      false,
+    );
+  }
 
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({

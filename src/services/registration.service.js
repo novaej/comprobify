@@ -7,6 +7,7 @@ const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
 const emailService = require('./email.service');
 const tenantEventModel = require('../models/tenant-event.model');
+const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const ConflictError = require('../errors/conflict-error');
 const TIERS = require('../constants/subscription-tiers');
 const config = require('../config');
@@ -83,17 +84,26 @@ async function register(fields, p12Buffer, p12Password) {
     throw err;
   }
 
+  const documentTypes = Array.isArray(fields.documentTypes) && fields.documentTypes.length > 0
+    ? [...new Set(fields.documentTypes)]
+    : ['01'];
+  await issuerDocumentTypeModel.bulkCreate(issuer.id, documentTypes);
+
+  const sequentialMap = {};
   if (Array.isArray(fields.initialSequentials)) {
     for (const entry of fields.initialSequentials) {
-      await sequentialService.initialize(
-        issuer.id,
-        issuer.branch_code,
-        issuer.issue_point_code,
-        entry.documentType,
-        parseInt(entry.sequential, 10),
-        true,
-      );
+      sequentialMap[entry.documentType] = parseInt(entry.sequential, 10);
     }
+  }
+  for (const docType of documentTypes) {
+    await sequentialService.initialize(
+      issuer.id,
+      issuer.branch_code,
+      issuer.issue_point_code,
+      docType,
+      sequentialMap[docType] || 1,
+      true,
+    );
   }
 
   plainToken = crypto.randomBytes(32).toString('hex');

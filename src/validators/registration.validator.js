@@ -1,4 +1,5 @@
 const { body, query } = require('express-validator');
+const { SUPPORTED_TYPES } = require('../builders');
 
 const register = [
   body('email')
@@ -59,6 +60,22 @@ const register = [
     .optional()
     .isInt({ min: 1 })
     .withMessage('each initialSequentials entry must have a sequential >= 1'),
+
+  body('documentTypes')
+    .optional()
+    .customSanitizer(value => {
+      if (typeof value === 'string') {
+        try { return JSON.parse(value); } catch { return value; }
+      }
+      return value;
+    })
+    .isArray({ min: 1 })
+    .withMessage('documentTypes must be a non-empty array'),
+
+  body('documentTypes.*')
+    .optional()
+    .isIn(SUPPORTED_TYPES)
+    .withMessage(`each documentType must be one of: ${SUPPORTED_TYPES.join(', ')}`),
 
   body().custom((_, { req }) => {
     if (!req.file) throw new Error('A P12 certificate file is required');

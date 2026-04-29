@@ -12,4 +12,6 @@ function getBuilder(documentTypeCode, issuer) {
   return new BuilderClass(issuer);
 }
 
-module.exports = { getBuilder };
+const SUPPORTED_TYPES = Object.keys(builders);
+
+module.exports = { getBuilder, SUPPORTED_TYPES };
