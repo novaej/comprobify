@@ -442,6 +442,38 @@
             },
             "description": "Verify your email address using the token from the registration email. Required before promoting to production."
           }
+        },
+        {
+          "name": "Resend Verification Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/resend-verification",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "resend-verification"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"your@email.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Resends the verification email. Generates a fresh token with a new 24-hour expiry, invalidating the previous one. Returns the same generic message whether or not the email exists."
+          }
         }
       ]
     },

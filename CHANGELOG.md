@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`POST /api/resend-verification`** — public endpoint to resend the verification email. Regenerates the token with a new 24-hour expiry (invalidating the previous one). Returns a generic message to avoid email enumeration. Rate-limited via the existing `registrationLimiter`. Returns 409 if already verified, 403 if suspended.
+- **Tenant event log** — new `tenant_events` table (migration 036) records lifecycle events for tenants: `VERIFICATION_EMAIL_SENT`, `VERIFICATION_EMAIL_FAILED`, `EMAIL_VERIFIED`, `VERIFICATION_EMAIL_DELIVERED`, `VERIFICATION_EMAIL_TEMP_FAILED`, `VERIFICATION_EMAIL_COMPLAINED`.
+- **Verification email delivery tracking** — `verification_email_message_id` and `verification_email_status` columns added to `tenants` (migration 037). Mailgun webhook now falls through to a tenant lookup when no document matches the message ID, updating these fields and writing `tenant_events` rows on delivery/failure/complaint — the same lifecycle as invoice emails.
+- `email.service.sendVerificationEmail()` now returns `{ messageId }` so the Mailgun message ID can be stored on the tenant row after a successful send.
+
 ### Changed
 - All primary key columns (`id`) and their referencing foreign key columns migrated from `INT` (`SERIAL`) to `BIGINT` (`BIGSERIAL`) across all tables — migration 030. Sequences updated to `BIGINT` maxvalue. No application code changes required.
 
