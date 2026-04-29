@@ -92,6 +92,8 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`, `EMAIL_SENT`, `EMAIL_FAILED`, `EMAIL_DELIVERED`, `EMAIL_TEMP_FAILED`, `EMAIL_COMPLAINED`.
 
+**Tenant event log:** `tenant_events` mirrors the document audit trail for tenant-level lifecycle events. Event types: `VERIFICATION_EMAIL_SENT`, `VERIFICATION_EMAIL_FAILED`, `VERIFICATION_EMAIL_DELIVERED`, `VERIFICATION_EMAIL_TEMP_FAILED`, `VERIFICATION_EMAIL_COMPLAINED`, `EMAIL_VERIFIED`. Written by `registration.service.js` and `mailgun-webhook.service.js`. Uses `db.query()` directly — tenants are not issuer-scoped. Adding a new event type requires updating the `chk_tenant_events_event_type` CHECK constraint in a migration.
+
 **Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry.
 
 **Idempotency key:** `POST /api/documents` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
@@ -230,11 +232,12 @@ chore: update express to 4.22.1
 | `src/services/xml-validator.service.js` | XSD pre-validation via xmllint (async) |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
 | `src/presenters/document.presenter.js` | `formatDocument()` — shared response shape |
-| `src/models/tenant.model.js` | Tenant CRUD — `create`, `findByEmail`, `findByVerificationToken`, `activate`, `updateTier`, `updateStatus`, `countIssuersByTenantId` |
+| `src/models/tenant.model.js` | Tenant CRUD — `create`, `findByEmail`, `findByVerificationToken`, `activate`, `updateTier`, `updateStatus`, `updateVerificationToken`, `updateVerificationEmailSent`, `updateVerificationEmailStatus`, `findByVerificationEmailMessageId`, `countIssuersByTenantId` |
+| `src/models/tenant-event.model.js` | Tenant event log — `create`, `findByTenantId`; uses `db.query()` (not issuer-scoped) |
 | `src/services/certificate.service.js` | P12 parsing — shared by registration and admin service |
-| `src/services/registration.service.js` | Self-service registration — creates tenant + issuer + sandbox API key |
-| `src/controllers/registration.controller.js` | Handlers for `POST /api/register` and `GET /api/verify-email` |
-| `src/routes/registration.routes.js` | Public registration + email verification routes |
+| `src/services/registration.service.js` | Self-service registration + resend verification — creates tenant + issuer + sandbox API key; logs tenant events |
+| `src/controllers/registration.controller.js` | Handlers for `POST /api/register`, `POST /api/resend-verification`, and `GET /api/verify-email` |
+| `src/routes/registration.routes.js` | Public registration, resend-verification, and email verification routes |
 | `src/routes/issuers.routes.js` | `POST /api/issuers/promote` (authenticated) |
 | `src/constants/subscription-tiers.js` | Tier definitions: quota, issuer limits, rate limits |
 | `src/services/admin.service.js` | Tenant + issuer + API key management |

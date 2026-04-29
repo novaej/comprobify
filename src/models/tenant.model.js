@@ -60,6 +60,41 @@ async function updateStatus(id, status) {
   return rows[0] || null;
 }
 
+async function findByVerificationEmailMessageId(messageId) {
+  const { rows } = await db.query(
+    'SELECT * FROM tenants WHERE verification_email_message_id = $1',
+    [messageId]
+  );
+  return rows[0] || null;
+}
+
+async function updateVerificationEmailStatus(id, status) {
+  const { rows } = await db.query(
+    `UPDATE tenants SET verification_email_status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [status, id]
+  );
+  return rows[0] || null;
+}
+
+async function updateVerificationEmailSent(id, messageId) {
+  const { rows } = await db.query(
+    `UPDATE tenants SET verification_email_message_id = $1, verification_email_status = 'SENT', updated_at = NOW()
+     WHERE id = $2 RETURNING *`,
+    [messageId, id]
+  );
+  return rows[0] || null;
+}
+
+async function updateVerificationToken(id, token, expiresAt) {
+  const { rows } = await db.query(
+    `UPDATE tenants SET verification_token = $1, verification_token_expires_at = $2, updated_at = NOW()
+     WHERE id = $3
+     RETURNING *`,
+    [token, expiresAt, id]
+  );
+  return rows[0] || null;
+}
+
 async function countIssuersByTenantId(tenantId) {
   const { rows } = await db.query(
     `SELECT COUNT(*) AS count FROM issuers WHERE tenant_id = $1 AND active = true`,
@@ -68,4 +103,4 @@ async function countIssuersByTenantId(tenantId) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, countIssuersByTenantId };
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countIssuersByTenantId };

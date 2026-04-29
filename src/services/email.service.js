@@ -47,7 +47,7 @@ async function sendVerificationEmail(email, token) {
   const { subject, text, html } = verifyEmailTemplate.render(verificationUrl);
   const provider = emailFactory.getProvider();
 
-  await provider.send({
+  const { messageId } = await provider.send({
     from: `Comprobify <${config.email.from}>`,
     to: email,
     subject,
@@ -55,6 +55,8 @@ async function sendVerificationEmail(email, token) {
     html,
     attachments: [],
   });
+
+  return { messageId };
 }
 
 module.exports = { sendInvoiceAuthorized, sendVerificationEmail };

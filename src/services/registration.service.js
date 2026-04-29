@@ -6,6 +6,7 @@ const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
 const emailService = require('./email.service');
+const tenantEventModel = require('../models/tenant-event.model');
 const ConflictError = require('../errors/conflict-error');
 const TIERS = require('../constants/subscription-tiers');
 const config = require('../config');
@@ -105,7 +106,12 @@ async function register(fields, p12Buffer, p12Password) {
 
   // Fire-and-forget — don't fail registration if email sending fails
   if (config.email.provider !== 'none') {
-    emailService.sendVerificationEmail(fields.email, verificationToken).catch(() => {});
+    emailService.sendVerificationEmail(fields.email, verificationToken)
+      .then(({ messageId }) => Promise.all([
+        tenantModel.updateVerificationEmailSent(tenant.id, messageId),
+        tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),
+      ]))
+      .catch((err) => tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_FAILED', { error: err.message }).catch(() => {}));
   }
 
   return {
@@ -126,12 +132,42 @@ async function register(fields, p12Buffer, p12Password) {
   };
 }
 
+async function resendVerification(email) {
+  const tenant = await tenantModel.findByEmail(email);
+  if (!tenant) return; // don't leak whether email exists
+
+  if (tenant.status === 'ACTIVE') {
+    const err = new Error('ALREADY_VERIFIED');
+    err.tenantStatus = tenant.status;
+    throw err;
+  }
+  if (tenant.status === 'SUSPENDED') {
+    const err = new Error('SUSPENDED');
+    err.tenantStatus = tenant.status;
+    throw err;
+  }
+
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  const verificationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  await tenantModel.updateVerificationToken(tenant.id, verificationToken, verificationTokenExpiresAt);
+
+  if (config.email.provider !== 'none') {
+    emailService.sendVerificationEmail(email, verificationToken)
+      .then(({ messageId }) => Promise.all([
+        tenantModel.updateVerificationEmailSent(tenant.id, messageId),
+        tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),
+      ]))
+      .catch((err) => tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_FAILED', { error: err.message }).catch(() => {}));
+  }
+}
+
 async function verifyEmail(token) {
   const tenant = await tenantModel.findByVerificationToken(token);
   if (!tenant) {
     throw new Error('INVALID_TOKEN');
   }
   await tenantModel.activate(tenant.id);
+  await tenantEventModel.create(tenant.id, 'EMAIL_VERIFIED');
 }
 
-module.exports = { register, verifyEmail, formatTenant };
+module.exports = { register, resendVerification, verifyEmail, formatTenant };

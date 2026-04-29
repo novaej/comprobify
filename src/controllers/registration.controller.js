@@ -1,5 +1,6 @@
 const registrationService = require('../services/registration.service');
 const AppError = require('../errors/app-error');
+const ConflictError = require('../errors/conflict-error');
 
 const register = async (req, res) => {
   const { tenant, issuer, apiKey } = await registrationService.register(
@@ -29,4 +30,19 @@ const verifyEmail = async (req, res) => {
   res.json({ ok: true, message: 'Email verified. You can now promote your issuer to production.' });
 };
 
-module.exports = { register, verifyEmail };
+const resendVerification = async (req, res) => {
+  try {
+    await registrationService.resendVerification(req.body.email);
+  } catch (err) {
+    if (err.message === 'ALREADY_VERIFIED') {
+      throw new ConflictError('This account is already verified.');
+    }
+    if (err.message === 'SUSPENDED') {
+      throw new AppError(403, 'This account has been suspended.');
+    }
+    throw err;
+  }
+  res.json({ ok: true, message: 'If that email is registered and unverified, a new verification email has been sent.' });
+};
+
+module.exports = { register, resendVerification, verifyEmail };
