@@ -17,6 +17,9 @@ Document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints re
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/api/issuers/promote` | Promote issuer to production — returns new production API key |
+| `GET` | `/api/issuers/document-types` | List active document types for this issuer |
+| `POST` | `/api/issuers/document-types` | Enable a document type for this issuer |
+| `DELETE` | `/api/issuers/document-types/:code` | Disable a document type for this issuer |
 
 ## Documents
 

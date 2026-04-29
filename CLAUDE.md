@@ -94,7 +94,9 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Tenant event log:** `tenant_events` mirrors the document audit trail for tenant-level lifecycle events. Event types: `VERIFICATION_EMAIL_SENT`, `VERIFICATION_EMAIL_FAILED`, `VERIFICATION_EMAIL_DELIVERED`, `VERIFICATION_EMAIL_TEMP_FAILED`, `VERIFICATION_EMAIL_COMPLAINED`, `EMAIL_VERIFIED`. Written by `registration.service.js` and `mailgun-webhook.service.js`. Uses `db.query()` directly — tenants are not issuer-scoped. Adding a new event type requires updating the `chk_tenant_events_event_type` CHECK constraint in a migration.
 
-**Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry.
+**Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry. `SUPPORTED_TYPES` (exported from `src/builders/index.js`) is derived from the registry keys and used by validators and `issuer.service.js` to enforce type eligibility. When adding a new builder, `SUPPORTED_TYPES` automatically includes it — no manual update needed.
+
+**Issuer document types:** `issuer_document_types` table records which document types each issuer is allowed to use. Defaults to `['01']` at registration/admin create. Checked at document creation time — attempting to create a disallowed type returns 400. Managed via `GET/POST/DELETE /api/issuers/document-types`. At promotion, production sequentials are seeded for all active types (using `initialSequentials` values if provided, otherwise 1). Adding a new document type to the system requires a new builder, not a migration.
 
 **Idempotency key:** `POST /api/documents` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
 
@@ -238,7 +240,10 @@ chore: update express to 4.22.1
 | `src/services/registration.service.js` | Self-service registration + resend verification — creates tenant + issuer + sandbox API key; logs tenant events |
 | `src/controllers/registration.controller.js` | Handlers for `POST /api/register`, `POST /api/resend-verification`, and `GET /api/verify-email` |
 | `src/routes/registration.routes.js` | Public registration, resend-verification, and email verification routes |
-| `src/routes/issuers.routes.js` | `POST /api/issuers/promote` (authenticated) |
+| `src/routes/issuers.routes.js` | Authenticated issuer routes: promote, document type list/add/remove |
+| `src/controllers/issuer.controller.js` | Handlers for promote and document type management |
+| `src/services/issuer.service.js` | `listDocumentTypes`, `addDocumentType`, `removeDocumentType` — validates against `SUPPORTED_TYPES` |
+| `src/models/issuer-document-type.model.js` | `bulkCreate`, `findActiveByIssuerId`, `activate`, `deactivate` — uses `db.query()` (not issuer-scoped) |
 | `src/constants/subscription-tiers.js` | Tier definitions: quota, issuer limits, rate limits |
 | `src/services/admin.service.js` | Tenant + issuer + API key management |
 | `src/controllers/admin.controller.js` | Thin HTTP handlers for admin routes |

@@ -23,6 +23,7 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/endpoints/' },
           { text: 'Resend Verification', link: '/endpoints/resend-verification' },
+          { text: 'Document Types', link: '/endpoints/document-types' },
           { text: 'List Documents', link: '/endpoints/list-documents' },
           { text: 'Create Invoice', link: '/endpoints/create-invoice' },
           { text: 'Get Document', link: '/endpoints/get-document' },

@@ -10,7 +10,9 @@ const accessKeyService = require('./access-key.service');
 const signingService = require('./signing.service');
 const xmlValidator = require('./xml-validator.service');
 const { getBuilder } = require('../builders');
+const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const ValidationError = require('../errors/validation-error');
+const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const QuotaExceededError = require('../errors/quota-exceeded-error');
 const DocumentStatus = require('../constants/document-status');
@@ -38,6 +40,14 @@ async function create(body, idempotencyKey = null, issuer) {
 
   const documentType = body.documentType;
   const issueDate = body.issueDate || moment().format('DD/MM/YYYY');
+
+  const allowedTypes = await issuerDocumentTypeModel.findActiveByIssuerId(issuer.id);
+  if (!allowedTypes.includes(documentType)) {
+    throw new AppError(
+      `Document type '${documentType}' is not enabled for this issuer. Allowed types: ${allowedTypes.join(', ')}`,
+      400
+    );
+  }
 
   // Open a single transaction that covers sequential assignment, XML build/validate/sign,
   // and all INSERTs. If anything fails the entire transaction rolls back — the sequential

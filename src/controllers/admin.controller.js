@@ -43,7 +43,10 @@ const listIssuers = async (req, res) => {
 };
 
 const promoteIssuer = async (req, res) => {
-  const { issuer, apiKey } = await adminService.promoteIssuer(parseInt(req.params.id, 10));
+  const { issuer, apiKey } = await adminService.promoteIssuer(
+    parseInt(req.params.id, 10),
+    req.body.initialSequentials || [],
+  );
   res.json({ ok: true, issuer, apiKey });
 };
 
