@@ -74,4 +74,11 @@ const verifyEmail = [
     .withMessage('token must be a 64-character hex string'),
 ];
 
-module.exports = { register, verifyEmail };
+const resendVerification = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('email must be a valid email address'),
+];
+
+module.exports = { register, resendVerification, verifyEmail };
