@@ -488,6 +488,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
               }
             ],
             "url": {
@@ -501,7 +505,102 @@
                 "promote"
               ]
             },
-            "description": "Promotes the issuer associated with your API key from sandbox to production. One-way \u2014 cannot be reversed.\n\nYour sandbox key is revoked automatically. The response includes a new production API key \u2014 copy it into the `api_key` variable."
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initialSequentials\": [\n    { \"documentType\": \"01\", \"sequential\": 1 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Promotes the issuer associated with your API key from sandbox to production. One-way \u2014 cannot be reversed.\n\nYour sandbox key is revoked automatically. The response includes a new production API key \u2014 copy it into the `api_key` variable.\n\n`initialSequentials` is optional. If omitted, all active document types start at sequential 1. Pass explicit values when migrating an issuer that has already issued documents outside this system."
+          }
+        },
+        {
+          "name": "List Document Types",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/issuers/document-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "issuers",
+                "document-types"
+              ]
+            },
+            "description": "Returns the active document types enabled for the authenticated issuer."
+          }
+        },
+        {
+          "name": "Add Document Type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/issuers/document-types",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "issuers",
+                "document-types"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"01\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Enables a document type for the issuer. Returns the full updated list of active document types."
+          }
+        },
+        {
+          "name": "Remove Document Type",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/issuers/document-types/01",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "issuers",
+                "document-types",
+                "01"
+              ]
+            },
+            "description": "Disables a document type for the issuer. The last active type cannot be removed."
           }
         }
       ]
@@ -923,7 +1022,16 @@
                 "promote"
               ]
             },
-            "description": "Promotes an issuer from sandbox to production. This is one-way \u2014 there is no going back.\n\nAll existing sandbox API keys for this issuer are revoked automatically. Create a new key after promotion to start sending production invoices."
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"initialSequentials\": [\n    { \"documentType\": \"01\", \"sequential\": 1 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Promotes an issuer from sandbox to production. This is one-way \u2014 there is no going back.\n\nAll existing sandbox API keys for this issuer are revoked automatically. Create a new key after promotion to start sending production invoices.\n\n`initialSequentials` is optional. If omitted, all active document types start at sequential 1."
           }
         },
         {

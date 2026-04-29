@@ -10,6 +10,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Issuer document types** — `issuer_document_types` table (migration 038) records which SRI document types each issuer is permitted to use. Defaults to `['01']` (invoice) if not specified at registration or admin create. Document creation now validates the requested type against this list and returns 400 if not allowed.
+- **`GET /api/issuers/document-types`** — list active document types for the authenticated issuer.
+- **`POST /api/issuers/document-types`** — enable a document type for the issuer (validates against supported builder types).
+- **`DELETE /api/issuers/document-types/:code`** — disable a document type; prevents removing the last active type.
+- **`initialSequentials` on promote** — both `POST /api/issuers/promote` and `POST /api/admin/issuers/:id/promote` now accept an optional `initialSequentials` array (`[{ documentType, sequential }]`). All active document types have their production sequentials seeded at promotion time — using the supplied value if present, or 1 if not.
+- `documentTypes` field on `POST /api/register` and `POST /api/admin/issuers` — optional array of document type codes to enable for the new issuer (default `['01']`). Sequentials are initialized for each type at creation time.
+- `SUPPORTED_TYPES` exported from `src/builders/index.js` — derived from the builder registry, used by validators and the issuer service to check type eligibility.
 - **`POST /api/resend-verification`** — public endpoint to resend the verification email. Regenerates the token with a new 24-hour expiry (invalidating the previous one). Returns a generic message to avoid email enumeration. Rate-limited via the existing `registrationLimiter`. Returns 409 if already verified, 403 if suspended.
 - **Tenant event log** — new `tenant_events` table (migration 036) records lifecycle events for tenants: `VERIFICATION_EMAIL_SENT`, `VERIFICATION_EMAIL_FAILED`, `EMAIL_VERIFIED`, `VERIFICATION_EMAIL_DELIVERED`, `VERIFICATION_EMAIL_TEMP_FAILED`, `VERIFICATION_EMAIL_COMPLAINED`.
 - **Verification email delivery tracking** — `verification_email_message_id` and `verification_email_status` columns added to `tenants` (migration 037). Mailgun webhook now falls through to a tenant lookup when no document matches the message ID, updating these fields and writing `tenant_events` rows on delivery/failure/complaint — the same lifecycle as invoice emails.
