@@ -4,6 +4,7 @@ const emailService = require('./email.service');
 const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
+const EmailStatus = require('../constants/email-status');
 const EventType = require('../constants/event-type');
 
 async function retryFailedEmails(issuer) {
@@ -14,7 +15,7 @@ async function retryFailedEmails(issuer) {
     try {
       const { messageId } = await emailService.sendInvoiceAuthorized(doc);
       await documentModel.updateStatus(doc.id, doc.status, {
-        email_status: 'SENT',
+        email_status: EmailStatus.SENT,
         email_sent_at: new Date(),
         email_error: null,
         email_message_id: messageId,
@@ -24,7 +25,7 @@ async function retryFailedEmails(issuer) {
       result.sent++;
     } catch (err) {
       await documentModel.updateStatus(doc.id, doc.status, {
-        email_status: 'FAILED',
+        email_status: EmailStatus.FAILED,
         email_error: err.message,
       }, issuer.id, issuer.sandbox);
       await documentEventModel.create(doc.id, EventType.EMAIL_FAILED,
@@ -45,17 +46,17 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
     throw new AppError(`Cannot send email for document with status ${document.status}. Must be ${DocumentStatus.AUTHORIZED}.`, 400);
   }
   if (!document.buyer_email) {
-    await documentModel.updateStatus(document.id, document.status, { email_status: 'SKIPPED' }, issuer.id, issuer.sandbox);
+    await documentModel.updateStatus(document.id, document.status, { email_status: EmailStatus.SKIPPED }, issuer.id, issuer.sandbox);
     return { sent: false, reason: 'no_email' };
   }
-  if (document.email_status === 'SENT' && !force) {
+  if (document.email_status === EmailStatus.SENT && !force) {
     return { sent: false, reason: 'already_sent' };
   }
 
   try {
     const { messageId } = await emailService.sendInvoiceAuthorized(document);
     await documentModel.updateStatus(document.id, document.status, {
-      email_status: 'SENT',
+      email_status: EmailStatus.SENT,
       email_sent_at: new Date(),
       email_error: null,
       email_message_id: messageId,
@@ -65,7 +66,7 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
     return { sent: true };
   } catch (err) {
     await documentModel.updateStatus(document.id, document.status, {
-      email_status: 'FAILED',
+      email_status: EmailStatus.FAILED,
       email_error: err.message,
     }, issuer.id, issuer.sandbox);
     await documentEventModel.create(document.id, EventType.EMAIL_FAILED,

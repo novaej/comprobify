@@ -5,6 +5,7 @@ const sriResponseModel = require('../models/sri-response.model');
 const emailService = require('./email.service');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
+const EmailStatus = require('../constants/email-status');
 const { assertTransition } = require('../constants/document-state-machine');
 const EventType = require('../constants/event-type');
 const OperationType = require('../constants/operation-type');
@@ -111,8 +112,8 @@ async function checkAuthorization(accessKey, issuer) {
       emailService.sendInvoiceAuthorized(updated)
         .then(({ sent, messageId }) => {
           const emailFields = sent
-            ? { email_status: 'SENT', email_sent_at: new Date(), email_message_id: messageId }
-            : { email_status: 'SKIPPED' };
+            ? { email_status: EmailStatus.SENT, email_sent_at: new Date(), email_message_id: messageId }
+            : { email_status: EmailStatus.SKIPPED };
           return Promise.all([
             documentModel.updateStatus(updated.id, updated.status, emailFields, updated.issuer_id, issuer.sandbox),
             documentEventModel.create(updated.id,
@@ -124,7 +125,7 @@ async function checkAuthorization(accessKey, issuer) {
           console.warn('Invoice email failed:', err.message);
           return Promise.all([
             documentModel.updateStatus(updated.id, updated.status, {
-              email_status: 'FAILED',
+              email_status: EmailStatus.FAILED,
               email_error: err.message,
             }, updated.issuer_id, issuer.sandbox),
             documentEventModel.create(updated.id, EventType.EMAIL_FAILED,

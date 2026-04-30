@@ -1,6 +1,8 @@
 const db = require('../config/database');
+const TenantStatus = require('../constants/tenant-status');
+const EmailStatus = require('../constants/email-status');
 
-async function create({ email, subscriptionTier = 'FREE', status = 'PENDING_VERIFICATION', invoiceQuota = 100, verificationToken = null, verificationTokenExpiresAt = null }) {
+async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, invoiceQuota = 100, verificationToken = null, verificationTokenExpiresAt = null }) {
   const { rows } = await db.query(
     `INSERT INTO tenants (email, subscription_tier, status, invoice_quota, verification_token, verification_token_expires_at)
      VALUES ($1, $2, $3, $4, $5, $6)
@@ -36,10 +38,10 @@ async function findAll() {
 async function activate(id) {
   const { rows } = await db.query(
     `UPDATE tenants
-     SET status = 'ACTIVE', verification_token = NULL, verification_token_expires_at = NULL, updated_at = NOW()
-     WHERE id = $1
+     SET status = $1, verification_token = NULL, verification_token_expires_at = NULL, updated_at = NOW()
+     WHERE id = $2
      RETURNING *`,
-    [id]
+    [TenantStatus.ACTIVE, id]
   );
   return rows[0] || null;
 }
@@ -78,9 +80,9 @@ async function updateVerificationEmailStatus(id, status) {
 
 async function updateVerificationEmailSent(id, messageId) {
   const { rows } = await db.query(
-    `UPDATE tenants SET verification_email_message_id = $1, verification_email_status = 'SENT', updated_at = NOW()
-     WHERE id = $2 RETURNING *`,
-    [messageId, id]
+    `UPDATE tenants SET verification_email_message_id = $1, verification_email_status = $2, updated_at = NOW()
+     WHERE id = $3 RETURNING *`,
+    [messageId, EmailStatus.SENT, id]
   );
   return rows[0] || null;
 }

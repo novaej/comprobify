@@ -3,6 +3,7 @@ const documentEventModel = require('../models/document-event.model');
 const tenantModel = require('../models/tenant.model');
 const tenantEventModel = require('../models/tenant-event.model');
 const EventType = require('../constants/event-type');
+const EmailStatus = require('../constants/email-status');
 
 /**
  * Normalises Mailgun webhook payload across v3 and legacy formats.
@@ -66,13 +67,13 @@ async function processEvent(body) {
 
 async function processDocumentEvent(document, event, recipient, severity) {
   if (event === 'delivered') {
-    await documentModel.updateEmailStatus(document.id, 'DELIVERED');
+    await documentModel.updateEmailStatus(document.id, EmailStatus.DELIVERED);
     await documentEventModel.create(document.id, EventType.EMAIL_DELIVERED, null, null, { to: recipient });
     return;
   }
 
   if (event === 'complained') {
-    await documentModel.updateEmailStatus(document.id, 'COMPLAINED');
+    await documentModel.updateEmailStatus(document.id, EmailStatus.COMPLAINED);
     await documentEventModel.create(document.id, EventType.EMAIL_COMPLAINED, null, null, { to: recipient });
     return;
   }
@@ -81,20 +82,20 @@ async function processDocumentEvent(document, event, recipient, severity) {
   if (severity === 'temporary') {
     await documentEventModel.create(document.id, EventType.EMAIL_TEMP_FAILED, null, null, { to: recipient, severity });
   } else {
-    await documentModel.updateEmailStatus(document.id, 'FAILED');
+    await documentModel.updateEmailStatus(document.id, EmailStatus.FAILED);
     await documentEventModel.create(document.id, EventType.EMAIL_FAILED, null, null, { to: recipient, severity });
   }
 }
 
 async function processTenantVerificationEvent(tenant, event, recipient, severity) {
   if (event === 'delivered') {
-    await tenantModel.updateVerificationEmailStatus(tenant.id, 'DELIVERED');
+    await tenantModel.updateVerificationEmailStatus(tenant.id, EmailStatus.DELIVERED);
     await tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_DELIVERED', { to: recipient });
     return;
   }
 
   if (event === 'complained') {
-    await tenantModel.updateVerificationEmailStatus(tenant.id, 'COMPLAINED');
+    await tenantModel.updateVerificationEmailStatus(tenant.id, EmailStatus.COMPLAINED);
     await tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_COMPLAINED', { to: recipient });
     return;
   }
@@ -103,7 +104,7 @@ async function processTenantVerificationEvent(tenant, event, recipient, severity
   if (severity === 'temporary') {
     await tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_TEMP_FAILED', { to: recipient, severity });
   } else {
-    await tenantModel.updateVerificationEmailStatus(tenant.id, 'FAILED');
+    await tenantModel.updateVerificationEmailStatus(tenant.id, EmailStatus.FAILED);
     await tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_FAILED', { to: recipient, severity });
   }
 }

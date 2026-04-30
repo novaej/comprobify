@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const DocumentStatus = require('../constants/document-status');
+const EmailStatus = require('../constants/email-status');
 
 const MUTABLE_EXTRA_COLUMNS = new Set([
   // Email tracking — always updatable
@@ -107,11 +108,11 @@ async function findPendingEmails(issuerId, sandbox = false) {
     `SELECT * FROM documents
      WHERE  issuer_id = $1
        AND  status = 'AUTHORIZED'
-       AND  email_status IN ('PENDING', 'FAILED')
+       AND  email_status IN ($2, $3)
        AND  buyer_email IS NOT NULL
      ORDER BY created_at ASC
      LIMIT 100`,
-    [issuerId],
+    [issuerId, EmailStatus.PENDING, EmailStatus.FAILED],
     sandbox
   );
   return rows;

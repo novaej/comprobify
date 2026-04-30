@@ -1,9 +1,10 @@
 const adminService = require('../services/admin.service');
 const issuerService = require('../services/issuer.service');
 const AppError = require('../errors/app-error');
+const TenantStatus = require('../constants/tenant-status');
 
 const promote = async (req, res) => {
-  if (req.tenant.status !== 'ACTIVE') {
+  if (req.tenant.status !== TenantStatus.ACTIVE) {
     throw new AppError('Email verification required before promoting to production. Check your inbox.', 403);
   }
   const { issuer, apiKey } = await adminService.promoteIssuer(

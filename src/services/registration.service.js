@@ -10,6 +10,7 @@ const tenantEventModel = require('../models/tenant-event.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const ConflictError = require('../errors/conflict-error');
 const TIERS = require('../constants/subscription-tiers');
+const TenantStatus = require('../constants/tenant-status');
 const config = require('../config');
 
 function sha256Hex(value) {
@@ -31,7 +32,7 @@ function formatTenant(row) {
 async function register(fields, p12Buffer, p12Password) {
   const existing = await tenantModel.findByEmail(fields.email);
   if (existing) {
-    if (existing.status === 'SUSPENDED') {
+    if (existing.status === TenantStatus.SUSPENDED) {
       throw new Error('SUSPENDED');
     }
     const issuer = await issuerModel.findByTenantId(existing.id);
@@ -83,7 +84,7 @@ async function register(fields, p12Buffer, p12Password) {
     tenant = await tenantModel.create({
       email: fields.email,
       subscriptionTier: 'FREE',
-      status: 'PENDING_VERIFICATION',
+      status: TenantStatus.PENDING_VERIFICATION,
       invoiceQuota: tier.invoiceQuota,
       verificationToken,
       verificationTokenExpiresAt,
@@ -177,12 +178,12 @@ async function resendVerification(email) {
   const tenant = await tenantModel.findByEmail(email);
   if (!tenant) return; // don't leak whether email exists
 
-  if (tenant.status === 'ACTIVE') {
+  if (tenant.status === TenantStatus.ACTIVE) {
     const err = new Error('ALREADY_VERIFIED');
     err.tenantStatus = tenant.status;
     throw err;
   }
-  if (tenant.status === 'SUSPENDED') {
+  if (tenant.status === TenantStatus.SUSPENDED) {
     const err = new Error('SUSPENDED');
     err.tenantStatus = tenant.status;
     throw err;
