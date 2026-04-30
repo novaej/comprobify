@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const apiKeyModel = require('../models/api-key.model');
 const AppError = require('../errors/app-error');
+const TenantStatus = require('../constants/tenant-status');
 
 const authenticate = async (req, _res, next) => {
   const authHeader = req.headers['authorization'];
@@ -21,7 +22,7 @@ const authenticate = async (req, _res, next) => {
     return next(new AppError('Invalid or revoked API key', 401));
   }
 
-  if (row.tenant_status === 'SUSPENDED') {
+  if (row.tenant_status === TenantStatus.SUSPENDED) {
     return next(new AppError('This account has been suspended. Contact support.', 403));
   }
 

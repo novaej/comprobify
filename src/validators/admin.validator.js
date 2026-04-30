@@ -1,5 +1,6 @@
 const { body, param } = require('express-validator');
 const TIERS = require('../constants/subscription-tiers');
+const TenantStatus = require('../constants/tenant-status');
 const { SUPPORTED_TYPES } = require('../builders');
 
 // Tenants
@@ -27,8 +28,8 @@ const updateTenantStatus = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 
   body('status')
-    .isIn(['ACTIVE', 'SUSPENDED', 'PENDING_VERIFICATION'])
-    .withMessage('status must be ACTIVE, SUSPENDED, or PENDING_VERIFICATION'),
+    .isIn(Object.values(TenantStatus))
+    .withMessage(`status must be one of: ${Object.values(TenantStatus).join(', ')}`),
 ];
 
 const verifyTenant = [

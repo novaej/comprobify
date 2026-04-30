@@ -1,4 +1,5 @@
 const moment = require('moment');
+const EmailStatus = require('../constants/email-status');
 
 function formatDocument(doc) {
   return {
@@ -17,7 +18,7 @@ function formatDocument(doc) {
     ...(doc.authorization_number && { authorizationNumber: doc.authorization_number }),
     ...(doc.authorization_date && { authorizationDate: doc.authorization_date }),
     email: {
-      status: doc.email_status || 'PENDING',
+      status: doc.email_status || EmailStatus.PENDING,
       ...(doc.email_sent_at && { sentAt: doc.email_sent_at }),
       ...(doc.email_error && { error: doc.email_error }),
     },

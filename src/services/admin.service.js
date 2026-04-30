@@ -9,6 +9,7 @@ const certificateService = require('./certificate.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const TIERS = require('../constants/subscription-tiers');
+const TenantStatus = require('../constants/tenant-status');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -54,7 +55,7 @@ async function createTenant(fields) {
   const row = await tenantModel.create({
     email: fields.email,
     subscriptionTier: tier,
-    status: 'ACTIVE',
+    status: TenantStatus.ACTIVE,
     invoiceQuota: TIERS[tier]?.invoiceQuota ?? 100,
   });
   return formatTenant(row);
@@ -75,7 +76,7 @@ async function updateTenantTier(id, tier) {
 }
 
 async function updateTenantStatus(id, status) {
-  const allowed = ['ACTIVE', 'SUSPENDED', 'PENDING_VERIFICATION'];
+  const allowed = Object.values(TenantStatus);
   if (!allowed.includes(status)) {
     throw new AppError(`Invalid status: ${status}`, 400);
   }
