@@ -245,6 +245,8 @@ chore: update express to 4.22.1
 | `src/services/issuer.service.js` | `listDocumentTypes`, `addDocumentType`, `removeDocumentType` — validates against `SUPPORTED_TYPES` |
 | `src/models/issuer-document-type.model.js` | `bulkCreate`, `findActiveByIssuerId`, `activate`, `deactivate` — uses `db.query()` (not issuer-scoped) |
 | `src/constants/subscription-tiers.js` | Tier definitions: quota, issuer limits, rate limits |
+| `src/constants/tenant-status.js` | `TenantStatus` frozen object — `PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED` |
+| `src/constants/email-status.js` | `EmailStatus` frozen object — `PENDING`, `SENT`, `FAILED`, `DELIVERED`, `COMPLAINED`, `SKIPPED` — shared by document and tenant email tracking |
 | `src/services/admin.service.js` | Tenant + issuer + API key management |
 | `src/controllers/admin.controller.js` | Thin HTTP handlers for admin routes |
 | `src/routes/admin.routes.js` | `/api/admin/*` — admin auth + rate limit, tenant/issuer/key CRUD |
