@@ -231,6 +231,8 @@ All variables are required unless marked optional.
 |----------|----------|-------------|
 | `PORT` | No | HTTP port (default `8080`) |
 | `APP_ENV` | Yes | `staging` or `production`. Controls SRI endpoint routing — staging always uses the SRI test endpoint; production uses the production endpoint for issuers with `sandbox=false`. Default: `staging`. |
+| `APP_BASE_URL` | Yes | Public base URL of this API (e.g. `https://api.yourdomain.com`). Used as the base for verification email links when no per-tenant `verificationRedirectUrl` is set. |
+| `VERIFICATION_TOKEN_TTL_HOURS` | No | Email verification token lifetime in hours (default `24`). |
 | `DB_HOST` | Yes | PostgreSQL host |
 | `DB_PORT` | No | PostgreSQL port (default `5432`) |
 | `DB_NAME` | Yes | Database name |

@@ -10,6 +10,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`verificationRedirectUrl` on `POST /api/register`** — optional field that stores a frontend URL on the tenant row. Verification emails will link to `${verificationRedirectUrl}?token=<token>` instead of directly to the API, enabling frontend-integrated verification flows. Validated as a URL; `https` required in production, `http` accepted in staging.
+- **`APP_BASE_URL` env var** — now required and validated at startup; used as the base for verification email links when no per-tenant `verificationRedirectUrl` is set. Previously the config key existed but was not validated at startup, so a missing value produced broken links silently.
+- **`VERIFICATION_TOKEN_TTL_HOURS` env var** — configures the verification token lifetime (default 24 hours). Previously hardcoded.
+- **Per-account resend cooldown** — `POST /api/resend-verification` now enforces a 60-second server-side cooldown per email address, checked against `tenants.verification_email_sent_at`. Returns `429 TOO_MANY_REQUESTS` if the cooldown has not elapsed. Frontend-side cooldowns were already in place but were bypassable via direct API calls.
+- `verification_redirect_url` and `verification_email_sent_at` columns added to `tenants` (migration 039).
 - **Issuer document types** — `issuer_document_types` table (migration 038) records which SRI document types each issuer is permitted to use. Defaults to `['01']` (invoice) if not specified at registration or admin create. Document creation now validates the requested type against this list and returns 400 if not allowed.
 - **`GET /api/issuers/document-types`** — list active document types for the authenticated issuer.
 - **`POST /api/issuers/document-types`** — enable a document type for the issuer (validates against supported builder types).

@@ -43,7 +43,10 @@ const resendVerification = async (req, res) => {
       throw new ConflictError('This account is already verified.');
     }
     if (err.message === 'SUSPENDED') {
-      throw new AppError(403, 'This account has been suspended.');
+      throw new AppError('This account has been suspended.', 403);
+    }
+    if (err.message === 'RESEND_COOLDOWN') {
+      throw new AppError('Please wait before requesting another verification email.', 429);
     }
     throw err;
   }
