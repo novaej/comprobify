@@ -31,7 +31,38 @@ function formatTenant(row) {
 async function register(fields, p12Buffer, p12Password) {
   const existing = await tenantModel.findByEmail(fields.email);
   if (existing) {
-    throw new ConflictError(`An account with email ${fields.email} already exists`);
+    if (existing.status === 'SUSPENDED') {
+      throw new Error('SUSPENDED');
+    }
+    const issuer = await issuerModel.findByTenantId(existing.id);
+    if (!issuer) {
+      throw new ConflictError(`An account with email ${fields.email} already exists`);
+    }
+    await apiKeyModel.revokeAllByIssuerIdAndEnvironment(issuer.id, 'sandbox');
+    const plainToken = crypto.randomBytes(32).toString('hex');
+    await apiKeyModel.create({
+      issuerId: issuer.id,
+      keyHash: sha256Hex(plainToken),
+      label: 'Recovery sandbox key',
+      environment: 'sandbox',
+    });
+    return {
+      tenant: formatTenant(existing),
+      issuer: {
+        id: issuer.id,
+        ruc: issuer.ruc,
+        businessName: issuer.business_name,
+        tradeName: issuer.trade_name,
+        environment: issuer.environment,
+        branchCode: issuer.branch_code,
+        issuePointCode: issuer.issue_point_code,
+        certFingerprint: issuer.cert_fingerprint,
+        certExpiry: issuer.cert_expiry,
+        sandbox: issuer.sandbox,
+      },
+      apiKey: plainToken,
+      recovered: true,
+    };
   }
 
   const existingIssuer = await issuerModel.findByRuc(fields.ruc);

@@ -34,6 +34,14 @@ async function findAll() {
   return rows;
 }
 
+async function findByTenantId(tenantId) {
+  const { rows } = await db.query(
+    'SELECT * FROM issuers WHERE tenant_id = $1 AND active = true ORDER BY id LIMIT 1',
+    [tenantId]
+  );
+  return rows[0] || null;
+}
+
 async function promote(id) {
   const { rows } = await db.query(
     `UPDATE issuers SET sandbox = false WHERE id = $1 AND active = true RETURNING *`,
@@ -42,4 +50,4 @@ async function promote(id) {
   return rows[0] || null;
 }
 
-module.exports = { findById, findByRuc, findFirst, create, findAll, promote };
+module.exports = { findById, findByRuc, findFirst, findByTenantId, create, findAll, promote };
