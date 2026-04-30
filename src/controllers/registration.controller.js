@@ -3,12 +3,17 @@ const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 
 const register = async (req, res) => {
-  const { tenant, issuer, apiKey } = await registrationService.register(
-    req.body,
-    req.file?.buffer,
-    req.body.certPassword,
-  );
-  res.status(201).json({ ok: true, tenant, issuer, apiKey });
+  let result;
+  try {
+    result = await registrationService.register(req.body, req.file?.buffer, req.body.certPassword);
+  } catch (err) {
+    if (err.message === 'SUSPENDED') {
+      throw new AppError(403, 'This account has been suspended.');
+    }
+    throw err;
+  }
+  const { tenant, issuer, apiKey, recovered } = result;
+  res.status(recovered ? 200 : 201).json({ ok: true, tenant, issuer, apiKey });
 };
 
 const verifyEmail = async (req, res) => {

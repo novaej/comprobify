@@ -23,6 +23,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `email.service.sendVerificationEmail()` now returns `{ messageId }` so the Mailgun message ID can be stored on the tenant row after a successful send.
 
 ### Changed
+- **`POST /api/register` is now idempotent** — if the email already exists and the account is not suspended, the endpoint revokes the current sandbox API key, issues a new one, and returns `200` with the same response shape as initial registration (`tenant`, `issuer`, `apiKey`). Allows frontend clients to self-heal if the API key was lost after a successful registration call. Returns `403` if the account is suspended (previously would 409).
 - All primary key columns (`id`) and their referencing foreign key columns migrated from `INT` (`SERIAL`) to `BIGINT` (`BIGSERIAL`) across all tables — migration 030. Sequences updated to `BIGINT` maxvalue. No application code changes required.
 
 ### Added

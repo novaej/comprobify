@@ -8,7 +8,7 @@ Document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints re
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/register` | Self-service: create tenant + issuer + sandbox API key |
+| `POST` | `/api/register` | Self-service: create tenant + issuer + sandbox API key. Idempotent — if the email already exists, revokes the current sandbox key and returns a new one (200). |
 | `GET` | `/api/verify-email` | Verify email with token from registration email |
 | `POST` | `/api/resend-verification` | Resend verification email (regenerates token) |
 

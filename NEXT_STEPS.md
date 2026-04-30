@@ -157,3 +157,20 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 - CSV export
 
 **Effort:** Medium — multiple query endpoints, no architectural changes needed.
+
+---
+
+## 10. Registration DoS Monitoring
+
+**Priority: Low — risk mitigation**
+
+`POST /api/register` is now idempotent: calling it with an existing email revokes the current sandbox key and issues a new one. This is intentional for frontend recovery, but a bad actor could loop it to continuously invalidate a tenant's key.
+
+The existing `registrationLimiter` (5 req/hour per IP) limits per-IP burst, but does not detect distributed multi-IP abuse targeting a single email.
+
+**What:**
+- Structured log entry whenever a recovery key is issued (email, IP, timestamp) — already distinguishable via the `recovered: true` flag in the service response
+- Alert rule (e.g., Datadog / Grafana) firing when the same email sees >3 recovery key issuances within a rolling 1-hour window
+- Optionally: add an `api_key_recovery_count` counter to `tenants` and expose it in the admin tenant detail response so operators can spot abuse manually
+
+**Effort:** Low (logging only) to Medium (alerting infrastructure).
