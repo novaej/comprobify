@@ -89,6 +89,7 @@ async function register(fields, p12Buffer, p12Password) {
       verificationToken,
       verificationTokenExpiresAt,
       verificationRedirectUrl: fields.verificationRedirectUrl || null,
+      preferredLanguage: fields.language || 'es',
     });
 
     issuer = await issuerModel.create({
@@ -149,7 +150,7 @@ async function register(fields, p12Buffer, p12Password) {
 
   // Fire-and-forget — don't fail registration if email sending fails
   if (config.email.provider !== 'none') {
-    emailService.sendVerificationEmail(fields.email, verificationToken, fields.verificationRedirectUrl || null)
+    emailService.sendVerificationEmail(fields.email, verificationToken, fields.verificationRedirectUrl || null, fields.language || 'es')
       .then(({ messageId }) => Promise.all([
         tenantModel.updateVerificationEmailSent(tenant.id, messageId),
         tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),
@@ -204,7 +205,7 @@ async function resendVerification(email) {
   await tenantModel.updateVerificationToken(tenant.id, verificationToken, verificationTokenExpiresAt);
 
   if (config.email.provider !== 'none') {
-    emailService.sendVerificationEmail(email, verificationToken, tenant.verification_redirect_url || null)
+    emailService.sendVerificationEmail(email, verificationToken, tenant.verification_redirect_url || null, tenant.preferred_language || 'es')
       .then(({ messageId }) => Promise.all([
         tenantModel.updateVerificationEmailSent(tenant.id, messageId),
         tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),

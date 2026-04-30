@@ -1,5 +1,6 @@
 const { body, query } = require('express-validator');
 const { SUPPORTED_TYPES } = require('../builders');
+const { SUPPORTED_LANGUAGES } = require('../locales');
 const config = require('../config');
 
 const register = [
@@ -77,6 +78,11 @@ const register = [
     .optional()
     .isIn(SUPPORTED_TYPES)
     .withMessage(`each documentType must be one of: ${SUPPORTED_TYPES.join(', ')}`),
+
+  body('language')
+    .optional()
+    .isIn(SUPPORTED_LANGUAGES)
+    .withMessage(`language must be one of: ${SUPPORTED_LANGUAGES.join(', ')}`),
 
   body('verificationRedirectUrl')
     .optional()

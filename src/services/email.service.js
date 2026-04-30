@@ -42,11 +42,11 @@ async function sendInvoiceAuthorized(document) {
   return { sent: true, messageId };
 }
 
-async function sendVerificationEmail(email, token, redirectUrl = null) {
+async function sendVerificationEmail(email, token, redirectUrl = null, language = 'es') {
   const verificationUrl = redirectUrl
     ? `${redirectUrl}?token=${token}`
     : `${config.appBaseUrl}/api/verify-email?token=${token}`;
-  const { subject, text, html } = verifyEmailTemplate.render(verificationUrl, config.verificationTokenTtlHours);
+  const { subject, text, html } = verifyEmailTemplate.render(verificationUrl, config.verificationTokenTtlHours, language);
   const provider = emailFactory.getProvider();
 
   const { messageId } = await provider.send({
