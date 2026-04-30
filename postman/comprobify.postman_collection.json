@@ -413,10 +413,24 @@
                   "key": "cert",
                   "type": "file",
                   "src": ""
+                },
+                {
+                  "key": "language",
+                  "value": "es",
+                  "description": "Optional. Email language: es (default) or en.",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "verificationRedirectUrl",
+                  "value": "",
+                  "description": "Optional. Frontend URL for the email verification link. Token appended as ?token=<token>. https required in production.",
+                  "type": "text",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` \u2014 it is shown only once.\n\nCopy `apiKey` into the `api_key` collection variable."
+            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` \u2014 it is shown only once.\n\nCopy `apiKey` into the `api_key` collection variable.\n\nIf the email already exists and is not suspended, the endpoint revokes the current sandbox key and returns a new one (200 with `recovered: true`).\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link. When set, the email links to `{verificationRedirectUrl}?token=<token>` instead of directly to the API."
           }
         },
         {
@@ -472,7 +486,44 @@
                 }
               }
             },
-            "description": "Resends the verification email. Generates a fresh token with a new 24-hour expiry, invalidating the previous one. Returns the same generic message whether or not the email exists."
+            "description": "Resends the verification email. Generates a fresh token (invalidating the previous one) and resets the expiry.\n\nTwo rate limits apply:\n- IP-based: shared with POST /api/register \u2014 5 requests per hour per IP.\n- Per-account cooldown: 60 seconds between resends for the same email. Returns 429 if not elapsed.\n\nReturns the same generic message whether or not the email exists (no enumeration)."
+          }
+        },
+        {
+          "name": "Update Preferred Language",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/tenants/language",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "tenants",
+                "language"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"language\": \"en\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Updates the preferred language for the authenticated tenant. Used for all outgoing emails. Supported values: es (Spanish, default), en (English)."
           }
         }
       ]

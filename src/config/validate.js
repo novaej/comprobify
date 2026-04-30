@@ -26,6 +26,10 @@ function validateConfig(cfg) {
     missing.push('ADMIN_SECRET');
   }
 
+  if (!cfg.appBaseUrl) {
+    missing.push('APP_BASE_URL');
+  }
+
   // Required when email is enabled (default provider is 'mailgun', opt out by setting EMAIL_PROVIDER=none)
   if (cfg.email.provider && cfg.email.provider !== 'none') {
     if (!cfg.email.mailgunApiKey) {

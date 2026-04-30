@@ -75,7 +75,7 @@ async function register(fields, p12Buffer, p12Password) {
   const encryptedPrivateKey = cryptoService.encrypt(parsed.privateKeyPem);
 
   const verificationToken = crypto.randomBytes(32).toString('hex');
-  const verificationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const verificationTokenExpiresAt = new Date(Date.now() + config.verificationTokenTtlHours * 60 * 60 * 1000);
 
   const tier = TIERS.FREE;
 
@@ -88,6 +88,8 @@ async function register(fields, p12Buffer, p12Password) {
       invoiceQuota: tier.invoiceQuota,
       verificationToken,
       verificationTokenExpiresAt,
+      verificationRedirectUrl: fields.verificationRedirectUrl || null,
+      preferredLanguage: fields.language || 'es',
     });
 
     issuer = await issuerModel.create({
@@ -148,7 +150,7 @@ async function register(fields, p12Buffer, p12Password) {
 
   // Fire-and-forget — don't fail registration if email sending fails
   if (config.email.provider !== 'none') {
-    emailService.sendVerificationEmail(fields.email, verificationToken)
+    emailService.sendVerificationEmail(fields.email, verificationToken, fields.verificationRedirectUrl || null, fields.language || 'es')
       .then(({ messageId }) => Promise.all([
         tenantModel.updateVerificationEmailSent(tenant.id, messageId),
         tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),
@@ -174,6 +176,8 @@ async function register(fields, p12Buffer, p12Password) {
   };
 }
 
+const RESEND_COOLDOWN_MS = 60 * 1000;
+
 async function resendVerification(email) {
   const tenant = await tenantModel.findByEmail(email);
   if (!tenant) return; // don't leak whether email exists
@@ -189,12 +193,19 @@ async function resendVerification(email) {
     throw err;
   }
 
+  if (tenant.verification_email_sent_at) {
+    const elapsed = Date.now() - new Date(tenant.verification_email_sent_at).getTime();
+    if (elapsed < RESEND_COOLDOWN_MS) {
+      throw new Error('RESEND_COOLDOWN');
+    }
+  }
+
   const verificationToken = crypto.randomBytes(32).toString('hex');
-  const verificationTokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const verificationTokenExpiresAt = new Date(Date.now() + config.verificationTokenTtlHours * 60 * 60 * 1000);
   await tenantModel.updateVerificationToken(tenant.id, verificationToken, verificationTokenExpiresAt);
 
   if (config.email.provider !== 'none') {
-    emailService.sendVerificationEmail(email, verificationToken)
+    emailService.sendVerificationEmail(email, verificationToken, tenant.verification_redirect_url || null, tenant.preferred_language || 'es')
       .then(({ messageId }) => Promise.all([
         tenantModel.updateVerificationEmailSent(tenant.id, messageId),
         tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),

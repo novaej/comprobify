@@ -1,5 +1,7 @@
 const { body, query } = require('express-validator');
 const { SUPPORTED_TYPES } = require('../builders');
+const { SUPPORTED_LANGUAGES } = require('../locales');
+const config = require('../config');
 
 const register = [
   body('email')
@@ -76,6 +78,23 @@ const register = [
     .optional()
     .isIn(SUPPORTED_TYPES)
     .withMessage(`each documentType must be one of: ${SUPPORTED_TYPES.join(', ')}`),
+
+  body('language')
+    .optional()
+    .isIn(SUPPORTED_LANGUAGES)
+    .withMessage(`language must be one of: ${SUPPORTED_LANGUAGES.join(', ')}`),
+
+  body('verificationRedirectUrl')
+    .optional()
+    .isURL({
+      protocols: config.appEnv === 'production' ? ['https'] : ['https', 'http'],
+      require_protocol: true,
+    })
+    .withMessage(
+      config.appEnv === 'production'
+        ? 'verificationRedirectUrl must be a valid https URL'
+        : 'verificationRedirectUrl must be a valid URL (http or https)'
+    ),
 
   body().custom((_, { req }) => {
     if (!req.file) throw new Error('A P12 certificate file is required');

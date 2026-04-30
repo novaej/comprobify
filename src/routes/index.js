@@ -5,6 +5,7 @@ router.use('/', require('./registration.routes'));
 router.use('/admin', require('./admin.routes'));
 router.use('/documents', require('./documents.routes'));
 router.use('/issuers', require('./issuers.routes'));
+router.use('/tenants', require('./tenants.routes'));
 router.use('/mailgun', require('./mailgun-webhook.routes'));
 
 module.exports = router;

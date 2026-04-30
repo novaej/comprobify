@@ -2,12 +2,12 @@ const db = require('../config/database');
 const TenantStatus = require('../constants/tenant-status');
 const EmailStatus = require('../constants/email-status');
 
-async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, invoiceQuota = 100, verificationToken = null, verificationTokenExpiresAt = null }) {
+async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, invoiceQuota = 100, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es' }) {
   const { rows } = await db.query(
-    `INSERT INTO tenants (email, subscription_tier, status, invoice_quota, verification_token, verification_token_expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO tenants (email, subscription_tier, status, invoice_quota, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [email, subscriptionTier, status, invoiceQuota, verificationToken, verificationTokenExpiresAt]
+    [email, subscriptionTier, status, invoiceQuota, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage]
   );
   return rows[0];
 }
@@ -80,7 +80,7 @@ async function updateVerificationEmailStatus(id, status) {
 
 async function updateVerificationEmailSent(id, messageId) {
   const { rows } = await db.query(
-    `UPDATE tenants SET verification_email_message_id = $1, verification_email_status = $2, updated_at = NOW()
+    `UPDATE tenants SET verification_email_message_id = $1, verification_email_status = $2, verification_email_sent_at = NOW(), updated_at = NOW()
      WHERE id = $3 RETURNING *`,
     [messageId, EmailStatus.SENT, id]
   );
@@ -97,6 +97,14 @@ async function updateVerificationToken(id, token, expiresAt) {
   return rows[0] || null;
 }
 
+async function updatePreferredLanguage(id, language) {
+  const { rows } = await db.query(
+    `UPDATE tenants SET preferred_language = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [language, id]
+  );
+  return rows[0] || null;
+}
+
 async function countIssuersByTenantId(tenantId) {
   const { rows } = await db.query(
     `SELECT COUNT(*) AS count FROM issuers WHERE tenant_id = $1 AND active = true`,
@@ -105,4 +113,4 @@ async function countIssuersByTenantId(tenantId) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countIssuersByTenantId };
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countIssuersByTenantId };

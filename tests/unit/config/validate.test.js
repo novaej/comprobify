@@ -8,6 +8,7 @@ function validConfig(overrides = {}) {
   return {
     port: 8080,
     appEnv: 'staging',
+    appBaseUrl: 'https://api.example.com',
     docsBaseUrl: 'https://example.com',
     encryptionKey: 'a'.repeat(64),
     adminSecret: 'secret123',
@@ -75,6 +76,11 @@ describe('validateConfig', () => {
     test('throws listing both ENCRYPTION_KEY and ADMIN_SECRET in a single combined error', () => {
       const config = validConfig({ encryptionKey: '', adminSecret: '' });
       expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): ENCRYPTION_KEY, ADMIN_SECRET');
+    });
+
+    test('throws listing APP_BASE_URL when it is missing', () => {
+      const config = validConfig({ appBaseUrl: '' });
+      expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): APP_BASE_URL');
     });
 
     test('throws with format error when ENCRYPTION_KEY is present but wrong length (too short)', () => {
