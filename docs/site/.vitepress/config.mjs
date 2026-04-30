@@ -24,6 +24,7 @@ export default defineConfig({
           { text: 'Overview', link: '/endpoints/' },
           { text: 'Register', link: '/endpoints/register' },
           { text: 'Resend Verification', link: '/endpoints/resend-verification' },
+          { text: 'Update Language', link: '/endpoints/tenant-language' },
           { text: 'Document Types', link: '/endpoints/document-types' },
           { text: 'List Documents', link: '/endpoints/list-documents' },
           { text: 'Create Invoice', link: '/endpoints/create-invoice' },

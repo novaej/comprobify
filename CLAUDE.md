@@ -68,7 +68,9 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the admin service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. See `POST /api/admin/issuers`.
 
-**Tenant model:** `tenants` is the root billing entity. One tenant owns one or more issuers (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `invoice_count`, `invoice_quota`. Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines quota, issuer limits, and rate limits per tier.
+**Tenant model:** `tenants` is the root billing entity. One tenant owns one or more issuers (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `invoice_count`, `invoice_quota`, `preferred_language` (default `'es'`). Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines quota, issuer limits, and rate limits per tier. `PATCH /api/tenants/language` updates the preferred language after registration.
+
+**Email localisation:** outgoing emails are localised using `src/locales/` — a cross-cutting layer shared by email templates and (in future) API responses. `getTranslations(lang)` returns the locale object for the given language code, falling back to `'es'`. Each locale file exports a plain object keyed by domain (`email.verifyEmail.*`). Templates own HTML structure; locales own strings. `SUPPORTED_LANGUAGES` exported from `src/locales/index.js` is the single source of truth for accepted language codes — used by validators on `POST /api/register` and `PATCH /api/tenants/language`.
 
 **Self-service registration:** `POST /api/register` (public) — creates tenant + issuer + sandbox API key in one call. Tenant starts PENDING_VERIFICATION. A verification email is sent (fire-and-forget). The returned API key is shown once. `GET /api/verify-email?token=xxx` activates the tenant. Unverified tenants can use sandbox but cannot promote to production. Optional `verificationRedirectUrl` field redirects the email link to a frontend page (e.g. `https://app.example.com/verify?token=xxx`) instead of directly to the API — stored on the tenant row and used for all subsequent verification emails including resends. Token TTL is configurable via `VERIFICATION_TOKEN_TTL_HOURS` (default 24h). `POST /api/resend-verification` enforces a 60-second server-side cooldown (checked against `tenants.verification_email_sent_at`) in addition to the IP rate limit.
 
@@ -247,6 +249,11 @@ chore: update express to 4.22.1
 | `src/constants/subscription-tiers.js` | Tier definitions: quota, issuer limits, rate limits |
 | `src/constants/tenant-status.js` | `TenantStatus` frozen object — `PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED` |
 | `src/constants/email-status.js` | `EmailStatus` frozen object — `PENDING`, `SENT`, `FAILED`, `DELIVERED`, `COMPLAINED`, `SKIPPED` — shared by document and tenant email tracking |
+| `src/locales/index.js` | `getTranslations(lang)` + `SUPPORTED_LANGUAGES` + `DEFAULT_LANGUAGE` — single source of truth for i18n |
+| `src/locales/en.js` / `src/locales/es.js` | Locale string objects keyed by domain (`email.verifyEmail.*`) |
+| `src/services/tenant.service.js` | Tenant settings mutations — currently `updateLanguage` |
+| `src/controllers/tenant.controller.js` | Thin handlers for `PATCH /api/tenants/*` routes |
+| `src/routes/tenants.routes.js` | Authenticated tenant settings routes |
 | `src/services/admin.service.js` | Tenant + issuer + API key management |
 | `src/controllers/admin.controller.js` | Thin HTTP handlers for admin routes |
 | `src/routes/admin.routes.js` | `/api/admin/*` — admin auth + rate limit, tenant/issuer/key CRUD |

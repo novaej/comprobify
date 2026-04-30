@@ -12,6 +12,12 @@ Document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints re
 | `GET` | `/api/verify-email` | Verify email with token from registration email |
 | `POST` | `/api/resend-verification` | Resend verification email (regenerates token) |
 
+## Tenants (authenticated)
+
+| Method | Path | Description |
+|---|---|---|
+| `PATCH` | `/api/tenants/language` | Update the preferred language for outgoing emails |
+
 ## Issuers (authenticated)
 
 | Method | Path | Description |

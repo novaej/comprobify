@@ -36,6 +36,7 @@ Shared with `POST /api/resend-verification` — 5 requests per hour per IP.
 | `branchAddress` | string | No | Branch address |
 | `documentTypes` | array | No | Document type codes to enable (default: `["01"]`). Must be supported types. |
 | `initialSequentials` | array | No | Starting sequential numbers per document type: `[{ "documentType": "01", "sequential": 1 }]` |
+| `language` | string | No | Language for outgoing emails. Supported: `es` (default), `en`. Stored on the tenant and used for all subsequent emails including resends. |
 | `verificationRedirectUrl` | string | No | Frontend URL where the verification link in the email will point. The token is appended as `?token=<token>`. If omitted, the link goes directly to the API's verify endpoint. |
 
 ### `verificationRedirectUrl` behaviour
