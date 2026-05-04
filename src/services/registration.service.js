@@ -221,6 +221,7 @@ async function verifyEmail(token) {
   }
   await tenantModel.activate(tenant.id);
   await tenantEventModel.create(tenant.id, 'EMAIL_VERIFIED');
+  return { email: tenant.email };
 }
 
 module.exports = { register, resendVerification, verifyEmail, formatTenant };
