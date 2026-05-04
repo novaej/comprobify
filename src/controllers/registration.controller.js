@@ -17,8 +17,9 @@ const register = async (req, res) => {
 };
 
 const verifyEmail = async (req, res) => {
+  let email;
   try {
-    await registrationService.verifyEmail(req.query.token);
+    ({ email } = await registrationService.verifyEmail(req.query.token));
   } catch (err) {
     if (err.message === 'INVALID_TOKEN') {
       return res.status(400).json({
@@ -32,7 +33,7 @@ const verifyEmail = async (req, res) => {
     }
     throw err;
   }
-  res.json({ ok: true, message: 'Email verified. You can now promote your issuer to production.' });
+  res.json({ ok: true, email, message: 'Email verified. You can now promote your issuer to production.' });
 };
 
 const resendVerification = async (req, res) => {
