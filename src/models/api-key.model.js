@@ -7,8 +7,8 @@ async function findByKeyHash(keyHash) {
             t.subscription_tier AS tenant_subscription_tier,
             t.status            AS tenant_status,
             t.email             AS tenant_email,
-            t.invoice_count     AS tenant_invoice_count,
-            t.invoice_quota     AS tenant_invoice_quota
+            t.document_count    AS tenant_document_count,
+            t.document_quota    AS tenant_document_quota
      FROM api_keys ak
      JOIN issuers i  ON i.id = ak.issuer_id
      JOIN tenants t  ON t.id = i.tenant_id

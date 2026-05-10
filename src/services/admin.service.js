@@ -21,8 +21,8 @@ function formatTenant(row) {
     email: row.email,
     subscriptionTier: row.subscription_tier,
     status: row.status,
-    invoiceQuota: row.invoice_quota,
-    invoiceCount: row.invoice_count,
+    documentQuota: row.document_quota,
+    documentCount: row.document_count,
     createdAt: row.created_at,
   };
 }
@@ -56,7 +56,7 @@ async function createTenant(fields) {
     email: fields.email,
     subscriptionTier: tier,
     status: TenantStatus.ACTIVE,
-    invoiceQuota: TIERS[tier]?.invoiceQuota ?? 100,
+    documentQuota: TIERS[tier]?.documentQuota ?? 100,
   });
   return formatTenant(row);
 }
@@ -70,7 +70,7 @@ async function updateTenantTier(id, tier) {
   if (!TIERS[tier]) {
     throw new AppError(`Unknown tier: ${tier}`, 400);
   }
-  const row = await tenantModel.updateTier(id, tier, TIERS[tier].invoiceQuota);
+  const row = await tenantModel.updateTier(id, tier, TIERS[tier].documentQuota);
   if (!row) throw new AppError('Tenant not found', 404);
   return formatTenant(row);
 }
