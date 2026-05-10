@@ -8,6 +8,8 @@ The request is syntactically valid but cannot be processed in the current contex
 - Attempting a lifecycle operation on a document that is not in the required status (e.g. sending a document that is already `AUTHORIZED`)
 - Retrying an email that was already sent without the `?force=true` flag
 - Supplying conflicting parameters
+- Uploading a corrupt P12 certificate file during registration
+- Providing the wrong password for a P12 certificate during registration
 
 ## Response
 
