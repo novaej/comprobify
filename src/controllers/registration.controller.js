@@ -38,7 +38,7 @@ const verifyEmail = async (req, res) => {
 
 const resendVerification = async (req, res) => {
   try {
-    await registrationService.resendVerification(req.body.email);
+    await registrationService.resendVerification(req.body.email, req.body.verificationRedirectUrl);
   } catch (err) {
     if (err.message === 'ALREADY_VERIFIED') {
       throw new ConflictError('This account is already verified.');

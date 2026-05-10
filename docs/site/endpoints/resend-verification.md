@@ -21,13 +21,15 @@ Two independent limits apply:
 
 ```json
 {
-  "email": "your@email.com"
+  "email": "your@email.com",
+  "verificationRedirectUrl": "https://app.example.com/verify"
 }
 ```
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `email` | string | Yes | Email address used at registration |
+| `verificationRedirectUrl` | string (URL) | No | If provided, overrides the redirect URL embedded in the verification link. Must be `https` in production. Omit to keep the URL set at registration. |
 
 ## Response
 
@@ -53,6 +55,6 @@ The message is intentionally generic — the endpoint does not reveal whether th
 
 - The old token is immediately invalidated — only the newly issued token will work.
 - The new token expires after the configured TTL (default 24 hours).
-- The verification link in the resent email uses the same `verificationRedirectUrl` that was set at registration. If none was set, the link goes directly to the API verify endpoint.
+- If `verificationRedirectUrl` is supplied, it overwrites the value stored on the tenant and is used for all subsequent verification emails including future resends. Omit the field to keep the existing URL unchanged.
 - Delivery status is tracked the same way as invoice emails: `verification_email_status` on the tenant row is updated to `SENT`, `DELIVERED`, `FAILED`, or `COMPLAINED` via the Mailgun webhook.
 - If `EMAIL_PROVIDER=none`, the token is still regenerated in the database but no email is sent.

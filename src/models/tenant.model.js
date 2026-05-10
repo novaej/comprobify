@@ -97,6 +97,14 @@ async function updateVerificationToken(id, token, expiresAt) {
   return rows[0] || null;
 }
 
+async function updateVerificationRedirectUrl(id, url) {
+  const { rows } = await db.query(
+    `UPDATE tenants SET verification_redirect_url = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [url, id]
+  );
+  return rows[0] || null;
+}
+
 async function updatePreferredLanguage(id, language) {
   const { rows } = await db.query(
     `UPDATE tenants SET preferred_language = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
@@ -113,4 +121,4 @@ async function countIssuersByTenantId(tenantId) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countIssuersByTenantId };
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countIssuersByTenantId };

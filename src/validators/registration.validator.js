@@ -115,6 +115,18 @@ const resendVerification = [
     .isEmail()
     .normalizeEmail()
     .withMessage('email must be a valid email address'),
+
+  body('verificationRedirectUrl')
+    .optional()
+    .isURL({
+      protocols: config.appEnv === 'production' ? ['https'] : ['https', 'http'],
+      require_protocol: true,
+    })
+    .withMessage(
+      config.appEnv === 'production'
+        ? 'verificationRedirectUrl must be a valid https URL'
+        : 'verificationRedirectUrl must be a valid URL (http or https)'
+    ),
 ];
 
 module.exports = { register, resendVerification, verifyEmail };
