@@ -89,6 +89,7 @@ const register = [
     .isURL({
       protocols: config.appEnv === 'production' ? ['https'] : ['https', 'http'],
       require_protocol: true,
+      require_tld: config.appEnv === 'production',
     })
     .withMessage(
       config.appEnv === 'production'
@@ -121,6 +122,7 @@ const resendVerification = [
     .isURL({
       protocols: config.appEnv === 'production' ? ['https'] : ['https', 'http'],
       require_protocol: true,
+      require_tld: config.appEnv === 'production',
     })
     .withMessage(
       config.appEnv === 'production'
