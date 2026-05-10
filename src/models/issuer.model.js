@@ -42,6 +42,16 @@ async function findByTenantId(tenantId) {
   return rows[0] || null;
 }
 
+async function findAllByTenantId(tenantId) {
+  const { rows } = await db.query(
+    `SELECT id, ruc, business_name, trade_name, branch_code, issue_point_code,
+            branch_address, sandbox, cert_fingerprint, cert_expiry
+     FROM issuers WHERE tenant_id = $1 AND active = true ORDER BY id`,
+    [tenantId]
+  );
+  return rows;
+}
+
 async function promote(id) {
   const { rows } = await db.query(
     `UPDATE issuers SET sandbox = false WHERE id = $1 AND active = true RETURNING *`,
@@ -50,4 +60,4 @@ async function promote(id) {
   return rows[0] || null;
 }
 
-module.exports = { findById, findByRuc, findFirst, findByTenantId, create, findAll, promote };
+module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, promote };

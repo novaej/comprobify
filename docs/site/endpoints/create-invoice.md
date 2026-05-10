@@ -69,12 +69,13 @@ POST /api/documents
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `documentType` | string | Yes | Document type code. Currently only `"01"` (factura) is supported |
-| `issueDate` | string | No | Date in `DD/MM/YYYY` format. Defaults to today |
+| `issueDate` | string | No | Date in `DD/MM/YYYY` format. Must be today's date — SRI rejects past and future dates. Defaults to today if omitted |
 | `buyer.idType` | string | Yes | 2-digit SRI identification type code (e.g. `"05"` = cedula, `"04"` = RUC) |
 | `buyer.id` | string | Yes | Buyer identification number (max 20 chars) |
 | `buyer.name` | string | Yes | Buyer full name or business name (max 300 chars) |
 | `buyer.email` | string | Yes | Buyer email — RIDE and XML are sent here on authorization |
 | `buyer.address` | string | No | Buyer address (max 300 chars) |
+| `guiaRemision` | string | No | Delivery note number in `NNN-NNN-NNNNNNNNN` format (e.g. `001-001-000000001`) |
 | `items` | array | Yes | At least one item required |
 | `items[].mainCode` | string | Yes | Product/service main code |
 | `items[].auxiliaryCode` | string | No | Secondary code |
@@ -91,8 +92,8 @@ POST /api/documents
 | `payments` | array | Yes | At least one payment required |
 | `payments[].method` | string | Yes | 2-digit SRI payment method code |
 | `payments[].total` | string | Yes | Numeric payment amount |
-| `payments[].term` | number | No | Payment term (days) |
-| `payments[].termUnit` | string | No | Term unit (e.g. `"dias"`) |
+| `payments[].term` | number | No | Payment term length — maps to SRI `plazo` |
+| `payments[].termUnit` | string | No | Payment term unit (max 10 chars, e.g. `"dias"`) — maps to SRI `unidadTiempo` |
 | `additionalInfo` | array | No | Key-value pairs included in the XML as `campoAdicional` |
 
 ## Response

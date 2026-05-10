@@ -59,6 +59,33 @@ async function getTaxRateDescription(taxCode, rateCode) {
   return map.get(`${taxCode}|${rateCode}`) || rateCode;
 }
 
+async function listIdTypes() {
+  const { rows } = await db.query('SELECT code, description FROM cat_id_types ORDER BY code');
+  return rows;
+}
+
+async function listPaymentMethods() {
+  const { rows } = await db.query('SELECT code, description FROM cat_payment_methods ORDER BY code');
+  return rows;
+}
+
+async function listTaxTypes() {
+  const { rows } = await db.query('SELECT code, description FROM cat_tax_types ORDER BY code');
+  return rows;
+}
+
+async function listTaxRates() {
+  const { rows } = await db.query(
+    'SELECT tax_code, rate_code, description, rate FROM cat_tax_rates ORDER BY tax_code, rate_code'
+  );
+  return rows.map((r) => ({
+    taxCode: r.tax_code,
+    rateCode: r.rate_code,
+    description: r.description,
+    rate: r.rate,
+  }));
+}
+
 module.exports = {
   isValidIdType,
   isValidTaxType,
@@ -67,4 +94,8 @@ module.exports = {
   getIdTypeLabel,
   getPaymentMethodLabel,
   getTaxRateDescription,
+  listIdTypes,
+  listPaymentMethods,
+  listTaxTypes,
+  listTaxRates,
 };

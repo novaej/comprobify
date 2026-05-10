@@ -1,4 +1,5 @@
 const { body } = require('express-validator');
+const moment = require('moment');
 const catalog = require('../models/catalog.model');
 
 const createInvoice = [
@@ -10,7 +11,14 @@ const createInvoice = [
   body('issueDate')
     .optional()
     .matches(/^\d{2}\/\d{2}\/\d{4}$/)
-    .withMessage('Issue date must be in DD/MM/YYYY format'),
+    .withMessage('Issue date must be in DD/MM/YYYY format')
+    .bail()
+    .custom((value) => {
+      if (value !== moment().format('DD/MM/YYYY')) {
+        throw new Error('Issue date must be today — SRI rejects past and future dates');
+      }
+      return true;
+    }),
 
   body('buyer').notEmpty().withMessage('Buyer is required'),
   body('buyer.idType')
@@ -37,6 +45,11 @@ const createInvoice = [
   body('buyer.address')
     .optional()
     .isLength({ max: 300 }),
+
+  body('guiaRemision')
+    .optional()
+    .matches(/^\d{3}-\d{3}-\d{9}$/)
+    .withMessage('guiaRemision must be in format NNN-NNN-NNNNNNNNN'),
 
   body('items')
     .isArray({ min: 1 })
@@ -106,6 +119,14 @@ const createInvoice = [
     .notEmpty()
     .isNumeric()
     .withMessage('Payment total must be numeric'),
+  body('payments.*.term')
+    .optional()
+    .isNumeric()
+    .withMessage('Payment term must be numeric'),
+  body('payments.*.termUnit')
+    .optional()
+    .isLength({ min: 1, max: 10 })
+    .withMessage('Payment termUnit must be between 1 and 10 characters'),
 
   body('additionalInfo')
     .optional()
