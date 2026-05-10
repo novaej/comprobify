@@ -2,6 +2,7 @@ jest.mock('../../../src/models/issuer.model');
 jest.mock('../../../src/models/document.model');
 jest.mock('../../../src/models/document-line-item.model');
 jest.mock('../../../src/models/document-event.model');
+jest.mock('../../../src/models/issuer-document-type.model');
 jest.mock('../../../src/services/sequential.service');
 jest.mock('../../../src/services/access-key.service');
 jest.mock('../../../src/services/signing.service');
@@ -27,6 +28,7 @@ const db = require('../../../src/config/database');
 const documentModel = require('../../../src/models/document.model');
 const documentLineItemModel = require('../../../src/models/document-line-item.model');
 const documentEventModel = require('../../../src/models/document-event.model');
+const issuerDocumentTypeModel = require('../../../src/models/issuer-document-type.model');
 const sequentialService = require('../../../src/services/sequential.service');
 const accessKeyService = require('../../../src/services/access-key.service');
 const signingService = require('../../../src/services/signing.service');
@@ -77,6 +79,7 @@ describe('DocumentCreationService', () => {
     db.getClient.mockResolvedValue(mockClient);
     mockClient.query.mockResolvedValue({ rows: [{ id: 1 }] });
 
+    issuerDocumentTypeModel.findActiveByIssuerId.mockResolvedValue(['01']);
     sequentialService.getNext.mockResolvedValue(263);
     accessKeyService.generate.mockResolvedValue('2602202601171234567800110010010000002630000026311');
 
