@@ -10,6 +10,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`GET /api/issuers/me`** — returns the authenticated issuer's profile: `ruc`, `businessName`, `tradeName`, `branchCode`, `issuePointCode`, `sandbox`, `certFingerprint`, `certExpiry`. No extra DB query — all fields come from the issuer row already loaded by the `authenticate` middleware.
+
+### Changed
+- **`requestPayload` added to document responses** — all endpoints that return a document object now include `requestPayload` (the original request body). Omitted when `null`. Intended for pre-filling the Rebuild Invoice form after a rejection.
+
+### Added
 - **`verificationRedirectUrl` on `POST /api/register`** — optional field that stores a frontend URL on the tenant row. Verification emails will link to `${verificationRedirectUrl}?token=<token>` instead of directly to the API, enabling frontend-integrated verification flows. Validated as a URL; `https` required in production, `http` accepted in staging.
 - **`APP_BASE_URL` env var** — now required and validated at startup; used as the base for verification email links when no per-tenant `verificationRedirectUrl` is set. Previously the config key existed but was not validated at startup, so a missing value produced broken links silently.
 - **`VERIFICATION_TOKEN_TTL_HOURS` env var** — configures the verification token lifetime (default 24 hours). Previously hardcoded.

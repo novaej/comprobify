@@ -37,6 +37,7 @@ const removeDocumentTypeValidator = [
     .withMessage(`code must be one of: ${SUPPORTED_TYPES.join(', ')}`),
 ];
 
+router.get('/me', asyncHandler(controller.me));
 router.post('/promote', promoteValidator, validateRequest, asyncHandler(controller.promote));
 router.get('/document-types', asyncHandler(controller.listDocumentTypes));
 router.post('/document-types', addDocumentTypeValidator, validateRequest, asyncHandler(controller.addDocumentType));

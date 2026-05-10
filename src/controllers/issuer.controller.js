@@ -29,4 +29,21 @@ const removeDocumentType = async (req, res) => {
   res.json({ ok: true, documentTypes });
 };
 
-module.exports = { promote, listDocumentTypes, addDocumentType, removeDocumentType };
+const me = async (req, res) => {
+  const i = req.issuer;
+  res.json({
+    ok: true,
+    issuer: {
+      ruc: i.ruc,
+      businessName: i.business_name,
+      tradeName: i.trade_name || null,
+      branchCode: i.branch_code,
+      issuePointCode: i.issue_point_code,
+      sandbox: i.sandbox,
+      certFingerprint: i.cert_fingerprint || null,
+      certExpiry: i.cert_expiry || null,
+    },
+  });
+};
+
+module.exports = { promote, listDocumentTypes, addDocumentType, removeDocumentType, me };
