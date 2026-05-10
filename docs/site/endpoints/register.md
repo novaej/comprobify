@@ -69,8 +69,8 @@ https://api.yourdomain.com/api/verify-email?token=<64-char-hex>
     "email": "you@company.com",
     "subscriptionTier": "FREE",
     "status": "PENDING_VERIFICATION",
-    "invoiceQuota": 100,
-    "invoiceCount": 0,
+    "documentQuota": 100,
+    "documentCount": 0,
     "createdAt": "2026-04-30T00:00:00.000Z"
   },
   "issuer": {
