@@ -178,7 +178,7 @@ async function register(fields, p12Buffer, p12Password) {
 
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
-async function resendVerification(email) {
+async function resendVerification(email, verificationRedirectUrl) {
   const tenant = await tenantModel.findByEmail(email);
   if (!tenant) return; // don't leak whether email exists
 
@@ -204,8 +204,15 @@ async function resendVerification(email) {
   const verificationTokenExpiresAt = new Date(Date.now() + config.verificationTokenTtlHours * 60 * 60 * 1000);
   await tenantModel.updateVerificationToken(tenant.id, verificationToken, verificationTokenExpiresAt);
 
+  const effectiveRedirectUrl = verificationRedirectUrl !== undefined
+    ? (verificationRedirectUrl || null)
+    : (tenant.verification_redirect_url || null);
+  if (verificationRedirectUrl !== undefined) {
+    await tenantModel.updateVerificationRedirectUrl(tenant.id, effectiveRedirectUrl);
+  }
+
   if (config.email.provider !== 'none') {
-    emailService.sendVerificationEmail(email, verificationToken, tenant.verification_redirect_url || null, tenant.preferred_language || 'es')
+    emailService.sendVerificationEmail(email, verificationToken, effectiveRedirectUrl, tenant.preferred_language || 'es')
       .then(({ messageId }) => Promise.all([
         tenantModel.updateVerificationEmailSent(tenant.id, messageId),
         tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),
