@@ -3,8 +3,18 @@ const AppError = require('../errors/app-error');
 
 function parseCertificate(p12Buffer, p12Password) {
   const p12Der = p12Buffer.toString('binary');
-  const p12Asn1 = forge.asn1.fromDer(p12Der);
-  const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, p12Password);
+  let p12Asn1;
+  try {
+    p12Asn1 = forge.asn1.fromDer(p12Der);
+  } catch {
+    throw new AppError('Invalid P12 certificate file', 400);
+  }
+  let p12;
+  try {
+    p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, p12Password);
+  } catch {
+    throw new AppError('Invalid P12 certificate password', 400);
+  }
 
   const pkcs8Bags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
   const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
