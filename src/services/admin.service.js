@@ -98,13 +98,25 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
   if (!tenant) throw new AppError('Tenant not found', 404);
 
   const tierConfig = TIERS[tenant.subscription_tier];
-  if (tierConfig.maxIssuers !== null) {
-    const count = await tenantModel.countIssuersByTenantId(tenant.id);
-    if (count >= tierConfig.maxIssuers) {
-      throw new AppError(
-        `Tenant has reached the issuer limit for the ${tenant.subscription_tier} plan (${tierConfig.maxIssuers})`,
-        402
-      );
+  const issuePointCount = await tenantModel.countIssuePointsByBranch(tenant.id, fields.branchCode);
+  if (issuePointCount === 0) {
+    if (tierConfig.maxBranches !== null) {
+      const branchCount = await tenantModel.countBranchesByTenantId(tenant.id);
+      if (branchCount >= tierConfig.maxBranches) {
+        throw new AppError(
+          `Tenant has reached the branch limit for the ${tenant.subscription_tier} plan (${tierConfig.maxBranches})`,
+          402
+        );
+      }
+    }
+  } else {
+    if (tierConfig.maxIssuePointsPerBranch !== null) {
+      if (issuePointCount >= tierConfig.maxIssuePointsPerBranch) {
+        throw new AppError(
+          `Branch ${fields.branchCode} has reached the issue point limit for the ${tenant.subscription_tier} plan (${tierConfig.maxIssuePointsPerBranch})`,
+          402
+        );
+      }
     }
   }
 

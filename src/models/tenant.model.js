@@ -113,12 +113,20 @@ async function updatePreferredLanguage(id, language) {
   return rows[0] || null;
 }
 
-async function countIssuersByTenantId(tenantId) {
+async function countBranchesByTenantId(tenantId) {
   const { rows } = await db.query(
-    `SELECT COUNT(*) AS count FROM issuers WHERE tenant_id = $1 AND active = true`,
+    `SELECT COUNT(DISTINCT branch_code) AS count FROM issuers WHERE tenant_id = $1 AND active = true`,
     [tenantId]
   );
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countIssuersByTenantId };
+async function countIssuePointsByBranch(tenantId, branchCode) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*) AS count FROM issuers WHERE tenant_id = $1 AND branch_code = $2 AND active = true`,
+    [tenantId, branchCode]
+  );
+  return parseInt(rows[0].count, 10);
+}
+
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
