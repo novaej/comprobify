@@ -1,4 +1,5 @@
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
+const issuerModel = require('../models/issuer.model');
 const { SUPPORTED_TYPES } = require('../builders');
 const AppError = require('../errors/app-error');
 
@@ -26,4 +27,20 @@ async function removeDocumentType(issuerId, documentType) {
   return issuerDocumentTypeModel.findActiveByIssuerId(issuerId);
 }
 
-module.exports = { listDocumentTypes, addDocumentType, removeDocumentType };
+async function listIssuers(tenantId) {
+  const rows = await issuerModel.findAllByTenantId(tenantId);
+  return rows.map((i) => ({
+    id: i.id,
+    ruc: i.ruc,
+    businessName: i.business_name,
+    tradeName: i.trade_name || null,
+    branchCode: i.branch_code,
+    issuePointCode: i.issue_point_code,
+    branchAddress: i.branch_address || null,
+    sandbox: i.sandbox,
+    certFingerprint: i.cert_fingerprint || null,
+    certExpiry: i.cert_expiry || null,
+  }));
+}
+
+module.exports = { listDocumentTypes, addDocumentType, removeDocumentType, listIssuers };

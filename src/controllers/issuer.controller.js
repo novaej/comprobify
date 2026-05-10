@@ -46,4 +46,9 @@ const me = async (req, res) => {
   });
 };
 
-module.exports = { promote, listDocumentTypes, addDocumentType, removeDocumentType, me };
+const list = async (req, res) => {
+  const issuers = await issuerService.listIssuers(req.tenant.id);
+  res.json({ ok: true, issuers });
+};
+
+module.exports = { promote, list, listDocumentTypes, addDocumentType, removeDocumentType, me };

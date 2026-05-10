@@ -4,6 +4,7 @@ const controller = require('../controllers/issuer.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
+const { readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_TYPES } = require('../builders');
 
 const router = Router();
@@ -37,7 +38,8 @@ const removeDocumentTypeValidator = [
     .withMessage(`code must be one of: ${SUPPORTED_TYPES.join(', ')}`),
 ];
 
-router.get('/me', asyncHandler(controller.me));
+router.get('/', readLimiter, asyncHandler(controller.list));
+router.get('/me', readLimiter, asyncHandler(controller.me));
 router.post('/promote', promoteValidator, validateRequest, asyncHandler(controller.promote));
 router.get('/document-types', asyncHandler(controller.listDocumentTypes));
 router.post('/document-types', addDocumentTypeValidator, validateRequest, asyncHandler(controller.addDocumentType));
