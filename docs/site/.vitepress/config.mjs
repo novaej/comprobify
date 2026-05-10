@@ -22,24 +22,68 @@ export default defineConfig({
         collapsed: false,
         items: [
           { text: 'Overview', link: '/endpoints/' },
-          { text: 'Register', link: '/endpoints/register' },
-          { text: 'Resend Verification', link: '/endpoints/resend-verification' },
-          { text: 'Update Language', link: '/endpoints/tenant-language' },
-          { text: 'Get Issuer', link: '/endpoints/get-issuer-me' },
-          { text: 'Document Types', link: '/endpoints/document-types' },
-          { text: 'List Documents', link: '/endpoints/list-documents' },
-          { text: 'Create Invoice', link: '/endpoints/create-invoice' },
-          { text: 'Get Document', link: '/endpoints/get-document' },
-          { text: 'Send to SRI', link: '/endpoints/send-to-sri' },
-          { text: 'Check Authorization', link: '/endpoints/check-authorization' },
-          { text: 'Rebuild Invoice', link: '/endpoints/rebuild-invoice' },
-          { text: 'Get RIDE (PDF)', link: '/endpoints/get-ride' },
-          { text: 'Get XML', link: '/endpoints/get-xml' },
-          { text: 'Get Events', link: '/endpoints/get-events' },
-          { text: 'Retry Emails (Batch)', link: '/endpoints/retry-emails' },
-          { text: 'Retry Email (Single)', link: '/endpoints/retry-single-email' },
-          { text: 'Mailgun Webhook', link: '/endpoints/webhooks' },
-          { text: 'Health Check', link: '/endpoints/health' },
+          {
+            text: 'Registration',
+            collapsed: false,
+            items: [
+              { text: 'Register', link: '/endpoints/register' },
+              { text: 'Resend Verification', link: '/endpoints/resend-verification' },
+            ],
+          },
+          {
+            text: 'Tenants',
+            collapsed: false,
+            items: [
+              { text: 'Update Language', link: '/endpoints/tenant-language' },
+            ],
+          },
+          {
+            text: 'Issuers',
+            collapsed: false,
+            items: [
+              { text: 'Get Issuer', link: '/endpoints/get-issuer-me' },
+              { text: 'List Issuers', link: '/endpoints/list-issuers' },
+              { text: 'Document Types', link: '/endpoints/document-types' },
+            ],
+          },
+          {
+            text: 'Documents',
+            collapsed: false,
+            items: [
+              { text: 'List Documents', link: '/endpoints/list-documents' },
+              { text: 'Create Invoice', link: '/endpoints/create-invoice' },
+              { text: 'Get Document', link: '/endpoints/get-document' },
+              { text: 'Send to SRI', link: '/endpoints/send-to-sri' },
+              { text: 'Check Authorization', link: '/endpoints/check-authorization' },
+              { text: 'Rebuild Invoice', link: '/endpoints/rebuild-invoice' },
+              { text: 'Get RIDE (PDF)', link: '/endpoints/get-ride' },
+              { text: 'Get XML', link: '/endpoints/get-xml' },
+              { text: 'Get Events', link: '/endpoints/get-events' },
+              { text: 'Retry Emails (Batch)', link: '/endpoints/retry-emails' },
+              { text: 'Retry Email (Single)', link: '/endpoints/retry-single-email' },
+            ],
+          },
+          {
+            text: 'Catalogs',
+            collapsed: false,
+            items: [
+              { text: 'Catalog Reference', link: '/endpoints/catalogs' },
+            ],
+          },
+          {
+            text: 'Webhooks',
+            collapsed: false,
+            items: [
+              { text: 'Mailgun Webhook', link: '/endpoints/webhooks' },
+            ],
+          },
+          {
+            text: 'Monitoring',
+            collapsed: false,
+            items: [
+              { text: 'Health Check', link: '/endpoints/health' },
+            ],
+          },
         ],
       },
       {

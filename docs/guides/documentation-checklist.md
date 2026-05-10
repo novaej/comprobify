@@ -20,7 +20,7 @@ When making changes to the codebase, update the corresponding documentation plac
 1. **`docs/site/endpoints/{endpoint-name}.md`** — create new endpoint documentation
    - Include: method, path, auth, params, request body, response, errors
 2. **`docs/site/endpoints/index.md`** — add to endpoints overview table
-3. **`docs/site/.vitepress/config.mjs`** — add to sidebar navigation
+3. **`docs/site/.vitepress/config.mjs`** — add to sidebar under the matching route group (Registration / Tenants / Issuers / Documents / Catalogs / Webhooks / Monitoring)
 4. **`postman/comprobify.postman_collection.json`** — add request (validate JSON after)
 5. **`CHANGELOG.md`** — add to "### Added" section in Unreleased
 6. **`NEXT_STEPS.md`** — update if this completes a pending task (remove/renumber)
@@ -319,7 +319,7 @@ npm run docs:preview
 ## Notes
 
 - **Order matters for Postman edits**: Update the route first, then update Postman with the actual JSON structure.
-- **VitePress sidebar is strict**: If you add a doc file but forget to add it to the sidebar, it won't be discoverable.
+- **VitePress sidebar is strict**: If you add a doc file but forget to add it to the sidebar, it won't be discoverable. The sidebar in `config.mjs` is grouped by API route prefix (Registration, Tenants, Issuers, Documents, Catalogs, Webhooks, Monitoring) — add new endpoints to the matching group.
 - **CHANGELOG dates**: Use today's date when adding to Unreleased; dates are assigned at release time.
 - **NEXT_STEPS.md renumbering**: Keep items numbered 1, 2, 3... If you complete item 3, renumber remaining items.
 - **Commit atomicity**: Group related changes (code + docs) in a single commit if they're conceptually one change.
