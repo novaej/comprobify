@@ -22,6 +22,7 @@ function formatDocument(doc) {
       ...(doc.email_sent_at && { sentAt: doc.email_sent_at }),
       ...(doc.email_error && { error: doc.email_error }),
     },
+    ...(doc.request_payload != null && { requestPayload: doc.request_payload }),
   };
 }
 

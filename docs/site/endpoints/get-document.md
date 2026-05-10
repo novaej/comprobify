@@ -35,10 +35,13 @@ GET /api/documents/:accessKey
     "email": {
       "status": "DELIVERED",
       "sentAt": "2026-03-15T14:22:05.123Z"
-    }
+    },
+    "requestPayload": { }
   }
 }
 ```
+
+`requestPayload` contains the original request body that was used to create the document. It is omitted when `null`. Use it to pre-fill the [Rebuild Invoice](rebuild-invoice.md) form after a document is rejected.
 
 ## Errors
 

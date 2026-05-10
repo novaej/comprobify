@@ -22,6 +22,7 @@ Document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints re
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/api/issuers/me` | Get profile info for the current issuer (name, RUC, sandbox flag, cert expiry) |
 | `POST` | `/api/issuers/promote` | Promote issuer to production — returns new production API key |
 | `GET` | `/api/issuers/document-types` | List active document types for this issuer |
 | `POST` | `/api/issuers/document-types` | Enable a document type for this issuer |

@@ -22,6 +22,8 @@ Use this when a document is in `RETURNED` or `NOT_AUTHORIZED` status. After rebu
 
 Same schema as [Create Invoice](create-invoice.md). Supply the corrected invoice content. The `issueDate` from the original document is preserved regardless of what is supplied here.
 
+The original payload is available in the `requestPayload` field on the [Get Document](get-document.md) response — use it to pre-fill the form with the data that was submitted when the document was first created.
+
 ## Response
 
 **200 OK**
