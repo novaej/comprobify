@@ -6,7 +6,7 @@ class InvoiceBuilder extends BaseDocumentBuilder {
   }
 
   buildInfoFactura(body) {
-    const { issueDate, buyer, items, payments } = body;
+    const { issueDate, buyer, guiaRemision, items, payments } = body;
 
     // Calculate totals from items
     let subtotal = 0;
@@ -37,6 +37,7 @@ class InvoiceBuilder extends BaseDocumentBuilder {
       ...(this.issuer.special_taxpayer && { contribuyenteEspecial: this.issuer.special_taxpayer }),
       ...(this.issuer.required_accounting && { obligadoContabilidad: this.issuer.required_accounting }),
       tipoIdentificacionComprador: buyer.idType,
+      ...(guiaRemision && { guiaRemision }),
       razonSocialComprador: buyer.name,
       identificacionComprador: buyer.id,
       ...(buyer.address && { direccionComprador: buyer.address }),
@@ -57,6 +58,8 @@ class InvoiceBuilder extends BaseDocumentBuilder {
         pago: payments.map((p) => ({
           formaPago: p.method,
           total: p.total,
+          ...(p.term !== undefined && { plazo: String(p.term) }),
+          ...(p.termUnit && { unidadTiempo: p.termUnit }),
         })),
       },
     };
