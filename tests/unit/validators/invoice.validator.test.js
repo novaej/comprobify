@@ -1,4 +1,5 @@
 const { validationResult } = require('express-validator');
+const moment = require('moment');
 
 jest.mock('../../../src/models/catalog.model', () => ({
   isValidIdType:       jest.fn(async (v) => ['04', '05', '06', '07', '08'].includes(v)),
@@ -24,7 +25,7 @@ async function runValidation(body) {
 describe('Invoice Validator', () => {
   const validBody = {
     documentType: '01',
-    issueDate: '26/02/2026',
+    issueDate: moment().format('DD/MM/YYYY'),
     buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
     items: [{
       mainCode: '001',
@@ -66,6 +67,20 @@ describe('Invoice Validator', () => {
     expect(result.isEmpty()).toBe(false);
     const errors = result.array();
     expect(errors.some(e => e.path === 'issueDate')).toBe(true);
+  });
+
+  test('rejects past issueDate', async () => {
+    const yesterday = moment().subtract(1, 'day').format('DD/MM/YYYY');
+    const result = await runValidation({ ...validBody, issueDate: yesterday });
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'issueDate')).toBe(true);
+  });
+
+  test('rejects future issueDate', async () => {
+    const tomorrow = moment().add(1, 'day').format('DD/MM/YYYY');
+    const result = await runValidation({ ...validBody, issueDate: tomorrow });
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'issueDate')).toBe(true);
   });
 
   test('rejects missing buyer', async () => {

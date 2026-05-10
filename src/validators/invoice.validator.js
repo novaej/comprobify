@@ -1,4 +1,5 @@
 const { body } = require('express-validator');
+const moment = require('moment');
 const catalog = require('../models/catalog.model');
 
 const createInvoice = [
@@ -10,7 +11,14 @@ const createInvoice = [
   body('issueDate')
     .optional()
     .matches(/^\d{2}\/\d{2}\/\d{4}$/)
-    .withMessage('Issue date must be in DD/MM/YYYY format'),
+    .withMessage('Issue date must be in DD/MM/YYYY format')
+    .bail()
+    .custom((value) => {
+      if (value !== moment().format('DD/MM/YYYY')) {
+        throw new Error('Issue date must be today — SRI rejects past and future dates');
+      }
+      return true;
+    }),
 
   body('buyer').notEmpty().withMessage('Buyer is required'),
   body('buyer.idType')

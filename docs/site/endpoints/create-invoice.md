@@ -69,7 +69,7 @@ POST /api/documents
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `documentType` | string | Yes | Document type code. Currently only `"01"` (factura) is supported |
-| `issueDate` | string | No | Date in `DD/MM/YYYY` format. Defaults to today |
+| `issueDate` | string | No | Date in `DD/MM/YYYY` format. Must be today's date — SRI rejects past and future dates. Defaults to today if omitted |
 | `buyer.idType` | string | Yes | 2-digit SRI identification type code (e.g. `"05"` = cedula, `"04"` = RUC) |
 | `buyer.id` | string | Yes | Buyer identification number (max 20 chars) |
 | `buyer.name` | string | Yes | Buyer full name or business name (max 300 chars) |
