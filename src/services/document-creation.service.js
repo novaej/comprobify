@@ -62,8 +62,8 @@ async function create(body, idempotencyKey = null, issuer) {
 
     // Atomically increment invoice count — rolls back with the transaction if anything fails
     const quotaResult = await client.query(
-      `UPDATE tenants SET invoice_count = invoice_count + 1, updated_at = NOW()
-       WHERE id = $1 AND invoice_count < invoice_quota
+      `UPDATE tenants SET document_count = document_count + 1, updated_at = NOW()
+       WHERE id = $1 AND document_count < document_quota
        RETURNING id`,
       [issuer.tenant_id]
     );

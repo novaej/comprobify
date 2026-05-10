@@ -44,7 +44,7 @@ Response:
     "email": "your@email.com",
     "subscriptionTier": "FREE",
     "status": "PENDING_VERIFICATION",
-    "invoiceQuota": 100
+    "documentQuota": 100
   },
   "issuer": { "id": 1, "ruc": "...", "sandbox": true },
   "apiKey": "<your-sandbox-api-key>"
@@ -53,7 +53,7 @@ Response:
 
 **Store the `apiKey` — it is shown only once.**
 
-The account starts on the **FREE** tier (100 invoices/month, 1 issuer). All documents are sent to the SRI test environment until you promote to production.
+The account starts on the **FREE** tier (100 documents, 1 branch, 1 issuing point). All documents are sent to the SRI test environment until you promote to production.
 
 **Registration errors:**
 

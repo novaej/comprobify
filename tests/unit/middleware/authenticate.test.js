@@ -13,8 +13,8 @@ const mockRow = {
   tenant_status: 'ACTIVE',
   tenant_email: 'test@example.com',
   tenant_subscription_tier: 'FREE',
-  tenant_invoice_count: 0,
-  tenant_invoice_quota: 100,
+  tenant_document_count: 0,
+  tenant_document_quota: 100,
 };
 
 function makeReq(authHeader) {

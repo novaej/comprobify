@@ -42,8 +42,8 @@ const authenticate = async (req, _res, next) => {
     email: row.tenant_email,
     subscriptionTier: row.tenant_subscription_tier,
     status: row.tenant_status,
-    invoiceCount: row.tenant_invoice_count,
-    invoiceQuota: row.tenant_invoice_quota,
+    documentCount: row.tenant_document_count,
+    documentQuota: row.tenant_document_quota,
   };
 
   next();

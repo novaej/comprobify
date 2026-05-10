@@ -23,8 +23,8 @@ function formatTenant(row) {
     email: row.email,
     subscriptionTier: row.subscription_tier,
     status: row.status,
-    invoiceQuota: row.invoice_quota,
-    invoiceCount: row.invoice_count,
+    documentQuota: row.document_quota,
+    documentCount: row.document_count,
     createdAt: row.created_at,
   };
 }
@@ -85,7 +85,7 @@ async function register(fields, p12Buffer, p12Password) {
       email: fields.email,
       subscriptionTier: 'FREE',
       status: TenantStatus.PENDING_VERIFICATION,
-      invoiceQuota: tier.invoiceQuota,
+      documentQuota: tier.documentQuota,
       verificationToken,
       verificationTokenExpiresAt,
       verificationRedirectUrl: fields.verificationRedirectUrl || null,

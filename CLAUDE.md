@@ -68,7 +68,7 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the admin service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. See `POST /api/admin/issuers`.
 
-**Tenant model:** `tenants` is the root billing entity. One tenant owns one or more issuers (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `invoice_count`, `invoice_quota`, `preferred_language` (default `'es'`). Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines quota, issuer limits, and rate limits per tier. `PATCH /api/tenants/language` updates the preferred language after registration.
+**Tenant model:** `tenants` is the root billing entity. One tenant owns one RUC with one or more branches and issuing points (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `document_count`, `document_quota`, `preferred_language` (default `'es'`). Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines per-tier `documentQuota`, `maxBranches`, `maxIssuePointsPerBranch`, and rate limits. `PATCH /api/tenants/language` updates the preferred language after registration.
 
 **Email localisation:** outgoing emails are localised using `src/locales/` — a cross-cutting layer shared by email templates and (in future) API responses. `getTranslations(lang)` returns the locale object for the given language code, falling back to `'es'`. Each locale file exports a plain object keyed by domain (`email.verifyEmail.*`). Templates own HTML structure; locales own strings. `SUPPORTED_LANGUAGES` exported from `src/locales/index.js` is the single source of truth for accepted language codes — used by validators on `POST /api/register` and `PATCH /api/tenants/language`.
 
@@ -80,7 +80,7 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **API key environment scoping:** every `api_keys` row has an `environment` column (`'sandbox'` or `'production'`) stamped at creation from the issuer's current `sandbox` flag. The `authenticate` middleware rejects a key whose environment no longer matches the issuer, and rejects requests from SUSPENDED tenants (403). `findByKeyHash` joins `tenants` and returns `tenant_*` columns; `authenticate` splits these into `req.tenant`.
 
-**Invoice quota enforcement:** at the start of every document creation transaction, `UPDATE tenants SET invoice_count = invoice_count + 1 WHERE id = $1 AND invoice_count < invoice_quota RETURNING id` runs atomically. If no row returns, a `QuotaExceededError` (402 QUOTA_EXCEEDED) is thrown and the transaction rolls back.
+**Document quota enforcement:** at the start of every document creation transaction, `UPDATE tenants SET document_count = document_count + 1 WHERE id = $1 AND document_count < document_quota RETURNING id` runs atomically. If no row returns, a `QuotaExceededError` (402 QUOTA_EXCEEDED) is thrown and the transaction rolls back.
 
 **Tier-aware rate limiting:** `writeLimiter` and `readLimiter` in `src/middleware/rate-limit.js` read `req.tenant.subscriptionTier` and return the tier's limit dynamically. `adminLimiter` is a fixed 20 req/min IP-based limiter applied to all admin routes.
 
@@ -236,7 +236,7 @@ chore: update express to 4.22.1
 | `src/services/xml-validator.service.js` | XSD pre-validation via xmllint (async) |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
 | `src/presenters/document.presenter.js` | `formatDocument()` — shared response shape |
-| `src/models/tenant.model.js` | Tenant CRUD — `create`, `findByEmail`, `findByVerificationToken`, `activate`, `updateTier`, `updateStatus`, `updateVerificationToken`, `updateVerificationEmailSent`, `updateVerificationEmailStatus`, `findByVerificationEmailMessageId`, `countIssuersByTenantId` |
+| `src/models/tenant.model.js` | Tenant CRUD — `create`, `findByEmail`, `findByVerificationToken`, `activate`, `updateTier`, `updateStatus`, `updateVerificationToken`, `updateVerificationEmailSent`, `updateVerificationEmailStatus`, `findByVerificationEmailMessageId`, `countBranchesByTenantId`, `countIssuePointsByBranch` |
 | `src/models/tenant-event.model.js` | Tenant event log — `create`, `findByTenantId`; uses `db.query()` (not issuer-scoped) |
 | `src/services/certificate.service.js` | P12 parsing — shared by registration and admin service |
 | `src/services/registration.service.js` | Self-service registration + resend verification — creates tenant + issuer + sandbox API key; logs tenant events |
@@ -246,7 +246,7 @@ chore: update express to 4.22.1
 | `src/controllers/issuer.controller.js` | Handlers for promote and document type management |
 | `src/services/issuer.service.js` | `listDocumentTypes`, `addDocumentType`, `removeDocumentType` — validates against `SUPPORTED_TYPES` |
 | `src/models/issuer-document-type.model.js` | `bulkCreate`, `findActiveByIssuerId`, `activate`, `deactivate` — uses `db.query()` (not issuer-scoped) |
-| `src/constants/subscription-tiers.js` | Tier definitions: quota, issuer limits, rate limits |
+| `src/constants/subscription-tiers.js` | Tier definitions: `documentQuota`, `maxBranches`, `maxIssuePointsPerBranch`, rate limits |
 | `src/constants/tenant-status.js` | `TenantStatus` frozen object — `PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED` |
 | `src/constants/email-status.js` | `EmailStatus` frozen object — `PENDING`, `SENT`, `FAILED`, `DELIVERED`, `COMPLAINED`, `SKIPPED` — shared by document and tenant email tracking |
 | `src/locales/index.js` | `getTranslations(lang)` + `SUPPORTED_LANGUAGES` + `DEFAULT_LANGUAGE` — single source of truth for i18n |

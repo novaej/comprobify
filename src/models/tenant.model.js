@@ -2,12 +2,12 @@ const db = require('../config/database');
 const TenantStatus = require('../constants/tenant-status');
 const EmailStatus = require('../constants/email-status');
 
-async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, invoiceQuota = 100, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es' }) {
+async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, documentQuota = 100, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es' }) {
   const { rows } = await db.query(
-    `INSERT INTO tenants (email, subscription_tier, status, invoice_quota, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language)
+    `INSERT INTO tenants (email, subscription_tier, status, document_quota, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [email, subscriptionTier, status, invoiceQuota, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage]
+    [email, subscriptionTier, status, documentQuota, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage]
   );
   return rows[0];
 }
@@ -46,10 +46,10 @@ async function activate(id) {
   return rows[0] || null;
 }
 
-async function updateTier(id, tier, invoiceQuota) {
+async function updateTier(id, tier, documentQuota) {
   const { rows } = await db.query(
-    `UPDATE tenants SET subscription_tier = $1, invoice_quota = $2, updated_at = NOW() WHERE id = $3 RETURNING *`,
-    [tier, invoiceQuota, id]
+    `UPDATE tenants SET subscription_tier = $1, document_quota = $2, updated_at = NOW() WHERE id = $3 RETURNING *`,
+    [tier, documentQuota, id]
   );
   return rows[0] || null;
 }
@@ -113,12 +113,20 @@ async function updatePreferredLanguage(id, language) {
   return rows[0] || null;
 }
 
-async function countIssuersByTenantId(tenantId) {
+async function countBranchesByTenantId(tenantId) {
   const { rows } = await db.query(
-    `SELECT COUNT(*) AS count FROM issuers WHERE tenant_id = $1 AND active = true`,
+    `SELECT COUNT(DISTINCT branch_code) AS count FROM issuers WHERE tenant_id = $1 AND active = true`,
     [tenantId]
   );
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countIssuersByTenantId };
+async function countIssuePointsByBranch(tenantId, branchCode) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*) AS count FROM issuers WHERE tenant_id = $1 AND branch_code = $2 AND active = true`,
+    [tenantId, branchCode]
+  );
+  return parseInt(rows[0].count, 10);
+}
+
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
