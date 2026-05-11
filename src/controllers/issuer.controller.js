@@ -4,6 +4,9 @@ const AppError = require('../errors/app-error');
 const TenantStatus = require('../constants/tenant-status');
 
 const createBranch = async (req, res) => {
+  if (req.tenant.status !== TenantStatus.ACTIVE) {
+    throw new AppError('Email verification required before creating additional branches. Check your inbox.', 403);
+  }
   const { issuer, apiKey } = await issuerService.createBranch(
     req.tenant,
     req.issuer,

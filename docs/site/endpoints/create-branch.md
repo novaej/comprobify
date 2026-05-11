@@ -79,4 +79,5 @@ The `apiKey` is shown **once** — store it immediately. The new issuer always s
 | `400` | `VALIDATION_ERROR` | Missing or invalid fields |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `402` | `PAYMENT_REQUIRED` | Branch or issue point limit reached for this tier |
+| `403` | `FORBIDDEN` | Tenant email not yet verified |
 | `409` | `CONFLICT` | A branch with this `branchCode` + `issuePointCode` combination already exists |
