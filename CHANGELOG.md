@@ -10,6 +10,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`POST /api/issuers`** — self-service branch/issue-point creation. Authenticated endpoint that creates a new issuer row sharing the tenant's RUC and certificate, returning a new sandbox API key. Inherits all issuer-level fields (RUC, business name, cert) from the calling issuer; only `branchCode` and `issuePointCode` are required. An optional P12 upload overrides the certificate for branches that use a different cert. Tier limits (`maxBranches`, `maxIssuePointsPerBranch`) are enforced and return 402 when exceeded.
 - **`GET /api/issuers/me`** — returns the authenticated issuer's profile: `ruc`, `businessName`, `tradeName`, `branchCode`, `issuePointCode`, `sandbox`, `certFingerprint`, `certExpiry`. No extra DB query — all fields come from the issuer row already loaded by the `authenticate` middleware.
 
 ### Changed

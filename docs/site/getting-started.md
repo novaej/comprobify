@@ -92,6 +92,61 @@ The key is SHA-256 hashed on each request — the plaintext is never persisted a
 
 ---
 
+## Understanding API keys and branches
+
+This is the most important concept to understand before integrating.
+
+**One API key = one issuer = one branch + issue point combination.**
+
+Your account (tenant) can have multiple issuers — each one is a unique pair of `branchCode` and `issuePointCode` (e.g., `001/001`, `001/002`, `002/001`). Every issuer has its own independent API key.
+
+When you call `POST /api/documents`, the API uses the key you provide to determine:
+- Which branch and issue point to embed in the document
+- Which digital certificate to sign with
+- Which sequential number sequence to draw from
+
+This means **you select the issuing branch by choosing which API key you use** — there is no `branchCode` field in the document request body.
+
+### Adding a new branch or issue point
+
+Once your email is verified, call `POST /api/issuers` with any existing key for your account:
+
+```http
+POST /api/issuers
+Authorization: Bearer <any-existing-api-key>
+Content-Type: multipart/form-data
+
+branchCode=002
+issuePointCode=001
+```
+
+The new issuer inherits your RUC, business name, and digital certificate automatically. The response includes a new API key scoped to that branch:
+
+```json
+{
+  "ok": true,
+  "issuer": { "id": 2, "branchCode": "002", "issuePointCode": "001", "sandbox": true },
+  "apiKey": "<new-key-for-branch-002>"
+}
+```
+
+**Store the `apiKey` — it is shown only once.** Use this key for all document requests that should originate from branch `002/001`.
+
+### Key lifecycle
+
+| Stage | Key | What to do |
+|---|---|---|
+| After registration | Sandbox key | Use for testing. Promote when ready. |
+| After `POST /api/issuers/promote` | Production key | Sandbox key revoked. Store production key. |
+| After `POST /api/issuers` | New sandbox key | Store it. Promote separately when ready. |
+| Lost key | — | Contact support to revoke and issue a replacement. |
+
+### Why per-branch keys?
+
+Each branch key is independently revocable. If you integrate branch `002` into a third-party ERP, that system only needs — and only gets — the key for branch `002`. A compromised or revoked key for one branch has no effect on the others.
+
+---
+
 ## 4. Create an invoice
 
 ```http
@@ -171,14 +226,16 @@ This is **one-way** — there is no going back to sandbox. On success:
 
 ## Subscription tiers
 
-| Tier | Price | Invoices/month | Issuers | Write limit |
+| Tier | Document quota | Max branches | Max issue points per branch | Write limit |
 |---|---|---|---|---|
-| Free | $0 | 100 | 1 | 10 req/min |
-| Starter | $29 | 1,000 | 2 | 60 req/min |
-| Growth | $79 | 5,000 | 5 | 120 req/min |
-| Business | $199 | 20,000 | unlimited | 300 req/min |
+| Free | 100 | 1 | 1 | 10 req/min |
+| Starter | 1,000 | 3 | 2 | 60 req/min |
+| Growth | 5,000 | 10 | 5 | 120 req/min |
+| Business | 20,000 | Unlimited | Unlimited | 300 req/min |
 
-When you reach your monthly invoice quota, `POST /api/documents` returns `402 QUOTA_EXCEEDED`. Contact support to upgrade your plan.
+The document quota is shared across all branches and document types. When you reach it, `POST /api/documents` returns `402 QUOTA_EXCEEDED`. Contact support to upgrade your plan.
+
+Attempting to create a branch beyond the tier limit returns `402 PAYMENT_REQUIRED`.
 
 ---
 
