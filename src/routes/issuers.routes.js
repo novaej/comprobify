@@ -1,11 +1,15 @@
 const { Router } = require('express');
 const { body, param } = require('express-validator');
+const multer = require('multer');
 const controller = require('../controllers/issuer.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
-const { readLimiter } = require('../middleware/rate-limit');
+const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_TYPES } = require('../builders');
+const v = require('../validators/issuer.validator');
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
@@ -38,6 +42,7 @@ const removeDocumentTypeValidator = [
     .withMessage(`code must be one of: ${SUPPORTED_TYPES.join(', ')}`),
 ];
 
+router.post('/', writeLimiter, upload.single('cert'), v.createBranch, validateRequest, asyncHandler(controller.createBranch));
 router.get('/', readLimiter, asyncHandler(controller.list));
 router.get('/me', readLimiter, asyncHandler(controller.me));
 router.post('/promote', promoteValidator, validateRequest, asyncHandler(controller.promote));

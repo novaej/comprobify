@@ -26,19 +26,19 @@
     {
       "key": "access_key",
       "value": "",
-      "description": "49-digit SRI access key — copy from Create Invoice response",
+      "description": "49-digit SRI access key \u2014 copy from Create Invoice response",
       "type": "string"
     },
     {
       "key": "issuer_id",
       "value": "",
-      "description": "Issuer ID — copy from Create Issuer response",
+      "description": "Issuer ID \u2014 copy from Create Issuer response",
       "type": "string"
     },
     {
       "key": "api_key_id",
       "value": "",
-      "description": "API key ID — copy from Create API Key response (used for revocation)",
+      "description": "API key ID \u2014 copy from Create API Key response (used for revocation)",
       "type": "string"
     }
   ],
@@ -69,7 +69,7 @@
               {
                 "key": "Idempotency-Key",
                 "value": "{{$guid}}",
-                "description": "Optional — unique per intended invoice. Reuse on retries to avoid duplicates."
+                "description": "Optional \u2014 unique per intended invoice. Reuse on retries to avoid duplicates."
               }
             ],
             "url": {
@@ -164,7 +164,7 @@
                 "{{access_key}}"
               ]
             },
-            "description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates."
+            "description": "Retrieves document metadata by access key. Does not call the SRI \u2014 use Check Authorization for status updates."
           }
         },
         {
@@ -293,7 +293,7 @@
                 "events"
               ]
             },
-            "description": "Returns the full audit trail for the document — every lifecycle transition, SRI call, and email event."
+            "description": "Returns the full audit trail for the document \u2014 every lifecycle transition, SRI call, and email event."
           }
         },
         {
@@ -430,7 +430,7 @@
                 }
               ]
             },
-            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once.\n\nCopy `apiKey` into the `api_key` collection variable.\n\nIf the email already exists and is not suspended, the endpoint revokes the current sandbox key and returns a new one (200 with `recovered: true`).\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link. When set, the email links to `{verificationRedirectUrl}?token=<token>` instead of directly to the API."
+            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` \u2014 it is shown only once.\n\nCopy `apiKey` into the `api_key` collection variable.\n\nIf the email already exists and is not suspended, the endpoint revokes the current sandbox key and returns a new one (200 with `recovered: true`).\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link. When set, the email links to `{verificationRedirectUrl}?token=<token>` instead of directly to the API."
           }
         },
         {
@@ -486,7 +486,7 @@
                 }
               }
             },
-            "description": "Resends the verification email. Generates a fresh token (invalidating the previous one) and resets the expiry.\n\nTwo rate limits apply:\n- IP-based: shared with POST /api/register — 5 requests per hour per IP.\n- Per-account cooldown: 60 seconds between resends for the same email. Returns 429 if not elapsed.\n\nReturns the same generic message whether or not the email exists (no enumeration)."
+            "description": "Resends the verification email. Generates a fresh token (invalidating the previous one) and resets the expiry.\n\nTwo rate limits apply:\n- IP-based: shared with POST /api/register \u2014 5 requests per hour per IP.\n- Per-account cooldown: 60 seconds between resends for the same email. Returns 429 if not elapsed.\n\nReturns the same generic message whether or not the email exists (no enumeration)."
           }
         },
         {
@@ -556,6 +556,69 @@
           }
         },
         {
+          "name": "Create Branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/issuers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "issuers"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "branchCode",
+                  "value": "002",
+                  "type": "text"
+                },
+                {
+                  "key": "issuePointCode",
+                  "value": "001",
+                  "type": "text"
+                },
+                {
+                  "key": "branchAddress",
+                  "value": "Av. 6 de Diciembre 123",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "documentTypes",
+                  "value": "[\"01\"]",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "cert",
+                  "type": "file",
+                  "src": "",
+                  "disabled": true,
+                  "description": "Optional \u2014 leave blank to reuse the calling issuer certificate"
+                },
+                {
+                  "key": "certPassword",
+                  "value": "",
+                  "type": "text",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Creates a new branch or issue point for the tenant. Inherits RUC, business name, and certificate from the issuer whose API key is used to authenticate. Returns a new sandbox API key for the created issuer.\n\nThe cert file and certPassword fields are optional \u2014 only provide them if the new branch needs a different certificate.\n\nTier limits apply: FREE allows 1 branch/1 issue point, STARTER 3/2, GROWTH 10/5, BUSINESS unlimited."
+          }
+        },
+        {
           "name": "Promote to Production",
           "request": {
             "method": "POST",
@@ -589,7 +652,7 @@
                 }
               }
             },
-            "description": "Promotes the issuer associated with your API key from sandbox to production. One-way — cannot be reversed.\n\nYour sandbox key is revoked automatically. The response includes a new production API key — copy it into the `api_key` variable.\n\n`initialSequentials` is optional. If omitted, all active document types start at sequential 1. Pass explicit values when migrating an issuer that has already issued documents outside this system."
+            "description": "Promotes the issuer associated with your API key from sandbox to production. One-way \u2014 cannot be reversed.\n\nYour sandbox key is revoked automatically. The response includes a new production API key \u2014 copy it into the `api_key` variable.\n\n`initialSequentials` is optional. If omitted, all active document types start at sequential 1. Pass explicit values when migrating an issuer that has already issued documents outside this system."
           }
         },
         {
@@ -724,7 +787,7 @@
                 }
               }
             },
-            "description": "Create a tenant for manual onboarding. Status is set to ACTIVE automatically — no email verification required."
+            "description": "Create a tenant for manual onboarding. Status is set to ACTIVE automatically \u2014 no email verification required."
           }
         },
         {
@@ -879,7 +942,7 @@
                   "key": "branchAddress",
                   "value": "Av. Amazonas 123, Quito",
                   "type": "text",
-                  "description": "Branch address (optional — defaults to mainAddress if omitted)",
+                  "description": "Branch address (optional \u2014 defaults to mainAddress if omitted)",
                   "disabled": true
                 },
                 {
@@ -941,7 +1004,7 @@
                   "key": "initialSequentials",
                   "value": "[{\"documentType\":\"01\",\"sequential\":1}]",
                   "type": "text",
-                  "description": "Optional — pre-seed sequential counters for issuers migrating from another system. Each entry sets the NEXT sequential the system will issue. Example: [{\"documentType\":\"01\",\"sequential\":500}] means the first invoice will be 000000500.",
+                  "description": "Optional \u2014 pre-seed sequential counters for issuers migrating from another system. Each entry sets the NEXT sequential the system will issue. Example: [{\"documentType\":\"01\",\"sequential\":500}] means the first invoice will be 000000500.",
                   "disabled": true
                 }
               ]
@@ -999,7 +1062,7 @@
                   "key": "branchAddress",
                   "value": "Av. Naciones Unidas 456, Quito",
                   "type": "text",
-                  "description": "Branch address (optional — defaults to mainAddress if omitted)",
+                  "description": "Branch address (optional \u2014 defaults to mainAddress if omitted)",
                   "disabled": true
                 },
                 {
@@ -1048,7 +1111,7 @@
                   "key": "initialSequentials",
                   "value": "[{\"documentType\":\"01\",\"sequential\":1}]",
                   "type": "text",
-                  "description": "Optional — pre-seed sequential counters. Example: [{\"documentType\":\"01\",\"sequential\":500}]",
+                  "description": "Optional \u2014 pre-seed sequential counters. Example: [{\"documentType\":\"01\",\"sequential\":500}]",
                   "disabled": true
                 }
               ]
@@ -1106,7 +1169,7 @@
                 }
               }
             },
-            "description": "Promotes an issuer from sandbox to production. This is one-way — there is no going back.\n\nAll existing sandbox API keys for this issuer are revoked automatically. Create a new key after promotion to start sending production invoices.\n\n`initialSequentials` is optional. If omitted, all active document types start at sequential 1."
+            "description": "Promotes an issuer from sandbox to production. This is one-way \u2014 there is no going back.\n\nAll existing sandbox API keys for this issuer are revoked automatically. Create a new key after promotion to start sending production invoices.\n\n`initialSequentials` is optional. If omitted, all active document types start at sequential 1."
           }
         },
         {
@@ -1141,7 +1204,7 @@
                 }
               }
             },
-            "description": "Generates a new Bearer API key for an issuer. The plaintext key is returned only once — store it immediately.\n\nCopy the returned key value into the `api_key` collection variable."
+            "description": "Generates a new Bearer API key for an issuer. The plaintext key is returned only once \u2014 store it immediately.\n\nCopy the returned key value into the `api_key` collection variable."
           }
         },
         {

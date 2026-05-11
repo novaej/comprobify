@@ -43,6 +43,7 @@ export default defineConfig({
             items: [
               { text: 'Get Issuer', link: '/endpoints/get-issuer-me' },
               { text: 'List Issuers', link: '/endpoints/list-issuers' },
+              { text: 'Create Branch', link: '/endpoints/create-branch' },
               { text: 'Document Types', link: '/endpoints/document-types' },
             ],
           },

@@ -3,6 +3,17 @@ const issuerService = require('../services/issuer.service');
 const AppError = require('../errors/app-error');
 const TenantStatus = require('../constants/tenant-status');
 
+const createBranch = async (req, res) => {
+  const { issuer, apiKey } = await issuerService.createBranch(
+    req.tenant,
+    req.issuer,
+    req.body,
+    req.file?.buffer || null,
+    req.body.certPassword || null,
+  );
+  res.status(201).json({ ok: true, issuer, apiKey });
+};
+
 const promote = async (req, res) => {
   if (req.tenant.status !== TenantStatus.ACTIVE) {
     throw new AppError('Email verification required before promoting to production. Check your inbox.', 403);
@@ -51,4 +62,4 @@ const list = async (req, res) => {
   res.json({ ok: true, issuers });
 };
 
-module.exports = { promote, list, listDocumentTypes, addDocumentType, removeDocumentType, me };
+module.exports = { createBranch, promote, list, listDocumentTypes, addDocumentType, removeDocumentType, me };
