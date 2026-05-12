@@ -127,7 +127,7 @@ Marks the key as inactive. The key cannot be used to authenticate any future req
 
 ## Key environment + targeted issuer
 
-When a key is used on a document request, the [`resolveIssuer`](getting-started.md#authentication) middleware validates that the key's `environment` matches the targeted issuer's environment:
+When a key is used on a document request, the `resolveIssuer` middleware validates that the key's `environment` matches the targeted issuer's environment:
 
 | Key environment | Issuer `sandbox` | Result |
 |---|---|---|
