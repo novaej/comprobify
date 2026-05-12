@@ -2,6 +2,11 @@ const { body } = require('express-validator');
 const { SUPPORTED_TYPES } = require('../builders');
 
 const createBranch = [
+  body('sourceIssuerId')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('sourceIssuerId must be a positive integer'),
+
   body('branchCode')
     .notEmpty()
     .matches(/^\d{3}$/)

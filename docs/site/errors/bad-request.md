@@ -10,6 +10,8 @@ The request is syntactically valid but cannot be processed in the current contex
 - Supplying conflicting parameters
 - Uploading a corrupt P12 certificate file during registration
 - Providing the wrong password for a P12 certificate during registration
+- Missing or malformed `X-Issuer-Id` header on a document endpoint
+- Attempting to revoke the API key currently being used to authenticate the request
 
 ## Response
 

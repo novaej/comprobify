@@ -1,7 +1,5 @@
-const crypto = require('crypto');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const issuerModel = require('../models/issuer.model');
-const apiKeyModel = require('../models/api-key.model');
 const tenantModel = require('../models/tenant.model');
 const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
@@ -10,10 +8,6 @@ const { SUPPORTED_TYPES } = require('../builders');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const TIERS = require('../constants/subscription-tiers');
-
-function sha256Hex(value) {
-  return crypto.createHash('sha256').update(value).digest('hex');
-}
 
 async function listDocumentTypes(issuerId) {
   return issuerDocumentTypeModel.findActiveByIssuerId(issuerId);
@@ -126,14 +120,6 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
     );
   }
 
-  const plainToken = crypto.randomBytes(32).toString('hex');
-  await apiKeyModel.create({
-    issuerId: newIssuer.id,
-    keyHash: sha256Hex(plainToken),
-    label: 'Initial sandbox key',
-    environment: 'sandbox',
-  });
-
   return {
     issuer: {
       id: newIssuer.id,
@@ -147,7 +133,6 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
       certFingerprint: newIssuer.cert_fingerprint || null,
       certExpiry: newIssuer.cert_expiry || null,
     },
-    apiKey: plainToken,
   };
 }
 

@@ -15,6 +15,12 @@ const router = Router();
 
 router.use(authenticate);
 
+const idParam = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('id must be a positive integer'),
+];
+
 const promoteValidator = [
   body('initialSequentials')
     .optional()
@@ -42,12 +48,15 @@ const removeDocumentTypeValidator = [
     .withMessage(`code must be one of: ${SUPPORTED_TYPES.join(', ')}`),
 ];
 
-router.post('/', writeLimiter, upload.single('cert'), v.createBranch, validateRequest, asyncHandler(controller.createBranch));
+// Tenant-level: list all issuers, create a new branch (no issuer context required)
 router.get('/', readLimiter, asyncHandler(controller.list));
-router.get('/me', readLimiter, asyncHandler(controller.me));
-router.post('/promote', promoteValidator, validateRequest, asyncHandler(controller.promote));
-router.get('/document-types', asyncHandler(controller.listDocumentTypes));
-router.post('/document-types', addDocumentTypeValidator, validateRequest, asyncHandler(controller.addDocumentType));
-router.delete('/document-types/:code', removeDocumentTypeValidator, validateRequest, asyncHandler(controller.removeDocumentType));
+router.post('/', writeLimiter, upload.single('cert'), v.createBranch, validateRequest, asyncHandler(controller.createBranch));
+
+// Single-issuer operations (issuer id in URL; ownership verified in controller)
+router.get('/:id', readLimiter, idParam, validateRequest, asyncHandler(controller.getById));
+router.post('/:id/promote', writeLimiter, idParam, promoteValidator, validateRequest, asyncHandler(controller.promote));
+router.get('/:id/document-types', readLimiter, idParam, validateRequest, asyncHandler(controller.listDocumentTypes));
+router.post('/:id/document-types', writeLimiter, idParam, addDocumentTypeValidator, validateRequest, asyncHandler(controller.addDocumentType));
+router.delete('/:id/document-types/:code', writeLimiter, idParam, removeDocumentTypeValidator, validateRequest, asyncHandler(controller.removeDocumentType));
 
 module.exports = router;

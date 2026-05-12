@@ -212,12 +212,20 @@ Response:
 ```json
 {
   "ok": true,
-  "issuer": { "id": 1, "ruc": "1700000000001", ... },
-  "apiKey": "a3f8c2...64 hex chars..."
+  "issuer": { "id": 1, "ruc": "1700000000001", ... }
 }
 ```
 
-**Save the `apiKey`** — it is printed once and never stored in plaintext. Use it as `Authorization: Bearer <apiKey>` on every `POST /api/documents` request.
+Admin issuer creation does **not** mint an API key — keys are tenant-scoped. Mint one for the issuer's tenant separately:
+
+```bash
+curl -s -X POST http://localhost:8080/api/admin/tenants/<tenant-id>/api-keys \
+  -H "Authorization: Bearer $ADMIN_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"label": "Initial sandbox key", "environment": "sandbox"}' | jq
+```
+
+**Save the `apiKey`** — it is printed once and never stored in plaintext. Use it as `Authorization: Bearer <apiKey>` on every request. Every document request must also include `X-Issuer-Id: <issuer.id>` to declare which branch the request targets.
 
 ### Seeding sequential counters (migrating an existing issuer)
 
@@ -303,10 +311,12 @@ curl -s http://localhost:8080/api/documents/000000000000000000000000000000000000
 
 ```bash
 TOKEN=<your_bearer_token>
+ISSUER_ID=<your_issuer_id>   # from POST /api/admin/issuers, or GET /api/issuers
 
 curl -s -X POST http://localhost:8080/api/documents \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
+  -H "X-Issuer-Id: $ISSUER_ID" \
   -d '{
     "documentType": "01",
     "issueDate": "01/03/2026",
@@ -360,6 +370,7 @@ Pass `Idempotency-Key` to make retries safe:
 curl -s -X POST http://localhost:8080/api/documents \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
+  -H "X-Issuer-Id: $ISSUER_ID" \
   -H "Idempotency-Key: order-12345" \
   -d '{ ... }'
 ```
@@ -377,25 +388,30 @@ ACCESS_KEY=<accessKey from create response>
 
 # 1. Send to SRI
 curl -s -X POST http://localhost:8080/api/documents/$ACCESS_KEY/send \
-  -H "Authorization: Bearer $TOKEN" | jq
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Issuer-Id: $ISSUER_ID" | jq
 
 # 2. Check authorization
 curl -s http://localhost:8080/api/documents/$ACCESS_KEY/authorize \
-  -H "Authorization: Bearer $TOKEN" | jq
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Issuer-Id: $ISSUER_ID" | jq
 
 # 3. Download RIDE PDF
 curl -s http://localhost:8080/api/documents/$ACCESS_KEY/ride \
   -H "Authorization: Bearer $TOKEN" \
+  -H "X-Issuer-Id: $ISSUER_ID" \
   -o RIDE-$ACCESS_KEY.pdf
 
 # 4. Download authorization XML
 curl -s http://localhost:8080/api/documents/$ACCESS_KEY/xml \
   -H "Authorization: Bearer $TOKEN" \
+  -H "X-Issuer-Id: $ISSUER_ID" \
   -o $ACCESS_KEY.xml
 
 # 5. View audit trail
 curl -s http://localhost:8080/api/documents/$ACCESS_KEY/events \
-  -H "Authorization: Bearer $TOKEN" | jq
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Issuer-Id: $ISSUER_ID" | jq
 ```
 
 ---
@@ -458,19 +474,25 @@ All requests are verified with HMAC-SHA256 and rejected with 401 if the signatur
 Every request requires `Authorization: Bearer <token>`. Use `POST /api/admin/issuers` to create an issuer and receive its initial API key.
 
 **`Invalid or revoked API key` / lost API key**
-The token does not match any active key in `api_keys`. Generate a replacement key — pass `revokeExisting: true` to revoke all current keys for that issuer atomically:
+The token does not match any active key in `api_keys`. Generate a replacement key — pass `revokeExisting: true` to revoke all current keys of the same environment for that tenant atomically:
 
 ```bash
-# Find the issuer ID
-curl -s http://localhost:8080/api/admin/issuers \
-  -H "Authorization: Bearer $ADMIN_SECRET" | jq '.[].id'
+# Find the tenant ID
+curl -s http://localhost:8080/api/admin/tenants \
+  -H "Authorization: Bearer $ADMIN_SECRET" | jq '.tenants[].id'
 
-# Generate a replacement key (revokes all existing keys)
-curl -s -X POST http://localhost:8080/api/admin/issuers/<id>/api-keys \
+# Generate a replacement key (revokes all existing sandbox keys for the tenant)
+curl -s -X POST http://localhost:8080/api/admin/tenants/<tenant-id>/api-keys \
   -H "Authorization: Bearer $ADMIN_SECRET" \
   -H "Content-Type: application/json" \
-  -d '{"label": "Replacement key", "revokeExisting": true}' | jq
+  -d '{"label": "Replacement key", "environment": "sandbox", "revokeExisting": true}' | jq
 ```
+
+**`X-Issuer-Id header is required`**
+Every authenticated document endpoint needs the `X-Issuer-Id` header. Find the issuer id with `GET /api/issuers` (using your tenant's API key).
+
+**`Issuer does not belong to this tenant`**
+The `X-Issuer-Id` header value points to an issuer owned by a different tenant. Use one of your own — `GET /api/issuers` lists them.
 
 **`Missing required environment variable(s): ENCRYPTION_KEY, ADMIN_SECRET, ...`**
 The server validates critical config on startup. If any required env vars are missing or malformed, the server exits immediately before starting. Fix the values in `.env` and restart.

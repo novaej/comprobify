@@ -28,13 +28,13 @@ const verifyTenant = async (req, res) => {
 
 // Issuers
 const createIssuer = async (req, res) => {
-  const { issuer, apiKey } = await adminService.createIssuer(
+  const { issuer } = await adminService.createIssuer(
     req.body,
     req.file?.buffer,
     req.body.certPassword,
     req.body.sourceIssuerId ? parseInt(req.body.sourceIssuerId, 10) : undefined,
   );
-  res.status(201).json({ ok: true, issuer, apiKey });
+  res.status(201).json({ ok: true, issuer });
 };
 
 const listIssuers = async (req, res) => {
@@ -52,8 +52,13 @@ const promoteIssuer = async (req, res) => {
 
 // API keys
 const createApiKey = async (req, res) => {
-  const issuerId = parseInt(req.params.id, 10);
-  const apiKey = await adminService.createApiKey(issuerId, req.body.label, req.body.revokeExisting === true);
+  const tenantId = parseInt(req.params.id, 10);
+  const apiKey = await adminService.createApiKey(
+    tenantId,
+    req.body.label,
+    req.body.environment || 'sandbox',
+    req.body.revokeExisting === true,
+  );
   res.status(201).json({ ok: true, apiKey });
 };
 

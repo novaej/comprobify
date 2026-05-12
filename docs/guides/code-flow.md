@@ -103,11 +103,12 @@ Each route in `documents.routes.js` follows the same pattern:
 authenticate  →  [rate limit]  →  [optional middleware]  →  [validator chain]  →  validateRequest  →  asyncHandler(controller.fn)
 ```
 
-`authenticate` is mounted first via `router.use(asyncHandler(authenticate))` at the top of the router, so every endpoint in the file requires a valid API key before any other middleware runs. Rate limiting is applied per-route: `readLimiter` on GET endpoints (300 req/min per key), `writeLimiter` on POST endpoints (60 req/min per key).
+`authenticate` is mounted first via `router.use(asyncHandler(authenticate))` at the top of the router, so every endpoint in the file requires a valid API key before any other middleware runs. On `/api/documents/*` it is followed by `resolveIssuer`, which reads `X-Issuer-Id` and sets `req.issuer` after validating tenant ownership and environment match. Rate limiting is applied per-route: `readLimiter` on GET endpoints (300 req/min per key), `writeLimiter` on POST endpoints (60 req/min per key).
 
 **Why this pattern?**
 
-- **`authenticate`**: verifies the `Authorization: Bearer <token>` header and sets `req.issuer` before any business logic runs. Centralising authentication at the router level means no endpoint can accidentally be reached unauthenticated.
+- **`authenticate`**: verifies the `Authorization: Bearer <token>` header and sets `req.tenant` + `req.apiKey` before any business logic runs. Centralising authentication at the router level means no endpoint can accidentally be reached unauthenticated.
+- **`resolveIssuer`**: reads `X-Issuer-Id` and sets `req.issuer` — only mounted on `/api/documents/*` where issuer scoping is required. Issuer-management routes use a URL `:id` param and inline ownership check instead.
 - **`[rate limit]`** (`readLimiter` or `writeLimiter`): per-API-key rate limiting prevents abuse. Applied immediately after authentication so the rate limit key (`req.keyHash`) is available. See `src/middleware/rate-limit.js`.
 - **Optional middleware** (e.g. `extractIdempotencyKey`): thin, synchronous header extraction that runs before body validation. Keeps HTTP-level concerns out of the controller.
 - **Validator chain** (`express-validator`): declarative field rules applied before the controller runs. Keeps validation logic out of the controller.
@@ -124,23 +125,33 @@ The `createInvoice` array contains `express-validator` chain calls that validate
 
 ---
 
-## 7. Authentication middleware — `src/middleware/authenticate.js`
+## 7. Authentication & issuer resolution — `src/middleware/authenticate.js` + `src/middleware/resolve-issuer.js`
 
 ```
-Authorization: Bearer <token>
+Authorization: Bearer <token>          ← authenticate
   │
   ├── missing header or wrong scheme → AppError 401
   ├── SHA-256(token) → keyHash
-  ├── apiKeyModel.findByKeyHash(keyHash)  (JOINs api_keys with issuers)
+  ├── apiKeyModel.findByKeyHash(keyHash)  (JOINs api_keys with tenants)
   │     └── not found → AppError 401
-  └── req.issuer = full issuer row (id, ruc, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry, ...)
+  ├── tenant.status === SUSPENDED → AppError 403
+  └── req.tenant + req.apiKey + req.keyHash set; req.issuer left unset
+
+X-Issuer-Id: <issuer-id>              ← resolveIssuer (only on /api/documents/*)
+  │
+  ├── missing or non-integer → AppError 400 BAD_REQUEST
+  ├── issuerModel.findById(id)
+  │     └── not found → AppError 404
+  ├── issuer.tenant_id !== req.tenant.id → AppError 403 FORBIDDEN
+  ├── req.apiKey.environment !== (issuer.sandbox ? 'sandbox' : 'production') → AppError 401
+  └── req.issuer = full issuer row (id, ruc, encrypted_private_key, certificate_pem, ...)
 ```
 
-Every protected route calls this middleware before anything else. It reads the `Authorization` header, computes `SHA-256(token)` as `keyHash`, and calls `apiKeyModel.findByKeyHash(keyHash)` which performs a JOIN between `api_keys` and `issuers`. If the key exists, the full issuer row is attached to `req.issuer` for downstream use.
+`authenticate` resolves *who* is calling (the tenant). `resolveIssuer` resolves *what* the call targets (the branch). The two are separate so a single tenant key can address every branch under the tenant — the request states the target explicitly.
 
 **Why SHA-256 and not bcrypt?** API keys are 256-bit random strings — they are not guessable like user passwords. The bcrypt slowdown exists to prevent brute-force dictionary attacks, which are not a concern for a token with `2^256` possible values. SHA-256 comparison is fast and secure for long random tokens, while bcrypt would add 100–300 ms of unnecessary latency to every request.
 
-**Why set `req.issuer` here?** It eliminates `issuerModel.findFirst()` from every service. Each service receives the issuer as a parameter and never queries the DB for it — the tenant is already known by the time the controller runs.
+**Why split issuer resolution from authentication?** Tenants can now have multiple branches and multiple named keys (e.g. `frontend-prod`, `erp`). Coupling the key to a specific issuer forced clients to juggle one key per branch. Splitting the two axes — credentials in the Authorization header, target resource in `X-Issuer-Id` — mirrors how Stripe and similar APIs handle multi-account access. See ADR-013 for the full rationale.
 
 **Why store `encrypted_private_key` and `certificate_pem` in `issuers`?** Moving from filesystem-based P12 files to database-stored PEM eliminates the need to ship certificate files with deployments, simplifies multi-branch cert sharing (copy the encrypted columns, no file duplication), and keeps all issuer configuration in one place. The private key PEM is AES-256-GCM encrypted at rest; the certificate PEM is stored plaintext (public material). The plaintext password for the P12 is never persisted — only the extracted and encrypted private key PEM is stored.
 
@@ -560,14 +571,14 @@ All models use parameterized queries exclusively (`$1, $2, ...`) — never strin
 | Model | Table | Key operations |
 |---|---|---|
 | `issuer.model` | `issuers` | `findById`, `findByRuc`, `create` |
-| `api-key.model` | `api_keys` | `findByKeyHash` (JOINs issuers), `create`, `revoke`, `revokeAllByIssuerId` |
+| `api-key.model` | `api_keys` | `findByKeyHash` (JOINs tenants), `create({ tenantId, ... })`, `findActiveByTenantId`, `findByIdAndTenantId`, `revoke`, `revokeAllByTenantIdAndEnvironment` |
 | `document.model` | `documents` | `create`, `findByAccessKey(accessKey, issuerId)`, `findById`, `updateStatus` (column-whitelisted), `findPendingEmails(issuerId)`, `findByIdempotencyKey` |
 | (no model) | `sequential_numbers` | managed directly by `sequential.service` |
 | `sri-response.model` | `sri_responses` | `create`, `findByDocumentId` |
 | `document-line-item.model` | `document_line_items` | `bulkCreate` (single multi-row INSERT) |
 | `document-event.model` | `document_events` | `create`, `findByDocumentId` |
 
-`issuer.model` no longer exposes `findFirst()` — issuers are always loaded via `apiKeyModel.findByKeyHash()` during authentication and passed as `req.issuer` to services. There is no "load the active issuer" step anywhere in the creation or transmission flow.
+`issuer.model.findById(id)` is called by `resolveIssuer` after authentication, once the request declares its target via `X-Issuer-Id`. The full issuer row is attached as `req.issuer` and passed to services from there. There is no "load the active issuer" step anywhere in the creation or transmission flow.
 
 **Why raw `pg` instead of an ORM?** The queries are straightforward and the SRI lifecycle is domain-specific enough that the mapping overhead of an ORM adds more complexity than it removes. Raw `pg` queries are readable, debuggable, and do exactly what they say.
 
@@ -605,18 +616,19 @@ The `from_status` / `to_status` columns make it possible to reconstruct the exac
 ## 21. Database schema overview
 
 ```
-issuers (1)
-  ├── api_keys (N)             ← one per API credential
-  ├── documents (N)            ← one per invoice
-  │     ├── document_line_items ← one per line item
-  │     ├── document_events    ← one per lifecycle transition
-  │     └── sri_responses      ← one per SRI SOAP call
-  └── sequential_numbers (N)   ← one per branch/point/docType combination
+tenants (1)
+  ├── api_keys (N)              ← named integration credentials (frontend, ERP, mobile)
+  └── issuers (N)               ← branches × issue points under the tenant's RUC
+        ├── documents (N)        ← one per invoice
+        │     ├── document_line_items ← one per line item
+        │     ├── document_events     ← one per lifecycle transition
+        │     └── sri_responses       ← one per SRI SOAP call
+        └── sequential_numbers (N)   ← one per branch/point/docType combination
 ```
 
-All child tables reference `issuers(id)` directly or via `documents(id)`, enabling multi-tenant filtering with a simple `WHERE issuer_id = $1`.
+API keys live at the tenant level and never reference an issuer directly. Every other tenant-scoped table references `issuers(id)` directly or via `documents(id)`, enabling per-branch filtering with a simple `WHERE issuer_id = $1`.
 
-**Row-Level Security** (migration 031) adds a second, database-enforced layer. Every query on `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `api_keys` is automatically filtered to the current issuer via the `app.current_issuer_id` session setting. A bug that forgets the `WHERE issuer_id = $1` clause still cannot expose another tenant's data — the RLS policy blocks it. The application DB user must not be a PostgreSQL superuser; superusers bypass RLS unconditionally.
+**Row-Level Security** (migration 031) adds a second, database-enforced layer for issuer-scoped tables. Every query on `documents`, `document_line_items`, `document_events`, and `sequential_numbers` is automatically filtered to the current issuer via the `app.current_issuer_id` session setting. A bug that forgets the `WHERE issuer_id = $1` clause still cannot expose another tenant's data — the RLS policy blocks it. The application DB user must not be a PostgreSQL superuser; superusers bypass RLS unconditionally. RLS was dropped from `api_keys` in migration 042 (tenant-scoped keys); the model filters by `tenant_id` explicitly in every query.
 
 ---
 
@@ -661,7 +673,8 @@ Generates the RIDE (Representación Impresa del Documento Electrónico) PDF for 
 POST /api/documents
   │
   ├── express.json()              parse JSON body
-  ├── authenticate                SHA-256(Bearer token) → api_keys → req.issuer (401 if invalid)
+  ├── authenticate                SHA-256(Bearer token) → api_keys ⋈ tenants → req.tenant + req.apiKey (401 if invalid, 403 if SUSPENDED)
+  ├── resolveIssuer               read X-Issuer-Id header → issuerModel.findById → req.issuer (400/403/404/401 on mismatch)
   ├── extractIdempotencyKey       read Idempotency-Key header → req.idempotencyKey
   ├── createInvoice validator     check every field
   ├── validateRequest             throw 400 if any field invalid

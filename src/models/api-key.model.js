@@ -2,32 +2,48 @@ const db = require('../config/database');
 
 async function findByKeyHash(keyHash) {
   const { rows } = await db.query(
-    `SELECT ak.id AS key_id, ak.issuer_id, ak.label, ak.environment AS key_environment,
-            i.*,
+    `SELECT ak.id AS key_id, ak.tenant_id, ak.label, ak.environment AS key_environment,
             t.subscription_tier AS tenant_subscription_tier,
             t.status            AS tenant_status,
             t.email             AS tenant_email,
             t.document_count    AS tenant_document_count,
             t.document_quota    AS tenant_document_quota
      FROM api_keys ak
-     JOIN issuers i  ON i.id = ak.issuer_id
-     JOIN tenants t  ON t.id = i.tenant_id
+     JOIN tenants t ON t.id = ak.tenant_id
      WHERE ak.key_hash = $1
-       AND ak.active = true
-       AND i.active = true`,
+       AND ak.active = true`,
     [keyHash]
   );
   return rows[0] || null;
 }
 
-async function create({ issuerId, keyHash, label, environment }) {
+async function create({ tenantId, keyHash, label, environment }) {
   const { rows } = await db.query(
-    `INSERT INTO api_keys (issuer_id, key_hash, label, environment)
+    `INSERT INTO api_keys (tenant_id, key_hash, label, environment)
      VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [issuerId, keyHash, label || null, environment]
+    [tenantId, keyHash, label || null, environment]
   );
   return rows[0];
+}
+
+async function findActiveByTenantId(tenantId) {
+  const { rows } = await db.query(
+    `SELECT id, label, environment, active, created_at, revoked_at
+     FROM api_keys
+     WHERE tenant_id = $1 AND active = true
+     ORDER BY created_at DESC`,
+    [tenantId]
+  );
+  return rows;
+}
+
+async function findByIdAndTenantId(id, tenantId) {
+  const { rows } = await db.query(
+    `SELECT * FROM api_keys WHERE id = $1 AND tenant_id = $2`,
+    [id, tenantId]
+  );
+  return rows[0] || null;
 }
 
 async function revoke(id) {
@@ -38,20 +54,19 @@ async function revoke(id) {
   return rows[0] || null;
 }
 
-async function revokeAllByIssuerId(issuerId) {
+async function revokeAllByTenantIdAndEnvironment(tenantId, environment) {
   await db.query(
     `UPDATE api_keys SET active = false, revoked_at = NOW()
-     WHERE issuer_id = $1 AND active = true`,
-    [issuerId]
+     WHERE tenant_id = $1 AND environment = $2 AND active = true`,
+    [tenantId, environment]
   );
 }
 
-async function revokeAllByIssuerIdAndEnvironment(issuerId, environment) {
-  await db.query(
-    `UPDATE api_keys SET active = false, revoked_at = NOW()
-     WHERE issuer_id = $1 AND environment = $2 AND active = true`,
-    [issuerId, environment]
-  );
-}
-
-module.exports = { findByKeyHash, create, revoke, revokeAllByIssuerId, revokeAllByIssuerIdAndEnvironment };
+module.exports = {
+  findByKeyHash,
+  create,
+  findActiveByTenantId,
+  findByIdAndTenantId,
+  revoke,
+  revokeAllByTenantIdAndEnvironment,
+};

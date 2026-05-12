@@ -190,15 +190,11 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     );
   }
 
-  const plainToken = crypto.randomBytes(32).toString('hex');
-  await apiKeyModel.create({
-    issuerId: newIssuer.id,
-    keyHash: sha256Hex(plainToken),
-    label: 'Initial key',
-    environment: newIssuer.sandbox ? 'sandbox' : 'production',
-  });
+  // Admin issuer creation does NOT mint an API key — the tenant already has its own keys.
+  // If this is the first issuer for a brand-new admin-created tenant, mint a key separately
+  // via createApiKey.
 
-  return { issuer: formatIssuer(newIssuer), apiKey: plainToken };
+  return { issuer: formatIssuer(newIssuer) };
 }
 
 async function listIssuers() {
@@ -206,18 +202,21 @@ async function listIssuers() {
   return rows.map(formatIssuer);
 }
 
-async function createApiKey(issuerId, label, revokeExisting = false) {
-  const issuer = await issuerModel.findById(issuerId);
-  if (!issuer) throw new AppError('Issuer not found', 404);
-  if (revokeExisting) {
-    await apiKeyModel.revokeAllByIssuerId(issuerId);
+async function createApiKey(tenantId, label, environment = 'sandbox', revokeExistingInEnv = false) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new AppError('Tenant not found', 404);
+  if (!['sandbox', 'production'].includes(environment)) {
+    throw new AppError(`environment must be 'sandbox' or 'production'`, 400);
+  }
+  if (revokeExistingInEnv) {
+    await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, environment);
   }
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
-    issuerId,
+    tenantId,
     keyHash: sha256Hex(plainToken),
     label: label || null,
-    environment: issuer.sandbox ? 'sandbox' : 'production',
+    environment,
   });
   return plainToken;
 }
@@ -228,7 +227,6 @@ async function promoteIssuer(id, initialSequentials = []) {
   if (!issuer.sandbox) throw new ConflictError('Issuer is already in production');
 
   await issuerModel.promote(id);
-  await apiKeyModel.revokeAllByIssuerIdAndEnvironment(id, 'sandbox');
 
   const documentTypes = await issuerDocumentTypeModel.findActiveByIssuerId(id);
   const sequentialMap = {};
@@ -246,13 +244,22 @@ async function promoteIssuer(id, initialSequentials = []) {
     );
   }
 
-  const plainToken = crypto.randomBytes(32).toString('hex');
-  await apiKeyModel.create({
-    issuerId: id,
-    keyHash: sha256Hex(plainToken),
-    label: 'Production key',
-    environment: 'production',
-  });
+  // Mint a production key for the tenant if they don't already have one.
+  // Sandbox keys remain active — the tenant may still have other sandbox issuers and
+  // can revoke unused keys explicitly via the keys API.
+  const existingProdKeys = (await apiKeyModel.findActiveByTenantId(issuer.tenant_id))
+    .filter((k) => k.environment === 'production');
+
+  let plainToken = null;
+  if (existingProdKeys.length === 0) {
+    plainToken = crypto.randomBytes(32).toString('hex');
+    await apiKeyModel.create({
+      tenantId: issuer.tenant_id,
+      keyHash: sha256Hex(plainToken),
+      label: 'Production key',
+      environment: 'production',
+    });
+  }
 
   return { issuer: formatIssuer({ ...issuer, sandbox: false }), apiKey: plainToken };
 }

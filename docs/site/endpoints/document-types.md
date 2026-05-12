@@ -6,15 +6,23 @@ Manage which SRI document types an issuer is allowed to process. Document type e
 
 `Authorization: Bearer <api-key>`
 
+All endpoints below take the issuer id as a URL parameter and verify it belongs to your tenant before applying any change.
+
 ---
 
 ## List document types
 
 ```
-GET /api/issuers/document-types
+GET /api/issuers/:id/document-types
 ```
 
-Returns the active document types for the authenticated issuer.
+Returns the active document types for the named issuer.
+
+### Path parameters
+
+| Parameter | Description |
+|---|---|
+| `id` | Numeric issuer id (from `GET /api/issuers`) |
 
 ### Response
 
@@ -30,10 +38,16 @@ Returns the active document types for the authenticated issuer.
 ## Add a document type
 
 ```
-POST /api/issuers/document-types
+POST /api/issuers/:id/document-types
 ```
 
 Enables a new document type for the issuer. If the type was previously removed, it is reactivated.
+
+### Path parameters
+
+| Parameter | Description |
+|---|---|
+| `id` | Numeric issuer id |
 
 ### Request body
 
@@ -63,13 +77,15 @@ Returns the full updated list of active document types.
 | Status | Code | When |
 |---|---|---|
 | `400` | `VALIDATION_ERROR` | `documentType` is missing or not a supported type |
+| `403` | `FORBIDDEN` | Issuer belongs to a different tenant |
+| `404` | `NOT_FOUND` | Issuer id does not exist |
 
 ---
 
 ## Remove a document type
 
 ```
-DELETE /api/issuers/document-types/:code
+DELETE /api/issuers/:id/document-types/:code
 ```
 
 Disables a document type for the issuer. The last active type cannot be removed.
@@ -78,6 +94,7 @@ Disables a document type for the issuer. The last active type cannot be removed.
 
 | Parameter | Description |
 |---|---|
+| `id` | Numeric issuer id |
 | `code` | Document type code to remove (e.g. `01`) |
 
 ### Response
@@ -97,7 +114,8 @@ Returns the full updated list of active document types.
 |---|---|---|
 | `400` | `VALIDATION_ERROR` | `code` is not a supported type |
 | `400` | `BAD_REQUEST` | Attempting to remove the last active document type |
-| `404` | `NOT_FOUND` | The document type is not currently active for this issuer |
+| `403` | `FORBIDDEN` | Issuer belongs to a different tenant |
+| `404` | `NOT_FOUND` | Issuer id does not exist, or the document type is not currently active for this issuer |
 
 ---
 

@@ -98,52 +98,72 @@ This is the most important concept to understand before integrating.
 
 **One API key = one issuer = one branch + issue point combination.**
 
-Your account (tenant) can have multiple issuers — each one is a unique pair of `branchCode` and `issuePointCode` (e.g., `001/001`, `001/002`, `002/001`). Every issuer has its own independent API key.
+Your account (tenant) can have multiple issuers — each one is a unique pair of `branchCode` and `issuePointCode` (e.g., `001/001`, `001/002`, `002/001`). API keys live at the **tenant** level: one key can address any of your branches. Each request declares its target branch via the `X-Issuer-Id` header.
 
-When you call `POST /api/documents`, the API uses the key you provide to determine:
+When you call `POST /api/documents`, the API uses the key to identify your tenant, then uses `X-Issuer-Id` to determine:
 - Which branch and issue point to embed in the document
 - Which digital certificate to sign with
 - Which sequential number sequence to draw from
 
-This means **you select the issuing branch by choosing which API key you use** — there is no `branchCode` field in the document request body.
+### Listing your issuers
+
+```http
+GET /api/issuers
+Authorization: Bearer <your-api-key>
+```
+
+Returns every issuer (branch / issue point) under your tenant with its numeric `id`. Use that `id` as the `X-Issuer-Id` header value on document requests.
 
 ### Adding a new branch or issue point
 
-Once your email is verified, call `POST /api/issuers` with any existing key for your account:
+Once your email is verified, call `POST /api/issuers` with your API key:
 
 ```http
 POST /api/issuers
-Authorization: Bearer <any-existing-api-key>
+Authorization: Bearer <your-api-key>
 Content-Type: multipart/form-data
 
 branchCode=002
 issuePointCode=001
 ```
 
-The new issuer inherits your RUC, business name, and digital certificate automatically. The response includes a new API key scoped to that branch:
+The new issuer inherits your RUC, business name, and digital certificate from your tenant's first existing issuer (or pass `sourceIssuerId` to pick a specific one):
 
 ```json
 {
   "ok": true,
-  "issuer": { "id": 2, "branchCode": "002", "issuePointCode": "001", "sandbox": true },
-  "apiKey": "<new-key-for-branch-002>"
+  "issuer": { "id": 2, "branchCode": "002", "issuePointCode": "001", "sandbox": true }
 }
 ```
 
-**Store the `apiKey` — it is shown only once.** Use this key for all document requests that should originate from branch `002/001`.
+No new API key is minted — the key you already have covers every branch under your tenant.
+
+### Multiple named keys per tenant
+
+You can mint additional keys via `POST /api/keys` to track which integration is making each call:
+
+```http
+POST /api/keys
+Authorization: Bearer <your-api-key>
+Content-Type: application/json
+
+{ "label": "ERP integration", "environment": "sandbox" }
+```
+
+Use `GET /api/keys` to list them and `DELETE /api/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that at least one of your issuers has been promoted.
 
 ### Key lifecycle
 
-| Stage | Key | What to do |
+| Stage | Key environment | What to do |
 |---|---|---|
-| After registration | Sandbox key | Use for testing. Promote when ready. |
-| After `POST /api/issuers/promote` | Production key | Sandbox key revoked. Store production key. |
-| After `POST /api/issuers` | New sandbox key | Store it. Promote separately when ready. |
-| Lost key | — | Contact support to revoke and issue a replacement. |
+| After registration | Sandbox | Use for testing against the SRI test environment. |
+| After `POST /api/issuers/:id/promote` | Production | The first promotion mints a production key. Sandbox keys remain valid for sandbox issuers. |
+| Adding integrations | Same tenant | Mint named keys via `POST /api/keys` for per-integration observability. |
+| Lost key | — | Mint a replacement via `POST /api/keys`, revoke the old one via `DELETE /api/keys/:id`. |
 
-### Why per-branch keys?
+### Why tenant-scoped keys?
 
-Each branch key is independently revocable. If you integrate branch `002` into a third-party ERP, that system only needs — and only gets — the key for branch `002`. A compromised or revoked key for one branch has no effect on the others.
+One key covers your whole account, so a frontend or ERP that operates on multiple branches doesn't have to juggle separate credentials. Per-integration accountability comes from named keys (`frontend-prod`, `erp`, `mobile`) rather than per-branch keys. Revoking a leaked key only affects the integration that used it; other keys keep working.
 
 ---
 
@@ -152,6 +172,7 @@ Each branch key is independently revocable. If you integrate branch `002` into a
 ```http
 POST /api/documents
 Authorization: Bearer <your-api-key>
+X-Issuer-Id: <issuer-id>
 Content-Type: application/json
 Idempotency-Key: <unique-key>   (optional but recommended)
 
@@ -167,6 +188,8 @@ Idempotency-Key: <unique-key>   (optional but recommended)
   "payments": [...]
 }
 ```
+
+Every document endpoint (POST, GET, DELETE) requires the `X-Issuer-Id` header naming the target branch. Omit it → `400 ISSUER_ID_REQUIRED`. Pass an id belonging to another tenant → `403 ISSUER_FORBIDDEN`.
 
 Returns the signed document with status `SIGNED`. See [Create Invoice](endpoints/create-invoice.md) for the full schema.
 
@@ -203,20 +226,23 @@ Queries the SRI for the authorization result.
 Once you have verified your email and tested your integration in sandbox:
 
 ```http
-POST /api/issuers/promote
+POST /api/issuers/:id/promote
 Authorization: Bearer <your-sandbox-api-key>
 ```
 
+Replace `:id` with the numeric id of the issuer to promote (from `GET /api/issuers`).
+
 This is **one-way** — there is no going back to sandbox. On success:
-- Your sandbox key is revoked immediately
-- A new **production API key** is returned in the response — store it, it is shown only once
-- All subsequent documents will be sent to the SRI production endpoint with `ambiente = 2`
+- A **production API key** is returned the first time you promote any of the tenant's issuers — store it immediately
+- Subsequent promotions return `apiKey: null` because the tenant already has a production key
+- Sandbox keys are **not** auto-revoked; they keep working for any remaining sandbox issuers. Revoke unused ones via `DELETE /api/keys/:id`
+- All subsequent documents addressed to the promoted issuer (via `X-Issuer-Id`) will be sent to the SRI production endpoint with `ambiente = 2`
 
 ```json
 {
   "ok": true,
   "issuer": { "sandbox": false, ... },
-  "apiKey": "<your-new-production-api-key>"
+  "apiKey": "<your-new-production-api-key-or-null>"
 }
 ```
 

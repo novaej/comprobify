@@ -146,11 +146,18 @@ const promoteIssuer = [
 
 // API keys
 const createApiKey = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+
   body('label')
     .optional()
     .isString()
     .isLength({ max: 100 })
     .withMessage('label must be a string of max 100 characters'),
+
+  body('environment')
+    .optional()
+    .isIn(['sandbox', 'production'])
+    .withMessage(`environment must be 'sandbox' or 'production'`),
 
   body('revokeExisting')
     .optional()

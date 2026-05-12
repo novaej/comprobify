@@ -149,9 +149,9 @@ GROUP BY document_type
 
 ## 7. API Key Usage Tracking
 
-**Priority: Medium — required to make per-branch control meaningful**
+**Priority: Medium — observability for named integrations**
 
-Rate limiting is already per `keyHash` (in-memory, enforces throttling). But there is no persistent usage record per key — request counts reset on restart and there is no way to answer "how many requests / documents did branch 002 generate last month?" Without this, the per-issuer key model loses its main analytics advantage over tenant-level keys.
+Rate limiting is already per `keyHash` (in-memory, enforces throttling). But there is no persistent usage record per key — request counts reset on restart and there is no way to answer "how many requests did the ERP integration make last month?" With tenant-scoped keys, this is the only way to slice traffic per integration (`frontend-prod`, `erp`, `mobile`, etc.); per-issuer slicing is already derivable from `documents.issuer_id`.
 
 **What to track (add to `api_keys` table):**
 - `last_used_at TIMESTAMPTZ` — updated on every authenticated request
@@ -160,18 +160,18 @@ Rate limiting is already per `keyHash` (in-memory, enforces throttling). But the
 **Implementation:**
 1. Migration — `ALTER TABLE api_keys ADD COLUMN last_used_at TIMESTAMPTZ, ADD COLUMN request_count BIGINT NOT NULL DEFAULT 0`
 2. `authenticate` middleware — after a successful key lookup, fire a background `UPDATE api_keys SET last_used_at = NOW(), request_count = request_count + 1 WHERE id = $1` (no `await` — fire and forget, does not block the request)
-3. Admin issuer list / key list endpoints — expose `lastUsedAt` and `requestCount` in the response so operators can see activity per branch
+3. Admin / tenant key list endpoints — expose `lastUsedAt` and `requestCount` in the response so operators can see activity per integration
 
 **What this enables:**
-- Identify inactive branches (key never used or `last_used_at` months ago)
-- Spot a branch generating unexpectedly high volume
+- Identify dormant integrations (key never used or `last_used_at` months ago)
+- Spot an integration generating unexpectedly high volume
 - Revoke a compromised key with confidence that the request spike matches the revocation event
 - Audit trail: `created_at` + `last_used_at` + `request_count` per key tells the full lifecycle story
 
 **Notes:**
-- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs or an APM tool
+- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 10) or an APM tool
 - The background UPDATE is a single indexed write per request (`WHERE id = $1`); acceptable overhead for the observability gain
-- Document-level usage per branch is already derivable from `documents.issuer_id` — this adds the request-level dimension
+- Per-issuer document volume is already derivable from `documents.issuer_id` — this adds the per-integration request-level dimension
 
 **Effort:** Low — one migration, ~3 lines in the authenticate middleware, small admin response change.
 
@@ -217,8 +217,10 @@ No log aggregation is currently in place. Without it there is no way to debug a 
 
 **What to log (one JSON line per request):**
 - `timestamp`, `method`, `path`, `statusCode`, `durationMs`
-- `keyHash` (never the plaintext key), `tenantId`, `issuerId`
+- `keyHash` (never the plaintext key), `apiKeyId`, `tenantId`, `issuerId`
 - `requestId` (UUID injected by middleware for correlation)
+
+With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `frontend-prod` vs `erp`) and `issuerId` identifies which branch the request targeted — the two dimensions slice traffic independently.
 
 **What this enables:**
 - **Client debugging** — look up a key hash and see exactly what was sent and what the API returned, without needing the client to reproduce
@@ -234,3 +236,27 @@ No log aggregation is currently in place. Without it there is no way to debug a 
 **Note:** log the `keyHash`, never the plaintext token. All sensitive fields (`encrypted_private_key`, cert PEM, passwords) must be excluded.
 
 **Effort:** Low — one middleware, one external service connection, no migrations.
+
+---
+
+## 11. API Key Scopes
+
+**Priority: Low — defer until first concrete use case**
+
+Today every API key can do everything its tenant can do. Scopes would let tenants mint a read-only key (e.g. for a dashboard pulling stats) without the ability to issue or void documents.
+
+**Proposed scope vocabulary:**
+- `documents:write` — create, send, rebuild, authorize, email-retry
+- `documents:read` — list, get, ride, xml, events, stats
+- `documents:void` — voiding endpoints (when added)
+- `issuers:manage` — promote, create branch, document-type management
+
+**Implementation outline:**
+1. Migration — `ALTER TABLE api_keys ADD COLUMN scopes TEXT[] NOT NULL DEFAULT ARRAY['documents:write','documents:read','issuers:manage']` (full-access default preserves current behaviour)
+2. Tenant key-creation endpoint accepts a `scopes` array, validated against the vocabulary
+3. New `requireScope('documents:read')` middleware factory; mounted per-route alongside `authenticate` / `resolveIssuer`
+4. Surface scopes in `GET /api/keys` so operators can audit each integration's blast radius
+
+**Why defer:** there is no client today asking for a read-only key. Adding scopes preemptively means writing validation, tests, and docs for code paths nobody is using. Revisit when the first dashboard / read-only consumer appears, or when a security review demands principle-of-least-privilege.
+
+**Effort:** Low–Medium when the use case arrives — migration + one middleware factory + 4–8 route annotations + tests.

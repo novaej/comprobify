@@ -39,10 +39,10 @@ async function register(fields, p12Buffer, p12Password) {
     if (!issuer) {
       throw new ConflictError(`An account with email ${fields.email} already exists`);
     }
-    await apiKeyModel.revokeAllByIssuerIdAndEnvironment(issuer.id, 'sandbox');
+    await apiKeyModel.revokeAllByTenantIdAndEnvironment(existing.id, 'sandbox');
     const plainToken = crypto.randomBytes(32).toString('hex');
     await apiKeyModel.create({
-      issuerId: issuer.id,
+      tenantId: existing.id,
       keyHash: sha256Hex(plainToken),
       label: 'Recovery sandbox key',
       environment: 'sandbox',
@@ -142,7 +142,7 @@ async function register(fields, p12Buffer, p12Password) {
 
   plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
-    issuerId: issuer.id,
+    tenantId: tenant.id,
     keyHash: sha256Hex(plainToken),
     label: 'Initial sandbox key',
     environment: 'sandbox',
