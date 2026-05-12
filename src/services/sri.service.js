@@ -89,9 +89,10 @@ function parseMessages(xml) {
 
 /**
  * Derive which SRI endpoint set to use for a given issuer.
+ * issuer.sandbox is a virtual field derived from tenant.sandbox (set by resolveIssuer).
  *
  * Routing table:
- *   app env    | issuer.sandbox = true  | issuer.sandbox = false
+ *   app env    | tenant.sandbox = true  | tenant.sandbox = false
  *   staging    | SRI test               | SRI test
  *   production | SRI test               | SRI production
  *

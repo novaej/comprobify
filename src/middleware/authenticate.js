@@ -39,6 +39,7 @@ const authenticate = async (req, _res, next) => {
     status: row.tenant_status,
     documentCount: row.tenant_document_count,
     documentQuota: row.tenant_document_quota,
+    sandbox: row.tenant_sandbox,
   };
 
   next();

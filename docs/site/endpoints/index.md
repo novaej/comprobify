@@ -17,6 +17,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | Method | Path | Description |
 |---|---|---|
 | `PATCH` | `/api/tenants/language` | Update the preferred language for outgoing emails |
+| `POST` | `/api/tenants/promote` | Promote the tenant to production — revokes all sandbox keys and creates matching production keys |
 
 ## Issuers (authenticated)
 
@@ -24,8 +25,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 |---|---|---|
 | `GET` | `/api/issuers` | List all active issuers (branches / issue points) for the tenant |
 | `POST` | `/api/issuers` | Create a new branch or issue point — inherits cert from an existing issuer of the tenant. Does NOT mint a new API key. |
-| `GET` | `/api/issuers/:id` | Get a single issuer's profile (name, RUC, sandbox flag, cert expiry) |
-| `POST` | `/api/issuers/:id/promote` | Promote the issuer to production — mints a production API key if the tenant does not already have one |
+| `GET` | `/api/issuers/:id` | Get a single issuer's profile (name, RUC, cert expiry) |
 | `GET` | `/api/issuers/:id/document-types` | List active document types for the issuer |
 | `POST` | `/api/issuers/:id/document-types` | Enable a document type for the issuer |
 | `DELETE` | `/api/issuers/:id/document-types/:code` | Disable a document type for the issuer |
@@ -71,10 +71,10 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 | `PATCH` | `/api/admin/tenants/:id/tier` | Update tenant subscription tier |
 | `PATCH` | `/api/admin/tenants/:id/status` | Activate or suspend a tenant |
 | `POST` | `/api/admin/tenants/:id/verify` | Manually verify a tenant's email |
+| `POST` | `/api/admin/tenants/:id/promote` | Promote a tenant to production (admin override — skips ACTIVE status check) |
 | `POST` | `/api/admin/tenants/:id/api-keys` | Mint a tenant-scoped API key (admin) |
 | `POST` | `/api/admin/issuers` | Create issuer for a tenant (requires `tenantId`). Does NOT return an API key — mint one via `/api/admin/tenants/:id/api-keys`. |
 | `GET` | `/api/admin/issuers` | List all issuers |
-| `POST` | `/api/admin/issuers/:id/promote` | Promote any issuer to production (admin override) |
 | `DELETE` | `/api/admin/api-keys/:id` | Revoke an API key |
 
 ## Monitoring

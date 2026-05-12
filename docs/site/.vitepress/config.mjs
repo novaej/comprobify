@@ -35,6 +35,7 @@ export default defineConfig({
             collapsed: false,
             items: [
               { text: 'Update Language', link: '/endpoints/tenant-language' },
+              { text: 'Promote to Production', link: '/endpoints/promote-tenant' },
             ],
           },
           {
@@ -44,7 +45,6 @@ export default defineConfig({
               { text: 'List Issuers', link: '/endpoints/list-issuers' },
               { text: 'Get Issuer', link: '/endpoints/get-issuer-me' },
               { text: 'Create Branch', link: '/endpoints/create-branch' },
-              { text: 'Promote to Production', link: '/endpoints/promote-issuer' },
               { text: 'Document Types', link: '/endpoints/document-types' },
             ],
           },

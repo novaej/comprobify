@@ -59,7 +59,6 @@ async function register(fields, p12Buffer, p12Password) {
         issuePointCode: issuer.issue_point_code,
         certFingerprint: issuer.cert_fingerprint,
         certExpiry: issuer.cert_expiry,
-        sandbox: issuer.sandbox,
       },
       apiKey: plainToken,
       recovered: true,
@@ -109,7 +108,6 @@ async function register(fields, p12Buffer, p12Password) {
       certificatePem: parsed.certPem,
       certFingerprint: parsed.certFingerprint,
       certExpiry: parsed.certExpiry,
-      sandbox: true,
     });
   } catch (err) {
     if (err.code === '23505') {
@@ -170,7 +168,6 @@ async function register(fields, p12Buffer, p12Password) {
       issuePointCode: issuer.issue_point_code,
       certFingerprint: issuer.cert_fingerprint,
       certExpiry: issuer.cert_expiry,
-      sandbox: issuer.sandbox,
     },
     apiKey: plainToken,
   };

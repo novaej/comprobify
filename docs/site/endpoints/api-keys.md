@@ -70,7 +70,7 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `label` | string | No | `null` | Human-readable name for the integration (max 100 chars). Highly recommended for observability. |
-| `environment` | string | No | `"sandbox"` | Either `"sandbox"` or `"production"`. Production keys can only be minted after the tenant has promoted at least one issuer to production. |
+| `environment` | string | No | `"sandbox"` | Either `"sandbox"` or `"production"`. Production keys can only be minted after the tenant has been promoted to production. |
 
 ### Response
 

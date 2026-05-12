@@ -28,7 +28,7 @@ Content-Type: multipart/form-data
 | `businessName` | Legal company name as it appears on your RUC |
 | `branchCode` | 3-digit SRI branch code (e.g. `001` for the main branch) |
 | `issuePointCode` | 3-digit SRI issue point code (e.g. `001`) |
-| `environment` | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /api/issuers/:id/promote` to move to production. |
+| `environment` | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /api/tenants/promote` to move to production. |
 | `emissionType` | SRI emission type: always `1` (normal) |
 | `requiredAccounting` | `true` if your company is required to keep accounting records (*obligado a llevar contabilidad*), `false` otherwise |
 | `cert` | Your `.p12` digital certificate file issued by the SRI CA (Banco Central or Security Data) |
@@ -148,14 +148,14 @@ Content-Type: application/json
 { "label": "ERP integration", "environment": "sandbox" }
 ```
 
-Use `GET /api/keys` to list them and `DELETE /api/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that at least one of your issuers has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others).
+Use `GET /api/keys` to list them and `DELETE /api/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that the tenant has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others).
 
 ### Key lifecycle
 
 | Stage | Key environment | What to do |
 |---|---|---|
 | After registration | Sandbox | Use for testing against the SRI test environment. |
-| After `POST /api/issuers/:id/promote` | Production | The first promotion mints a production key. Sandbox keys remain valid for sandbox issuers. |
+| After `POST /api/tenants/promote` | Production | All sandbox keys are revoked and production mirrors are returned in the response. |
 | Adding integrations | Same tenant | Mint named keys via `POST /api/keys` for per-integration observability. |
 | Lost key | — | Mint a replacement via `POST /api/keys`, revoke the old one via `DELETE /api/keys/:id`. |
 
@@ -224,25 +224,32 @@ Queries the SRI for the authorization result.
 Once you have verified your email and tested your integration in sandbox:
 
 ```http
-POST /api/issuers/:id/promote
+POST /api/tenants/promote
 Authorization: Bearer <your-api-key>
+Content-Type: application/json
+
+{}
 ```
 
-Replace `:id` with the numeric id of the issuer to promote (from `GET /api/issuers`). You can use any active key (sandbox or otherwise) for authentication; the API validates that the issuer and key are compatible at promotion time.
+An empty body is valid. Optionally supply `initialSequentials` to set starting sequential numbers per issuer × document type.
 
 This is **one-way** — there is no going back to sandbox. On success:
-- A **production API key** is returned the first time you promote any of the tenant's issuers — store it immediately
-- Subsequent promotions return `apiKey: null` because the tenant already has a production key
-- Sandbox keys are **not** auto-revoked; they keep working for any remaining sandbox issuers. Revoke unused ones via `DELETE /api/keys/:id`
-- All subsequent documents addressed to the promoted issuer (via `X-Issuer-Id`) will be sent to the SRI production endpoint with `ambiente = 2`
+- **All active sandbox API keys are revoked** and a production key is created for each one, preserving the same label
+- All new production tokens are returned in the response — **store them immediately, they are shown only once**
+- All branches are promoted at once — there is no per-branch promotion
+- All subsequent documents for any branch will be sent to the SRI production endpoint with `ambiente = 2`
 
 ```json
 {
   "ok": true,
-  "issuer": { "sandbox": false, ... },
-  "apiKey": "<your-new-production-api-key-or-null>"
+  "apiKeys": [
+    { "label": "Initial sandbox key", "apiKey": "<production-token>" },
+    { "label": "ERP integration",     "apiKey": "<production-token>" }
+  ]
 }
 ```
+
+Distribute each token to the integration that previously used the sandbox key with the same label.
 
 > If your account status is `PENDING_VERIFICATION` (email not yet verified), this call returns `403`. Verify your email first.
 

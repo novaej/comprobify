@@ -10,6 +10,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed (BREAKING)
+- **Promotion is now tenant-level** (ADR-014). `POST /api/issuers/:id/promote` is removed. Use `POST /api/tenants/promote` instead. The new endpoint promotes all branches at once, revokes all active sandbox API keys, and returns matching production keys (one per revoked sandbox key, same label). Admin override: `POST /api/admin/tenants/:id/promote`. The `initialSequentials` parameter now takes `[{ issuerId, documentType, sequential }]` to allow per-branch per-type overrides.
+- **`issuers.sandbox` column removed** (migration 043). `tenants.sandbox` (boolean, default `true`) is now the single source of truth for environment. All issuer responses no longer include a `sandbox` field — the environment applies to the whole tenant.
+- **`POST /api/admin/issuers/:id/promote` removed** — replaced by `POST /api/admin/tenants/:id/promote`.
+
+### Changed (BREAKING)
 - **API keys are now tenant-scoped, not issuer-scoped** (ADR-013). Migration 042 moves `api_keys.issuer_id` → `tenant_id` and drops the issuer-scoped RLS policy. Every authenticated document endpoint now requires an `X-Issuer-Id` header naming the target branch. Missing header → `400 BAD_REQUEST`; foreign issuer → `403 FORBIDDEN`; env mismatch → `401`. `authenticate` middleware now sets `req.tenant` + `req.apiKey` + `req.keyHash` (no longer `req.issuer`); a new `resolveIssuer` middleware mounted on `/api/documents/*` sets `req.issuer` from the header. Issuer-management endpoints moved from implicit-key targeting to explicit URL params: `POST /api/issuers/promote` → `POST /api/issuers/:id/promote`, `GET/POST/DELETE /api/issuers/document-types*` → `GET/POST/DELETE /api/issuers/:id/document-types*`, `GET /api/issuers/me` → `GET /api/issuers/:id`. Admin key creation moved from `POST /api/admin/issuers/:id/api-keys` → `POST /api/admin/tenants/:id/api-keys`. `POST /api/issuers` (create branch) no longer mints a key — the tenant's existing key already covers every branch.
 
 ### Added

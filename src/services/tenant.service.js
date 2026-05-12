@@ -1,7 +1,55 @@
+const crypto = require('crypto');
 const tenantModel = require('../models/tenant.model');
+const issuerModel = require('../models/issuer.model');
+const apiKeyModel = require('../models/api-key.model');
+const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
+const sequentialService = require('./sequential.service');
+const AppError = require('../errors/app-error');
+const ConflictError = require('../errors/conflict-error');
+const TenantStatus = require('../constants/tenant-status');
+
+function sha256Hex(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
 
 async function updateLanguage(tenantId, language) {
   await tenantModel.updatePreferredLanguage(tenantId, language);
 }
 
-module.exports = { updateLanguage };
+async function promote(tenantId, initialSequentials = []) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new AppError('Tenant not found', 404);
+  if (tenant.status !== TenantStatus.ACTIVE) {
+    throw new AppError('Email verification required before promoting to production. Check your inbox.', 403);
+  }
+  if (!tenant.sandbox) throw new ConflictError('Tenant is already in production');
+
+  const seqMap = {};
+  for (const entry of initialSequentials) {
+    if (!seqMap[entry.issuerId]) seqMap[entry.issuerId] = {};
+    seqMap[entry.issuerId][entry.documentType] = parseInt(entry.sequential, 10);
+  }
+
+  const issuers = await issuerModel.findAllByTenantId(tenantId);
+  for (const issuer of issuers) {
+    const docTypes = await issuerDocumentTypeModel.findActiveByIssuerId(issuer.id);
+    for (const docType of docTypes) {
+      const seq = seqMap[issuer.id]?.[docType] || 1;
+      await sequentialService.initialize(issuer.id, issuer.branch_code, issuer.issue_point_code, docType, seq, false);
+    }
+  }
+
+  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId);
+  await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, 'sandbox');
+  const apiKeys = [];
+  for (const key of sandboxKeys) {
+    const plainToken = crypto.randomBytes(32).toString('hex');
+    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production' });
+    apiKeys.push({ label: key.label, apiKey: plainToken });
+  }
+
+  await tenantModel.promote(tenantId);
+  return { apiKeys };
+}
+
+module.exports = { updateLanguage, promote };
