@@ -29,13 +29,13 @@ Shared with `POST /api/resend-verification` — 5 requests per hour per IP.
 | `mainAddress` | string | No | Main address |
 | `branchCode` | string | Yes | 3-digit branch code, e.g. `001` |
 | `issuePointCode` | string | Yes | 3-digit issue point code, e.g. `001` |
-| `environment` | string | Yes | `1` (test) or `2` (production) |
+| `environment` | string | No | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /api/issuers/:id/promote` to move to production. |
 | `emissionType` | string | Yes | `1` (normal emission) |
 | `requiredAccounting` | boolean | Yes | Whether the business is required to keep accounting |
 | `specialTaxpayer` | string | No | Special taxpayer code |
 | `branchAddress` | string | No | Branch address |
 | `documentTypes` | array | No | Document type codes to enable (default: `["01"]`). Must be supported types. |
-| `initialSequentials` | array | No | Starting sequential numbers per document type: `[{ "documentType": "01", "sequential": 1 }]` |
+| `initialSequentials` | array | No | (Deprecated — ignored at registration) Starting sequential numbers per document type to use at promotion time. Pass these to `POST /api/issuers/:id/promote` instead. |
 | `language` | string | No | Language for outgoing emails. Supported: `es` (default), `en`. Stored on the tenant and used for all subsequent emails including resends. |
 | `verificationRedirectUrl` | string | No | Frontend URL where the verification link in the email will point. The token is appended as `?token=<token>`. If omitted, the link goes directly to the API's verify endpoint. |
 
@@ -78,7 +78,6 @@ https://api.yourdomain.com/api/verify-email?token=<64-char-hex>
     "ruc": "1712345678001",
     "businessName": "My Company S.A.",
     "tradeName": null,
-    "environment": "1",
     "branchCode": "001",
     "issuePointCode": "001",
     "certFingerprint": "SHA256:...",
