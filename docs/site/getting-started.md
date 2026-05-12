@@ -28,7 +28,7 @@ Content-Type: multipart/form-data
 | `businessName` | Legal company name as it appears on your RUC |
 | `branchCode` | 3-digit SRI branch code (e.g. `001` for the main branch) |
 | `issuePointCode` | 3-digit SRI issue point code (e.g. `001`) |
-| `environment` | SRI XML environment value: `1` for test, `2` for production. Use `1` — all new accounts start in sandbox regardless of this value |
+| `environment` | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /api/issuers/:id/promote` to move to production. |
 | `emissionType` | SRI emission type: always `1` (normal) |
 | `requiredAccounting` | `true` if your company is required to keep accounting records (*obligado a llevar contabilidad*), `false` otherwise |
 | `cert` | Your `.p12` digital certificate file issued by the SRI CA (Banco Central or Security Data) |
@@ -96,11 +96,9 @@ The key is SHA-256 hashed on each request — the plaintext is never persisted a
 
 This is the most important concept to understand before integrating.
 
-**One API key = one issuer = one branch + issue point combination.**
+**One API key covers your entire account (all branches).** API keys are **tenant-scoped**, not issuer-scoped. One key can address any of your branches; you declare the target branch via the `X-Issuer-Id` header on each request.
 
-Your account (tenant) can have multiple issuers — each one is a unique pair of `branchCode` and `issuePointCode` (e.g., `001/001`, `001/002`, `002/001`). API keys live at the **tenant** level: one key can address any of your branches. Each request declares its target branch via the `X-Issuer-Id` header.
-
-When you call `POST /api/documents`, the API uses the key to identify your tenant, then uses `X-Issuer-Id` to determine:
+Your account (tenant) can have multiple issuers — each one is a unique pair of `branchCode` and `issuePointCode` (e.g., `001/001`, `001/002`, `002/001`). When you call `POST /api/documents`, the API uses the key to identify your tenant, then uses `X-Issuer-Id` to determine:
 - Which branch and issue point to embed in the document
 - Which digital certificate to sign with
 - Which sequential number sequence to draw from
@@ -140,7 +138,7 @@ No new API key is minted — the key you already have covers every branch under 
 
 ### Multiple named keys per tenant
 
-You can mint additional keys via `POST /api/keys` to track which integration is making each call:
+Since one tenant-scoped key covers all your branches, you can mint additional keys via `POST /api/keys` to track which integration is making each call (frontend, ERP, mobile app, etc.):
 
 ```http
 POST /api/keys
@@ -150,7 +148,7 @@ Content-Type: application/json
 { "label": "ERP integration", "environment": "sandbox" }
 ```
 
-Use `GET /api/keys` to list them and `DELETE /api/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that at least one of your issuers has been promoted.
+Use `GET /api/keys` to list them and `DELETE /api/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that at least one of your issuers has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others).
 
 ### Key lifecycle
 
@@ -227,10 +225,10 @@ Once you have verified your email and tested your integration in sandbox:
 
 ```http
 POST /api/issuers/:id/promote
-Authorization: Bearer <your-sandbox-api-key>
+Authorization: Bearer <your-api-key>
 ```
 
-Replace `:id` with the numeric id of the issuer to promote (from `GET /api/issuers`).
+Replace `:id` with the numeric id of the issuer to promote (from `GET /api/issuers`). You can use any active key (sandbox or otherwise) for authentication; the API validates that the issuer and key are compatible at promotion time.
 
 This is **one-way** — there is no going back to sandbox. On success:
 - A **production API key** is returned the first time you promote any of the tenant's issuers — store it immediately
