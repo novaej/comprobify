@@ -4,6 +4,7 @@ const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const extractIdempotencyKey = require('../middleware/idempotency');
 const authenticate = require('../middleware/authenticate');
+const resolveIssuer = require('../middleware/resolve-issuer');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { createInvoice } = require('../validators/invoice.validator');
 const { accessKeyParam, listDocumentsQuery } = require('../validators/common.validator');
@@ -11,6 +12,7 @@ const { accessKeyParam, listDocumentsQuery } = require('../validators/common.val
 const router = Router();
 
 router.use(asyncHandler(authenticate));
+router.use(asyncHandler(resolveIssuer));
 
 // Read endpoints
 router.get('/', readLimiter, listDocumentsQuery, validateRequest, asyncHandler(controller.list));

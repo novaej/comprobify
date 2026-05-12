@@ -39,7 +39,7 @@ METHOD /api/path
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` or describe auth requirements
+`Authorization: Bearer <api-key>` (plus `X-Issuer-Id: <issuer-id>` for document endpoints) or describe auth requirements
 
 ## Path Parameters (if any)
 

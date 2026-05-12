@@ -66,7 +66,7 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Certificate storage:** private key PEM stored AES-256-GCM encrypted in `issuers.encrypted_private_key`; certificate PEM stored plaintext in `issuers.certificate_pem`. Decrypted at signing time only. Encryption key lives in `ENCRYPTION_KEY` env var.
 
-**Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the admin service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. See `POST /api/admin/issuers`.
+**Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. Self-service endpoint is `POST /api/issuers` (omit `sourceIssuerId` to inherit from the tenant's first existing issuer). Creating a branch does NOT mint a new API key — the tenant's existing key covers every branch via the `X-Issuer-Id` header.
 
 **Tenant model:** `tenants` is the root billing entity. One tenant owns one RUC with one or more branches and issuing points (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `document_count`, `document_quota`, `preferred_language` (default `'es'`). Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines per-tier `documentQuota`, `maxBranches`, `maxIssuePointsPerBranch`, and rate limits. `PATCH /api/tenants/language` updates the preferred language after registration.
 
@@ -74,11 +74,13 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Self-service registration:** `POST /api/register` (public) — creates tenant + issuer + sandbox API key in one call. Tenant starts PENDING_VERIFICATION. A verification email is sent (fire-and-forget). The returned API key is shown once. `GET /api/verify-email?token=xxx` activates the tenant. Unverified tenants can use sandbox but cannot promote to production. Optional `verificationRedirectUrl` field redirects the email link to a frontend page (e.g. `https://app.example.com/verify?token=xxx`) instead of directly to the API — stored on the tenant row and used for all subsequent verification emails including resends. Token TTL is configurable via `VERIFICATION_TOKEN_TTL_HOURS` (default 24h). `POST /api/resend-verification` enforces a 60-second server-side cooldown (checked against `tenants.verification_email_sent_at`) in addition to the IP rate limit.
 
-**User-facing promotion:** `POST /api/issuers/promote` (authenticated) — checks tenant is ACTIVE, promotes the issuer, revokes sandbox keys, creates and returns a new production key. This is one-way.
+**User-facing promotion:** `POST /api/issuers/:id/promote` (authenticated) — checks tenant is ACTIVE, validates issuer ownership, promotes the issuer, mints a production API key for the tenant if none exists yet (returned as `apiKey`, else `null`). Sandbox keys are NOT auto-revoked — the tenant may still have other sandbox issuers and can revoke unused keys via `DELETE /api/keys/:id`. This is one-way.
 
 **Admin API:** `ADMIN_SECRET` env var (64-char hex) protects all `/api/admin/*` routes via `src/middleware/authenticate-admin.js` (constant-time comparison) with a 20 req/min IP-based rate limiter. Admin tenant routes: create (status ACTIVE, no verification), list, update tier, update status (activate/suspend), manual verify. Admin issuer routes: create (requires `tenantId`), list, promote (override, no tenant status check). Admin key routes: create, revoke.
 
-**API key environment scoping:** every `api_keys` row has an `environment` column (`'sandbox'` or `'production'`) stamped at creation from the issuer's current `sandbox` flag. The `authenticate` middleware rejects a key whose environment no longer matches the issuer, and rejects requests from SUSPENDED tenants (403). `findByKeyHash` joins `tenants` and returns `tenant_*` columns; `authenticate` splits these into `req.tenant`.
+**Tenant-scoped API keys (ADR-013):** API keys belong to a tenant, not an issuer. One tenant can mint multiple named keys (e.g. `frontend-prod`, `erp`, `mobile-app`) via `GET / POST / DELETE /api/keys`. Each key carries an `environment` column (`'sandbox'` or `'production'`). The `authenticate` middleware sets `req.tenant` + `req.apiKey` + `req.keyHash`, rejects keys for SUSPENDED tenants (403), and does NOT set `req.issuer` — issuer resolution is delegated to the next middleware.
+
+**Per-request issuer resolution:** every authenticated document-endpoint request must include an `X-Issuer-Id` header. The `resolveIssuer` middleware (mounted on `/api/documents/*`) fetches the issuer, validates `issuer.tenant_id === req.tenant.id` (403 ISSUER_FORBIDDEN if not), validates `req.apiKey.environment === (issuer.sandbox ? 'sandbox' : 'production')` (401 on mismatch), and sets `req.issuer`. Issuer-management routes (`/api/issuers/:id/...`) bypass this middleware and instead read the issuer from `:id` in the URL with an inline ownership check.
 
 **Document quota enforcement:** at the start of every document creation transaction, `UPDATE tenants SET document_count = document_count + 1 WHERE id = $1 AND document_count < document_quota RETURNING id` runs atomically. If no row returns, a `QuotaExceededError` (402 QUOTA_EXCEEDED) is thrown and the transaction rolls back.
 
@@ -98,7 +100,7 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry. `SUPPORTED_TYPES` (exported from `src/builders/index.js`) is derived from the registry keys and used by validators and `issuer.service.js` to enforce type eligibility. When adding a new builder, `SUPPORTED_TYPES` automatically includes it — no manual update needed.
 
-**Issuer document types:** `issuer_document_types` table records which document types each issuer is allowed to use. Defaults to `['01']` at registration/admin create. Checked at document creation time — attempting to create a disallowed type returns 400. Managed via `GET/POST/DELETE /api/issuers/document-types`. At promotion, production sequentials are seeded for all active types (using `initialSequentials` values if provided, otherwise 1). Adding a new document type to the system requires a new builder, not a migration.
+**Issuer document types:** `issuer_document_types` table records which document types each issuer is allowed to use. Defaults to `['01']` at registration/admin create. Checked at document creation time — attempting to create a disallowed type returns 400. Managed via `GET/POST /api/issuers/:id/document-types` and `DELETE /api/issuers/:id/document-types/:code`. At promotion, production sequentials are seeded for all active types (using `initialSequentials` values if provided, otherwise 1). Adding a new document type to the system requires a new builder, not a migration.
 
 **Idempotency key:** `POST /api/documents` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
 
@@ -119,7 +121,7 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Sandbox PostgreSQL schema:** sandbox and production documents live in separate schemas (`sandbox` vs `public`) so sequential sequences are fully independent and test data can be truncated safely. The `sandbox` schema contains `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `sri_responses` with the same constraints, triggers, and RLS as `public`. **Every future migration that alters a tenant-scoped table must be applied to both schemas.**
 
-**Row-Level Security (RLS):** all tenant-scoped tables (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `api_keys`) have RLS enabled via migration 031. The policy restricts every query to the current issuer by reading `app.current_issuer_id` — a transaction-local PostgreSQL setting. Two helpers in `src/config/database.js` manage this:
+**Row-Level Security (RLS):** all issuer-scoped tables (`documents`, `document_line_items`, `document_events`, `sequential_numbers`) have RLS enabled via migration 031. The policy restricts every query to the current issuer by reading `app.current_issuer_id` — a transaction-local PostgreSQL setting. RLS was dropped from `api_keys` in migration 042 because authentication happens before any context can be set; `api_keys` queries filter by `tenant_id` explicitly at the application layer (reintroducing tenant-scoped RLS is noted in `NEXT_STEPS.md`). Two helpers in `src/config/database.js` manage this:
 - `db.setIssuerContext(client, issuerId, sandbox)` — call after `BEGIN` on an existing transaction client; sets both `app.current_issuer_id` (for RLS) and `search_path` (`sandbox, public` or `public`), both rolled back automatically on abort.
 - `db.queryAsIssuer(issuerId, sql, params, sandbox)` — wraps a single query in a mini BEGIN / set_config / SET LOCAL search_path / query / COMMIT for non-transactional reads.
 All authenticated service code paths must use one of these two helpers. Only the Mailgun webhook, admin API, and health check are exempt — they authenticate by other means and operate without an issuer context (the policy's null bypass allows it). The application DB user must **not** be a PostgreSQL superuser; superusers always bypass RLS regardless of policies.
@@ -129,6 +131,8 @@ All authenticated service code paths must use one of these two helpers. Only the
 ---
 
 ## Document Lifecycle
+
+All document endpoints require the `X-Issuer-Id` header (the numeric issuer id, returned by `GET /api/issuers`).
 
 ```
 POST /api/documents             → SIGNED   (Idempotency-Key header optional, documentType defaults to '01')
@@ -214,7 +218,10 @@ chore: update express to 4.22.1
 | `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
 | `docs/adr/` | Architecture Decision Records |
 | `src/config/validate.js` | Startup config validation — throws if critical env vars are missing or malformed |
-| `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.issuer` + `req.tenant`; checks suspension + env mismatch |
+| `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.tenant` + `req.apiKey` + `req.keyHash`; checks suspension. Does NOT set `req.issuer`. |
+| `src/middleware/resolve-issuer.js` | Reads `X-Issuer-Id` header → fetches issuer → validates tenant ownership + env match → sets `req.issuer` |
+| `src/services/api-key.service.js` | Tenant-facing key management — list, create (named, sandbox/production), revoke |
+| `src/routes/api-keys.routes.js` | Mounts `GET / POST / DELETE /api/keys` for tenants to manage their own keys |
 | `src/middleware/authenticate-admin.js` | `ADMIN_SECRET` constant-time check for `/api/admin/*` |
 | `src/middleware/rate-limit.js` | Tier-aware per-key rate limiting + `adminLimiter` (20 req/min IP-based) |
 | `src/middleware/idempotency.js` | Extracts + validates `Idempotency-Key` header |
@@ -257,13 +264,13 @@ chore: update express to 4.22.1
 | `src/services/admin.service.js` | Tenant + issuer + API key management |
 | `src/controllers/admin.controller.js` | Thin HTTP handlers for admin routes |
 | `src/routes/admin.routes.js` | `/api/admin/*` — admin auth + rate limit, tenant/issuer/key CRUD |
-| `src/models/api-key.model.js` | API key CRUD — `findByKeyHash` (joins tenants), `create`, `revoke` |
+| `src/models/api-key.model.js` | Tenant-scoped key CRUD — `findByKeyHash` (joins tenants), `create({ tenantId, ... })`, `findActiveByTenantId`, `findByIdAndTenantId`, `revoke`, `revokeAllByTenantIdAndEnvironment` |
 | `src/errors/conflict-error.js` | AppError subclass for HTTP 409 |
 | `src/errors/quota-exceeded-error.js` | AppError subclass for HTTP 402 QUOTA_EXCEEDED |
 | `src/builders/index.js` | Builder registry |
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
 | `src/constants/document-state-machine.js` | `TRANSITIONS` map + `canTransition` / `assertTransition` |
 | `src/config/database.js` | pg Pool + `query` (bypass) + `setIssuerContext(client, issuerId, sandbox)` + `queryAsIssuer(issuerId, sql, params, sandbox)` — sets both RLS context and `search_path` |
-| `db/migrations/` | SQL migration files 001–035 (031: RLS; 032: sandbox on issuers; 033: sandbox schema; 034: api_key environment; 035: tenants) |
+| `db/migrations/` | SQL migration files 001–042 (031: RLS; 032: sandbox on issuers; 033: sandbox schema; 034: api_key environment; 035: tenants; 042: api_keys tenant-scoped) |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |

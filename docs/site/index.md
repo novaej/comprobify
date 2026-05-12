@@ -23,19 +23,20 @@ https://your-deployment.com/api
 
 ## Authentication
 
-All document and issuer endpoints require a Bearer API key. You receive one when you register — each branch / issue point has its own independent key:
+API keys are tenant-scoped — one key can address every branch on your account. Document endpoints require both the Bearer key and an `X-Issuer-Id` header naming the target branch:
 
 ```
 Authorization: Bearer <api-key>
+X-Issuer-Id: <issuer-id>
 ```
 
-Admin endpoints use a separate secret:
+Issuer-management and key-management endpoints need only the Bearer key. Admin endpoints use a separate secret:
 
 ```
 Authorization: Bearer <admin-secret>
 ```
 
-See [Getting Started](getting-started.md) for details on the key model and how to manage multiple branches.
+See [Getting Started](getting-started.md) for details on the key model, multiple branches, and minting named keys per integration.
 
 ## Response format
 

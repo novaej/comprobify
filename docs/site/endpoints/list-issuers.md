@@ -38,7 +38,7 @@ GET /api/issuers
 
 | Field | Description |
 |---|---|
-| `id` | Internal issuer ID |
+| `id` | Numeric issuer id — pass as `X-Issuer-Id` on document requests |
 | `ruc` | Taxpayer RUC |
 | `businessName` | Legal business name |
 | `tradeName` | Trade name (null if not set) |

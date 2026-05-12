@@ -76,8 +76,11 @@ GET /:key/xml   →  Authorization XML (application/xml)
 | `POST` | `/api/documents/:accessKey/email-retry` | Retry email for one document (`?force=true` to resend already-sent) |
 | `POST` | `/api/admin/issuers` | Create issuer (P12 upload or branch copy) |
 | `GET` | `/api/admin/issuers` | List all issuers |
-| `POST` | `/api/admin/issuers/:id/api-keys` | Generate a new Bearer API key for an issuer |
+| `POST` | `/api/admin/tenants/:id/api-keys` | Generate a new Bearer API key for a tenant |
 | `DELETE` | `/api/admin/api-keys/:id` | Revoke an API key |
+| `GET` | `/api/keys` | List the tenant's active API keys |
+| `POST` | `/api/keys` | Mint a new named API key for the tenant |
+| `DELETE` | `/api/keys/:id` | Revoke a tenant API key |
 | `POST` | `/api/mailgun/webhook` | Receive Mailgun delivery events (HMAC-verified) |
 
 ---
@@ -116,6 +119,9 @@ When a document becomes `AUTHORIZED`, an email is sent to the buyer with the RID
 
 **Per-API-key rate limiting**
 All authenticated endpoints are rate-limited to prevent abuse and quota exhaustion. Write endpoints (POST) are limited to 60 requests per minute; read endpoints (GET) to 300 per minute. Limits are per API key — a compromised or misbehaving key cannot exhaust resources for other tenants. Rate limit exceeded responses return RFC 7807 formatted 429 errors. Configurable via environment variables.
+
+**Tenant-scoped API keys with per-request issuer targeting**
+API keys belong to the tenant, not to a single branch. A tenant can mint multiple named keys (`frontend-prod`, `erp`, `mobile`) via `POST /api/keys` and pick which key represents which integration. Every document endpoint requires an `X-Issuer-Id` header naming the target branch. The auth pipeline (`authenticate` then `resolveIssuer`) validates that the issuer belongs to the calling tenant and that the key's environment (sandbox / production) matches the issuer's environment. See [ADR-013](docs/adr/013-tenant-scoped-api-keys.md).
 
 ---
 
@@ -160,13 +166,14 @@ All authenticated endpoints are rate-limited to prevent abuse and quota exhausti
 ## Database Schema
 
 ```
-issuers (1)
-  ├── api_keys                 Bearer tokens (SHA-256 hash, never plaintext)
-  ├── documents (N)            One per document — stores unsigned XML, signed XML, authorization XML
-  │     ├── document_line_items  One row per line item
-  │     ├── document_events    Lifecycle audit log (CREATED, SENT, STATUS_CHANGED, EMAIL_*, ...)
-  │     └── sri_responses      Raw SRI SOAP responses (reception + authorization)
-  └── sequential_numbers       Counter per issuer/branch/point/docType (FOR UPDATE locked)
+tenants (1)
+  ├── api_keys (N)               Named Bearer tokens (SHA-256 hash, never plaintext) — per integration
+  └── issuers (N)                Branches × issue points under the tenant's RUC
+        ├── documents (N)         One per document — stores unsigned XML, signed XML, authorization XML
+        │     ├── document_line_items  One row per line item
+        │     ├── document_events     Lifecycle audit log (CREATED, SENT, STATUS_CHANGED, EMAIL_*, ...)
+        │     └── sri_responses       Raw SRI SOAP responses (reception + authorization)
+        └── sequential_numbers       Counter per issuer/branch/point/docType (FOR UPDATE locked)
 ```
 
 ---

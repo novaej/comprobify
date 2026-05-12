@@ -41,10 +41,18 @@ export default defineConfig({
             text: 'Issuers',
             collapsed: false,
             items: [
-              { text: 'Get Issuer', link: '/endpoints/get-issuer-me' },
               { text: 'List Issuers', link: '/endpoints/list-issuers' },
+              { text: 'Get Issuer', link: '/endpoints/get-issuer-me' },
               { text: 'Create Branch', link: '/endpoints/create-branch' },
+              { text: 'Promote to Production', link: '/endpoints/promote-issuer' },
               { text: 'Document Types', link: '/endpoints/document-types' },
+            ],
+          },
+          {
+            text: 'API Keys',
+            collapsed: false,
+            items: [
+              { text: 'Manage API Keys', link: '/endpoints/api-keys' },
             ],
           },
           {
@@ -95,6 +103,7 @@ export default defineConfig({
           { text: 'Validation Error', link: '/errors/validation-error' },
           { text: 'Bad Request', link: '/errors/bad-request' },
           { text: 'Unauthorized', link: '/errors/unauthorized' },
+          { text: 'Forbidden', link: '/errors/forbidden' },
           { text: 'Not Found', link: '/errors/not-found' },
           { text: 'Conflict', link: '/errors/conflict' },
           { text: 'Too Many Requests', link: '/errors/too-many-requests' },

@@ -26,17 +26,12 @@ const authenticate = async (req, _res, next) => {
     return next(new AppError('This account has been suspended. Contact support.', 403));
   }
 
-  const expectedEnv = row.sandbox ? 'sandbox' : 'production';
-  if (row.key_environment !== expectedEnv) {
-    return next(new AppError(
-      `This API key was created for the ${row.key_environment} environment. ` +
-      `The issuer is now in ${expectedEnv}. Create a new API key.`,
-      401
-    ));
-  }
-
-  req.issuer = row;
   req.keyHash = keyHash;
+  req.apiKey = {
+    id: row.key_id,
+    label: row.label,
+    environment: row.key_environment,
+  };
   req.tenant = {
     id: row.tenant_id,
     email: row.tenant_email,

@@ -1,6 +1,6 @@
 # Endpoints
 
-Document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints require `Authorization: Bearer <admin-secret>`. Registration and email verification are public.
+Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-Id: <issuer-id>`. Tenant settings, issuer management, and key management require only `Authorization: Bearer <api-key>`. Admin endpoints require `Authorization: Bearer <admin-secret>`. Registration and email verification are public.
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
 
@@ -22,15 +22,25 @@ Document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints re
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/issuers/me` | Get profile info for the current issuer (name, RUC, sandbox flag, cert expiry) |
 | `GET` | `/api/issuers` | List all active issuers (branches / issue points) for the tenant |
-| `POST` | `/api/issuers` | Create a new branch or issue point — inherits cert from calling issuer, returns new sandbox API key |
-| `POST` | `/api/issuers/promote` | Promote issuer to production — returns new production API key |
-| `GET` | `/api/issuers/document-types` | List active document types for this issuer |
-| `POST` | `/api/issuers/document-types` | Enable a document type for this issuer |
-| `DELETE` | `/api/issuers/document-types/:code` | Disable a document type for this issuer |
+| `POST` | `/api/issuers` | Create a new branch or issue point — inherits cert from an existing issuer of the tenant. Does NOT mint a new API key. |
+| `GET` | `/api/issuers/:id` | Get a single issuer's profile (name, RUC, sandbox flag, cert expiry) |
+| `POST` | `/api/issuers/:id/promote` | Promote the issuer to production — mints a production API key if the tenant does not already have one |
+| `GET` | `/api/issuers/:id/document-types` | List active document types for the issuer |
+| `POST` | `/api/issuers/:id/document-types` | Enable a document type for the issuer |
+| `DELETE` | `/api/issuers/:id/document-types/:code` | Disable a document type for the issuer |
+
+## API keys (authenticated)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/keys` | List all active keys for the tenant (label, environment, created_at) |
+| `POST` | `/api/keys` | Mint a new named key (`label`, optional `environment`) |
+| `DELETE` | `/api/keys/:id` | Revoke an API key. Cannot revoke the key used for the current request. |
 
 ## Documents
+
+Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issuer-Id: <issuer-id>`.
 
 | Method | Path | Description |
 |---|---|---|
@@ -61,10 +71,10 @@ Document endpoints require `Authorization: Bearer <api-key>`. Admin endpoints re
 | `PATCH` | `/api/admin/tenants/:id/tier` | Update tenant subscription tier |
 | `PATCH` | `/api/admin/tenants/:id/status` | Activate or suspend a tenant |
 | `POST` | `/api/admin/tenants/:id/verify` | Manually verify a tenant's email |
-| `POST` | `/api/admin/issuers` | Create issuer for a tenant (requires `tenantId`) |
+| `POST` | `/api/admin/tenants/:id/api-keys` | Mint a tenant-scoped API key (admin) |
+| `POST` | `/api/admin/issuers` | Create issuer for a tenant (requires `tenantId`). Does NOT return an API key — mint one via `/api/admin/tenants/:id/api-keys`. |
 | `GET` | `/api/admin/issuers` | List all issuers |
 | `POST` | `/api/admin/issuers/:id/promote` | Promote any issuer to production (admin override) |
-| `POST` | `/api/admin/issuers/:id/api-keys` | Create API key for an issuer |
 | `DELETE` | `/api/admin/api-keys/:id` | Revoke an API key |
 
 ## Monitoring

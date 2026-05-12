@@ -25,8 +25,8 @@ router.post('/issuers', upload.single('cert'), v.createIssuer, validateRequest, 
 router.get('/issuers',                                                           asyncHandler(controller.listIssuers));
 router.post('/issuers/:id/promote', v.promoteIssuer,       validateRequest, asyncHandler(controller.promoteIssuer));
 
-// API keys
-router.post('/issuers/:id/api-keys', v.createApiKey,       validateRequest, asyncHandler(controller.createApiKey));
+// API keys (tenant-scoped)
+router.post('/tenants/:id/api-keys', v.createApiKey,       validateRequest, asyncHandler(controller.createApiKey));
 router.delete('/api-keys/:id',       v.revokeApiKey,       validateRequest, asyncHandler(controller.revokeApiKey));
 
 module.exports = router;

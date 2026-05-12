@@ -10,7 +10,7 @@ The document must be in `SIGNED` status. After a successful call the document mo
 
 ## Authentication
 
-`Authorization: Bearer <api-key>`
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
 
 ## Path parameters
 

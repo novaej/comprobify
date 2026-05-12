@@ -4,11 +4,9 @@ const apiKeyModel = require('../../../src/models/api-key.model');
 const authenticate = require('../../../src/middleware/authenticate');
 
 const mockRow = {
-  id: 1,
-  ruc: '1712345678001',
-  environment: '1',
-  sandbox: true,
+  key_id: 7,
   tenant_id: 10,
+  label: 'frontend-prod',
   key_environment: 'sandbox',
   tenant_status: 'ACTIVE',
   tenant_email: 'test@example.com',
@@ -33,14 +31,15 @@ function runMiddleware(req) {
 describe('authenticate middleware', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  test('sets req.issuer, req.tenant, and req.keyHash when token is valid', async () => {
+  test('sets req.tenant, req.apiKey, and req.keyHash when token is valid', async () => {
     apiKeyModel.findByKeyHash.mockResolvedValue(mockRow);
     const req = makeReq('Bearer mytoken');
     await runMiddleware(req);
-    expect(req.issuer).toEqual(mockRow);
     expect(req.tenant).toMatchObject({ id: 10, subscriptionTier: 'FREE', status: 'ACTIVE' });
+    expect(req.apiKey).toEqual({ id: 7, label: 'frontend-prod', environment: 'sandbox' });
     expect(req.keyHash).toBeDefined();
     expect(typeof req.keyHash).toBe('string');
+    expect(req.issuer).toBeUndefined();
   });
 
   test('passes 401 when Authorization header is missing', async () => {
@@ -68,12 +67,6 @@ describe('authenticate middleware', () => {
     apiKeyModel.findByKeyHash.mockResolvedValue({ ...mockRow, tenant_status: 'SUSPENDED' });
     const req = makeReq('Bearer mytoken');
     await expect(runMiddleware(req)).rejects.toMatchObject({ statusCode: 403 });
-  });
-
-  test('passes 401 when key environment does not match issuer environment', async () => {
-    apiKeyModel.findByKeyHash.mockResolvedValue({ ...mockRow, sandbox: false, key_environment: 'sandbox' });
-    const req = makeReq('Bearer mytoken');
-    await expect(runMiddleware(req)).rejects.toMatchObject({ statusCode: 401 });
   });
 
   test('hashes the token with SHA-256 before querying', async () => {

@@ -8,7 +8,7 @@ GET /api/documents
 
 ## Authentication
 
-`Authorization: Bearer <api-key>`
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
 
 ## Query parameters
 

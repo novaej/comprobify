@@ -3,7 +3,7 @@
 **Code:** `NOT_FOUND`
 **Status:** `404 Not Found`
 
-The requested document does not exist, or it belongs to a different issuer than the one authenticated by the API key.
+The requested resource does not exist, or it belongs to a different issuer than the one named by the `X-Issuer-Id` header. Common cases: an access key that does not match any document for the targeted issuer, or an issuer id that is inactive or never existed.
 
 ## Response
 
@@ -21,4 +21,4 @@ The requested document does not exist, or it belongs to a different issuer than 
 ## What to do
 
 - Verify the access key is correct — it must be exactly 49 digits
-- Confirm you are using the API key for the issuer that created the document
+- Confirm `X-Issuer-Id` names the issuer that created the document — list all of your tenant's issuers with `GET /api/issuers`

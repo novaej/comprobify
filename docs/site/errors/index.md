@@ -101,7 +101,8 @@ When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contai
 |---|---|---|
 | [`VALIDATION_FAILED`](validation-error.md) | 400 | One or more request fields failed validation |
 | [`BAD_REQUEST`](bad-request.md) | 400 | Malformed request or invalid operation for current state |
-| [`UNAUTHORIZED`](unauthorized.md) | 401 | Missing or invalid API key |
+| [`UNAUTHORIZED`](unauthorized.md) | 401 | Missing or invalid API key, or environment mismatch |
+| [`FORBIDDEN`](forbidden.md) | 403 | Authenticated but not permitted (issuer ownership, suspended tenant, unverified email) |
 | [`NOT_FOUND`](not-found.md) | 404 | Requested resource does not exist |
 | [`CONFLICT`](conflict.md) | 409 | Idempotency key conflict |
 | [`TOO_MANY_REQUESTS`](too-many-requests.md) | 429 | Rate limit exceeded for this API key |

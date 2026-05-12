@@ -10,7 +10,7 @@ The document must be in `RECEIVED` status. On success it moves to `AUTHORIZED` a
 
 ## Authentication
 
-`Authorization: Bearer <api-key>`
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
 
 ## Path parameters
 

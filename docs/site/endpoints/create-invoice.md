@@ -15,6 +15,7 @@ POST /api/documents
 | Header | Required | Description |
 |---|---|---|
 | `Authorization` | Yes | Bearer API key |
+| `X-Issuer-Id` | Yes | Numeric id of the issuing branch (from `GET /api/issuers`). Identifies which branch and certificate to use. |
 | `Content-Type` | Yes | `application/json` |
 | `Idempotency-Key` | No | Unique string (max 255 chars) — see [idempotency](#idempotency) |
 
@@ -130,6 +131,9 @@ Include an `Idempotency-Key` header to make creation idempotent. Generate the ke
 | Code | Status | When |
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | Request body fails field validation |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key |
+| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
+| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production issuer or vice versa) |
+| `FORBIDDEN` | 403 | The `X-Issuer-Id` issuer belongs to a different tenant |
+| `NOT_FOUND` | 404 | The `X-Issuer-Id` issuer does not exist |
 | `CONFLICT` | 409 | Idempotency key reused with a different payload |
 | `INTERNAL_ERROR` | 500 | Unexpected server error |

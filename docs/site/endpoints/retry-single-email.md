@@ -10,7 +10,7 @@ By default only retries if `email_status` is `PENDING` or `FAILED`. Add `?force=
 
 ## Authentication
 
-`Authorization: Bearer <api-key>`
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
 
 ## Path parameters
 

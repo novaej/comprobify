@@ -1,6 +1,6 @@
 # Create Branch / Issue Point
 
-Creates a new branch or issue point for the authenticated tenant. The new issuer inherits the RUC, business name, and certificate from the issuer identified by the API key used to make the request. A new sandbox API key is returned.
+Creates a new branch or issue point for the authenticated tenant. The new issuer inherits the RUC, business name, and certificate from an existing issuer of the tenant. **No new API key is minted** — your existing tenant key already covers every branch via the `X-Issuer-Id` header.
 
 ```
 POST /api/issuers
@@ -16,7 +16,7 @@ Write limiter — tier-dependent (10–300 req/min per API key).
 
 ## Request body
 
-`multipart/form-data`. The certificate fields are optional — if no P12 file is uploaded, the new branch reuses the certificate from the calling issuer.
+`multipart/form-data`. If no P12 file is uploaded, the new branch reuses the certificate from another of your existing issuers.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -25,16 +25,17 @@ Write limiter — tier-dependent (10–300 req/min per API key).
 | `branchAddress` | string | No | Branch address (max 300 chars) |
 | `documentTypes` | array | No | Document type codes to enable (default: `["01"]`) |
 | `initialSequentials` | array | No | Starting sequential numbers: `[{ "documentType": "01", "sequential": 1 }]` |
+| `sourceIssuerId` | integer | No | Numeric id of the issuer to inherit cert/profile from. Defaults to the tenant's first existing issuer. Ignored if a `cert` file is uploaded. |
 | `cert` | file | No | P12 certificate file — only needed if this branch uses a different certificate |
 | `certPassword` | string | No | P12 password — only when providing a `cert` file |
 
-### Inherited from calling issuer
+### Inherited from the source issuer
 
-The following fields are copied from the issuer that owns the API key used to authenticate:
+When no P12 file is uploaded, the following fields are copied from the source issuer (either the one named in `sourceIssuerId` or the tenant's first issuer):
 
 - `ruc`, `businessName`, `tradeName`, `mainAddress`
 - `environment`, `emissionType`, `requiredAccounting`, `specialTaxpayer`
-- Certificate data (`encryptedPrivateKey`, `certificatePem`, `certFingerprint`, `certExpiry`) — unless a new `cert` file is uploaded
+- Certificate data (`encryptedPrivateKey`, `certificatePem`, `certFingerprint`, `certExpiry`)
 
 ### Tier limits
 
@@ -65,19 +66,19 @@ A new branch is counted when `branchCode` does not yet exist for the tenant. Add
     "sandbox": true,
     "certFingerprint": "SHA256:...",
     "certExpiry": "2027-01-01T00:00:00.000Z"
-  },
-  "apiKey": "abc123..."
+  }
 }
 ```
 
-The `apiKey` is shown **once** — store it immediately. The new issuer always starts in sandbox mode; use `POST /api/issuers/promote` to move it to production.
+The returned `id` is what you pass as `X-Issuer-Id` on document requests targeting this branch. The new issuer always starts in sandbox mode; use `POST /api/issuers/:id/promote` to move it to production.
 
 ## Errors
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | Missing or invalid fields |
+| `400` | `VALIDATION_ERROR` | Missing or invalid fields, or the tenant has no existing issuer to inherit from and no P12 was uploaded |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `402` | `PAYMENT_REQUIRED` | Branch or issue point limit reached for this tier |
 | `403` | `FORBIDDEN` | Tenant email not yet verified |
+| `404` | `NOT_FOUND` | `sourceIssuerId` does not exist or belongs to a different tenant |
 | `409` | `CONFLICT` | A branch with this `branchCode` + `issuePointCode` combination already exists |
