@@ -89,7 +89,6 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
       certificatePem,
       certFingerprint,
       certExpiry,
-      sandbox: true,
     });
   } catch (err) {
     if (err.code === '23505') {
@@ -116,7 +115,7 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
       newIssuer.issue_point_code,
       docType,
       sequentialMap[docType] || 1,
-      true,
+      tenant.sandbox,
     );
   }
 
@@ -129,7 +128,6 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
       branchCode: newIssuer.branch_code,
       issuePointCode: newIssuer.issue_point_code,
       branchAddress: newIssuer.branch_address || null,
-      sandbox: newIssuer.sandbox,
       certFingerprint: newIssuer.cert_fingerprint || null,
       certExpiry: newIssuer.cert_expiry || null,
     },
@@ -146,7 +144,6 @@ async function listIssuers(tenantId) {
     branchCode: i.branch_code,
     issuePointCode: i.issue_point_code,
     branchAddress: i.branch_address || null,
-    sandbox: i.sandbox,
     certFingerprint: i.cert_fingerprint || null,
     certExpiry: i.cert_expiry || null,
   }));

@@ -113,6 +113,14 @@ async function updatePreferredLanguage(id, language) {
   return rows[0] || null;
 }
 
+async function promote(id) {
+  const { rows } = await db.query(
+    `UPDATE tenants SET sandbox = false, updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
 async function countBranchesByTenantId(tenantId) {
   const { rows } = await db.query(
     `SELECT COUNT(DISTINCT branch_code) AS count FROM issuers WHERE tenant_id = $1 AND active = true`,
@@ -129,4 +137,4 @@ async function countIssuePointsByBranch(tenantId, branchCode) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };

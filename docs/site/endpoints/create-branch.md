@@ -63,14 +63,13 @@ A new branch is counted when `branchCode` does not yet exist for the tenant. Add
     "branchCode": "002",
     "issuePointCode": "001",
     "branchAddress": "Av. 6 de Diciembre 123",
-    "sandbox": true,
     "certFingerprint": "SHA256:...",
     "certExpiry": "2027-01-01T00:00:00.000Z"
   }
 }
 ```
 
-The returned `id` is what you pass as `X-Issuer-Id` on document requests targeting this branch. The new issuer always starts in sandbox mode; use `POST /api/issuers/:id/promote` to move it to production.
+The returned `id` is what you pass as `X-Issuer-Id` on document requests targeting this branch. New branches inherit the tenant's current environment (sandbox or production). Use [`POST /api/tenants/promote`](promote-tenant.md) to promote the entire tenant to production.
 
 ## Errors
 

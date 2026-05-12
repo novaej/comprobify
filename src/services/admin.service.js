@@ -39,7 +39,6 @@ function formatIssuer(row) {
     issuePointCode: row.issue_point_code,
     certFingerprint: row.cert_fingerprint,
     certExpiry: row.cert_expiry,
-    sandbox: row.sandbox,
     active: row.active,
   };
 }
@@ -159,7 +158,6 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
       certificatePem,
       certFingerprint,
       certExpiry,
-      sandbox: fields.sandbox === false || fields.sandbox === 'false' || fields.sandbox === 0 || fields.sandbox === '0' ? false : true,
     });
   } catch (err) {
     if (err.code === '23505') {
@@ -186,7 +184,7 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
       newIssuer.issue_point_code,
       docType,
       sequentialMap[docType] || 1,
-      newIssuer.sandbox,
+      tenant.sandbox,
     );
   }
 
@@ -221,47 +219,45 @@ async function createApiKey(tenantId, label, environment = 'sandbox', revokeExis
   return plainToken;
 }
 
-async function promoteIssuer(id, initialSequentials = []) {
-  const issuer = await issuerModel.findById(id);
-  if (!issuer) throw new AppError('Issuer not found', 404);
-  if (!issuer.sandbox) throw new ConflictError('Issuer is already in production');
+// Promotes a tenant to production. No tenant-status check — admin can override.
+// For the user-facing version (which enforces ACTIVE status), see tenant.service.js.
+async function promoteTenant(tenantId, initialSequentials = []) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new AppError('Tenant not found', 404);
+  if (!tenant.sandbox) throw new ConflictError('Tenant is already in production');
 
-  await issuerModel.promote(id);
-
-  const documentTypes = await issuerDocumentTypeModel.findActiveByIssuerId(id);
-  const sequentialMap = {};
+  // Build lookup: { issuerId: { documentType: sequential } }
+  const seqMap = {};
   for (const entry of initialSequentials) {
-    sequentialMap[entry.documentType] = parseInt(entry.sequential, 10);
-  }
-  for (const docType of documentTypes) {
-    await sequentialService.initialize(
-      id,
-      issuer.branch_code,
-      issuer.issue_point_code,
-      docType,
-      sequentialMap[docType] || 1,
-      false,
-    );
+    if (!seqMap[entry.issuerId]) seqMap[entry.issuerId] = {};
+    seqMap[entry.issuerId][entry.documentType] = parseInt(entry.sequential, 10);
   }
 
-  // Mint a production key for the tenant if they don't already have one.
-  // Sandbox keys remain active — the tenant may still have other sandbox issuers and
-  // can revoke unused keys explicitly via the keys API.
-  const existingProdKeys = (await apiKeyModel.findActiveByTenantId(issuer.tenant_id))
-    .filter((k) => k.environment === 'production');
-
-  let plainToken = null;
-  if (existingProdKeys.length === 0) {
-    plainToken = crypto.randomBytes(32).toString('hex');
-    await apiKeyModel.create({
-      tenantId: issuer.tenant_id,
-      keyHash: sha256Hex(plainToken),
-      label: 'Production key',
-      environment: 'production',
-    });
+  // Seed production sequentials for every issuer × document type.
+  const issuers = await issuerModel.findAllByTenantId(tenantId);
+  for (const issuer of issuers) {
+    const docTypes = await issuerDocumentTypeModel.findActiveByIssuerId(issuer.id);
+    for (const docType of docTypes) {
+      const seq = seqMap[issuer.id]?.[docType] || 1;
+      await sequentialService.initialize(issuer.id, issuer.branch_code, issuer.issue_point_code, docType, seq, false);
+    }
   }
 
-  return { issuer: formatIssuer({ ...issuer, sandbox: false }), apiKey: plainToken };
+  // Revoke all sandbox keys and create matching production keys (same labels).
+  // KEY_MIRRORING: the tenant receives one new production token per sandbox key
+  // that was active at the time of promotion. All tokens are returned in the
+  // response and shown once — store them immediately.
+  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId);
+  await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, 'sandbox');
+  const apiKeys = [];
+  for (const key of sandboxKeys) {
+    const plainToken = crypto.randomBytes(32).toString('hex');
+    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production' });
+    apiKeys.push({ label: key.label, apiKey: plainToken });
+  }
+
+  await tenantModel.promote(tenantId);
+  return { apiKeys };
 }
 
 async function revokeApiKey(id) {
@@ -272,5 +268,5 @@ async function revokeApiKey(id) {
 
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant,
-  createIssuer, listIssuers, createApiKey, revokeApiKey, promoteIssuer,
+  createIssuer, listIssuers, createApiKey, revokeApiKey, promoteTenant,
 };

@@ -5,4 +5,9 @@ const updateLanguage = async (req, res) => {
   res.json({ ok: true });
 };
 
-module.exports = { updateLanguage };
+const promote = async (req, res) => {
+  const { apiKeys } = await tenantService.promote(req.tenant.id, req.body.initialSequentials || []);
+  res.json({ ok: true, apiKeys });
+};
+
+module.exports = { updateLanguage, promote };

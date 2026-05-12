@@ -98,3 +98,4 @@ YYYY-MM-DD
 | [011](011-rfc7807-error-format.md) | RFC 7807 Problem Details for Error Responses | Accepted | 2026-04-04 |
 | [012](012-postgresql-row-level-security.md) | PostgreSQL Row-Level Security for Tenant Isolation | Accepted | 2026-04-20 |
 | [013](013-tenant-scoped-api-keys.md) | Tenant-Scoped API Keys with Per-Request Issuer Header | Accepted | 2026-05-11 |
+| [014](014-tenant-level-environment.md) | Tenant-Level Environment (sandbox vs production) | Accepted | 2026-05-12 |

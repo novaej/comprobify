@@ -33,7 +33,6 @@ GET /api/issuers/:id
     "branchCode": "001",
     "issuePointCode": "001",
     "branchAddress": "Av. Amazonas 123",
-    "sandbox": true,
     "certFingerprint": "a1b2c3d4e5f6...",
     "certExpiry": "2027-03-15T00:00:00.000Z"
   }
@@ -49,7 +48,6 @@ GET /api/issuers/:id
 | `branchCode` | string | 3-digit SRI branch code |
 | `issuePointCode` | string | 3-digit SRI issue point code |
 | `branchAddress` | string \| null | Branch address, if set |
-| `sandbox` | boolean | `true` if the issuer is in sandbox mode; `false` if promoted to production |
 | `certFingerprint` | string \| null | SHA-256 fingerprint of the signing certificate |
 | `certExpiry` | string \| null | ISO 8601 expiry timestamp of the signing certificate |
 

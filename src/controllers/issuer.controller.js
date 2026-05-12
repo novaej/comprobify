@@ -1,4 +1,3 @@
-const adminService = require('../services/admin.service');
 const issuerService = require('../services/issuer.service');
 const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
@@ -52,15 +51,6 @@ const createBranch = async (req, res) => {
   res.status(201).json({ ok: true, issuer });
 };
 
-const promote = async (req, res) => {
-  if (req.tenant.status !== TenantStatus.ACTIVE) {
-    throw new AppError('Email verification required before promoting to production. Check your inbox.', 403);
-  }
-  const issuer = await loadOwnedIssuer(req);
-  const result = await adminService.promoteIssuer(issuer.id, req.body.initialSequentials || []);
-  res.json({ ok: true, issuer: result.issuer, apiKey: result.apiKey });
-};
-
 const listDocumentTypes = async (req, res) => {
   const issuer = await loadOwnedIssuer(req);
   const documentTypes = await issuerService.listDocumentTypes(issuer.id);
@@ -91,7 +81,6 @@ const getById = async (req, res) => {
       branchCode: i.branch_code,
       issuePointCode: i.issue_point_code,
       branchAddress: i.branch_address || null,
-      sandbox: i.sandbox,
       certFingerprint: i.cert_fingerprint || null,
       certExpiry: i.cert_expiry || null,
     },
@@ -103,4 +92,4 @@ const list = async (req, res) => {
   res.json({ ok: true, issuers });
 };
 
-module.exports = { createBranch, promote, list, getById, listDocumentTypes, addDocumentType, removeDocumentType };
+module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType };

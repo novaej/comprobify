@@ -74,11 +74,6 @@ const createIssuer = [
     .isBoolean()
     .withMessage('requiredAccounting must be a boolean'),
 
-  body('sandbox')
-    .optional()
-    .isBoolean()
-    .withMessage('sandbox must be a boolean'),
-
   body('initialSequentials')
     .optional()
     .customSanitizer(value => {
@@ -124,7 +119,7 @@ const createIssuer = [
   }),
 ];
 
-const promoteIssuer = [
+const promoteTenant = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 
   body('initialSequentials')
@@ -132,9 +127,13 @@ const promoteIssuer = [
     .isArray({ min: 1 })
     .withMessage('initialSequentials must be a non-empty array'),
 
+  body('initialSequentials.*.issuerId')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('each initialSequentials entry must have a positive integer issuerId'),
+
   body('initialSequentials.*.documentType')
     .optional()
-    .notEmpty()
     .isIn(SUPPORTED_TYPES)
     .withMessage(`each initialSequentials entry documentType must be one of: ${SUPPORTED_TYPES.join(', ')}`),
 
@@ -170,6 +169,6 @@ const revokeApiKey = [
 ];
 
 module.exports = {
-  createTenant, updateTenantTier, updateTenantStatus, verifyTenant,
-  createIssuer, promoteIssuer, createApiKey, revokeApiKey,
+  createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
+  createIssuer, createApiKey, revokeApiKey,
 };

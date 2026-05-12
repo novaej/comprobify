@@ -15,19 +15,19 @@ async function findFirst() {
   return rows[0] || null;
 }
 
-async function create({ tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, sandbox }) {
+async function create({ tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry }) {
   const { rows } = await db.query(
-    `INSERT INTO issuers (tenant_id, ruc, business_name, trade_name, main_address, branch_code, issue_point_code, environment, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry, sandbox)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+    `INSERT INTO issuers (tenant_id, ruc, business_name, trade_name, main_address, branch_code, issue_point_code, environment, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING *`,
-    [tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, sandbox !== false]
+    [tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry]
   );
   return rows[0];
 }
 
 async function findAll() {
   const { rows } = await db.query(
-    `SELECT id, tenant_id, ruc, business_name, trade_name, environment, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active, sandbox
+    `SELECT id, tenant_id, ruc, business_name, trade_name, environment, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active
      FROM issuers
      ORDER BY id`
   );
@@ -45,19 +45,11 @@ async function findByTenantId(tenantId) {
 async function findAllByTenantId(tenantId) {
   const { rows } = await db.query(
     `SELECT id, ruc, business_name, trade_name, branch_code, issue_point_code,
-            branch_address, sandbox, cert_fingerprint, cert_expiry
+            branch_address, cert_fingerprint, cert_expiry
      FROM issuers WHERE tenant_id = $1 AND active = true ORDER BY id`,
     [tenantId]
   );
   return rows;
 }
 
-async function promote(id) {
-  const { rows } = await db.query(
-    `UPDATE issuers SET sandbox = false WHERE id = $1 AND active = true RETURNING *`,
-    [id]
-  );
-  return rows[0] || null;
-}
-
-module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, promote };
+module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll };

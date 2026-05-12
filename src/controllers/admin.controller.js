@@ -42,12 +42,12 @@ const listIssuers = async (req, res) => {
   res.json({ ok: true, issuers });
 };
 
-const promoteIssuer = async (req, res) => {
-  const { issuer, apiKey } = await adminService.promoteIssuer(
+const promoteTenant = async (req, res) => {
+  const { apiKeys } = await adminService.promoteTenant(
     parseInt(req.params.id, 10),
     req.body.initialSequentials || [],
   );
-  res.json({ ok: true, issuer, apiKey });
+  res.json({ ok: true, apiKeys });
 };
 
 // API keys
@@ -68,6 +68,6 @@ const revokeApiKey = async (req, res) => {
 };
 
 module.exports = {
-  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant,
-  createIssuer, listIssuers, promoteIssuer, createApiKey, revokeApiKey,
+  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
+  createIssuer, listIssuers, createApiKey, revokeApiKey,
 };

@@ -35,16 +35,18 @@ const resolveIssuer = async (req, _res, next) => {
     return next(new AppError('Issuer does not belong to this tenant', 403));
   }
 
-  const expectedEnv = issuer.sandbox ? 'sandbox' : 'production';
+  const expectedEnv = req.tenant.sandbox ? 'sandbox' : 'production';
   if (req.apiKey.environment !== expectedEnv) {
     return next(new AppError(
       `This API key was created for the ${req.apiKey.environment} environment. ` +
-      `The target issuer is ${expectedEnv}. Use a key created for the matching environment.`,
+      `The tenant is ${expectedEnv}. Use a key created for the matching environment.`,
       401
     ));
   }
 
-  req.issuer = issuer;
+  // Attach sandbox as a virtual field so downstream services can read issuer.sandbox
+  // without needing a separate tenant reference.
+  req.issuer = { ...issuer, sandbox: req.tenant.sandbox };
   next();
 };
 

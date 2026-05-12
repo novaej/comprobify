@@ -7,7 +7,8 @@ async function findByKeyHash(keyHash) {
             t.status            AS tenant_status,
             t.email             AS tenant_email,
             t.document_count    AS tenant_document_count,
-            t.document_quota    AS tenant_document_quota
+            t.document_quota    AS tenant_document_quota,
+            t.sandbox           AS tenant_sandbox
      FROM api_keys ak
      JOIN tenants t ON t.id = ak.tenant_id
      WHERE ak.key_hash = $1

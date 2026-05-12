@@ -26,7 +26,6 @@ GET /api/issuers
       "branchCode": "001",
       "issuePointCode": "001",
       "branchAddress": "Av. Amazonas 123",
-      "sandbox": true,
       "certFingerprint": "AA:BB:CC:...",
       "certExpiry": "2027-01-01T00:00:00.000Z"
     }
@@ -45,7 +44,6 @@ GET /api/issuers
 | `branchCode` | 3-digit SRI branch code |
 | `issuePointCode` | 3-digit SRI issue point code |
 | `branchAddress` | Branch address (null if not set) |
-| `sandbox` | `true` = test environment, `false` = production |
 | `certFingerprint` | Certificate fingerprint (null if no cert loaded) |
 | `certExpiry` | Certificate expiry date (null if no cert loaded) |
 

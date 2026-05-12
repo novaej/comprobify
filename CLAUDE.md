@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError / QuotaExceededError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–035
+db/migrations/     SQL migration files 001–043
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -66,15 +66,15 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Certificate storage:** private key PEM stored AES-256-GCM encrypted in `issuers.encrypted_private_key`; certificate PEM stored plaintext in `issuers.certificate_pem`. Decrypted at signing time only. Encryption key lives in `ENCRYPTION_KEY` env var.
 
-**Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. Self-service endpoint is `POST /api/issuers` (omit `sourceIssuerId` to inherit from the tenant's first existing issuer). Creating a branch does NOT mint a new API key — the tenant's existing key covers every branch via the `X-Issuer-Id` header.
+**Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. Self-service endpoint is `POST /api/issuers` (omit `sourceIssuerId` to inherit from the tenant's first existing issuer). Creating a branch does NOT mint a new API key — the tenant's existing key covers every branch via the `X-Issuer-Id` header. New branches inherit the tenant's current environment (sandbox or production).
 
-**Tenant model:** `tenants` is the root billing entity. One tenant owns one RUC with one or more branches and issuing points (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `document_count`, `document_quota`, `preferred_language` (default `'es'`). Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines per-tier `documentQuota`, `maxBranches`, `maxIssuePointsPerBranch`, and rate limits. `PATCH /api/tenants/language` updates the preferred language after registration.
+**Tenant model:** `tenants` is the root billing entity. One tenant owns one RUC with one or more branches and issuing points (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `sandbox` (boolean, default `true`), `document_count`, `document_quota`, `preferred_language` (default `'es'`). Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines per-tier `documentQuota`, `maxBranches`, `maxIssuePointsPerBranch`, and rate limits. `PATCH /api/tenants/language` updates the preferred language after registration.
 
 **Email localisation:** outgoing emails are localised using `src/locales/` — a cross-cutting layer shared by email templates and (in future) API responses. `getTranslations(lang)` returns the locale object for the given language code, falling back to `'es'`. Each locale file exports a plain object keyed by domain (`email.verifyEmail.*`). Templates own HTML structure; locales own strings. `SUPPORTED_LANGUAGES` exported from `src/locales/index.js` is the single source of truth for accepted language codes — used by validators on `POST /api/register` and `PATCH /api/tenants/language`.
 
 **Self-service registration:** `POST /api/register` (public) — creates tenant + issuer + sandbox API key in one call. Tenant starts PENDING_VERIFICATION. A verification email is sent (fire-and-forget). The returned API key is shown once. `GET /api/verify-email?token=xxx` activates the tenant. Unverified tenants can use sandbox but cannot promote to production. Optional `verificationRedirectUrl` field redirects the email link to a frontend page (e.g. `https://app.example.com/verify?token=xxx`) instead of directly to the API — stored on the tenant row and used for all subsequent verification emails including resends. Token TTL is configurable via `VERIFICATION_TOKEN_TTL_HOURS` (default 24h). `POST /api/resend-verification` enforces a 60-second server-side cooldown (checked against `tenants.verification_email_sent_at`) in addition to the IP rate limit.
 
-**User-facing promotion:** `POST /api/issuers/:id/promote` (authenticated) — checks tenant is ACTIVE, validates issuer ownership, promotes the issuer, mints a production API key for the tenant if none exists yet (returned as `apiKey`, else `null`). Sandbox keys are NOT auto-revoked — the tenant may still have other sandbox issuers and can revoke unused keys via `DELETE /api/keys/:id`. This is one-way.
+**User-facing promotion:** `POST /api/tenants/promote` (authenticated) — checks tenant is ACTIVE, flips `tenants.sandbox = false`, seeds production sequentials for all issuers × document types, revokes all sandbox API keys, and creates matching production keys (one per revoked sandbox key, same label). Returns `{ apiKeys: [{ label, apiKey }] }` — all tokens shown once, store immediately. This is one-way. Admin override: `POST /api/admin/tenants/:id/promote` (skips ACTIVE status check).
 
 **Admin API:** `ADMIN_SECRET` env var (64-char hex) protects all `/api/admin/*` routes via `src/middleware/authenticate-admin.js` (constant-time comparison) with a 20 req/min IP-based rate limiter. Admin tenant routes: create (status ACTIVE, no verification), list, update tier, update status (activate/suspend), manual verify. Admin issuer routes: create (requires `tenantId`), list, promote (override, no tenant status check). Admin key routes: create, revoke.
 
@@ -110,14 +110,14 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Rate limiting:** per-API-key request rate limits prevent abuse and quota exhaustion. Applied via `src/middleware/rate-limit.js` using `express-rate-limit`: 60 req/min on write endpoints (POST), 300 req/min on read endpoints (GET). Keyed by `req.keyHash` (SHA-256 token hash). Returns RFC 7807 `429 TOO_MANY_REQUESTS` response. Configurable via `RATE_LIMIT_WINDOW_MS` (default: 60000ms) and `RATE_LIMIT_MAX` (default: 60) env vars. See `docs/site/errors/too-many-requests.md` for client retry guidance.
 
-**Sandbox environment + SRI routing:** `APP_ENV` (`staging` | `production`) combined with `issuers.sandbox` (boolean, default `true`) controls which SRI SOAP endpoint is used and what `ambiente` digit is embedded in the access key and XML.
+**Sandbox environment + SRI routing:** `APP_ENV` (`staging` | `production`) combined with `tenants.sandbox` (boolean, default `true`) controls which SRI SOAP endpoint is used and what `ambiente` digit is embedded in the access key and XML. `issuers` no longer has a `sandbox` column — `issuer.sandbox` in all service code is a virtual field set by `resolveIssuer` middleware (`req.issuer.sandbox = req.tenant.sandbox`).
 
-| `APP_ENV`    | `issuer.sandbox = true` | `issuer.sandbox = false` |
+| `APP_ENV`    | `tenant.sandbox = true` | `tenant.sandbox = false` |
 |---|---|---|
 | `staging`    | SRI test, `ambiente = 1` | SRI test, `ambiente = 1` |
 | `production` | SRI test, `ambiente = 1` | SRI production, `ambiente = 2` |
 
-`document-creation.service.js` and `document-rebuild.service.js` compute `ambiente = (config.appEnv !== 'production' || issuer.sandbox) ? '1' : '2'` and pass an `effectiveIssuer` (with `environment` set to the computed value) to both the builder and `accessKeyService.generate()`. `sri.service.js` `getSriUrls(issuer)` applies the same logic. All existing issuers default to `sandbox = true` on upgrade — safe mode until explicitly promoted.
+`document-creation.service.js` and `document-rebuild.service.js` compute `ambiente = (config.appEnv !== 'production' || issuer.sandbox) ? '1' : '2'` (where `issuer.sandbox` reflects `tenant.sandbox` via the virtual field) and pass an `effectiveIssuer` (with `environment` set to the computed value) to both the builder and `accessKeyService.generate()`. `sri.service.js` `getSriUrls(issuer)` applies the same logic. All tenants default to `sandbox = true` — safe mode until explicitly promoted.
 
 **Sandbox PostgreSQL schema:** sandbox and production documents live in separate schemas (`sandbox` vs `public`) so sequential sequences are fully independent and test data can be truncated safely. The `sandbox` schema contains `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `sri_responses` with the same constraints, triggers, and RLS as `public`. **Every future migration that alters a tenant-scoped table must be applied to both schemas.**
 
@@ -243,7 +243,7 @@ chore: update express to 4.22.1
 | `src/services/xml-validator.service.js` | XSD pre-validation via xmllint (async) |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
 | `src/presenters/document.presenter.js` | `formatDocument()` — shared response shape |
-| `src/models/tenant.model.js` | Tenant CRUD — `create`, `findByEmail`, `findByVerificationToken`, `activate`, `updateTier`, `updateStatus`, `updateVerificationToken`, `updateVerificationEmailSent`, `updateVerificationEmailStatus`, `findByVerificationEmailMessageId`, `countBranchesByTenantId`, `countIssuePointsByBranch` |
+| `src/models/tenant.model.js` | Tenant CRUD — `create`, `findByEmail`, `findByVerificationToken`, `activate`, `promote`, `updateTier`, `updateStatus`, `updateVerificationToken`, `updateVerificationEmailSent`, `updateVerificationEmailStatus`, `findByVerificationEmailMessageId`, `countBranchesByTenantId`, `countIssuePointsByBranch` |
 | `src/models/tenant-event.model.js` | Tenant event log — `create`, `findByTenantId`; uses `db.query()` (not issuer-scoped) |
 | `src/services/certificate.service.js` | P12 parsing — shared by registration and admin service |
 | `src/services/registration.service.js` | Self-service registration + resend verification — creates tenant + issuer + sandbox API key; logs tenant events |
@@ -258,9 +258,9 @@ chore: update express to 4.22.1
 | `src/constants/email-status.js` | `EmailStatus` frozen object — `PENDING`, `SENT`, `FAILED`, `DELIVERED`, `COMPLAINED`, `SKIPPED` — shared by document and tenant email tracking |
 | `src/locales/index.js` | `getTranslations(lang)` + `SUPPORTED_LANGUAGES` + `DEFAULT_LANGUAGE` — single source of truth for i18n |
 | `src/locales/en.js` / `src/locales/es.js` | Locale string objects keyed by domain (`email.verifyEmail.*`) |
-| `src/services/tenant.service.js` | Tenant settings mutations — currently `updateLanguage` |
-| `src/controllers/tenant.controller.js` | Thin handlers for `PATCH /api/tenants/*` routes |
-| `src/routes/tenants.routes.js` | Authenticated tenant settings routes |
+| `src/services/tenant.service.js` | Tenant mutations — `updateLanguage`, `promote` (with ACTIVE status check) |
+| `src/controllers/tenant.controller.js` | Thin handlers for `PATCH /api/tenants/*` and `POST /api/tenants/promote` |
+| `src/routes/tenants.routes.js` | Authenticated tenant routes: language update + promotion |
 | `src/services/admin.service.js` | Tenant + issuer + API key management |
 | `src/controllers/admin.controller.js` | Thin HTTP handlers for admin routes |
 | `src/routes/admin.routes.js` | `/api/admin/*` — admin auth + rate limit, tenant/issuer/key CRUD |
@@ -271,6 +271,6 @@ chore: update express to 4.22.1
 | `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
 | `src/constants/document-state-machine.js` | `TRANSITIONS` map + `canTransition` / `assertTransition` |
 | `src/config/database.js` | pg Pool + `query` (bypass) + `setIssuerContext(client, issuerId, sandbox)` + `queryAsIssuer(issuerId, sql, params, sandbox)` — sets both RLS context and `search_path` |
-| `db/migrations/` | SQL migration files 001–042 (031: RLS; 032: sandbox on issuers; 033: sandbox schema; 034: api_key environment; 035: tenants; 042: api_keys tenant-scoped) |
+| `db/migrations/` | SQL migration files 001–043 (031: RLS; 033: sandbox schema; 034: api_key environment; 042: api_keys tenant-scoped; 043: sandbox moved from issuers to tenants) |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |
