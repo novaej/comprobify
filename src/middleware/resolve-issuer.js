@@ -1,5 +1,6 @@
 const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 
 /**
  * Resolves the target issuer for the request from the X-Issuer-Id header.
@@ -18,21 +19,21 @@ const resolveIssuer = async (req, _res, next) => {
   const headerValue = req.headers['x-issuer-id'];
 
   if (!headerValue) {
-    return next(new AppError('X-Issuer-Id header is required', 400));
+    return next(new AppError('X-Issuer-Id header is required', 400, ErrorCodes.ISSUER_ID_REQUIRED));
   }
 
   const issuerId = parseInt(headerValue, 10);
   if (!Number.isInteger(issuerId) || issuerId <= 0 || String(issuerId) !== String(headerValue).trim()) {
-    return next(new AppError('X-Issuer-Id must be a positive integer', 400));
+    return next(new AppError('X-Issuer-Id must be a positive integer', 400, ErrorCodes.ISSUER_ID_INVALID));
   }
 
   const issuer = await issuerModel.findById(issuerId);
   if (!issuer) {
-    return next(new AppError('Issuer not found', 404));
+    return next(new AppError('Issuer not found', 404, ErrorCodes.ISSUER_NOT_FOUND));
   }
 
   if (issuer.tenant_id !== req.tenant.id) {
-    return next(new AppError('Issuer does not belong to this tenant', 403));
+    return next(new AppError('Issuer does not belong to this tenant', 403, ErrorCodes.ISSUER_FORBIDDEN));
   }
 
   const expectedEnv = req.tenant.sandbox ? 'sandbox' : 'production';
@@ -40,7 +41,8 @@ const resolveIssuer = async (req, _res, next) => {
     return next(new AppError(
       `This API key was created for the ${req.apiKey.environment} environment. ` +
       `The tenant is ${expectedEnv}. Use a key created for the matching environment.`,
-      401
+      401,
+      ErrorCodes.API_KEY_ENV_MISMATCH
     ));
   }
 

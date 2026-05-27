@@ -92,7 +92,7 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Retry logic:** `fetchWithRetry` in `sri.service.js` — retries only on `fetch` throws (network), never on HTTP-level SRI responses.
 
-**Error responses:** all `4xx`/`5xx` responses use RFC 7807 Problem Details (`Content-Type: application/problem+json`) with `type`, `title`, `status`, `code` (stable SCREAMING_SNAKE_CASE i18n key), `detail`, and `instance` (request URL). `AppError` derives `code`/`type`/`title` from the HTTP status automatically; `ValidationError` and `SriError` override with domain-specific values. Field-level errors in `ValidationError.errors[]` each carry a `code` derived from the field path with array indices stripped. See ADR-011.
+**Error responses:** all `4xx`/`5xx` responses use RFC 7807 Problem Details (`Content-Type: application/problem+json`) with `type`, `title`, `status`, `code` (stable SCREAMING_SNAKE_CASE i18n key), `detail`, and `instance` (request URL). `AppError` derives `code`/`type`/`title` from the HTTP status automatically; an optional third constructor argument overrides `code` with a domain-specific value (e.g. `new AppError(msg, 400, ErrorCodes.CERTIFICATE_EXPIRED)`). All stable codes live in `src/constants/error-codes.js` — always import from there, never hard-code strings. `ValidationError` and `SriError` subclasses override with domain-specific values (`VALIDATION_FAILED`, `SRI_SUBMISSION_FAILED`). Field-level errors in `ValidationError.errors[]` each carry a `code` derived from the field path with array indices stripped. See ADR-011 and `docs/site/errors/index.md` for the full code catalogue.
 
 **Audit trail:** every lifecycle transition → `document_events` row. Event types: `CREATED`, `SENT`, `STATUS_CHANGED`, `ERROR`, `REBUILT`, `EMAIL_SENT`, `EMAIL_FAILED`, `EMAIL_DELIVERED`, `EMAIL_TEMP_FAILED`, `EMAIL_COMPLAINED`.
 
@@ -205,6 +205,9 @@ chore: update express to 4.22.1
 13. Calling `db.query()` directly in an authenticated service or model — use `db.queryAsIssuer(issuerId, sql, params, sandbox)` instead so both RLS and the correct `search_path` are set. `db.query()` (no issuer context) is only correct for the webhook, admin, and health code paths.
 14. Adding a migration that alters a tenant-scoped table (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `sri_responses`) without also applying the same DDL to the `sandbox` schema — the schemas must stay structurally identical.
 15. Passing `issuer.environment` directly to `accessKeyService.generate()` or the XML builder — always derive `ambiente` from `config.appEnv` and `issuer.sandbox` first, then build an `effectiveIssuer` with the computed value. Using the raw DB field bypasses the staging safety rail and could embed `ambiente = 2` in a document sent to the test endpoint.
+16. Using a plain `new Error()` in any request-path code — the error handler only formats `AppError` subclasses. Plain errors produce unformatted 500 JSON.
+17. Throwing `new AppError(message, status)` with a generic HTTP-status code when a more specific code exists — clients need specific codes (`CERTIFICATE_EXPIRED`, `ISSUER_FORBIDDEN`, etc.) to react correctly without parsing `detail` strings. Always import from `src/constants/error-codes.js` and pass the code as the third argument.
+18. Adding a new `AppError` throw without adding the code to `src/constants/error-codes.js` first — codes defined inline as string literals are not documented, not discoverable, and can silently diverge across call sites.
 
 ---
 
@@ -256,6 +259,7 @@ chore: update express to 4.22.1
 | `src/constants/subscription-tiers.js` | Tier definitions: `documentQuota`, `maxBranches`, `maxIssuePointsPerBranch`, rate limits |
 | `src/constants/tenant-status.js` | `TenantStatus` frozen object — `PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED` |
 | `src/constants/email-status.js` | `EmailStatus` frozen object — `PENDING`, `SENT`, `FAILED`, `DELIVERED`, `COMPLAINED`, `SKIPPED` — shared by document and tenant email tracking |
+| `src/constants/error-codes.js` | **Single source of truth for all stable `code` values** in RFC 7807 error responses. Import from here at every throw site — never hard-code code strings inline. Full catalogue documented in `docs/site/errors/index.md`. |
 | `src/locales/index.js` | `getTranslations(lang)` + `SUPPORTED_LANGUAGES` + `DEFAULT_LANGUAGE` — single source of truth for i18n |
 | `src/locales/en.js` / `src/locales/es.js` | Locale string objects keyed by domain (`email.verifyEmail.*`) |
 | `src/services/tenant.service.js` | Tenant mutations — `updateLanguage`, `promote` (with ACTIVE status check) |

@@ -6,6 +6,7 @@ const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
 const EmailStatus = require('../constants/email-status');
 const EventType = require('../constants/event-type');
+const ErrorCodes = require('../constants/error-codes');
 
 async function retryFailedEmails(issuer) {
   const documents = await documentModel.findPendingEmails(issuer.id, issuer.sandbox);
@@ -43,7 +44,11 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
     throw new NotFoundError('Document');
   }
   if (document.status !== DocumentStatus.AUTHORIZED) {
-    throw new AppError(`Cannot send email for document with status ${document.status}. Must be ${DocumentStatus.AUTHORIZED}.`, 400);
+    throw new AppError(
+      `Cannot send email for document with status ${document.status}. Document must be ${DocumentStatus.AUTHORIZED}.`,
+      400,
+      ErrorCodes.DOCUMENT_NOT_AUTHORIZED
+    );
   }
   if (!document.buyer_email) {
     await documentModel.updateStatus(document.id, document.status, { email_status: EmailStatus.SKIPPED }, issuer.id, issuer.sandbox);

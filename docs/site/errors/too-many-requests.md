@@ -1,22 +1,32 @@
 # Too Many Requests
 
-Your API key has exceeded the rate limit. All authenticated requests are limited per API key.
+**Status:** `429 Too Many Requests`
 
-## Limits
+The request was throttled. Check the `code` field to distinguish between an API rate limit and an operation-specific cooldown.
 
-- **Write endpoints** (POST): 60 requests per minute
-- **Read endpoints** (GET): 300 requests per minute
+## Codes
 
-## Why you're seeing this error
+### `RESEND_COOLDOWN`
 
-You made too many requests with this API key in a short time. Rate limiting protects the service and prevents accidental or malicious abuse.
+`POST /api/resend-verification` was called again before the 60-second server-side cooldown elapsed. This per-account cooldown prevents email flooding regardless of IP.
 
-## How to resolve
+**What to do:** Wait 60 seconds from the previous resend request, then try again.
 
-1. **Wait and retry** — Rate limits reset every minute. Wait 60 seconds before retrying.
-2. **Implement exponential backoff** — When you receive a `429`, wait 1s, then 2s, then 4s, etc. before retrying.
-3. **Optimize your requests** — Batch operations when possible, cache read results, and avoid unnecessary requests.
-4. **Contact support** — If you consistently hit limits, we can discuss increasing your quota.
+### `TOO_MANY_REQUESTS` — API rate limit
+
+Your API key has exceeded the per-minute request limit.
+
+**Limits (per API key):**
+- **Write endpoints** (POST): 60 requests / minute
+- **Read endpoints** (GET): 300 requests / minute
+
+Rate limits are tiered. Higher subscription tiers carry higher limits — see your plan details.
+
+**What to do:**
+1. **Wait and retry** — Rate limits reset every minute.
+2. **Implement exponential backoff** — When you receive a 429, wait 1 s, then 2 s, then 4 s, etc. before retrying.
+3. **Optimise your requests** — Batch where possible, cache read results, avoid polling in a tight loop.
+4. **Upgrade your plan** — If you consistently hit limits, a higher tier will raise them.
 
 ## Example retry logic (JavaScript)
 
@@ -33,30 +43,34 @@ async function requestWithRetry(fn, maxRetries = 3) {
         await new Promise(resolve => setTimeout(resolve, waitMs));
         attempt++;
       } else {
-        throw error;  // Not a rate limit error, re-throw
+        throw error;
       }
     }
   }
   throw new Error('Max retries exceeded');
 }
-
-// Usage
-const document = await requestWithRetry(() => 
-  fetch('/api/documents', { headers: { Authorization: `Bearer ${apiKey}` } })
-);
 ```
 
-## Response format
+## Example responses
 
 ```json
 {
-  "type": "https://novaej.github.io/comprobify/errors/too-many-requests",
-  "title": "Too Many Requests",
-  "status": 429,
-  "code": "TOO_MANY_REQUESTS",
-  "detail": "Rate limit exceeded for this API key",
-  "instance": "/api/documents"
+  "type":     "https://novaej.github.io/comprobify/errors/too-many-requests",
+  "title":    "Too Many Requests",
+  "status":   429,
+  "code":     "RESEND_COOLDOWN",
+  "detail":   "Please wait before requesting another verification email.",
+  "instance": "/api/resend-verification"
 }
 ```
 
-Use the `code` field (`TOO_MANY_REQUESTS`) for client-side error handling, not the status code.
+```json
+{
+  "type":     "https://novaej.github.io/comprobify/errors/too-many-requests",
+  "title":    "Too Many Requests",
+  "status":   429,
+  "code":     "TOO_MANY_REQUESTS",
+  "detail":   "Rate limit exceeded for this API key",
+  "instance": "/api/documents"
+}
+```

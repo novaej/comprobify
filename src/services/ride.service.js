@@ -6,6 +6,7 @@ const rideBuilder = require('../../helpers/ride-builder');
 const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
+const ErrorCodes = require('../constants/error-codes');
 
 async function generate(accessKeyOrDocument, issuerOverride = null) {
   const document = typeof accessKeyOrDocument === 'string'
@@ -17,8 +18,9 @@ async function generate(accessKeyOrDocument, issuerOverride = null) {
   }
   if (document.status !== DocumentStatus.AUTHORIZED) {
     throw new AppError(
-      `Cannot generate RIDE for document with status ${document.status}. Must be ${DocumentStatus.AUTHORIZED}.`,
-      400
+      `Cannot generate RIDE for document with status ${document.status}. Document must be ${DocumentStatus.AUTHORIZED}.`,
+      400,
+      ErrorCodes.DOCUMENT_NOT_AUTHORIZED
     );
   }
 

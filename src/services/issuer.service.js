@@ -8,6 +8,7 @@ const { SUPPORTED_TYPES } = require('../builders');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const TIERS = require('../constants/subscription-tiers');
+const ErrorCodes = require('../constants/error-codes');
 
 async function listDocumentTypes(issuerId) {
   return issuerDocumentTypeModel.findActiveByIssuerId(issuerId);
@@ -15,7 +16,11 @@ async function listDocumentTypes(issuerId) {
 
 async function addDocumentType(issuerId, documentType) {
   if (!SUPPORTED_TYPES.includes(documentType)) {
-    throw new AppError(`Document type '${documentType}' is not supported. Supported types: ${SUPPORTED_TYPES.join(', ')}`, 400);
+    throw new AppError(
+      `Document type '${documentType}' is not supported. Supported types: ${SUPPORTED_TYPES.join(', ')}`,
+      400,
+      ErrorCodes.DOCUMENT_TYPE_NOT_SUPPORTED
+    );
   }
   await issuerDocumentTypeModel.activate(issuerId, documentType);
   return issuerDocumentTypeModel.findActiveByIssuerId(issuerId);
@@ -24,7 +29,11 @@ async function addDocumentType(issuerId, documentType) {
 async function removeDocumentType(issuerId, documentType) {
   const active = await issuerDocumentTypeModel.findActiveByIssuerId(issuerId);
   if (!active.includes(documentType)) {
-    throw new AppError(`Document type '${documentType}' is not active for this issuer`, 404);
+    throw new AppError(
+      `Document type '${documentType}' is not active for this issuer`,
+      404,
+      ErrorCodes.DOCUMENT_TYPE_NOT_ENABLED
+    );
   }
   if (active.length <= 1) {
     throw new AppError('Cannot remove the last document type — at least one must remain active', 400);
@@ -42,16 +51,18 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
       const branchCount = await tenantModel.countBranchesByTenantId(tenant.id);
       if (branchCount >= tierConfig.maxBranches) {
         throw new AppError(
-          `You have reached the branch limit for the ${tenant.subscriptionTier} plan (${tierConfig.maxBranches})`,
-          402
+          `You have reached the branch limit for the ${tenant.subscriptionTier} plan (${tierConfig.maxBranches}). Upgrade your plan to add more branches.`,
+          402,
+          ErrorCodes.BRANCH_LIMIT_REACHED
         );
       }
     }
   } else if (tierConfig.maxIssuePointsPerBranch !== null) {
     if (issuePointCount >= tierConfig.maxIssuePointsPerBranch) {
       throw new AppError(
-        `Branch ${fields.branchCode} has reached the issue point limit for the ${tenant.subscriptionTier} plan (${tierConfig.maxIssuePointsPerBranch})`,
-        402
+        `Branch ${fields.branchCode} has reached the issue point limit for the ${tenant.subscriptionTier} plan (${tierConfig.maxIssuePointsPerBranch}). Upgrade your plan to add more issue points.`,
+        402,
+        ErrorCodes.ISSUE_POINT_LIMIT_REACHED
       );
     }
   }

@@ -20,25 +20,25 @@ All error responses use [RFC 7807 Problem Details](https://www.rfc-editor.org/rf
 | `type` | URL linking to the documentation page for this error type (this site) |
 | `title` | Short, stable description of the error type |
 | `status` | HTTP status code (same as the response status) |
-| `code` | Stable machine-readable key — use this for localization |
+| `code` | Stable machine-readable key — use this for i18n and programmatic handling |
 | `detail` | Human-readable explanation of this specific occurrence |
 | `instance` | The request path that produced the error |
 
-## Using `code` for localization
+## Using `code` for programmatic handling
 
-The `code` field is the stable key your client application should use to look up localized messages. It never changes for a given error type, regardless of the `detail` text.
+The `code` field is the stable key your client application should switch on. It never changes for a given situation, regardless of changes to the human-readable `detail` text.
 
 ```js
-const messages = {
-  VALIDATION_FAILED:    'Por favor corrija los campos indicados.',
-  NOT_FOUND:            'El documento solicitado no existe.',
-  UNAUTHORIZED:         'Clave API inválida o revocada.',
-  CONFLICT:             'Ya existe un documento con esa clave de idempotencia.',
-  SRI_SUBMISSION_FAILED: 'Error al comunicarse con el SRI.',
-  INTERNAL_ERROR:       'Error interno. Por favor intente nuevamente.',
-};
-
-const message = messages[error.code] ?? error.detail;
+switch (error.code) {
+  case 'CERTIFICATE_EXPIRED':
+    return 'Your signing certificate has expired. Replace it in issuer settings.';
+  case 'RESEND_COOLDOWN':
+    return 'Please wait before requesting another email.';
+  case 'QUOTA_EXCEEDED':
+    return 'Monthly invoice limit reached. Upgrade your plan.';
+  default:
+    return error.detail;
+}
 ```
 
 ## Validation errors
@@ -97,14 +97,77 @@ When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contai
 
 ## All error codes
 
-| Code | Status | Description |
-|---|---|---|
-| [`VALIDATION_FAILED`](validation-error.md) | 400 | One or more request fields failed validation |
-| [`BAD_REQUEST`](bad-request.md) | 400 | Malformed request or invalid operation for current state |
-| [`UNAUTHORIZED`](unauthorized.md) | 401 | Missing or invalid API key, or environment mismatch |
-| [`FORBIDDEN`](forbidden.md) | 403 | Authenticated but not permitted (issuer ownership, suspended tenant, unverified email) |
-| [`NOT_FOUND`](not-found.md) | 404 | Requested resource does not exist |
-| [`CONFLICT`](conflict.md) | 409 | Idempotency key conflict |
-| [`TOO_MANY_REQUESTS`](too-many-requests.md) | 429 | Rate limit exceeded for this API key |
-| [`SRI_SUBMISSION_FAILED`](sri-error.md) | 502 | Error communicating with or receiving from SRI |
-| [`INTERNAL_ERROR`](internal-error.md) | 500 | Unexpected server error |
+Most errors carry a specific `code` that is more precise than the HTTP status alone. Switch on `code`, not on `status`, to handle errors programmatically.
+
+### 400 Bad Request
+
+| Code | When |
+|---|---|
+| `VALIDATION_FAILED` | One or more request fields failed validation — see `errors[]` |
+| `CERTIFICATE_INVALID` | P12 file is corrupted or not a valid PKCS#12 archive |
+| `CERTIFICATE_PASSWORD_INVALID` | P12 password is incorrect |
+| `CERTIFICATE_KEY_NOT_FOUND` | Signing key bag not found inside the P12 |
+| `CERTIFICATE_EXPIRED` | Certificate `notAfter` date has passed |
+| `ISSUER_ID_REQUIRED` | `X-Issuer-Id` header is missing on a document endpoint |
+| `ISSUER_ID_INVALID` | `X-Issuer-Id` is not a valid positive integer |
+| `INVALID_OR_EXPIRED_TOKEN` | Email verification token is invalid or has expired |
+| `DOCUMENT_TYPE_NOT_ENABLED` | Requested document type is not active for this issuer |
+| `DOCUMENT_TYPE_NOT_SUPPORTED` | Document type code is not registered in the system |
+| `INVALID_STATE_TRANSITION` | Document operation is not valid for its current status |
+| `DOCUMENT_NOT_AUTHORIZED` | Operation (RIDE, email) requires document status `AUTHORIZED` |
+| `SELF_REVOCATION_FORBIDDEN` | Cannot revoke the API key used to authenticate this request |
+| `BAD_REQUEST` | Other malformed request (fallback — read `detail`) |
+
+### 401 Unauthorized
+
+| Code | When |
+|---|---|
+| `API_KEY_ENV_MISMATCH` | API key environment (`sandbox`/`production`) does not match the tenant's current environment |
+| `UNAUTHORIZED` | Missing, invalid, or revoked API key (fallback) |
+
+### 402 Payment Required
+
+| Code | When |
+|---|---|
+| `QUOTA_EXCEEDED` | Monthly document quota reached — upgrade plan |
+| `BRANCH_LIMIT_REACHED` | Tenant has reached the maximum number of branches for their plan |
+| `ISSUE_POINT_LIMIT_REACHED` | Branch has reached the maximum number of issue points for this plan |
+
+### 403 Forbidden
+
+| Code | When |
+|---|---|
+| `ISSUER_FORBIDDEN` | `X-Issuer-Id` names an issuer that belongs to a different tenant |
+| `ACCOUNT_SUSPENDED` | Tenant account is suspended — contact support |
+| `EMAIL_VERIFICATION_REQUIRED` | Operation requires a verified email address |
+| `PRODUCTION_KEY_REQUIRES_PROMOTION` | Production API key cannot be created before promoting to production |
+| `FORBIDDEN` | Other permission failure (fallback — read `detail`) |
+
+### 404 Not Found
+
+| Code | When |
+|---|---|
+| `ISSUER_NOT_FOUND` | Issuer ID in `X-Issuer-Id` or URL parameter does not exist |
+| `SOURCE_ISSUER_NOT_FOUND` | `sourceIssuerId` not found or belongs to a different tenant |
+| `NOT_FOUND` | Other resource not found (document, API key — read `detail`) |
+
+### 409 Conflict
+
+| Code | When |
+|---|---|
+| `ALREADY_VERIFIED` | Attempting to resend verification to an already-verified account |
+| `CONFLICT` | Idempotency key reused with a different payload, or other conflict |
+
+### 429 Too Many Requests
+
+| Code | When |
+|---|---|
+| `RESEND_COOLDOWN` | Resend verification requested again before the 60-second cooldown elapsed |
+| `TOO_MANY_REQUESTS` | API key rate limit exceeded |
+
+### 500 / 502
+
+| Code | When |
+|---|---|
+| `SRI_SUBMISSION_FAILED` | SRI SOAP service returned an error or unexpected HTTP status |
+| `INTERNAL_ERROR` | Unexpected server error |

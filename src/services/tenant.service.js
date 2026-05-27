@@ -6,7 +6,9 @@ const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const sequentialService = require('./sequential.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
+const NotFoundError = require('../errors/not-found-error');
 const TenantStatus = require('../constants/tenant-status');
+const ErrorCodes = require('../constants/error-codes');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -18,9 +20,13 @@ async function updateLanguage(tenantId, language) {
 
 async function promote(tenantId, initialSequentials = []) {
   const tenant = await tenantModel.findById(tenantId);
-  if (!tenant) throw new AppError('Tenant not found', 404);
+  if (!tenant) throw new NotFoundError('Tenant');
   if (tenant.status !== TenantStatus.ACTIVE) {
-    throw new AppError('Email verification required before promoting to production. Check your inbox.', 403);
+    throw new AppError(
+      'Email verification is required before promoting to production. Check your inbox.',
+      403,
+      ErrorCodes.EMAIL_VERIFICATION_REQUIRED
+    );
   }
   if (!tenant.sandbox) throw new ConflictError('Tenant is already in production');
 

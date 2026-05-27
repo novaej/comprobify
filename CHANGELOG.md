@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Certificate expiry at signing time returned 500** — `helpers/signer.js` threw a plain `Error` when a certificate had expired after registration. Now throws `AppError` with code `CERTIFICATE_EXPIRED` (400), matching the check already present in `certificate.service.js` at upload time.
+- **`registration.controller.js` swapped `AppError` constructor arguments** — `AppError(403, 'message')` was called with status code and message reversed, causing malformed error responses for suspended account attempts during re-registration. Fixed by removing the try/catch entirely.
+- **`verifyEmail` response bypassed the error handler** — the controller constructed the RFC 7807 JSON manually and sent it directly, missing `Content-Type: application/problem+json`. Now throws `AppError` and lets the central error handler format the response.
+- **`crypto.service.js` and `builders/index.js` threw plain `Error`** — two guard checks produced unformatted 500 responses. Both now throw `AppError` with specific codes (`DECRYPTION_FAILED`, `BUILDER_NOT_FOUND`).
+
+### Changed
+- **Specific `code` values on all operational errors** — previously most errors fell back to the HTTP-status default code (`BAD_REQUEST`, `FORBIDDEN`, etc.). Every operationally distinct error now carries a specific code from the new `src/constants/error-codes.js` catalogue (e.g. `CERTIFICATE_EXPIRED`, `ISSUER_FORBIDDEN`, `EMAIL_VERIFICATION_REQUIRED`, `RESEND_COOLDOWN`, `API_KEY_ENV_MISMATCH`). Clients should switch on `code`, not `status` or `detail`. Existing `VALIDATION_FAILED`, `SRI_SUBMISSION_FAILED`, and `QUOTA_EXCEEDED` codes are unchanged.
+- **`AppError` constructor accepts optional `code` parameter** — third positional argument overrides the HTTP-status-derived default. `isOperational` moves to fourth. No existing call sites are affected.
+- **`registration.service.js` sentinel string errors replaced** — `throw new Error('SUSPENDED')`, `'RESEND_COOLDOWN'`, `'ALREADY_VERIFIED'`, `'INVALID_TOKEN'` replaced with proper `AppError` / `ConflictError` throws. The corresponding try/catch blocks in `registration.controller.js` are removed; the controller now relies on `asyncHandler` alone as intended by CLAUDE.md.
+- **Error messages made more actionable** — certificate errors now include the expiry date; tier-limit errors name the plan and the limit; RUC mismatch shows both values; environment mismatch names both environments.
+
 ### Changed (BREAKING)
 - **Promotion is now tenant-level** (ADR-014). `POST /api/issuers/:id/promote` is removed. Use `POST /api/tenants/promote` instead. The new endpoint promotes all branches at once, revokes all active sandbox API keys, and returns matching production keys (one per revoked sandbox key, same label). Admin override: `POST /api/admin/tenants/:id/promote`. The `initialSequentials` parameter now takes `[{ issuerId, documentType, sequential }]` to allow per-branch per-type overrides.
 - **`issuers.sandbox` column removed** (migration 043). `tenants.sandbox` (boolean, default `true`) is now the single source of truth for environment. All issuer responses no longer include a `sandbox` field — the environment applies to the whole tenant.

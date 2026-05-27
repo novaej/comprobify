@@ -41,7 +41,7 @@ describe('CryptoService', () => {
   });
 
   test('decrypt with invalid format throws', () => {
-    expect(() => cryptoService.decrypt('not-valid')).toThrow('Invalid encrypted data format');
+    expect(() => cryptoService.decrypt('not-valid')).toThrow('Failed to decrypt stored credential');
   });
 
   test('handles empty string', () => {

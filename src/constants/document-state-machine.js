@@ -1,5 +1,6 @@
 const DocumentStatus = require('./document-status');
 const AppError = require('../errors/app-error');
+const ErrorCodes = require('./error-codes');
 
 const TRANSITIONS = Object.freeze({
   [DocumentStatus.SIGNED]:         [DocumentStatus.RECEIVED, DocumentStatus.RETURNED],
@@ -16,7 +17,7 @@ function canTransition(from, to) {
 
 function assertTransition(from, to) {
   if (!canTransition(from, to)) {
-    throw new AppError(`Invalid state transition: ${from} → ${to}`, 400);
+    throw new AppError(`Invalid state transition: ${from} → ${to}`, 400, ErrorCodes.INVALID_STATE_TRANSITION);
   }
 }
 

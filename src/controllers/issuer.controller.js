@@ -1,7 +1,9 @@
 const issuerService = require('../services/issuer.service');
 const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
+const NotFoundError = require('../errors/not-found-error');
 const TenantStatus = require('../constants/tenant-status');
+const ErrorCodes = require('../constants/error-codes');
 
 /**
  * Fetches the issuer identified by req.params.id and confirms it belongs to the
@@ -11,17 +13,21 @@ async function loadOwnedIssuer(req) {
   const id = parseInt(req.params.id, 10);
   const issuer = await issuerModel.findById(id);
   if (!issuer) {
-    throw new AppError('Issuer not found', 404);
+    throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
   }
   if (issuer.tenant_id !== req.tenant.id) {
-    throw new AppError('Issuer does not belong to this tenant', 403);
+    throw new AppError('Issuer does not belong to this tenant', 403, ErrorCodes.ISSUER_FORBIDDEN);
   }
   return issuer;
 }
 
 const createBranch = async (req, res) => {
   if (req.tenant.status !== TenantStatus.ACTIVE) {
-    throw new AppError('Email verification required before creating additional branches. Check your inbox.', 403);
+    throw new AppError(
+      'Email verification is required before creating additional branches. Check your inbox.',
+      403,
+      ErrorCodes.EMAIL_VERIFICATION_REQUIRED
+    );
   }
 
   let sourceIssuer = null;
@@ -30,13 +36,16 @@ const createBranch = async (req, res) => {
     if (sourceId) {
       sourceIssuer = await issuerModel.findById(sourceId);
       if (!sourceIssuer || sourceIssuer.tenant_id !== req.tenant.id) {
-        throw new AppError('sourceIssuerId not found or does not belong to this tenant', 404);
+        throw new NotFoundError('sourceIssuerId', ErrorCodes.SOURCE_ISSUER_NOT_FOUND);
       }
     } else {
       const issuers = await issuerModel.findAllByTenantId(req.tenant.id);
       sourceIssuer = issuers[0] || null;
       if (!sourceIssuer) {
-        throw new AppError('Tenant has no existing issuer to inherit the certificate from. Upload a P12 or pass sourceIssuerId.', 400);
+        throw new AppError(
+          'No existing issuer found to inherit the certificate from. Upload a P12 file or pass sourceIssuerId.',
+          400
+        );
       }
     }
   }
