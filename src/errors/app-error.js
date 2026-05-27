@@ -13,12 +13,19 @@ const STATUS_METADATA = {
 const DEFAULT_META = { code: 'ERROR', title: 'Error', typeSlug: 'error' };
 
 class AppError extends Error {
-  constructor(message, statusCode = 500, isOperational = true) {
+  /**
+   * @param {string} message      - Human-readable description (goes into `detail`)
+   * @param {number} statusCode   - HTTP status code
+   * @param {string|null} code    - Stable machine-readable code from ErrorCodes (overrides
+   *                                the HTTP-status default). Clients should switch on this.
+   * @param {boolean} isOperational - false = programmer error, not a safe user-facing message
+   */
+  constructor(message, statusCode = 500, code = null, isOperational = true) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = isOperational;
     const meta = STATUS_METADATA[statusCode] || DEFAULT_META;
-    this.code = meta.code;
+    this.code = code ?? meta.code;
     this.typeSlug = meta.typeSlug;
     this.title = meta.title;
     Error.captureStackTrace(this, this.constructor);

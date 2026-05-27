@@ -15,6 +15,7 @@ const ValidationError = require('../errors/validation-error');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const QuotaExceededError = require('../errors/quota-exceeded-error');
+const ErrorCodes = require('../constants/error-codes');
 const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
 const { formatDocument } = require('../presenters/document.presenter');
@@ -45,7 +46,8 @@ async function create(body, idempotencyKey = null, issuer) {
   if (!allowedTypes.includes(documentType)) {
     throw new AppError(
       `Document type '${documentType}' is not enabled for this issuer. Allowed types: ${allowedTypes.join(', ')}`,
-      400
+      400,
+      ErrorCodes.DOCUMENT_TYPE_NOT_ENABLED
     );
   }
 

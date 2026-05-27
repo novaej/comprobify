@@ -13,10 +13,10 @@ const sandboxIssuer = {
   active: true,
 };
 
-function makeReq(headers, tenantId = 10, environment = 'sandbox') {
+function makeReq(headers, tenantId = 10, environment = 'sandbox', sandbox = true) {
   return {
     headers,
-    tenant: { id: tenantId, status: 'ACTIVE' },
+    tenant: { id: tenantId, status: 'ACTIVE', sandbox },
     apiKey: { id: 1, label: 'key', environment },
   };
 }
@@ -34,7 +34,8 @@ describe('resolveIssuer middleware', () => {
     issuerModel.findById.mockResolvedValue(sandboxIssuer);
     const req = makeReq({ 'x-issuer-id': '42' });
     await run(req);
-    expect(req.issuer).toEqual(sandboxIssuer);
+    // resolve-issuer attaches sandbox as a virtual field from req.tenant.sandbox
+    expect(req.issuer).toEqual({ ...sandboxIssuer, sandbox: true });
     expect(issuerModel.findById).toHaveBeenCalledWith(42);
   });
 
@@ -66,15 +67,17 @@ describe('resolveIssuer middleware', () => {
   });
 
   test('401 when API key environment does not match issuer environment', async () => {
-    issuerModel.findById.mockResolvedValue({ ...sandboxIssuer, sandbox: false });
-    const req = makeReq({ 'x-issuer-id': '42' }, 10, 'sandbox');
+    // Tenant is in production (sandbox=false) but API key is sandbox
+    issuerModel.findById.mockResolvedValue(sandboxIssuer);
+    const req = makeReq({ 'x-issuer-id': '42' }, 10, 'sandbox', false);
     await expect(run(req)).rejects.toMatchObject({ statusCode: 401 });
   });
 
-  test('production key with production issuer passes', async () => {
-    issuerModel.findById.mockResolvedValue({ ...sandboxIssuer, sandbox: false });
-    const req = makeReq({ 'x-issuer-id': '42' }, 10, 'production');
+  test('production key with production tenant passes', async () => {
+    issuerModel.findById.mockResolvedValue(sandboxIssuer);
+    const req = makeReq({ 'x-issuer-id': '42' }, 10, 'production', false);
     await run(req);
+    // sandbox is a virtual field sourced from req.tenant.sandbox, not the issuer row
     expect(req.issuer.sandbox).toBe(false);
   });
 });

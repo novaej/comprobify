@@ -8,8 +8,10 @@ const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
+const NotFoundError = require('../errors/not-found-error');
 const TIERS = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
+const ErrorCodes = require('../constants/error-codes');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -67,26 +69,26 @@ async function listTenants() {
 
 async function updateTenantTier(id, tier) {
   if (!TIERS[tier]) {
-    throw new AppError(`Unknown tier: ${tier}`, 400);
+    throw new AppError(`Unknown subscription tier: '${tier}'. Valid tiers: ${Object.keys(TIERS).join(', ')}`, 400, ErrorCodes.INVALID_TIER);
   }
   const row = await tenantModel.updateTier(id, tier, TIERS[tier].documentQuota);
-  if (!row) throw new AppError('Tenant not found', 404);
+  if (!row) throw new NotFoundError('Tenant');
   return formatTenant(row);
 }
 
 async function updateTenantStatus(id, status) {
   const allowed = Object.values(TenantStatus);
   if (!allowed.includes(status)) {
-    throw new AppError(`Invalid status: ${status}`, 400);
+    throw new AppError(`Invalid status: '${status}'. Valid values: ${allowed.join(', ')}`, 400, ErrorCodes.INVALID_TENANT_STATUS);
   }
   const row = await tenantModel.updateStatus(id, status);
-  if (!row) throw new AppError('Tenant not found', 404);
+  if (!row) throw new NotFoundError('Tenant');
   return formatTenant(row);
 }
 
 async function verifyTenant(id) {
   const row = await tenantModel.activate(id);
-  if (!row) throw new AppError('Tenant not found', 404);
+  if (!row) throw new NotFoundError('Tenant');
   return formatTenant(row);
 }
 
@@ -94,7 +96,7 @@ async function verifyTenant(id) {
 
 async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
   const tenant = await tenantModel.findById(fields.tenantId);
-  if (!tenant) throw new AppError('Tenant not found', 404);
+  if (!tenant) throw new NotFoundError('Tenant');
 
   const tierConfig = TIERS[tenant.subscription_tier];
   const issuePointCount = await tenantModel.countIssuePointsByBranch(tenant.id, fields.branchCode);
@@ -103,8 +105,9 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
       const branchCount = await tenantModel.countBranchesByTenantId(tenant.id);
       if (branchCount >= tierConfig.maxBranches) {
         throw new AppError(
-          `Tenant has reached the branch limit for the ${tenant.subscription_tier} plan (${tierConfig.maxBranches})`,
-          402
+          `Tenant has reached the branch limit for the ${tenant.subscription_tier} plan (${tierConfig.maxBranches}).`,
+          402,
+          ErrorCodes.BRANCH_LIMIT_REACHED
         );
       }
     }
@@ -112,8 +115,9 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     if (tierConfig.maxIssuePointsPerBranch !== null) {
       if (issuePointCount >= tierConfig.maxIssuePointsPerBranch) {
         throw new AppError(
-          `Branch ${fields.branchCode} has reached the issue point limit for the ${tenant.subscription_tier} plan (${tierConfig.maxIssuePointsPerBranch})`,
-          402
+          `Branch ${fields.branchCode} has reached the issue point limit for the ${tenant.subscription_tier} plan (${tierConfig.maxIssuePointsPerBranch}).`,
+          402,
+          ErrorCodes.ISSUE_POINT_LIMIT_REACHED
         );
       }
     }
@@ -129,9 +133,13 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     certExpiry = parsed.certExpiry;
   } else {
     const source = await issuerModel.findById(sourceIssuerId);
-    if (!source) throw new AppError('Source issuer not found', 404);
+    if (!source) throw new NotFoundError('Source issuer', ErrorCodes.SOURCE_ISSUER_NOT_FOUND);
     if (source.ruc !== fields.ruc) {
-      throw new AppError('RUC mismatch: source issuer RUC does not match the supplied RUC', 400);
+      throw new AppError(
+        `RUC mismatch: source issuer RUC (${source.ruc}) does not match the supplied RUC (${fields.ruc}).`,
+        400,
+        ErrorCodes.RUC_MISMATCH
+      );
     }
     encryptedPrivateKey = source.encrypted_private_key;
     certificatePem = source.certificate_pem;
@@ -202,9 +210,9 @@ async function listIssuers() {
 
 async function createApiKey(tenantId, label, environment = 'sandbox', revokeExistingInEnv = false) {
   const tenant = await tenantModel.findById(tenantId);
-  if (!tenant) throw new AppError('Tenant not found', 404);
+  if (!tenant) throw new NotFoundError('Tenant');
   if (!['sandbox', 'production'].includes(environment)) {
-    throw new AppError(`environment must be 'sandbox' or 'production'`, 400);
+    throw new AppError(`environment must be 'sandbox' or 'production', got: '${environment}'`, 400);
   }
   if (revokeExistingInEnv) {
     await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, environment);
@@ -223,7 +231,7 @@ async function createApiKey(tenantId, label, environment = 'sandbox', revokeExis
 // For the user-facing version (which enforces ACTIVE status), see tenant.service.js.
 async function promoteTenant(tenantId, initialSequentials = []) {
   const tenant = await tenantModel.findById(tenantId);
-  if (!tenant) throw new AppError('Tenant not found', 404);
+  if (!tenant) throw new NotFoundError('Tenant');
   if (!tenant.sandbox) throw new ConflictError('Tenant is already in production');
 
   // Build lookup: { issuerId: { documentType: sequential } }
@@ -262,7 +270,7 @@ async function promoteTenant(tenantId, initialSequentials = []) {
 
 async function revokeApiKey(id) {
   const row = await apiKeyModel.revoke(id);
-  if (!row) throw new AppError('API key not found', 404);
+  if (!row) throw new NotFoundError('API key');
   return row;
 }
 

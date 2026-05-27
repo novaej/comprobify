@@ -1,5 +1,6 @@
 const forge = require('node-forge');
 const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 
 function parseCertificate(p12Buffer, p12Password) {
   const p12Der = p12Buffer.toString('binary');
@@ -7,13 +8,13 @@ function parseCertificate(p12Buffer, p12Password) {
   try {
     p12Asn1 = forge.asn1.fromDer(p12Der);
   } catch {
-    throw new AppError('Invalid P12 certificate file', 400);
+    throw new AppError('Invalid P12 certificate file — ensure the file is a valid PKCS#12 archive.', 400, ErrorCodes.CERTIFICATE_INVALID);
   }
   let p12;
   try {
     p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, p12Password);
   } catch {
-    throw new AppError('Invalid P12 certificate password', 400);
+    throw new AppError('Invalid P12 certificate password.', 400, ErrorCodes.CERTIFICATE_PASSWORD_INVALID);
   }
 
   const pkcs8Bags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
@@ -40,12 +41,21 @@ function parseCertificate(p12Buffer, p12Password) {
   }
 
   if (!pkcs8) {
-    throw new AppError('Could not locate signing key in P12 certificate', 400);
+    throw new AppError(
+      'Could not locate a signing key in the P12 certificate. ' +
+      'Ensure the file contains a BANCO CENTRAL or SECURITY DATA key bag.',
+      400,
+      ErrorCodes.CERTIFICATE_KEY_NOT_FOUND
+    );
   }
 
   const now = new Date();
   if (now < cert.validity.notBefore || now > cert.validity.notAfter) {
-    throw new AppError('Certificate has expired', 400);
+    throw new AppError(
+      `Certificate expired on ${cert.validity.notAfter.toISOString().slice(0, 10)}. Renew it with your CA before uploading.`,
+      400,
+      ErrorCodes.CERTIFICATE_EXPIRED
+    );
   }
 
   const privateKey = pkcs8.key ?? forge.pki.privateKeyFromAsn1(pkcs8.asn1);

@@ -1,4 +1,6 @@
 const InvoiceBuilder = require('./invoice.builder');
+const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 
 const builders = {
   '01': InvoiceBuilder,
@@ -7,7 +9,12 @@ const builders = {
 function getBuilder(documentTypeCode, issuer) {
   const BuilderClass = builders[documentTypeCode];
   if (!BuilderClass) {
-    throw new Error(`No builder registered for document type: ${documentTypeCode}`);
+    throw new AppError(
+      `No builder registered for document type: ${documentTypeCode}`,
+      500,
+      ErrorCodes.BUILDER_NOT_FOUND,
+      false
+    );
   }
   return new BuilderClass(issuer);
 }

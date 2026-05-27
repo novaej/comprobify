@@ -15,6 +15,8 @@
 
 const crypto = require('crypto');
 const config = require('../config');
+const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;       // 128-bit IV — standard for GCM
@@ -84,7 +86,12 @@ function decrypt(ciphertext) {
 
   const parts = ciphertext.split(':');
   if (parts.length !== 3) {
-    throw new Error('Invalid encrypted data format');
+    throw new AppError(
+      'Failed to decrypt stored credential — data format is invalid. This indicates data corruption.',
+      500,
+      ErrorCodes.DECRYPTION_FAILED,
+      false
+    );
   }
 
   const iv      = Buffer.from(parts[0], 'hex');

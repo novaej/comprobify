@@ -20,6 +20,8 @@
 
 var forge = require('node-forge');
 var Buffer = require('buffer/').Buffer;
+var AppError = require('../src/errors/app-error');
+var ErrorCodes = require('../src/constants/error-codes');
 
 /**
  * Hashes bytes with SHA-256 and returns the result as a Base64 string.
@@ -84,7 +86,12 @@ const sign = (privateKeyPem, certPem, xmlString = '') => {
     // --- Step 2: Validate certificate validity period ---
     const currentDate = new Date();
     if (currentDate < certificate.validity.notBefore || currentDate > certificate.validity.notAfter) {
-        throw new Error('Invalid certificate, certificate has expired');
+        throw new AppError(
+            `Certificate expired on ${certificate.validity.notAfter.toISOString().slice(0, 10)}. ` +
+            'Replace the P12 file on this issuer before creating documents.',
+            400,
+            ErrorCodes.CERTIFICATE_EXPIRED
+        );
     }
 
     // --- Step 3: Prepare the X.509 certificate for embedding ---

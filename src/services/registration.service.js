@@ -8,9 +8,11 @@ const certificateService = require('./certificate.service');
 const emailService = require('./email.service');
 const tenantEventModel = require('../models/tenant-event.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
+const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const TIERS = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
+const ErrorCodes = require('../constants/error-codes');
 const config = require('../config');
 
 function sha256Hex(value) {
@@ -33,7 +35,7 @@ async function register(fields, p12Buffer, p12Password) {
   const existing = await tenantModel.findByEmail(fields.email);
   if (existing) {
     if (existing.status === TenantStatus.SUSPENDED) {
-      throw new Error('SUSPENDED');
+      throw new AppError('This account has been suspended.', 403, ErrorCodes.ACCOUNT_SUSPENDED);
     }
     const issuer = await issuerModel.findByTenantId(existing.id);
     if (!issuer) {
@@ -180,20 +182,20 @@ async function resendVerification(email, verificationRedirectUrl) {
   if (!tenant) return; // don't leak whether email exists
 
   if (tenant.status === TenantStatus.ACTIVE) {
-    const err = new Error('ALREADY_VERIFIED');
-    err.tenantStatus = tenant.status;
-    throw err;
+    throw new ConflictError('This account is already verified.', ErrorCodes.ALREADY_VERIFIED);
   }
   if (tenant.status === TenantStatus.SUSPENDED) {
-    const err = new Error('SUSPENDED');
-    err.tenantStatus = tenant.status;
-    throw err;
+    throw new AppError('This account has been suspended.', 403, ErrorCodes.ACCOUNT_SUSPENDED);
   }
 
   if (tenant.verification_email_sent_at) {
     const elapsed = Date.now() - new Date(tenant.verification_email_sent_at).getTime();
     if (elapsed < RESEND_COOLDOWN_MS) {
-      throw new Error('RESEND_COOLDOWN');
+      throw new AppError(
+        'Please wait before requesting another verification email.',
+        429,
+        ErrorCodes.RESEND_COOLDOWN
+      );
     }
   }
 
@@ -221,7 +223,11 @@ async function resendVerification(email, verificationRedirectUrl) {
 async function verifyEmail(token) {
   const tenant = await tenantModel.findByVerificationToken(token);
   if (!tenant) {
-    throw new Error('INVALID_TOKEN');
+    throw new AppError(
+      'Verification token is invalid or has expired.',
+      400,
+      ErrorCodes.INVALID_OR_EXPIRED_TOKEN
+    );
   }
   await tenantModel.activate(tenant.id);
   await tenantEventModel.create(tenant.id, 'EMAIL_VERIFIED');

@@ -62,7 +62,19 @@ Adopt [RFC 7807 — Problem Details for HTTP APIs](https://www.rfc-editor.org/rf
 
 ### Error class codes
 
-`AppError` derives `code`, `type`, and `title` automatically from the HTTP status code:
+`AppError` derives `code`, `type`, and `title` automatically from the HTTP status code. An optional third constructor parameter overrides `code` with a domain-specific value when the HTTP status alone is too coarse:
+
+```js
+// Generic — code derived from status
+throw new AppError('Something went wrong', 400);
+// → code: 'BAD_REQUEST'
+
+// Specific — override via third parameter
+throw new AppError('Certificate has expired', 400, ErrorCodes.CERTIFICATE_EXPIRED);
+// → code: 'CERTIFICATE_EXPIRED'
+```
+
+**HTTP-status defaults (used when no explicit code is supplied):**
 
 | Status | `code` | `type` |
 |---|---|---|
@@ -75,7 +87,9 @@ Adopt [RFC 7807 — Problem Details for HTTP APIs](https://www.rfc-editor.org/rf
 | 500 | `INTERNAL_ERROR` | `/problems/internal-error` |
 | 502 | `BAD_GATEWAY` | `/problems/bad-gateway` |
 
-`ValidationError` and `SriError` override with domain-specific values (`VALIDATION_FAILED`, `SRI_SUBMISSION_FAILED`) since their HTTP status codes alone do not carry enough meaning.
+`ValidationError`, `SriError`, and `QuotaExceededError` use subclass-level overrides (`VALIDATION_FAILED`, `SRI_SUBMISSION_FAILED`, `QUOTA_EXCEEDED`) that bypass the HTTP-status default entirely.
+
+**All stable domain-specific codes are defined in `src/constants/error-codes.js`.** Every new error throw site must import from that file rather than hard-coding string literals. The full catalogue of codes is documented in the [Error Reference](../../docs/site/errors/index.md).
 
 ### Field-level i18n codes
 
