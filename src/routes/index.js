@@ -9,5 +9,6 @@ router.use('/keys', require('./api-keys.routes'));
 router.use('/catalogs', require('./catalogs.routes'));
 router.use('/tenants', require('./tenants.routes'));
 router.use('/mailgun', require('./mailgun-webhook.routes'));
+router.use('/notifications', require('./notifications.routes'));
 
 module.exports = router;

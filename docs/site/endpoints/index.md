@@ -56,6 +56,18 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 | `POST` | `/api/documents/email-retry` | Retry all failed/pending emails (batch) |
 | `POST` | `/api/documents/:accessKey/email-retry` | Retry email for a single document |
 
+## Notifications (authenticated)
+
+Tenant-level alerts for document events and certificate status. Supply `X-Issuer-Id` to filter to a specific issuer; omit for an all-issuer admin view.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/notifications` | List active notifications (read and unread) |
+| `POST` | `/api/notifications/sync` | Run all periodic checks (cert expiry, etc.) then return updated list |
+| `POST` | `/api/notifications/:id/read` | Mark a notification as read |
+| `GET` | `/api/notifications/preferences` | Get notification type preferences for the tenant |
+| `PATCH` | `/api/notifications/preferences` | Enable or disable notification types |
+
 ## Webhooks
 
 | Method | Path | Description |

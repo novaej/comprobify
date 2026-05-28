@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Notification system** (`GET / POST /api/notifications`, `POST /api/notifications/sync`, `POST /api/notifications/:id/read`, `GET / PATCH /api/notifications/preferences`). Tenant-level alerts for two initial conditions:
+  - `DOCUMENT_AUTHORIZED` — created automatically (fire-and-forget) when SRI authorises a document. Multiple authorisations within a 60-second window are aggregated into a single notification row to prevent batch flooding. The notification `id` is stable across polls; the frontend should upsert by `id`.
+  - `CERT_EXPIRING` / `CERT_EXPIRED` — upserted by `POST /api/notifications/sync`, which the frontend backend calls on a schedule. At most one unread alert per issuer; auto-dismissed when the certificate is renewed. Severity escalates from `WARNING` (> 7 days) to `ERROR` (≤ 7 days), then transitions to `CERT_EXPIRED` when the `notAfter` date passes.
+  - Optional `X-Issuer-Id` filter on list and sync endpoints: when supplied, returns only that issuer's notifications plus tenant-level ones (`issuerId: null`).
+  - Per-tenant opt-out preferences (`notification_preferences` table, migration 045). All types default to enabled. `PATCH /api/notifications/preferences` accepts an array of `{ type, enabled }` objects.
+  - `notifications` table (migration 044) with `id`, `tenant_id`, `issuer_id` (nullable), `type`, `severity`, `title`, `message`, `metadata` (JSONB), `read_at`, `expires_at`, `created_at`. CHECK constraints on `type` and `severity`.
+  - See [ADR-015](docs/adr/015-notifications.md) for design rationale (polling model, aggregation, issuer filter, frontend-managed per-user read state).
+
 ### Fixed
 - **Certificate expiry at signing time returned 500** — `helpers/signer.js` threw a plain `Error` when a certificate had expired after registration. Now throws `AppError` with code `CERTIFICATE_EXPIRED` (400), matching the check already present in `certificate.service.js` at upload time.
 - **`registration.controller.js` swapped `AppError` constructor arguments** — `AppError(403, 'message')` was called with status code and message reversed, causing malformed error responses for suspended account attempts during re-registration. Fixed by removing the try/catch entirely.

@@ -3,6 +3,7 @@ const documentEventModel = require('../models/document-event.model');
 const sriService = require('./sri.service');
 const sriResponseModel = require('../models/sri-response.model');
 const emailService = require('./email.service');
+const notificationService = require('./notification.service');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
 const EmailStatus = require('../constants/email-status');
@@ -109,6 +110,10 @@ async function checkAuthorization(accessKey, issuer) {
     }, null, issuer.id, issuer.sandbox);
 
     if (newStatus === DocumentStatus.AUTHORIZED) {
+      // Fire-and-forget: create a DOCUMENT_AUTHORIZED notification for the tenant.
+      notificationService.createDocumentAuthorized(updated, issuer)
+        .catch(err => console.warn('Notification creation failed:', err.message));
+
       emailService.sendInvoiceAuthorized(updated)
         .then(({ sent, messageId }) => {
           const emailFields = sent
