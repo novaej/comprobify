@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError / QuotaExceededError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–043
+db/migrations/     SQL migration files 001–045
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -126,6 +126,11 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 - `db.queryAsIssuer(issuerId, sql, params, sandbox)` — wraps a single query in a mini BEGIN / set_config / SET LOCAL search_path / query / COMMIT for non-transactional reads.
 All authenticated service code paths must use one of these two helpers. Only the Mailgun webhook, admin API, and health check are exempt — they authenticate by other means and operate without an issuer context (the policy's null bypass allows it). The application DB user must **not** be a PostgreSQL superuser; superusers always bypass RLS regardless of policies.
 
+**Notification system (ADR-015):** tenant-level alerts delivered via polling (no server push). Two creation paths:
+- *Event-driven* — `notificationService.createDocumentAuthorized(document, issuer)` is called fire-and-forget from `document-transmission.service.js` when SRI authorises a document. Multiple authorisations within a 60-second window are aggregated into one notification row (same `id`, incrementing `count`). Failure never affects the HTTP response.
+- *Sync-check* — `POST /api/notifications/sync` triggers `notificationService.runChecksForTenant(tenantId)`, which checks certificate expiry for all tenant issuers and upserts `CERT_EXPIRING`/`CERT_EXPIRED` alerts. Adding a new periodic check: add a private function in `notification.service.js` and call it from `runChecksForTenant()` — the endpoint never changes.
+`notifications` and `notification_preferences` tables use `db.query()` directly (not issuer-scoped; no RLS). Optional `X-Issuer-Id` filter on list/sync endpoints: parsed by `parseOptionalIssuerId()` in the controller, passed to the model. When supplied, the query adds `AND (issuer_id = $2 OR issuer_id IS NULL)`. Adding a new notification type requires updating the CHECK constraints in both `044_notifications.sql` (or a new migration) and `045_notification_preferences.sql`, plus entries in `NotificationTypes` and `NotificationSeverity` constants.
+
 **Config validation:** critical environment variables are validated at startup in `src/config/validate.js` and called from `app.js` before `Server` construction. Always-required: `APP_ENV` (`staging` | `production`), `ENCRYPTION_KEY` (64-char hex format), `ADMIN_SECRET`. Email-required when `EMAIL_PROVIDER` is set to anything other than `'none'`: `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_WEBHOOK_SIGNING_KEY`, `EMAIL_FROM`. If any are missing or malformed, the process throws immediately with a clear error message before accepting any HTTP requests. This prevents silent failures like unsigned webhooks or unencrypted P12 storage.
 
 ---
@@ -208,6 +213,7 @@ chore: update express to 4.22.1
 16. Using a plain `new Error()` in any request-path code — the error handler only formats `AppError` subclasses. Plain errors produce unformatted 500 JSON.
 17. Throwing `new AppError(message, status)` with a generic HTTP-status code when a more specific code exists — clients need specific codes (`CERTIFICATE_EXPIRED`, `ISSUER_FORBIDDEN`, etc.) to react correctly without parsing `detail` strings. Always import from `src/constants/error-codes.js` and pass the code as the third argument.
 18. Adding a new `AppError` throw without adding the code to `src/constants/error-codes.js` first — codes defined inline as string literals are not documented, not discoverable, and can silently diverge across call sites.
+19. Adding a new notification type without updating **both** CHECK constraints (`chk_notifications_type` in migration 044 and `chk_notification_preferences_type` in migration 045) — the INSERT will fail at runtime. Also add the type to `src/constants/notification-types.js`.
 
 ---
 
@@ -246,6 +252,14 @@ chore: update express to 4.22.1
 | `src/services/xml-validator.service.js` | XSD pre-validation via xmllint (async) |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
 | `src/presenters/document.presenter.js` | `formatDocument()` — shared response shape |
+| `src/presenters/notification.presenter.js` | `formatNotification()` — shared notification response shape (used by controller and service) |
+| `src/models/notification.model.js` | Notification CRUD — `create`, `findActiveByTenantId` (optional issuer filter), `findUnreadCertAlertByIssuer`, `findPendingDocumentAuthorized` (aggregation window), `update`, `updateAggregated`, `markAsRead`, `markAllCertAlertsAsRead`; uses `db.query()` (not issuer-scoped) |
+| `src/models/notification-preference.model.js` | Notification preference CRUD — `findByTenantId`, `isEnabled`, `upsertMany`; uses `db.query()` (not issuer-scoped) |
+| `src/services/notification.service.js` | Notification orchestration — `createDocumentAuthorized` (event-driven, fire-and-forget), `runChecksForTenant` (cert expiry + future checks), `listForTenant`, `markRead`, `getPreferences`, `updatePreferences` |
+| `src/controllers/notification.controller.js` | Handlers for `GET / POST /api/notifications`, `POST /api/notifications/sync`, `POST /api/notifications/:id/read`, `GET / PATCH /api/notifications/preferences` |
+| `src/routes/notifications.routes.js` | Notification routes — all authenticated; optional `X-Issuer-Id` parsed by controller |
+| `src/constants/notification-types.js` | `NotificationTypes` frozen object — 6 types (2 implemented, 4 reserved) |
+| `src/constants/notification-severity.js` | `NotificationSeverity` frozen object — `INFO`, `WARNING`, `ERROR` |
 | `src/models/tenant.model.js` | Tenant CRUD — `create`, `findByEmail`, `findByVerificationToken`, `activate`, `promote`, `updateTier`, `updateStatus`, `updateVerificationToken`, `updateVerificationEmailSent`, `updateVerificationEmailStatus`, `findByVerificationEmailMessageId`, `countBranchesByTenantId`, `countIssuePointsByBranch` |
 | `src/models/tenant-event.model.js` | Tenant event log — `create`, `findByTenantId`; uses `db.query()` (not issuer-scoped) |
 | `src/services/certificate.service.js` | P12 parsing — shared by registration and admin service |

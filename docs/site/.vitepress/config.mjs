@@ -80,6 +80,13 @@ export default defineConfig({
             ],
           },
           {
+            text: 'Notifications',
+            collapsed: false,
+            items: [
+              { text: 'Notifications', link: '/endpoints/notifications' },
+            ],
+          },
+          {
             text: 'Webhooks',
             collapsed: false,
             items: [
