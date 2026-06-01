@@ -165,7 +165,45 @@ One key covers your whole account, so a frontend or ERP that operates on multipl
 
 ---
 
-## 4. Create an invoice
+## 4. Register a webhook endpoint (recommended)
+
+Register an HTTPS URL on your server to receive event notifications in near-real time — document authorizations, certificate alerts, and any future event types the API produces.
+
+```http
+POST /api/webhooks
+Authorization: Bearer <your-api-key>
+Content-Type: application/json
+
+{
+  "url": "https://app.example.com/api/comprobify/events",
+  "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRING", "CERT_EXPIRED"]
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "endpoint": {
+    "id": 1,
+    "url": "https://app.example.com/api/comprobify/events",
+    "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRING", "CERT_EXPIRED"],
+    "active": true
+  },
+  "secret": "a3f5c8d1e2b4..."
+}
+```
+
+**Store the `secret` immediately — it is shown only once.** Use it to verify the `X-Comprobify-Signature` header on every incoming request.
+
+Omit `eventTypes` (or pass `[]`) to subscribe to all event types. You can register up to the limit for your plan (FREE: 1, STARTER: 2, GROWTH: 5, BUSINESS: 10) and manage them via `GET / PATCH / DELETE /api/webhooks`.
+
+> **If you cannot expose a public HTTPS URL** (local development, behind a firewall), poll `GET /api/notifications?sinceId=<lastId>` instead. Store the highest `id` seen from each poll and pass it on the next request to efficiently catch up — see [Notifications](endpoints/notifications.md).
+
+---
+
+## 5. Create an invoice
 
 ```http
 POST /api/documents
@@ -193,7 +231,7 @@ Returns the signed document with status `SIGNED`. See [Create Invoice](endpoints
 
 ---
 
-## 5. Send to SRI
+## 6. Send to SRI
 
 ```http
 POST /api/documents/:accessKey/send
@@ -206,7 +244,7 @@ Submits the signed XML to the SRI. The document moves to `RECEIVED` or `RETURNED
 
 ---
 
-## 6. Check authorization
+## 7. Check authorization
 
 ```http
 GET /api/documents/:accessKey/authorize
@@ -257,12 +295,12 @@ Distribute each token to the integration that previously used the sandbox key wi
 
 ## Subscription tiers
 
-| Tier | Document quota | Max branches | Max issue points per branch | Write limit |
-|---|---|---|---|---|
-| Free | 100 | 1 | 1 | 10 req/min |
-| Starter | 1,000 | 3 | 2 | 60 req/min |
-| Growth | 5,000 | 10 | 5 | 120 req/min |
-| Business | 20,000 | Unlimited | Unlimited | 300 req/min |
+| Tier | Document quota | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
+|---|---|---|---|---|---|
+| Free | 100 | 1 | 1 | 1 | 10 req/min |
+| Starter | 1,000 | 3 | 2 | 2 | 60 req/min |
+| Growth | 5,000 | 10 | 5 | 5 | 120 req/min |
+| Business | 20,000 | Unlimited | Unlimited | 10 | 300 req/min |
 
 The document quota is shared across all branches and document types. When you reach it, `POST /api/documents` returns `402 QUOTA_EXCEEDED`. Contact support to upgrade your plan.
 

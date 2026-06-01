@@ -46,6 +46,18 @@
       "value": "",
       "description": "Tenant ID — copy from Create Tenant (admin) response",
       "type": "string"
+    },
+    {
+      "key": "notification_id",
+      "value": "",
+      "description": "Notification ID — copy from List Notifications response (used for Mark as Read)",
+      "type": "string"
+    },
+    {
+      "key": "webhook_id",
+      "value": "",
+      "description": "Webhook endpoint ID — copy from Register Webhook response",
+      "type": "string"
     }
   ],
   "item": [
@@ -1051,6 +1063,199 @@
       ]
     },
     {
+      "name": "Notifications",
+      "description": "Tenant-level alerts. Both read and unread are returned; use `readAt` to decide what to show. Use `?sinceId=<id>` for efficient catch-up polling — pass the highest id seen on the last request to receive only new notifications.\n\nAll requests require a Bearer API key.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{api_key}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Issuer-Id",
+                "value": "{{issuer_id}}",
+                "description": "Optional — filter to a specific issuer's notifications plus tenant-level ones. Omit for all-tenant view.",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications"],
+              "query": [
+                {
+                  "key": "sinceId",
+                  "value": "0",
+                  "description": "Optional — return only notifications with id > sinceId. Store the highest id seen and pass it on the next poll to catch up efficiently.",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Returns active (unexpired) notifications for the tenant, newest first. Both read and unread are included.\n\n**Polling pattern:** call on a schedule (e.g. every 60 s). Use `?sinceId=<id>` to retrieve only notifications created after your last poll — store the highest `id` you've seen and pass it on the next request.\n\nOptional `X-Issuer-Id` header restricts results to a specific issuer's notifications plus tenant-level ones (`issuerId: null`). Omit it for an all-tenant view."
+          }
+        },
+        {
+          "name": "Mark as Read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/{{notification_id}}/read",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "{{notification_id}}", "read"]
+            },
+            "description": "Marks a notification as read at the tenant level. Call this only when every user with access to the notification has acknowledged it on the frontend side. After this call, the notification no longer contributes to `unreadCount` on future polls.\n\nCopy a notification `id` from the List Notifications response into the `notification_id` variable."
+          }
+        },
+        {
+          "name": "Get Preferences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/preferences",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "preferences"]
+            },
+            "description": "Returns the full notification preference list for the tenant — one entry per notification type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model)."
+          }
+        },
+        {
+          "name": "Update Preferences",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/preferences",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "preferences"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  { \"type\": \"DOCUMENT_AUTHORIZED\", \"enabled\": true },\n  { \"type\": \"CERT_EXPIRING\",        \"enabled\": true },\n  { \"type\": \"CERT_EXPIRED\",         \"enabled\": true }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Bulk-upsert notification preferences for the tenant. Send only the types you want to change — unmentioned types are unchanged.\n\nWhen `enabled` is `false` for a type, no new notifications of that type are created. Existing unread notifications remain and can still be marked as read.\n\nValid types: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "description": "Register HTTPS callback URLs to receive event notifications in near-real time. When a notification is created or updated, the API immediately POSTs a signed payload to every subscribed active endpoint.\n\n**Secret handling:** the signing secret is returned only at registration. Store it immediately — it cannot be retrieved later. If lost, deregister and re-register the endpoint.\n\n**Tier limits:** FREE: 1 endpoint, STARTER: 2, GROWTH: 5, BUSINESS: 10.\n\nAll requests require a Bearer API key.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{api_key}}",
+            "type": "string"
+          }
+        ]
+      },
+      "item": [
+        {
+          "name": "Register Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/webhooks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "webhooks"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://app.example.com/api/comprobify/events\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\", \"CERT_EXPIRING\", \"CERT_EXPIRED\"]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Registers a new webhook endpoint and returns the signing `secret` — **shown only once**. Store it immediately; it is used to verify `X-Comprobify-Signature` on incoming webhook requests.\n\n`url` must be a valid HTTPS URL.\n\n`eventTypes` is optional. Omit it or pass `[]` to subscribe to **all** event types. Valid values: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`.\n\nCopy the returned `id` into the `webhook_id` collection variable."
+          }
+        },
+        {
+          "name": "List Webhooks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/webhooks",
+              "host": ["{{base_url}}"],
+              "path": ["api", "webhooks"]
+            },
+            "description": "Returns all active webhook endpoints for the tenant. Signing secrets are never included in list responses."
+          }
+        },
+        {
+          "name": "Update Webhook",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/webhooks/{{webhook_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "webhooks", "{{webhook_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://app.example.com/api/comprobify/events-v2\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\"],\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Updates a webhook endpoint's URL, event subscriptions, or active flag. All fields are optional — send only what you want to change.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
+          }
+        },
+        {
+          "name": "Deregister Webhook",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/webhooks/{{webhook_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "webhooks", "{{webhook_id}}"]
+            },
+            "description": "Soft-deletes a webhook endpoint (`active = false`). The endpoint stops receiving deliveries immediately. Past delivery records are preserved for audit purposes.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
+          }
+        }
+      ]
+    },
+    {
       "name": "Admin",
       "description": "Admin endpoints for managing tenants, issuers, and API keys. Require the `ADMIN_SECRET` as a Bearer token.",
       "auth": {
@@ -1527,6 +1732,19 @@
               ]
             },
             "description": "Revokes (soft-deletes) an API key by ID. The key stops working immediately."
+          }
+        },
+        {
+          "name": "Run Notification Jobs",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/jobs/notifications",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "jobs", "notifications"]
+            },
+            "description": "Runs all periodic notification jobs across every non-suspended tenant:\n\n1. **Certificate expiry checks** — inspects `cert_expiry` for every active issuer and upserts `CERT_EXPIRING` / `CERT_EXPIRED` alerts. Auto-dismisses alerts when a cert has been renewed (> 30 days remaining).\n\n2. **Webhook retry queue** — retries all `RETRYING` webhook deliveries past their scheduled `next_retry_at` time.\n\nThis endpoint is designed to be called by an external scheduler (cron, infrastructure job) on a regular interval — every 5 minutes is a reasonable default. The job is **idempotent**: running it multiple times is safe.\n\nResponse includes `tenantsChecked` and a `retries` breakdown (`attempted`, `succeeded`, `failed`, `exhausted`)."
           }
         }
       ]
