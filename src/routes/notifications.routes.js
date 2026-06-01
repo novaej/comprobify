@@ -37,14 +37,12 @@ const preferencesValidator = [
 // Routes
 // ---------------------------------------------------------------------------
 
-// GET  /api/notifications              — list (optional X-Issuer-Id filter)
-// POST /api/notifications/sync         — run all checks + return updated list
+// GET  /api/notifications              — list (optional X-Issuer-Id filter, optional ?sinceId=)
 // POST /api/notifications/:id/read     — mark one notification as read
 // GET  /api/notifications/preferences  — get tenant preference list
 // PATCH /api/notifications/preferences — update preferences
 
 router.get('/',              readLimiter,  asyncHandler(controller.list));
-router.post('/sync',         writeLimiter, asyncHandler(controller.sync));
 router.get('/preferences',   readLimiter,  asyncHandler(controller.getPreferences));
 router.patch('/preferences',  writeLimiter, preferencesValidator, validateRequest, asyncHandler(controller.updatePreferences));
 router.post('/:id/read',     writeLimiter, idValidator, validateRequest, asyncHandler(controller.markRead));

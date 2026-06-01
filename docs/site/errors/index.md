@@ -132,6 +132,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `QUOTA_EXCEEDED` | Monthly document quota reached — upgrade plan |
 | `BRANCH_LIMIT_REACHED` | Tenant has reached the maximum number of branches for their plan |
 | `ISSUE_POINT_LIMIT_REACHED` | Branch has reached the maximum number of issue points for this plan |
+| `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Tenant has reached the maximum number of webhook endpoints for their plan |
 
 ### 403 Forbidden
 
@@ -149,6 +150,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 |---|---|
 | `ISSUER_NOT_FOUND` | Issuer ID in `X-Issuer-Id` or URL parameter does not exist |
 | `SOURCE_ISSUER_NOT_FOUND` | `sourceIssuerId` not found or belongs to a different tenant |
+| `WEBHOOK_ENDPOINT_NOT_FOUND` | Webhook endpoint not found or belongs to a different tenant |
 | `NOT_FOUND` | Other resource not found (document, API key — read `detail`) |
 
 ### 409 Conflict

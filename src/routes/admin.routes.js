@@ -29,4 +29,7 @@ router.get('/issuers',                                                          
 router.post('/tenants/:id/api-keys', v.createApiKey,       validateRequest, asyncHandler(controller.createApiKey));
 router.delete('/api-keys/:id',       v.revokeApiKey,       validateRequest, asyncHandler(controller.revokeApiKey));
 
+// Jobs
+router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));
+
 module.exports = router;

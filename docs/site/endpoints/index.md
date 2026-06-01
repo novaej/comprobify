@@ -58,21 +58,25 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 
 ## Notifications (authenticated)
 
-Tenant-level alerts for document events and certificate status. Supply `X-Issuer-Id` to filter to a specific issuer; omit for an all-issuer admin view.
+Tenant-level alerts for document events and certificate status. Supply `X-Issuer-Id` to filter to a specific issuer; omit for an all-issuer admin view. Use `?sinceId=<id>` to efficiently poll only new notifications since your last request.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/notifications` | List active notifications (read and unread) |
-| `POST` | `/api/notifications/sync` | Run all periodic checks (cert expiry, etc.) then return updated list |
+| `GET` | `/api/notifications` | List active notifications (read and unread). Optional `?sinceId=<id>` for catch-up polling. |
 | `POST` | `/api/notifications/:id/read` | Mark a notification as read |
 | `GET` | `/api/notifications/preferences` | Get notification type preferences for the tenant |
 | `PATCH` | `/api/notifications/preferences` | Enable or disable notification types |
 
-## Webhooks
+## Webhooks (authenticated)
+
+Register HTTPS callback URLs to receive event notifications in near-real time.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/mailgun/webhook` | Mailgun delivery event receiver |
+| `POST` | `/api/webhooks` | Register a new webhook endpoint (secret shown once) |
+| `GET` | `/api/webhooks` | List active webhook endpoints (secrets excluded) |
+| `PATCH` | `/api/webhooks/:id` | Update URL, event subscriptions, or active flag |
+| `DELETE` | `/api/webhooks/:id` | Deregister an endpoint (soft-delete) |
 
 ## Admin
 
@@ -88,6 +92,7 @@ Tenant-level alerts for document events and certificate status. Supply `X-Issuer
 | `POST` | `/api/admin/issuers` | Create issuer for a tenant (requires `tenantId`). Does NOT return an API key — mint one via `/api/admin/tenants/:id/api-keys`. |
 | `GET` | `/api/admin/issuers` | List all issuers |
 | `DELETE` | `/api/admin/api-keys/:id` | Revoke an API key |
+| `POST` | `/api/admin/jobs/notifications` | Run cert-expiry checks for all tenants + process webhook retry queue |
 
 ## Monitoring
 

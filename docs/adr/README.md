@@ -99,3 +99,4 @@ YYYY-MM-DD
 | [012](012-postgresql-row-level-security.md) | PostgreSQL Row-Level Security for Tenant Isolation | Accepted | 2026-04-20 |
 | [013](013-tenant-scoped-api-keys.md) | Tenant-Scoped API Keys with Per-Request Issuer Header | Accepted | 2026-05-11 |
 | [014](014-tenant-level-environment.md) | Tenant-Level Environment (sandbox vs production) | Accepted | 2026-05-12 |
+| [015](015-notifications.md) | Notification and Webhook System | Accepted | 2026-05-31 |

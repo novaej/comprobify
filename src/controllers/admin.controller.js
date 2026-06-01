@@ -1,4 +1,5 @@
 const adminService = require('../services/admin.service');
+const notificationSchedulerService = require('../services/notification-scheduler.service');
 
 // Tenants
 const createTenant = async (req, res) => {
@@ -67,7 +68,26 @@ const revokeApiKey = async (req, res) => {
   res.json({ ok: true });
 };
 
+// Jobs
+
+/**
+ * POST /api/admin/jobs/notifications
+ *
+ * Run all periodic notification jobs across every non-suspended tenant:
+ *   1. Certificate expiry checks — upsert CERT_EXPIRING / CERT_EXPIRED alerts.
+ *   2. Webhook retry queue — re-attempt failed webhook deliveries past their
+ *      scheduled next_retry_at time.
+ *
+ * This endpoint is designed to be called by an external scheduler (cron,
+ * infrastructure-level job, etc.) on a regular schedule (e.g. every 5 minutes).
+ * The job is idempotent — running it multiple times is safe.
+ */
+const runNotificationJobs = async (req, res) => {
+  const result = await notificationSchedulerService.runAll();
+  res.json({ ok: true, ...result });
+};
+
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
-  createIssuer, listIssuers, createApiKey, revokeApiKey,
+  createIssuer, listIssuers, createApiKey, revokeApiKey, runNotificationJobs,
 };
