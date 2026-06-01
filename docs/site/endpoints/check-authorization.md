@@ -6,7 +6,7 @@ Queries the SRI for the authorization result of a previously submitted document.
 GET /api/documents/:accessKey/authorize
 ```
 
-The document must be in `RECEIVED` status. On success it moves to `AUTHORIZED` and an email with the RIDE PDF and signed XML is automatically sent to the buyer's email address. If SRI did not authorize it, the document moves to `NOT_AUTHORIZED` and must be rebuilt.
+The document must be in `RECEIVED` status. On success it moves to `AUTHORIZED`, an email with the RIDE PDF and signed XML is automatically sent to the buyer's email address, and a `DOCUMENT_AUTHORIZED` notification is created — which fires a webhook to any registered endpoint subscribed to that event type (see [Webhooks](webhooks.md)). If SRI did not authorize it, the document moves to `NOT_AUTHORIZED` and must be rebuilt.
 
 ## Authentication
 

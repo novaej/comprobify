@@ -13,6 +13,16 @@ Comprobify handles the full electronic document lifecycle on your behalf:
 | **Authorize** | Queries the SRI for the authorization result; on success fires an email to the buyer with the RIDE PDF and XML attached |
 | **Rebuild** | Corrects and re-signs a rejected document without changing its access key or sequential number |
 
+## Event delivery
+
+Register an HTTPS callback URL to receive events in near-real time — document authorizations, certificate expiry alerts, and more. The API signs every outgoing request with HMAC-SHA256 so your server can verify authenticity.
+
+```
+POST /api/webhooks    ← register your URL
+```
+
+If you cannot expose a public endpoint, poll `GET /api/notifications?sinceId=<id>` as a fallback. See [Webhooks](endpoints/webhooks.md) and [Notifications](endpoints/notifications.md) for details.
+
 ## Base URL
 
 All endpoints are prefixed with `/api`.
