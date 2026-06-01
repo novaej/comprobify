@@ -27,6 +27,25 @@ function parseOptionalIssuerId(req) {
   return id;
 }
 
+/**
+ * Parse the optional ?sinceId query parameter.
+ * Returns the parsed integer, or null if absent.
+ * Throws 400 if present but not a valid positive integer.
+ *
+ * @param {import('express').Request} req
+ * @returns {number|null}
+ */
+function parseSinceId(req) {
+  const raw = req.query.sinceId;
+  if (raw === undefined || raw === '') return null;
+
+  const id = parseInt(raw, 10);
+  if (!Number.isInteger(id) || id <= 0 || String(id) !== String(raw).trim()) {
+    throw new AppError('sinceId must be a positive integer', 400, ErrorCodes.ISSUER_ID_INVALID);
+  }
+  return id;
+}
+
 function buildListResponse(notifications) {
   const formatted = notifications.map(formatNotification);
   return {
@@ -43,32 +62,21 @@ function buildListResponse(notifications) {
  * GET /api/notifications
  *
  * Returns active notifications for the authenticated tenant.
- * When X-Issuer-Id is provided, filters to that issuer's notifications plus
- * any tenant-level ones (issuer_id IS NULL). Omit the header to get all.
+ *
+ * Query parameters:
+ *   ?sinceId=<id>     — Return only notifications with id > sinceId. Use this
+ *                       for catch-up polling after downtime: store the highest
+ *                       id seen from the previous poll and pass it on the next.
+ *
+ * Headers:
+ *   X-Issuer-Id       — Optional. When provided, filters to that issuer's
+ *                       notifications plus tenant-level ones (issuer_id IS NULL).
+ *                       Omit to retrieve all tenant notifications.
  */
 async function list(req, res) {
   const issuerId = parseOptionalIssuerId(req);
-  const notifications = await notificationService.listForTenant(req.tenant.id, issuerId);
-  res.json(buildListResponse(notifications));
-}
-
-/**
- * POST /api/notifications/sync
- *
- * Runs all periodic notification checks (cert expiry + any future checks) for
- * the tenant, then returns the updated notification list.
- *
- * Cert checks always run across ALL tenant issuers regardless of X-Issuer-Id —
- * it is a tenant-wide maintenance operation. The returned list is filtered by
- * X-Issuer-Id when provided, same as GET /.
- *
- * The frontend backend should call this on a schedule (e.g. daily cron, on login).
- * The check is idempotent.
- */
-async function sync(req, res) {
-  const issuerId = parseOptionalIssuerId(req);
-  await notificationService.runChecksForTenant(req.tenant.id);
-  const notifications = await notificationService.listForTenant(req.tenant.id, issuerId);
+  const sinceId  = parseSinceId(req);
+  const notifications = await notificationService.listForTenant(req.tenant.id, issuerId, sinceId);
   res.json(buildListResponse(notifications));
 }
 
@@ -114,4 +122,4 @@ async function updatePreferences(req, res) {
   res.json({ preferences });
 }
 
-module.exports = { list, sync, markRead, getPreferences, updatePreferences };
+module.exports = { list, markRead, getPreferences, updatePreferences };

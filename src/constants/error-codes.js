@@ -79,6 +79,12 @@ const ErrorCodes = Object.freeze({
   /** Source issuer RUC does not match the supplied RUC */
   RUC_MISMATCH: 'RUC_MISMATCH',
 
+  // --- Webhook endpoints ---
+  /** Tenant has reached the maximum number of webhook endpoints for their plan */
+  WEBHOOK_ENDPOINT_LIMIT_REACHED: 'WEBHOOK_ENDPOINT_LIMIT_REACHED',
+  /** Webhook endpoint not found or belongs to a different tenant */
+  WEBHOOK_ENDPOINT_NOT_FOUND: 'WEBHOOK_ENDPOINT_NOT_FOUND',
+
   // --- Infrastructure (internal errors) ---
   /** AES-GCM decryption failed — possible data corruption or wrong key */
   DECRYPTION_FAILED: 'DECRYPTION_FAILED',

@@ -35,6 +35,18 @@ async function findAll() {
   return rows;
 }
 
+/**
+ * Return all non-suspended tenants. Used by the notification scheduler job to
+ * run cert checks and webhook retries across every active tenant.
+ */
+async function findAllActive() {
+  const { rows } = await db.query(
+    `SELECT * FROM tenants WHERE status != $1 ORDER BY id`,
+    [TenantStatus.SUSPENDED]
+  );
+  return rows;
+}
+
 async function activate(id) {
   const { rows } = await db.query(
     `UPDATE tenants
@@ -137,4 +149,4 @@ async function countIssuePointsByBranch(tenantId, branchCode) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, activate, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, findAllActive, activate, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };

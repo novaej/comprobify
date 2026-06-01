@@ -30,35 +30,51 @@ async function create({ tenantId, issuerId = null, type, severity, title, messag
 }
 
 /**
- * Return all active (unexpired) notifications for a tenant, newest first.
+ * Find a notification by id (no tenant scoping — used internally by the
+ * webhook fan-out service which already has the tenant context).
+ *
+ * @param {number} id
+ */
+async function findById(id) {
+  const { rows } = await db.query(
+    `SELECT * FROM notifications WHERE id = $1`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Return active (unexpired) notifications for a tenant, newest first.
  * Both read and unread are included so the client can render a full history.
  *
  * @param {number}      tenantId
  * @param {number|null} issuerId - When provided, filters to notifications for
  *   that issuer plus tenant-level notifications (issuer_id IS NULL). When null,
  *   all tenant notifications are returned (admin / no-filter view).
+ * @param {number|null} sinceId  - When provided, returns only notifications with
+ *   id > sinceId (cursor-based catch-up after downtime).
  */
-async function findActiveByTenantId(tenantId, issuerId = null) {
+async function findActiveByTenantId(tenantId, issuerId = null, sinceId = null) {
+  const conditions = ['tenant_id = $1', '(expires_at IS NULL OR expires_at > NOW())'];
+  const values = [tenantId];
+  let idx = 2;
+
   if (issuerId != null) {
-    const { rows } = await db.query(
-      `SELECT * FROM notifications
-       WHERE tenant_id = $1
-         AND (issuer_id = $2 OR issuer_id IS NULL)
-         AND (expires_at IS NULL OR expires_at > NOW())
-       ORDER BY created_at DESC
-       LIMIT 100`,
-      [tenantId, issuerId]
-    );
-    return rows;
+    conditions.push(`(issuer_id = $${idx++} OR issuer_id IS NULL)`);
+    values.push(issuerId);
+  }
+
+  if (sinceId != null) {
+    conditions.push(`id > $${idx++}`);
+    values.push(sinceId);
   }
 
   const { rows } = await db.query(
     `SELECT * FROM notifications
-     WHERE tenant_id = $1
-       AND (expires_at IS NULL OR expires_at > NOW())
+     WHERE ${conditions.join(' AND ')}
      ORDER BY created_at DESC
      LIMIT 100`,
-    [tenantId]
+    values
   );
   return rows;
 }
@@ -174,6 +190,7 @@ async function markAllCertAlertsAsRead(tenantId, issuerId) {
 
 module.exports = {
   create,
+  findById,
   findActiveByTenantId,
   findUnreadCertAlertByIssuer,
   findPendingDocumentAuthorized,

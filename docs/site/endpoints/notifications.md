@@ -3,15 +3,16 @@
 Tenant-level alerts surfaced to users of the system. The API produces two categories of notifications:
 
 - **Event-driven** — created automatically when something happens (e.g. a document is authorized by SRI).
-- **Sync-check** — created or updated when the frontend explicitly asks the API to check current conditions (e.g. certificate expiry).
+- **Scheduled** — created or updated by the API's own background job (e.g. certificate expiry). No consumer action required.
 
 ```
 GET   /api/notifications
-POST  /api/notifications/sync
 POST  /api/notifications/:id/read
 GET   /api/notifications/preferences
 PATCH /api/notifications/preferences
 ```
+
+See [Webhooks](webhooks.md) for registering callback URLs that receive notifications in near-real time. Polling this endpoint with `?sinceId=` is the fallback for consumers that cannot expose a public HTTPS callback URL.
 
 ## Authentication
 
@@ -40,7 +41,7 @@ All list and single-notification responses use the same shape:
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | integer | Stable identifier. The frontend uses this to deduplicate across polls and track per-user read state. |
+| `id` | integer | Stable identifier. Use it to deduplicate across polls and track per-user read state. |
 | `type` | string | Machine-readable type code — see [Notification types](#notification-types). |
 | `severity` | string | `INFO` · `WARNING` · `ERROR` |
 | `title` | string | Short human-readable headline. |
@@ -58,6 +59,8 @@ All list and single-notification responses use the same shape:
 ### `DOCUMENT_AUTHORIZED`
 
 Created automatically (fire-and-forget) inside `GET /:accessKey/authorize` when SRI confirms authorization. Multiple authorizations within a 60-second window are **aggregated into a single row** to avoid flooding the list during batch processing. The same notification `id` may have an updated `count` on successive polls within that window — the frontend should upsert by `id` rather than append.
+
+A webhook payload is fired for each update to the aggregated row (including count increments).
 
 **Severity:** `INFO`
 
@@ -86,7 +89,7 @@ Created automatically (fire-and-forget) inside `GET /:accessKey/authorize` when 
 
 ### `CERT_EXPIRING`
 
-Created or updated by `POST /api/notifications/sync` when an issuer's certificate is within 30 days of its `notAfter` date. At most **one unread row per issuer** — the same row is updated in place on successive sync calls (days remaining refreshes, severity may escalate). Auto-dismissed when the certificate is renewed and has > 30 days remaining.
+Created or updated by the API scheduler job when an issuer's certificate is within 30 days of its `notAfter` date. At most **one unread row per issuer** — the same row is updated in place on successive job runs (days remaining refreshes, severity may escalate). Auto-dismissed when the certificate is renewed and has > 30 days remaining.
 
 **Severity:** `WARNING` (> 7 days) · `ERROR` (≤ 7 days)
 
@@ -131,7 +134,13 @@ The following types are defined in the schema and accepted by the preferences en
 GET /api/notifications
 ```
 
-Returns all active (unexpired) notifications for the tenant, newest first. Both read and unread are included. The frontend uses `readAt` to decide what to show as new.
+Returns active (unexpired) notifications for the tenant, newest first. Both read and unread are included. Use `readAt` to decide what to show as new.
+
+### Query parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `sinceId` | integer | Optional. When provided, returns only notifications with `id > sinceId`. Use for efficient catch-up polling: store the highest `id` seen on each poll and pass it on the next request. |
 
 ### Issuer filter
 
@@ -158,33 +167,8 @@ Omit the header to receive all notifications across every issuer (useful for adm
 | Status | Code | When |
 |---|---|---|
 | `400` | `ISSUER_ID_INVALID` | `X-Issuer-Id` header is present but not a valid positive integer |
+| `400` | `ISSUER_ID_INVALID` | `sinceId` is present but not a valid positive integer |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-
----
-
-## Sync (run checks + list)
-
-```
-POST /api/notifications/sync
-```
-
-Runs all periodic notification checks for the tenant, then returns the updated notification list. Currently performs:
-
-1. **Certificate expiry check** — inspects `cert_expiry` for every active issuer and upserts `CERT_EXPIRING` / `CERT_EXPIRED` alerts as needed. Auto-dismisses alerts for issuers whose certs have been renewed (> 30 days remaining).
-
-Future checks (quota warning, etc.) will be added here without changing the endpoint.
-
-The cert check always runs across **all tenant issuers** regardless of any `X-Issuer-Id` filter. The returned list is filtered by `X-Issuer-Id` if supplied, the same as `GET /api/notifications`.
-
-**When to call:** on login and on a daily schedule from the frontend backend. The check is idempotent — calling it repeatedly has no side effects.
-
-### Response
-
-**200 OK** — same shape as `GET /api/notifications`.
-
-### Errors
-
-Same as `GET /api/notifications`.
 
 ---
 
@@ -289,20 +273,22 @@ When `enabled` is `false` for a type, the API will not create new notifications 
 
 ---
 
-## Recommended polling pattern
+## Recommended integration pattern
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Frontend backend (Next.js server-side)                         │
-│                                                                 │
-│  On login / once daily (cron):                                  │
-│    POST /api/notifications/sync        ← check certs + get list │
-│                                                                 │
-│  Poll interval (e.g. every 60 s):                               │
-│    GET  /api/notifications             ← fast read, no checks   │
-│                                                                 │
-│  When user opens notification panel:                            │
-│    Mark read in frontend DB per user                            │
-│    When all users have read → POST /api/notifications/:id/read  │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│  Consumer backend (e.g. Next.js)                                    │
+│                                                                     │
+│  Primary (near-real-time):                                          │
+│    Register a webhook endpoint → receive events via POST callback   │
+│    Verify X-Comprobify-Signature on each incoming request           │
+│                                                                     │
+│  Fallback / catch-up:                                               │
+│    Poll GET /api/notifications?sinceId=<lastSeenId> every 60s       │
+│    Store highest id seen → pass as sinceId on next poll             │
+│                                                                     │
+│  When user opens notification panel:                                │
+│    Mark read in frontend DB per user                                │
+│    When all users have read → POST /api/notifications/:id/read      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
