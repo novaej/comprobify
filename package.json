@@ -19,6 +19,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@sentry/node": "^10.56.0",
     "buffer": "^6.0.3",
     "bwip-js": "^4.8.0",
     "cors": "^2.8.6",

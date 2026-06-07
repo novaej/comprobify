@@ -29,6 +29,9 @@ const config = {
     maxRequests: parseInt(process.env.RATE_LIMIT_MAX, 10) || 60,
   },
   verificationTokenTtlHours: parseInt(process.env.VERIFICATION_TOKEN_TTL_HOURS, 10) || 24,
+  sentry: {
+    dsn: process.env.SENTRY_DSN || '',
+  },
 };
 
 module.exports = config;
