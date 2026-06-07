@@ -40,6 +40,10 @@ The constructor calls three setup methods in a fixed order because Express is an
 - `express.json()` — parses `Content-Type: application/json` bodies into `req.body`. Without this, `req.body` is always `undefined`.
 - `express.static('public')` — serves any static files from `/public` (reserved for future use, e.g. RIDE PDFs).
 
+**Error handling chain (registered last, in order):**
+1. `Sentry.setupExpressErrorHandler(app)` — reports errors with `statusCode >= 500` (or none) to Sentry, then forwards the error unchanged via `next(err)`. Expected `AppError` 4xx responses are not reported. Sentry itself is initialised even earlier — `instrument.js` is required at the very top of `app.js`, before `express`/`pg` are loaded, so the SDK can auto-instrument them.
+2. `errorHandler` (`src/middleware/error-handler.js`) — translates the (possibly Sentry-reported) error into the RFC 7807 JSON response sent to the client.
+
 ---
 
 ## 3. Configuration — `src/config/index.js`

@@ -132,6 +132,8 @@ All authenticated service code paths must use one of these two helpers. Only the
 After every notification create/update, `webhookDeliveryService.fanOut(notification)` fans the event out to all active, subscribed webhook endpoints (fire-and-forget). Failed deliveries are retried by the admin job. Consumers can also fall back to `GET /api/notifications?sinceId=<id>` for catch-up polling.
 `notifications`, `notification_preferences`, `webhook_endpoints`, and `webhook_deliveries` tables use `db.query()` directly (not issuer-scoped; no RLS). Optional `X-Issuer-Id` filter on `GET /api/notifications`: parsed by `parseOptionalIssuerId()` in the controller. When supplied, the query adds `AND (issuer_id = $2 OR issuer_id IS NULL)`. Adding a new notification type requires updating the CHECK constraints in both `044_notifications.sql` (or a new migration) and `045_notification_preferences.sql`, plus entries in `NotificationTypes` and `NotificationSeverity` constants.
 
+**Error monitoring (Sentry):** unexpected `5xx` failures are reported to Sentry via `@sentry/node`. `instrument.js` (project root) calls `Sentry.init({ dsn, environment, sendDefaultPii: false })` and is required at the very top of `app.js` — before any other module — so the SDK can auto-instrument `http`, `express`, and `pg`. `Sentry.setupExpressErrorHandler(app)` is mounted in `server.js` immediately before the central `errorHandler`, so it only reports errors with `statusCode >= 500` (or none) and then forwards unchanged; expected `AppError` 4xx responses (validation, not found, quota, etc.) are never sent. `environment` is always `staging` or `production` (mirrors `config.appEnv`), filterable in the Sentry UI. `SENTRY_DSN` is optional — when unset (e.g. local development), the client is a no-op and nothing is transmitted.
+
 **Config validation:** critical environment variables are validated at startup in `src/config/validate.js` and called from `app.js` before `Server` construction. Always-required: `APP_ENV` (`staging` | `production`), `ENCRYPTION_KEY` (64-char hex format), `ADMIN_SECRET`. Email-required when `EMAIL_PROVIDER` is set to anything other than `'none'`: `MAILGUN_API_KEY`, `MAILGUN_DOMAIN`, `MAILGUN_WEBHOOK_SIGNING_KEY`, `EMAIL_FROM`. If any are missing or malformed, the process throws immediately with a clear error message before accepting any HTTP requests. This prevents silent failures like unsigned webhooks or unencrypted P12 storage.
 
 ---
@@ -230,6 +232,7 @@ chore: update express to 4.22.1
 | `docs/guides/code-flow.md` | Layer-by-layer request walkthrough |
 | `docs/guides/coding-guidelines.md` | Patterns and examples for adding features |
 | `docs/adr/` | Architecture Decision Records |
+| `instrument.js` | Sentry initialisation — required first in `app.js`, before any other module, so `@sentry/node` can auto-instrument `http`/`express`/`pg` |
 | `src/config/validate.js` | Startup config validation — throws if critical env vars are missing or malformed |
 | `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.tenant` + `req.apiKey` + `req.keyHash`; checks suspension. Does NOT set `req.issuer`. |
 | `src/middleware/resolve-issuer.js` | Reads `X-Issuer-Id` header → fetches issuer → validates tenant ownership + env match → sets `req.issuer` |
