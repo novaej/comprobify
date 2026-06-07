@@ -123,6 +123,9 @@ All authenticated endpoints are rate-limited to prevent abuse and quota exhausti
 **Tenant-scoped API keys with per-request issuer targeting**
 API keys belong to the tenant, not to a single branch. A tenant can mint multiple named keys (`frontend-prod`, `erp`, `mobile`) via `POST /api/keys` and pick which key represents which integration. Every document endpoint requires an `X-Issuer-Id` header naming the target branch. The auth pipeline (`authenticate` then `resolveIssuer`) validates that the issuer belongs to the calling tenant and that the key's environment (sandbox / production) matches the issuer's environment. See [ADR-013](docs/adr/013-tenant-scoped-api-keys.md).
 
+**Error monitoring**
+Unexpected `5xx` failures are reported to [Sentry](https://sentry.io) via `@sentry/node`, tagged with the running `environment` (`staging` / `production`). Sentry's Express error handler is mounted directly before the central RFC 7807 error handler, so it captures genuine internal errors with full stack traces and request context — without intercepting expected `AppError` 4xx responses (validation, not found, quota, etc.). Configured via the optional `SENTRY_DSN` env var; unset locally so development never reports.
+
 ---
 
 ## Project Structure
@@ -130,6 +133,7 @@ API keys belong to the tenant, not to a single branch. A tenant can mint multipl
 ```
 .
 ├── app.js                     Entry point — loads env, starts server
+├── instrument.js              Sentry initialisation — required first, before any other module
 ├── src/
 │   ├── server.js              Express class (middleware, routes, error handler)
 │   ├── config/

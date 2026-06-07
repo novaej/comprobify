@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const Sentry = require('@sentry/node');
 const config = require('./config');
 const errorHandler = require('./middleware/error-handler');
 
@@ -25,6 +26,7 @@ class Server {
   }
 
   errorHandling() {
+    Sentry.setupExpressErrorHandler(this.app);
     this.app.use(errorHandler);
   }
 

@@ -246,6 +246,7 @@ All variables are required unless marked optional.
 | `MAILGUN_API_KEY` | No | Mailgun private API key |
 | `MAILGUN_DOMAIN` | No | Mailgun sending domain, e.g. `mg.yourdomain.com` |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | No | From Mailgun dashboard → Sending → Webhooks → Webhook signing key |
+| `SENTRY_DSN` | No | Sentry project DSN — enables error monitoring (`@sentry/node`). Leave unset to disable; the client becomes a no-op and nothing is transmitted. Set independently per environment — staging and production should point at the same Sentry project but report distinct `environment` tags (derived from `APP_ENV`). |
 
 > **Issuer-specific config** (RUC, branch code, issue point, SRI environment, certificate) is stored per-issuer in the `issuers` database table via the Admin API. This enables multiple issuers to be configured independently without changing environment variables.
 
@@ -337,6 +338,7 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [ ] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard for all 4 event types
 - [ ] Webhook endpoint (`/api/mailgun/webhook`) reachable on the public HTTPS URL
 - [ ] Log aggregation configured — the API logs to stdout
+- [ ] `SENTRY_DSN` set on staging and production so unexpected `5xx` errors are reported (left unset locally so development never sends events)
 
 ---
 
@@ -354,6 +356,8 @@ Key log lines to monitor:
 | `Failed to upsert client record` | Non-critical — buyer catalogue update failed |
 | `Invoice email failed: ...` | Non-critical — email send failed; `email_status` set to `FAILED`, retry via `POST /api/documents/:key/email-retry` |
 | `Unhandled error: ...` | Unexpected error — inspect stack trace |
+
+**Sentry** complements stdout logging: every response with `statusCode >= 500` is automatically reported to the configured `SENTRY_DSN` project (tagged `staging` / `production` via `environment`), with a full stack trace and request context — searchable and alertable without grepping log output. See the "Error monitoring (Sentry)" entry under Key Patterns in `../CLAUDE.md`.
 
 ---
 
