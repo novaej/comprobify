@@ -53,7 +53,7 @@ async function upsertMany(tenantId, updates) {
   const placeholders = updates.map(({ type, enabled }, i) => {
     values.push(type, enabled);
     const base = 2 + i * 2; // $2,$3  then $4,$5  ...
-    return `($1, $${base}, $${base + 1})`;
+    return `($1, $${base}, $${base + 1}, NOW())`;
   });
 
   await db.query(
