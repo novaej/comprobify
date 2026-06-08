@@ -12,6 +12,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Added
 - **Payment term unit catalog** (`GET /api/catalogs/term-units`) — returns the SRI-accepted values for `unidadTiempo` (`dias`, `meses`; `cat_term_units` table, migration 048) so clients can discover and validate `payments[].termUnit` before sending invoices *a plazos* (e.g. `{ method, total, term: 12, termUnit: 'meses' }` → `<plazo>12</plazo><unidadTiempo>meses</unidadTiempo>`). `payments[].termUnit` is now validated against this catalog in `invoice.validator.js`, mirroring the existing `payments[].method` check.
 
+### Fixed
+- **RIDE PDF dropped the installment term** — the "Forma de pago" section showed only the payment method and amount, omitting `plazo`/`unidadTiempo` for invoices *a plazos*. `ride.service.js` now resolves a human-readable `termUnitLabel` via the new `cat_term_units` catalog, and `helpers/ride-builder.js` appends `(N UNIT)` to the payment row label when a term is present, e.g. `20 - TARJETA DE CRÉDITO (12 MESES)`.
+
 ### Changed
 - **Invoice-authorized email is now localised** — `src/services/email/templates/invoice-authorized.js` now renders subject/text/HTML from `getTranslations(language).email.invoiceAuthorized` (new `en`/`es` string blocks in `src/locales/`) instead of hardcoded Spanish strings, mirroring the existing `verify-email.js` pattern. `email.service.js` resolves the language from the **issuer's tenant** `preferred_language` (via `issuer.tenant_id` → `tenantModel.findById`), falling back to `'es'` — there is no buyer-language field, so the issuer's tenant preference is used as the closest available signal.
 
