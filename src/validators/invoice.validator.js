@@ -126,7 +126,12 @@ const createInvoice = [
   body('payments.*.termUnit')
     .optional()
     .isLength({ min: 1, max: 10 })
-    .withMessage('Payment termUnit must be between 1 and 10 characters'),
+    .withMessage('Payment termUnit must be between 1 and 10 characters')
+    .custom(async (value) => {
+      if (!(await catalog.isValidTermUnit(value))) {
+        throw new Error(`Invalid payment termUnit: ${value}`);
+      }
+    }),
 
   body('additionalInfo')
     .optional()

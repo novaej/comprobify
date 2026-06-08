@@ -94,7 +94,7 @@ POST /api/documents
 | `payments[].method` | string | Yes | 2-digit SRI payment method code |
 | `payments[].total` | string | Yes | Numeric payment amount |
 | `payments[].term` | number | No | Payment term length — maps to SRI `plazo` |
-| `payments[].termUnit` | string | No | Payment term unit (max 10 chars, e.g. `"dias"`) — maps to SRI `unidadTiempo` |
+| `payments[].termUnit` | string | No | Payment term unit code — maps to SRI `unidadTiempo`. Must be one of the values returned by `GET /api/catalogs/term-units` (e.g. `"dias"`, `"meses"`) |
 | `additionalInfo` | array | No | Key-value pairs included in the XML as `campoAdicional` |
 
 ## Response

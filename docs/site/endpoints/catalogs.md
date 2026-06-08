@@ -59,6 +59,28 @@ GET /api/catalogs/payment-methods
 
 ---
 
+## GET /api/catalogs/term-units
+
+Returns accepted payment term units (SRI `unidadTiempo`). Use together with `payments[].term` to express installment plans (`pagos a plazos`).
+
+```
+GET /api/catalogs/term-units
+```
+
+**Response**
+
+```json
+{
+  "ok": true,
+  "termUnits": [
+    { "code": "dias", "description": "Días" },
+    { "code": "meses", "description": "Meses" }
+  ]
+}
+```
+
+---
+
 ## GET /api/catalogs/tax-types
 
 Returns SRI tax type codes.
