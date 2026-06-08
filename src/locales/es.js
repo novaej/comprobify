@@ -1,5 +1,20 @@
 module.exports = {
   email: {
+    invoiceAuthorized: {
+      subject: (formattedSeq, issuerName) => `Factura Electrónica N° ${formattedSeq} — ${issuerName}`,
+      greeting: (buyerName) => `Estimado/a ${buyerName},`,
+      intro: 'Nos complacemos en informarle que su comprobante electrónico ha sido autorizado por el SRI.',
+      labelInvoiceNumber: 'Factura N°',
+      labelIssueDate: 'Fecha de emisión',
+      labelTotal: 'Total',
+      labelAuthorizationNumber: 'Número de autorización',
+      attachmentsIntro: 'Adjunto encontrará los siguientes documentos:',
+      attachmentRide: 'Representación impresa del comprobante',
+      attachmentXml: 'Comprobante electrónico (XML autorizado)',
+      thanks: 'Gracias por su preferencia.',
+      ruc: (issuerRuc) => `RUC: ${issuerRuc}`,
+      disclaimer: 'No responder — este es un mensaje automático.',
+    },
     verifyEmail: {
       subject: 'Verifica tu correo electrónico de Comprobify',
       greeting: '¡Bienvenido a Comprobify!',

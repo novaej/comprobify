@@ -1,4 +1,5 @@
 const issuerModel = require('../models/issuer.model');
+const tenantModel = require('../models/tenant.model');
 const rideService = require('./ride.service');
 const emailFactory = require('./email');
 const invoiceAuthorizedTemplate = require('./email/templates/invoice-authorized');
@@ -19,10 +20,11 @@ async function sendInvoiceAuthorized(document) {
   }
 
   const issuer = await issuerModel.findById(document.issuer_id);
+  const tenant = await tenantModel.findById(issuer.tenant_id);
   const ridePdf  = await rideService.generate(document);
   const xmlBytes = Buffer.from(document.authorization_xml, 'utf8');
 
-  const { subject, text, html } = invoiceAuthorizedTemplate.render(document, issuer);
+  const { subject, text, html } = invoiceAuthorizedTemplate.render(document, issuer, tenant.preferred_language || 'es');
   const provider = emailFactory.getProvider();
 
   const from = `${issuer.business_name} via Comprobify <${config.email.from}>`;
