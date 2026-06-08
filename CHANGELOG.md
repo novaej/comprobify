@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Invoice-authorized email is now localised** — `src/services/email/templates/invoice-authorized.js` now renders subject/text/HTML from `getTranslations(language).email.invoiceAuthorized` (new `en`/`es` string blocks in `src/locales/`) instead of hardcoded Spanish strings, mirroring the existing `verify-email.js` pattern. `email.service.js` resolves the language from the **issuer's tenant** `preferred_language` (via `issuer.tenant_id` → `tenantModel.findById`), falling back to `'es'` — there is no buyer-language field, so the issuer's tenant preference is used as the closest available signal.
+
 ### Added
 - **Sentry error monitoring** — unexpected `5xx` failures are now reported to [Sentry](https://sentry.io) via `@sentry/node`. `instrument.js` initialises the SDK before any other module loads (required first in `app.js` for auto-instrumentation of `http`/`express`/`pg`); `Sentry.setupExpressErrorHandler()` is mounted in `server.js` directly before the central `errorHandler`, so only genuine internal errors (`statusCode >= 500`) are reported — expected `AppError` 4xx responses (validation, not found, quota, etc.) are not. Events are tagged with `environment` (`staging` / `production`, mirroring `APP_ENV`) so they can be filtered in the Sentry UI. Configured via the optional `SENTRY_DSN` env var — when unset, the client is a no-op (e.g. local development sends nothing).
 - **Notification system** (`GET / POST /api/notifications`, `POST /api/notifications/sync`, `POST /api/notifications/:id/read`, `GET / PATCH /api/notifications/preferences`). Tenant-level alerts for two initial conditions:
