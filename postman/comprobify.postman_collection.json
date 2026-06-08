@@ -1025,6 +1025,24 @@
           }
         },
         {
+          "name": "Term Units",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/catalogs/term-units",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "catalogs",
+                "term-units"
+              ]
+            },
+            "description": "Returns accepted SRI payment term units (e.g. dias, meses). Use the `code` as `payments[].termUnit` (with `payments[].term`) when sending invoices a plazos."
+          }
+        },
+        {
           "name": "Tax Types",
           "request": {
             "method": "GET",
