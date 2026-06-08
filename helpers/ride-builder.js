@@ -369,6 +369,15 @@ function drawItemsTable(doc, data, y) {
   return y + 3;
 }
 
+// Builds the "Forma de pago" row label, including the installment term
+// (plazo / unidadTiempo) when present, e.g. "20 - TARJETA DE CRÉDITO (12 MESES)".
+function paymentLabel(p) {
+  const base = `${p.method} - ${(p.methodLabel || '').toUpperCase()}`;
+  if (p.term === undefined || p.term === null || !p.termUnit) return base;
+  const unit = (p.termUnitLabel || p.termUnit).toUpperCase();
+  return `${base} (${p.term} ${unit})`;
+}
+
 // ─── Section 4: Additional info + payments (left) / Tax totals (right) ───────
 function drawBottomSection(doc, data, y) {
   const LEFT_W  = Math.round(CW * 0.54);
@@ -410,7 +419,7 @@ function drawBottomSection(doc, data, y) {
 
   // Payments: height = max(method label height, amount height) + padding
   const payRowH = payments.map((p) => {
-    const label = `${p.method} - ${(p.methodLabel || '').toUpperCase()}`;
+    const label = paymentLabel(p);
     return Math.max(
       MIN_ROW,
       mh(doc, label,           PAY_LBL_W - P * 2, { size: 7 }),
@@ -468,7 +477,7 @@ function drawBottomSection(doc, data, y) {
 
   payments.forEach((p, i) => {
     const rh    = payRowH[i];
-    const label = `${p.method} - ${(p.methodLabel || '').toUpperCase()}`;
+    const label = paymentLabel(p);
     hline(doc, lx, ly, LEFT_W, C_BORDER);
     vline(doc, lx + PAY_LBL_W, ly, rh, C_DARK);
     wt(doc, label,        lx + P,           ly + 3, PAY_LBL_W - P * 2, { size: 7 });

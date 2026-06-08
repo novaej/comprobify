@@ -30,11 +30,12 @@ async function generate(accessKeyOrDocument, issuerOverride = null) {
   // Resolve catalog labels for buyer id type
   const idTypeLabel = await catalogModel.getIdTypeLabel(document.buyer_id_type);
 
-  // Resolve payment method labels
+  // Resolve payment method and term unit labels
   const payments = await Promise.all(
     (payload.payments || []).map(async (p) => ({
       ...p,
       methodLabel: await catalogModel.getPaymentMethodLabel(p.method),
+      ...(p.termUnit && { termUnitLabel: await catalogModel.getTermUnitLabel(p.termUnit) }),
     }))
   );
 
