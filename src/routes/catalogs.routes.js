@@ -10,6 +10,7 @@ router.use(authenticate);
 
 router.get('/id-types', readLimiter, asyncHandler(controller.listIdTypes));
 router.get('/payment-methods', readLimiter, asyncHandler(controller.listPaymentMethods));
+router.get('/term-units', readLimiter, asyncHandler(controller.listTermUnits));
 router.get('/tax-types', readLimiter, asyncHandler(controller.listTaxTypes));
 router.get('/tax-rates', readLimiter, asyncHandler(controller.listTaxRates));
 

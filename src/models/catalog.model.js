@@ -41,6 +41,11 @@ async function isValidPaymentMethod(code) {
   return set.has(code);
 }
 
+async function isValidTermUnit(code) {
+  const set = await loadSet('termUnits', 'SELECT code FROM cat_term_units');
+  return set.has(code);
+}
+
 async function getIdTypeLabel(code) {
   const map = await loadMap('idTypeLabels', "SELECT code AS key, description AS label FROM cat_id_types");
   return map.get(code) || code;
@@ -48,6 +53,11 @@ async function getIdTypeLabel(code) {
 
 async function getPaymentMethodLabel(code) {
   const map = await loadMap('paymentMethodLabels', "SELECT code AS key, description AS label FROM cat_payment_methods");
+  return map.get(code) || code;
+}
+
+async function getTermUnitLabel(code) {
+  const map = await loadMap('termUnitLabels', "SELECT code AS key, description AS label FROM cat_term_units");
   return map.get(code) || code;
 }
 
@@ -66,6 +76,11 @@ async function listIdTypes() {
 
 async function listPaymentMethods() {
   const { rows } = await db.query('SELECT code, description FROM cat_payment_methods ORDER BY code');
+  return rows;
+}
+
+async function listTermUnits() {
+  const { rows } = await db.query('SELECT code, description FROM cat_term_units ORDER BY code');
   return rows;
 }
 
@@ -91,11 +106,14 @@ module.exports = {
   isValidTaxType,
   isValidTaxRate,
   isValidPaymentMethod,
+  isValidTermUnit,
   getIdTypeLabel,
   getPaymentMethodLabel,
+  getTermUnitLabel,
   getTaxRateDescription,
   listIdTypes,
   listPaymentMethods,
+  listTermUnits,
   listTaxTypes,
   listTaxRates,
 };

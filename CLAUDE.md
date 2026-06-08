@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError / QuotaExceededError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–047
+db/migrations/     SQL migration files 001–048
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 

@@ -9,6 +9,7 @@ jest.mock('../../../src/models/catalog.model', () => ({
     return valid[taxCode]?.includes(rateCode) ?? false;
   }),
   isValidPaymentMethod: jest.fn(async (v) => ['01','15','16','17','18','19','20','21'].includes(v)),
+  isValidTermUnit:      jest.fn(async (v) => ['dias', 'meses'].includes(v)),
 }));
 
 const { createInvoice } = require('../../../src/validators/invoice.validator');
@@ -177,5 +178,18 @@ describe('Invoice Validator', () => {
     const result = await runValidation({ ...validBody, payments });
     expect(result.isEmpty()).toBe(false);
     expect(result.array().some(e => e.path === 'payments[0].method')).toBe(true);
+  });
+
+  test('accepts payment with valid term and termUnit', async () => {
+    const payments = [{ method: '20', total: '112.00', term: 30, termUnit: 'dias' }];
+    const result = await runValidation({ ...validBody, payments });
+    expect(result.isEmpty()).toBe(true);
+  });
+
+  test('rejects unknown payment termUnit', async () => {
+    const payments = [{ method: '20', total: '112.00', term: 30, termUnit: 'semanas' }];
+    const result = await runValidation({ ...validBody, payments });
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'payments[0].termUnit')).toBe(true);
   });
 });
