@@ -27,7 +27,7 @@ jobs:
     environment: production
     if: false  # remove this line to re-enable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
