@@ -1,0 +1,40 @@
+name: Release to Production
+
+# DISABLED — the production Render service, branch, and secrets do not exist yet.
+#
+# Promotes a released tag to the `production` branch by fast-forwarding it to
+# the tag the release was published from. Pushing `production` then triggers
+# deploy-production.yml automatically.
+#
+# A published GitHub Release (created from a tag already validated in staging)
+# means: "staging confirmed it, ship to production." Publishing the release is
+# the deliberate approval gate between staging and production.
+#
+# To enable once production is provisioned:
+#   1. Uncomment the `release:` trigger below
+#   2. Remove the `if: false` guard on the `promote` job
+on:
+  # release:
+  #   types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: production
+    if: false  # remove this line to re-enable
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward production to the released tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout production
+          git merge --ff-only "${{ github.event.release.tag_name }}"
+          git push origin production

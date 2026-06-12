@@ -1,0 +1,23 @@
+name: Deploy Production
+
+# DISABLED — the production Render service and secrets do not exist yet.
+#
+# To enable once production is provisioned:
+#   1. Uncomment the `push` trigger below
+#   2. Remove the `if: false` guard on the `deploy` job
+#   3. Add RENDER_DEPLOY_HOOK_URL as a secret on the `production` GitHub environment
+on:
+  # push:
+  #   branches: [production]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    if: false  # remove this line to re-enable
+
+    steps:
+      - name: Trigger Render deploy
+        run: |
+          curl -s --fail -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"

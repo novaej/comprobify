@@ -4,48 +4,38 @@
 
 ## Branching strategy
 
-Three long-lived branches map directly to environments. Feature branches are always cut from `main` and merged back into `main` via pull request.
+Two long-lived branches map to deployed environments. They are **automation-owned** — promoted forward by tags and GitHub Releases, never by direct or manual merges. Feature/fix branches are always cut from `main` and merged back via pull request.
 
 ```
-  feature/xyz              main               staging                prod
-      │                     │                    │                     │
-      │  PR + merge         │                    │                     │
-      │────────────────────▶│                    │                     │
-      │                     │  merge main →      │                     │
-      │                     │  staging           │                     │
-      │                     │───────────────────▶│──▶ GitHub Actions ──▶ comprobify-staging
-      │                     │                    │                     │
-      │                     │  merge staging →   │                     │
-      │                     │  prod (full release)                     │
-      │                     │────────────────────┼────────────────────▶│──▶ GitHub Actions ──▶ comprobify-prod
-      │                     │                    │                     │
-      │                     │  cherry-pick       │                     │
-      │                     │  (selective deploy)│                     │
-      │                     │────────────────────┼── commit SHA ──────▶│──▶ GitHub Actions ──▶ comprobify-prod
-      │                     │                    │                     │
-  hotfix/xyz                │                    │                     │
-      │  PR + merge         │                    │                     │
-      │────────────────────▶│                    │                     │
-      │                     │  cherry-pick       │                     │
-      │                     │  to prod           │                     │
-      │                     │────────────────────┼── commit SHA ──────▶│──▶ GitHub Actions ──▶ comprobify-prod
-      │                     │                    │                     │
-      │                     │  cherry-pick       │                     │
-      │                     │  to staging (sync) │                     │
-      │                     │───────────────────▶│                     │
+  feature/xyz              main                                   staging                  production
+      │                     │                                       │                          │
+      │  PR + merge         │                                       │                          │
+      │────────────────────▶│                                       │                          │
+      │                     │  git tag vX.Y.Z + push                │                          │
+      │                     │── release-staging.yml (ff-merge) ────▶│── deploy-staging.yml ───▶ comprobify-staging
+      │                     │                                       │                          │
+      │                     │  publish GitHub Release from the tag  │                          │
+      │                     │── release-production.yml (ff-merge) ──┼─────────────────────────▶│── deploy-production.yml ──▶ comprobify-production
+      │                     │                                                                   │
+  hotfix/xyz                │                                                                   │
+      │  branch off `production`, PR into the hotfix branch,                                   │
+      │  tag vX.Y.Z+1 → same pipeline (or emergency workflow_dispatch to skip staging)         │
+      │  → cherry-pick the merged fix back into `main`                                         │
+      │─────────────────────────────────────────────────────────────────────────────────────▶ │
 ```
 
-| Branch | Environment | Trigger |
-|--------|-------------|---------|
-| `main` | Local / CI tests | — |
-| `staging` | Staging (DigitalOcean) | Push to `staging` |
-| `prod` | Production (DigitalOcean) | Push to `prod` |
+| Branch | Environment | Promoted by |
+|--------|-------------|-------------|
+| `main` | — (trunk; CI only, no deploy) | PR merge |
+| `staging` | Staging (Render) | `release-staging.yml` — fast-forwarded on tag push `vX.Y.Z` |
+| `production` | Production (Render) — *not yet provisioned, pipeline disabled* | `release-production.yml` — fast-forwarded when a GitHub Release is published |
 
 **Rules:**
-- All development work happens in `feature/*` branches off `main`
-- Never commit directly to `staging` or `prod`
-- Always flow commits **downward**: `main` → `staging` → `prod`
-- For hotfixes: fix in `main` first, then cherry-pick to `prod`
+- All development happens in feature/fix branches off `main`, merged via PR (1 approval required)
+- `staging` and `production` are **automation-owned** — never push to them directly; they only move forward via fast-forward merges performed by the release workflows. Branch protection should restrict pushes to the automation
+- A **tag** (`vX.Y.Z`, semantic versioning) means *"build this, validate it in staging."* Pushing it triggers `release-staging.yml`, which fast-forwards `staging` and (via the existing push trigger) kicks off `deploy-staging.yml`
+- A **published GitHub Release**, created from a tag already validated in staging, means *"staging confirmed it, ship to production."* Publishing it is the deliberate, auditable approval gate between staging and production — no extra tooling needed
+- **Hotfixes** branch from the current `production` ref (not `main`, which may carry unreleased work), flow through a PR + tag through the same pipeline (or an emergency `workflow_dispatch` that skips straight to production), and **must be cherry-picked back into `main`** afterwards so the fix survives the next regular release
 
 ---
 
@@ -71,69 +61,60 @@ git checkout main && git pull origin main
 git branch -d feature/my-feature
 ```
 
-### Deploy to staging
+### Release to staging
+
+Tag the commit on `main` you want to promote — this is the only manual step; the workflow handles the rest.
 
 ```bash
-# Merge main into staging — triggers the staging deploy automatically
-git checkout staging
-git pull origin staging
-git merge main
-git push origin staging
-git checkout main
-```
-
-### Deploy to production
-
-```bash
-# Full release: merge staging into prod
-git checkout prod
-git pull origin prod
-git merge staging
-git push origin prod
-
-# Or: cherry-pick specific commits from main to prod
-git checkout prod
-git pull origin prod
-git cherry-pick <commit-sha>   # repeat for each commit needed
-git push origin prod
-git checkout main
-```
-
-> **Cherry-pick caveat:** cherry-picked commits get a new SHA. If you later do a full `merge staging → prod`, git won't recognise them as already merged and may produce conflicts. To avoid this, after cherry-picking into prod always cherry-pick the same commits into staging so all three branches stay consistent. Periodically do a full merge from staging to prod to reset the debt.
-
-### Sync after cherry-picking
-
-```bash
-# After cherry-picking to prod, keep staging consistent
-git checkout staging
-git cherry-pick <commit-sha>   # same commit(s)
-git push origin staging
-git checkout main
-```
-
-### Hotfix on production
-
-```bash
-# Always fix in main first
 git checkout main
 git pull origin main
-git checkout -b hotfix/critical-fix
-# fix, commit, push
-git push origin hotfix/critical-fix
-# PR → main, merge
+git tag v1.4.0
+git push origin v1.4.0
+```
 
-# Then cherry-pick to prod (and staging to keep in sync)
-git checkout prod
-git pull origin prod
-git cherry-pick <hotfix-commit-sha>
-git push origin prod
+`release-staging.yml` fast-forwards `staging` to `v1.4.0` and pushes it, which triggers `deploy-staging.yml` automatically. Use semantic versioning (`vMAJOR.MINOR.PATCH`) so it's obvious at a glance whether a tag is a feature release (`v1.5.0`) or a hotfix (`v1.4.1`).
 
-git checkout staging
-git pull origin staging
-git cherry-pick <hotfix-commit-sha>
-git push origin staging
+### Promote to production
 
+Once the tag has been validated in staging, promotion is a single deliberate action — **publishing a GitHub Release from that tag**:
+
+1. GitHub UI → **Releases → Draft a new release**
+2. Choose the existing tag (e.g. `v1.4.0`) — do not create a new one
+3. (Optional) generate release notes from the commits since the previous tag — this doubles as the changelog entry, since the publish event *is* the production-ship event
+4. Click **Publish release**
+
+`release-production.yml` then fast-forwards `production` to that commit and triggers `deploy-production.yml`.
+
+> **Currently disabled** — the production Render service, `production` branch, and secrets don't exist yet. See "Production status" below for what's needed to enable this.
+
+### Hotfix flow
+
+Branch from the **currently-deployed `production` ref** (not `main`, which may contain unreleased work):
+
+```bash
+# 1. Cut a short-lived integration branch from what's live in prod
+git checkout -b hotfix/payment-bug production
+
+# 2. Make the fix on a sub-branch and PR it into the hotfix branch (same review rigor as any change)
+git checkout -b fix/payment-rounding hotfix/payment-bug
+# ...fix, commit, push, open PR: fix/payment-rounding → hotfix/payment-bug, review + merge...
+
+# 3. Tag the merged result — this feeds the same release pipeline
+git checkout hotfix/payment-bug
+git pull origin hotfix/payment-bug
+git tag v1.4.1
+git push origin v1.4.1
+```
+
+From here, either run it through the normal tag → staging → release → production pipeline (safer, still validated), or — for true emergencies — trigger `release-production.yml` manually via `workflow_dispatch` to skip straight to production (documented as the "break-glass" path; bypasses staging validation).
+
+**Don't skip this step:** cherry-pick the merged fix commit back into `main` so it isn't silently lost or reverted on the next regular release.
+
+```bash
 git checkout main
+git pull origin main
+git cherry-pick <hotfix-commit-sha>
+git push origin main
 ```
 
 ---
@@ -142,44 +123,47 @@ git checkout main
 
 ### Workflow files
 
-| File | Trigger | Deploys to |
-|------|---------|------------|
-| `.github/workflows/deploy-staging.yml` | Push to `staging` | `comprobify-staging` (DigitalOcean App Platform) |
-| `.github/workflows/deploy-production.yml` | Push to `prod` | `comprobify-prod` *(to be added)* |
+| File | Trigger | Effect |
+|------|---------|--------|
+| `.github/workflows/release-staging.yml` | Push of tag `vX.Y.Z` | Fast-forwards `staging` to the tagged commit and pushes it |
+| `.github/workflows/deploy-staging.yml` | Push to `staging` | Calls the Render deploy hook for `comprobify-staging` |
+| `.github/workflows/notification-scheduler-staging.yml` | Schedule (every 5 min) + manual | Calls `POST /api/admin/jobs/notifications` on the staging deployment |
+| `.github/workflows/release-production.yml` | *(disabled)* GitHub Release published | Fast-forwards `production` to the released commit and pushes it |
+| `.github/workflows/deploy-production.yml` | *(disabled)* Push to `production` | Calls the Render deploy hook for `comprobify-production` |
 
 ### Pipeline stages (staging)
 
-1. **Checkout** — fetch latest commit from `staging` branch
-2. **Deploy** — authenticate to DigitalOcean with `DIGITALOCEAN_ACCESS_TOKEN` and trigger a new deployment of the `comprobify-staging` app
+1. **Tag pushed** (`vX.Y.Z`) — `release-staging.yml` checks out the tag and fast-forward-merges `staging` to it, then pushes
+2. **Push to `staging`** — `deploy-staging.yml` calls the `RENDER_DEPLOY_HOOK_URL` for `comprobify-staging`
 
-DigitalOcean App Platform handles the rest: installs dependencies (`npm ci`), runs the start command (`npm start`), and runs database migrations (`npm run migrate`) if configured as a pre-deploy job.
+Render handles the rest: installs dependencies (`npm ci`), runs the start command (`npm start`), and applies database migrations (`npm run migrate`) as part of the deploy.
 
-### Adding the production workflow
+### Production status
 
-When ready, create `.github/workflows/deploy-production.yml` by copying `deploy-staging.yml` and changing only:
-1. The workflow `name` to `Deploy to Production`
-2. The `branches` trigger from `staging` to `prod`
-3. The `app_name` from `comprobify-staging` to `comprobify-prod`
+The production pipeline is **written but disabled** — `release-production.yml` and `deploy-production.yml` exist in the repo with their triggers commented out and an `if: false` guard on their jobs, because the production Render service, `production` branch, database, domain, and secrets don't exist yet.
+
+To enable production once it's provisioned:
+1. Create the `production` branch (fast-forwarded only by the automation, same invariant as `staging`)
+2. Provision the `comprobify-production` Render web service + a paid Postgres instance (for backups/PITR), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
+3. Add `RENDER_DEPLOY_HOOK_URL` as a secret on the `production` GitHub environment (and `STAGING_API_BASE_URL` / `ADMIN_SECRET` if mirroring the notification scheduler too)
+4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
+5. In `deploy-production.yml`: uncomment the `push: branches: [production]` trigger and remove the `if: false` guard on the `deploy` job
+6. Add branch protection to `production` (restrict who can push to the automation only; no force pushes) — see GitHub repository setup below
+7. Copy `notification-scheduler-staging.yml` to `notification-scheduler-prod.yml`, change the environment to `production`, and point `STAGING_API_BASE_URL` → `PRODUCTION_API_BASE_URL` and `ADMIN_SECRET` at the production GitHub environment secrets
 
 ---
 
 ## GitHub repository setup
 
-One-time setup after creating the `staging` and `prod` branches.
+### 1. Branches
 
-### 1. Create the branches
+Only `staging` exists today (already created). `production` is created when the production environment is provisioned (see "Production status" above):
 
 ```bash
 git checkout main
 git pull origin main
-
-git checkout -b staging
-git push -u origin staging
-
-git checkout main
-git checkout -b prod
-git push -u origin prod
-
+git checkout -b production
+git push -u origin production
 git checkout main
 ```
 
@@ -191,25 +175,32 @@ git checkout main
 - ✅ Dismiss stale pull request approvals when new commits are pushed
 - ✅ Do not allow bypassing the above settings
 
-### 3. Protect `prod` (Settings → Branches → Add rule)
+### 3. Protect `staging` and `production` (Settings → Branches → Add rule, one for each)
 
-- **Branch name pattern:** `prod`
-- ✅ Restrict who can push — add only yourself
+Both branches are **automation-owned** — they only move forward via fast-forward pushes from `release-staging.yml` / `release-production.yml`. Restrict direct human pushes so the fast-forward invariant can't be broken by a stray commit:
+
+- **Branch name pattern:** `staging` (repeat for `production`)
+- ✅ Restrict who can push — limit to the automation (e.g. a bot account / `GITHUB_TOKEN` with appropriate permissions, or repository admins only as a fallback)
 - ✅ Do not allow force pushes
 
-### 4. Leave `staging` open
+### 4. Add secrets (Settings → Secrets and variables → Actions)
 
-`staging` does not need branch protection. Merges from `main` are fast and frequent. Direct push is fine.
+Per-environment secrets, scoped to the matching GitHub Environment (`staging` now, `production` once provisioned):
 
-### 5. Add secrets (Settings → Secrets and variables → Actions)
+| Secret | Environment | Used by |
+|---|---|---|
+| `RENDER_DEPLOY_HOOK_URL` | `staging` | `deploy-staging.yml` |
+| `STAGING_API_BASE_URL` | `staging` | `notification-scheduler-staging.yml` |
+| `ADMIN_SECRET` | `staging` | `notification-scheduler-staging.yml` (must match the value set in Render's staging env vars) |
+| `RENDER_DEPLOY_HOOK_URL` | `production` *(when provisioned)* | `deploy-production.yml` |
 
-- `DIGITALOCEAN_ACCESS_TOKEN` — personal access token from DigitalOcean dashboard (API → Generate New Token, write scope). Used by both staging and production workflows.
+Note `release-staging.yml` / `release-production.yml` don't need extra secrets — they push to branches using the workflow's own `contents: write` permission.
 
-### 6. DigitalOcean App Platform
+### 5. Render
 
-- Create two apps: `comprobify-staging` (linked to `staging` branch) and `comprobify-prod` (linked to `prod` branch)
-- Add all environment variables from the table below to each app's environment configuration
-- Configure a pre-deploy job: `npm run migrate` — this runs migrations automatically on each deployment before traffic is switched
+- `comprobify-staging` web service already exists, linked to the `staging` branch via deploy hook
+- When ready: create `comprobify-production` (its own web service + paid Postgres instance for backups/PITR), with independent env vars and secrets from staging — see "Production status" above
+- Configure migrations (`npm run migrate`) to run as part of every deploy on both services
 
 ---
 

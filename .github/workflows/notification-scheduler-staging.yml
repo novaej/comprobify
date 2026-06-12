@@ -1,0 +1,17 @@
+name: Notification Scheduler (Staging)
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Trigger notification job
+        run: |
+          curl -s --fail -X POST "${{ secrets.STAGING_API_BASE_URL }}/api/admin/jobs/notifications" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_SECRET }}"
