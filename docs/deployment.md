@@ -204,6 +204,64 @@ Note `release-staging.yml` / `release-production.yml` don't need extra secrets �
 
 ---
 
+## First deploy checklist
+
+Run through this after every new environment is provisioned (staging done, repeat for production). Steps are in order.
+
+### 1. Database user
+- [ ] Create a dedicated non-superuser role in Neon's SQL Editor (never use `neondb_owner` as the app user — it bypasses RLS):
+```sql
+CREATE ROLE comprobify_app LOGIN PASSWORD 'strong-password';
+GRANT ALL PRIVILEGES ON DATABASE neondb TO comprobify_app;
+GRANT ALL ON SCHEMA public TO comprobify_app;
+ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO comprobify_app;
+ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO comprobify_app;
+```
+
+### 2. Render service
+- [ ] Set all required env vars before first deploy (see Environment variables table below) — `APP_ENV`, `APP_BASE_URL`, `DB_*`, `ENCRYPTION_KEY`, `ADMIN_SECRET`, `EMAIL_PROVIDER=none`
+- [ ] `APP_BASE_URL` matches the actual Render URL (update after Render assigns one)
+- [ ] Build command: `npm ci`, Start command: `npm start`
+- [ ] Confirm first deploy succeeds and all migrations are listed as applied in the build log
+
+### 3. Sandbox schema grants
+After migrations run, migration 033 creates the `sandbox` schema. Grant access in Neon's SQL Editor:
+- [ ] Run:
+```sql
+GRANT ALL ON SCHEMA sandbox TO comprobify_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON TABLES TO comprobify_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON SEQUENCES TO comprobify_app;
+```
+- [ ] Verify both schemas exist and are accessible:
+```sql
+SELECT schema_name, schema_owner
+FROM information_schema.schemata
+WHERE schema_name IN ('public', 'sandbox');
+```
+
+### 4. GitHub secrets
+- [ ] `RENDER_DEPLOY_HOOK_URL` → Render service → Settings → Deploy Hook → copy URL → GitHub environment secret
+- [ ] `STAGING_API_BASE_URL` (or `PRODUCTION_API_BASE_URL`) → GitHub environment secret
+- [ ] `ADMIN_SECRET` → GitHub environment secret (must match the value set in Render)
+- [ ] `RELEASE_PUSH_TOKEN` → GitHub repository secret (fine-grained PAT with `Contents: Read and write` on this repo)
+
+### 5. Verify
+- [ ] Health check responds `{"status":"ok"}`:
+```bash
+curl https://your-app-url/health
+```
+- [ ] Admin auth works (returns `{"ok":true,"tenants":[]}`):
+```bash
+curl https://your-app-url/api/admin/tenants \
+  -H "Authorization: Bearer YOUR_ADMIN_SECRET"
+```
+- [ ] `xmllint` available — attempt a document creation and check Render logs for XSD validation errors. On paid Render tiers, check via Shell: `which xmllint`. If missing, a Dockerfile is needed (see NEXT_STEPS.md item 5).
+
+### 6. Pipeline smoke test
+- [ ] Push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) and confirm `Release to Staging` workflow runs and fast-forwards the `staging` branch, then `Deploy Staging` fires automatically
+
+---
+
 ## System requirements
 
 | Dependency | Notes |
