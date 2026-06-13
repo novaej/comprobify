@@ -41,7 +41,7 @@ A generic 403 not covered by a specific code above. Read `detail`.
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/forbidden",
+  "type":     "https://docs.comprobify.com/errors/forbidden",
   "title":    "Forbidden",
   "status":   403,
   "code":     "ISSUER_FORBIDDEN",
@@ -52,7 +52,7 @@ A generic 403 not covered by a specific code above. Read `detail`.
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/forbidden",
+  "type":     "https://docs.comprobify.com/errors/forbidden",
   "title":    "Forbidden",
   "status":   403,
   "code":     "EMAIL_VERIFICATION_REQUIRED",

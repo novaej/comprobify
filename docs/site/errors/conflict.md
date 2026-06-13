@@ -26,7 +26,7 @@ An `Idempotency-Key` header was supplied with a value that has already been used
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/conflict",
+  "type":     "https://docs.comprobify.com/errors/conflict",
   "title":    "Conflict",
   "status":   409,
   "code":     "ALREADY_VERIFIED",
@@ -37,7 +37,7 @@ An `Idempotency-Key` header was supplied with a value that has already been used
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/conflict",
+  "type":     "https://docs.comprobify.com/errors/conflict",
   "title":    "Conflict",
   "status":   409,
   "code":     "CONFLICT",

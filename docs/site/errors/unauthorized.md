@@ -25,7 +25,7 @@ The API key is missing, malformed, invalid, or has been revoked.
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/unauthorized",
+  "type":     "https://docs.comprobify.com/errors/unauthorized",
   "title":    "Unauthorized",
   "status":   401,
   "code":     "API_KEY_ENV_MISMATCH",
@@ -36,7 +36,7 @@ The API key is missing, malformed, invalid, or has been revoked.
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/unauthorized",
+  "type":     "https://docs.comprobify.com/errors/unauthorized",
   "title":    "Unauthorized",
   "status":   401,
   "code":     "UNAUTHORIZED",

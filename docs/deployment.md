@@ -127,7 +127,7 @@ git push origin main
 |------|---------|--------|
 | `.github/workflows/release-staging.yml` | Push of tag `vX.Y.Z` | Fast-forwards `staging` to the tagged commit and pushes it |
 | `.github/workflows/deploy-staging.yml` | Push to `staging` | Calls the Render deploy hook for `comprobify-staging` |
-| `.github/workflows/notification-scheduler-staging.yml` | Schedule (every 5 min) + manual | Calls `POST /api/admin/jobs/notifications` on the staging deployment |
+| `.github/workflows/notification-scheduler-staging.yml` | Schedule (every 5 min) + manual | Calls `POST /v1/admin/jobs/notifications` on the staging deployment |
 | `.github/workflows/release-production.yml` | *(disabled)* GitHub Release published | Fast-forwards `production` to the released commit and pushes it |
 | `.github/workflows/deploy-production.yml` | *(disabled)* Push to `production` | Calls the Render deploy hook for `comprobify-production` |
 
@@ -255,11 +255,11 @@ WHERE schema_name IN ('public', 'sandbox');
 ### 7. Verify
 - [ ] Health check responds `{"status":"ok"}`:
 ```bash
-curl https://your-app-url/health
+curl https://api.comprobify.com/health
 ```
 - [ ] Admin auth works (returns `{"ok":true,"tenants":[]}`):
 ```bash
-curl https://your-app-url/api/admin/tenants \
+curl https://api.comprobify.com/v1/admin/tenants \
   -H "Authorization: Bearer YOUR_ADMIN_SECRET"
 ```
 - [ ] `xmllint` available — attempt a document creation and check Render logs for XSD validation errors. On paid Render tiers, check via Shell: `which xmllint`. If missing, a Dockerfile is needed (see NEXT_STEPS.md item 5).
@@ -296,7 +296,7 @@ All variables are required unless marked optional.
 | `DB_PASSWORD` | Yes | Database password |
 | `DB_SSL` | Yes | `true` to enable SSL (required in production) |
 | `ENCRYPTION_KEY` | Yes | 64-character hex string — AES-256-GCM key for private key encryption |
-| `ADMIN_SECRET` | Yes | 64-character hex string — protects all `/api/admin/*` endpoints |
+| `ADMIN_SECRET` | Yes | 64-character hex string — protects all `/v1/admin/*` endpoints |
 | `EMAIL_PROVIDER` | No | Email provider (default `mailgun`; only `mailgun` supported today) |
 | `EMAIL_FROM` | No | Bare sender email address, e.g. `comprobantes@mg.yourdomain.com`. Display name is built dynamically as `{Issuer Business Name} via Comprobify <EMAIL_FROM>`. |
 | `MAILGUN_API_KEY` | No | Mailgun private API key |
@@ -327,7 +327,7 @@ The SRI endpoint is determined at runtime by combining the `APP_ENV` variable wi
 | `production` | SRI test endpoint, `ambiente = 1` | SRI production endpoint, `ambiente = 2` |
 
 - **All tenants default to `sandbox = true`**. They will continue hitting the SRI test endpoint until explicitly promoted.
-- **To promote a tenant to production:** use `POST /api/tenants/promote` (tenant-authenticated, requires `ACTIVE` status) or `POST /api/admin/tenants/:id/promote` (admin override). This flips `tenants.sandbox = false`, seeds production sequentials, and rotates API keys. Only do this on the `APP_ENV=production` deployment.
+- **To promote a tenant to production:** use `POST /v1/tenants/promote` (tenant-authenticated, requires `ACTIVE` status) or `POST /v1/admin/tenants/:id/promote` (admin override). This flips `tenants.sandbox = false`, seeds production sequentials, and rotates API keys. Only do this on the `APP_ENV=production` deployment.
 - `ambiente` is derived from the same logic and is embedded in both the 49-digit access key and the XML `infoTributaria/ambiente` field — it is never read directly from a DB column.
 
 ---
@@ -351,7 +351,7 @@ The runner tracks applied migrations in a `migrations` table — already-applied
 
 ## Certificate management
 
-P12 certificates are uploaded via the Admin API (`POST /api/admin/issuers`). The API extracts the private key and certificate PEM in-process (never written to disk), then stores them in the `issuers` table:
+P12 certificates are uploaded via the Admin API (`POST /v1/admin/issuers`). The API extracts the private key and certificate PEM in-process (never written to disk), then stores them in the `issuers` table:
 
 - `issuers.encrypted_private_key` — private key PEM encrypted with AES-256-GCM using `ENCRYPTION_KEY`
 - `issuers.certificate_pem` — certificate PEM stored plaintext
@@ -360,7 +360,7 @@ The plaintext private key only exists in memory during the request and at signin
 
 To provision a new issuer:
 ```bash
-curl -s -X POST https://yourserver/api/admin/issuers \
+curl -s -X POST https://api.comprobify.com/v1/admin/issuers \
   -H "Authorization: Bearer $ADMIN_SECRET" \
   -F "ruc=1700000000001" \
   -F "businessName=Acme S.A." \
@@ -387,14 +387,14 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [ ] `.env` file is not world-readable and never committed
 - [ ] `trust proxy: 1` set in `server.js` — required behind Cloudflare so IP-based rate limiters see the real client IP via `X-Forwarded-For`
 - [ ] `helmet()` middleware active — sets standard security headers (`X-Content-Type-Options`, `Strict-Transport-Security`, `X-Frame-Options`, etc.)
-- [ ] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /api/admin/tenants/:id/promote`
+- [ ] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /v1/admin/tenants/:id/promote`
 - [ ] API is behind HTTPS — on Render this is handled automatically; custom domain TLS cert issued via Let's Encrypt
 - [ ] PostgreSQL not exposed on a public port
 - [ ] `xmllint` installed on the server (`apt install libxml2-utils`)
 - [ ] `EMAIL_FROM`, `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` set and verified against a real Mailgun domain (not sandbox)
 - [ ] Mailgun sandbox authorized-recipient restriction removed (sandbox only allows pre-approved addresses)
 - [ ] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard for all 4 event types
-- [ ] Webhook endpoint (`/api/mailgun/webhook`) reachable on the public HTTPS URL
+- [ ] Webhook endpoint (`/v1/mailgun/webhook`) reachable on the public HTTPS URL
 - [ ] Log aggregation configured — the API logs to stdout
 - [ ] `SENTRY_DSN` set on staging and production so unexpected `5xx` errors are reported (left unset locally so development never sends events)
 
@@ -412,7 +412,7 @@ Key log lines to monitor:
 | `SRI fetch attempt N failed, retrying in Nms` | Transient SRI network failure — being retried |
 | `Unexpected database pool error` | DB connection issue — check PostgreSQL |
 | `Failed to upsert client record` | Non-critical — buyer catalogue update failed |
-| `Invoice email failed: ...` | Non-critical — email send failed; `email_status` set to `FAILED`, retry via `POST /api/documents/:key/email-retry` |
+| `Invoice email failed: ...` | Non-critical — email send failed; `email_status` set to `FAILED`, retry via `POST /v1/documents/:key/email-retry` |
 | `Unhandled error: ...` | Unexpected error — inspect stack trace |
 
 **Sentry** complements stdout logging: every response with `statusCode >= 500` is automatically reported to the configured `SENTRY_DSN` project (tagged `staging` / `production` via `environment`), with a full stack trace and request context — searchable and alertable without grepping log output. See the "Error monitoring (Sentry)" entry under Key Patterns in `../CLAUDE.md`.

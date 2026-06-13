@@ -7,8 +7,8 @@ This guide explains how to update API documentation when adding, modifying, or r
 ### VitePress Documentation
 - **Location:** `docs/site/`
 - **Format:** Markdown files
-- **Deployment:** GitHub Pages (auto-deployed on push to main)
-- **URL:** https://github.com/novaej/comprobify/wiki
+- **Deployment:** Cloudflare Pages (auto-deployed on push to main via `.github/workflows/docs.yml`)
+- **URL:** https://docs.comprobify.com
 
 ### Postman Collection
 - **Location:** `postman/comprobify.postman_collection.json`
@@ -34,7 +34,7 @@ Create a new markdown file in `docs/site/endpoints/` following the pattern of ex
 Brief description of what the endpoint does.
 
 \`\`\`
-METHOD /api/path
+METHOD /v1/path
 \`\`\`
 
 ## Authentication
@@ -86,7 +86,7 @@ METHOD /api/path
 Update `docs/site/endpoints/index.md` to add the new endpoint to the overview table:
 
 ```markdown
-| `METHOD` | `/api/path` | Brief description |
+| `METHOD` | `/v1/path` | Brief description |
 ```
 
 **Order endpoints by:**
@@ -128,9 +128,9 @@ item[0].item[]  // "Documents" folder → items array
   "request": {
     "method": "GET",
     "url": {
-      "raw": "{{base_url}}/api/path?param1=value",
+      "raw": "{{base_url}}/v1/path?param1=value",
       "host": ["{{base_url}}"],
-      "path": ["api", "path"],
+      "path": ["v1", "path"],
       "query": [
         { "key": "param1", "value": "value", "description": "...", "disabled": true }
       ]

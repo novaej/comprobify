@@ -190,7 +190,7 @@ See **[GETTING_STARTED.md](GETTING_STARTED.md)** for full local setup instructio
 
 ## Documentation
 
-- **[API Docs](https://novaej.github.io/comprobify)** — public endpoint and error reference (VitePress, hosted on GitHub Pages)
+- **[API Docs](https://docs.comprobify.com)** — public endpoint and error reference (VitePress, hosted on Cloudflare Pages)
 - **[docs/README.md](docs/README.md)** — internal documentation index (ADRs, coding guidelines, deployment guide)
 
 ---
