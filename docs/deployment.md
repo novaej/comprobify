@@ -239,13 +239,20 @@ FROM information_schema.schemata
 WHERE schema_name IN ('public', 'sandbox');
 ```
 
-### 4. GitHub secrets
+### 4. Custom domain (optional but recommended before production)
+- [ ] Add custom domain in Render → service → Settings → Custom Domains (e.g. `staging-api.comprobify.com`)
+- [ ] Add CNAME record in Cloudflare DNS: type `CNAME`, name `staging-api`, target = Render hostname, **proxy off (gray cloud)** initially
+- [ ] Wait for Render to verify the domain and issue the TLS cert, then optionally enable Cloudflare proxy (orange cloud) — set Cloudflare SSL/TLS mode to **Full (strict)**
+- [ ] Update `APP_BASE_URL` in Render env vars to the custom domain URL
+- [ ] Update `STAGING_API_BASE_URL` GitHub environment secret to match
+
+### 6. GitHub secrets
 - [ ] `RENDER_DEPLOY_HOOK_URL` → Render service → Settings → Deploy Hook → copy URL → GitHub environment secret
 - [ ] `STAGING_API_BASE_URL` (or `PRODUCTION_API_BASE_URL`) → GitHub environment secret
 - [ ] `ADMIN_SECRET` → GitHub environment secret (must match the value set in Render)
 - [ ] `RELEASE_PUSH_TOKEN` → GitHub repository secret (fine-grained PAT with `Contents: Read and write` on this repo)
 
-### 5. Verify
+### 7. Verify
 - [ ] Health check responds `{"status":"ok"}`:
 ```bash
 curl https://your-app-url/health
@@ -257,7 +264,7 @@ curl https://your-app-url/api/admin/tenants \
 ```
 - [ ] `xmllint` available — attempt a document creation and check Render logs for XSD validation errors. On paid Render tiers, check via Shell: `which xmllint`. If missing, a Dockerfile is needed (see NEXT_STEPS.md item 5).
 
-### 6. Pipeline smoke test
+### 8. Pipeline smoke test
 - [ ] Push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) and confirm `Release to Staging` workflow runs and fast-forwards the `staging` branch, then `Deploy Staging` fires automatically
 
 ---
@@ -312,16 +319,16 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## SRI environments
 
-The SRI endpoint is determined at runtime by combining the `APP_ENV` variable with the per-issuer `sandbox` flag:
+The SRI endpoint is determined at runtime by combining the `APP_ENV` variable with the per-tenant `sandbox` flag (`tenants.sandbox`). The `issuer.sandbox` field used in service code is a virtual field set by the `resolveIssuer` middleware — it reflects `tenant.sandbox`, not a column on `issuers`:
 
-| `APP_ENV`    | `issuers.sandbox = true` | `issuers.sandbox = false` |
+| `APP_ENV`    | `tenants.sandbox = true` | `tenants.sandbox = false` |
 |---|---|---|
 | `staging`    | SRI test endpoint, `ambiente = 1` | SRI test endpoint, `ambiente = 1` |
 | `production` | SRI test endpoint, `ambiente = 1` | SRI production endpoint, `ambiente = 2` |
 
-- **All existing issuers default to `sandbox = true`** after migration 032. They will continue hitting the SRI test endpoint until explicitly promoted.
-- **To promote an issuer to production:** update `issuers.sandbox = false` directly in the database (no API endpoint for this yet — admin-level operation). Only do this on the `APP_ENV=production` deployment.
-- `ambiente` is derived from the same logic and is embedded in both the 49-digit access key and the XML `infoTributaria/ambiente` field — it is not read directly from `issuers.environment`.
+- **All tenants default to `sandbox = true`**. They will continue hitting the SRI test endpoint until explicitly promoted.
+- **To promote a tenant to production:** use `POST /api/tenants/promote` (tenant-authenticated, requires `ACTIVE` status) or `POST /api/admin/tenants/:id/promote` (admin override). This flips `tenants.sandbox = false`, seeds production sequentials, and rotates API keys. Only do this on the `APP_ENV=production` deployment.
+- `ambiente` is derived from the same logic and is embedded in both the 49-digit access key and the XML `infoTributaria/ambiente` field — it is never read directly from a DB column.
 
 ---
 
@@ -378,8 +385,10 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [ ] `ENCRYPTION_KEY` is unique per environment — never share between staging and production
 - [ ] `ADMIN_SECRET` is unique per environment and kept behind an internal firewall
 - [ ] `.env` file is not world-readable and never committed
-- [ ] `issuers.sandbox` set to `false` only on issuer rows that are genuinely live on the production SRI system
-- [ ] API is behind HTTPS (reverse proxy: nginx, Caddy, or load balancer TLS termination)
+- [ ] `trust proxy: 1` set in `server.js` — required behind Cloudflare so IP-based rate limiters see the real client IP via `X-Forwarded-For`
+- [ ] `helmet()` middleware active — sets standard security headers (`X-Content-Type-Options`, `Strict-Transport-Security`, `X-Frame-Options`, etc.)
+- [ ] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /api/admin/tenants/:id/promote`
+- [ ] API is behind HTTPS — on Render this is handled automatically; custom domain TLS cert issued via Let's Encrypt
 - [ ] PostgreSQL not exposed on a public port
 - [ ] `xmllint` installed on the server (`apt install libxml2-utils`)
 - [ ] `EMAIL_FROM`, `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` set and verified against a real Mailgun domain (not sandbox)
