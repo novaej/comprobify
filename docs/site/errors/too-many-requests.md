@@ -8,7 +8,7 @@ The request was throttled. Check the `code` field to distinguish between an API 
 
 ### `RESEND_COOLDOWN`
 
-`POST /api/resend-verification` was called again before the 60-second server-side cooldown elapsed. This per-account cooldown prevents email flooding regardless of IP.
+`POST /v1/resend-verification` was called again before the 60-second server-side cooldown elapsed. This per-account cooldown prevents email flooding regardless of IP.
 
 **What to do:** Wait 60 seconds from the previous resend request, then try again.
 
@@ -60,7 +60,7 @@ async function requestWithRetry(fn, maxRetries = 3) {
   "status":   429,
   "code":     "RESEND_COOLDOWN",
   "detail":   "Please wait before requesting another verification email.",
-  "instance": "/api/resend-verification"
+  "instance": "/v1/resend-verification"
 }
 ```
 
@@ -71,6 +71,6 @@ async function requestWithRetry(fn, maxRetries = 3) {
   "status":   429,
   "code":     "TOO_MANY_REQUESTS",
   "detail":   "Rate limit exceeded for this API key",
-  "instance": "/api/documents"
+  "instance": "/v1/documents"
 }
 ```

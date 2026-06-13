@@ -3,12 +3,12 @@
 Retrieves a document by its 49-digit access key.
 
 ```
-GET /api/documents/:accessKey
+GET /v1/documents/:accessKey
 ```
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
 
 ## Path parameters
 

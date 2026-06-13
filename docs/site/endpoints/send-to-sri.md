@@ -3,14 +3,14 @@
 Submits the signed XML document to the SRI SOAP service.
 
 ```
-POST /api/documents/:accessKey/send
+POST /v1/documents/:accessKey/send
 ```
 
 The document must be in `SIGNED` status. After a successful call the document moves to `RECEIVED` (SRI accepted it for processing) or `RETURNED` (SRI rejected it — rebuild required).
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
 
 ## Path parameters
 

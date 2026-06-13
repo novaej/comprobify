@@ -3,7 +3,7 @@
 The Mailgun webhook is an inbound endpoint that Mailgun calls to report email delivery events. It updates the `email_status` on documents and verification emails so the API has an accurate delivery audit trail.
 
 ```
-POST /api/mailgun/webhook
+POST /v1/mailgun/webhook
 ```
 
 This endpoint is **not called by your application** — it is registered with Mailgun so that Mailgun calls it automatically when a delivery event occurs.
@@ -15,7 +15,7 @@ This endpoint is **not called by your application** — it is registered with Ma
 In your Mailgun dashboard, go to **Sending → Webhooks** for your domain and register the following URL:
 
 ```
-https://<your-api-host>/api/mailgun/webhook
+https://<your-api-host>/v1/mailgun/webhook
 ```
 
 Enable exactly these three event types:

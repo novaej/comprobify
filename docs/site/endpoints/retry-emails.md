@@ -3,12 +3,12 @@
 Retries sending the authorization email for all documents belonging to this issuer that have `email_status` of `PENDING` or `FAILED`.
 
 ```
-POST /api/documents/email-retry
+POST /v1/documents/email-retry
 ```
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
 
 ## Response
 

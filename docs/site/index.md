@@ -18,17 +18,17 @@ Comprobify handles the full electronic document lifecycle on your behalf:
 Register an HTTPS callback URL to receive events in near-real time — document authorizations, certificate expiry alerts, and more. The API signs every outgoing request with HMAC-SHA256 so your server can verify authenticity.
 
 ```
-POST /api/webhooks    ← register your URL
+POST /v1/webhooks    ← register your URL
 ```
 
-If you cannot expose a public endpoint, poll `GET /api/notifications?sinceId=<id>` as a fallback. See [Webhooks](endpoints/webhooks.md) and [Notifications](endpoints/notifications.md) for details.
+If you cannot expose a public endpoint, poll `GET /v1/notifications?sinceId=<id>` as a fallback. See [Webhooks](endpoints/webhooks.md) and [Notifications](endpoints/notifications.md) for details.
 
 ## Base URL
 
-All endpoints are prefixed with `/api`.
+All endpoints are prefixed with `/v1`.
 
 ```
-https://your-deployment.com/api
+https://api.comprobify.com/v1
 ```
 
 ## Authentication

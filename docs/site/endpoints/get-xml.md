@@ -3,7 +3,7 @@
 Downloads the document XML.
 
 ```
-GET /api/documents/:accessKey/xml
+GET /v1/documents/:accessKey/xml
 ```
 
 - For `AUTHORIZED` documents: returns the SRI authorization XML (includes the authorization number and timestamp wrapped around the signed document).
@@ -11,7 +11,7 @@ GET /api/documents/:accessKey/xml
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
 
 ## Path parameters
 

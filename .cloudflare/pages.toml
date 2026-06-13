@@ -1,0 +1,8 @@
+name = "comprobify-docs"
+pages_build_output_dir = "docs/site/.vitepress/dist"
+
+[build]
+command = "npm run docs:build"
+
+[build.environment_variables]
+NODE_VERSION = "24"

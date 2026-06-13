@@ -6,10 +6,10 @@ Tenant-level alerts surfaced to users of the system. The API produces two catego
 - **Scheduled** — created or updated by the API's own background job (e.g. certificate expiry). No consumer action required.
 
 ```
-GET   /api/notifications
-POST  /api/notifications/:id/read
-GET   /api/notifications/preferences
-PATCH /api/notifications/preferences
+GET   /v1/notifications
+POST  /v1/notifications/:id/read
+GET   /v1/notifications/preferences
+PATCH /v1/notifications/preferences
 ```
 
 See [Webhooks](webhooks.md) for registering callback URLs that receive notifications in near-real time. Polling this endpoint with `?sinceId=` is the fallback for consumers that cannot expose a public HTTPS callback URL.
@@ -131,7 +131,7 @@ The following types are defined in the schema and accepted by the preferences en
 ## List notifications
 
 ```
-GET /api/notifications
+GET /v1/notifications
 ```
 
 Returns active (unexpired) notifications for the tenant, newest first. Both read and unread are included. Use `readAt` to decide what to show as new.
@@ -175,7 +175,7 @@ Omit the header to receive all notifications across every issuer (useful for adm
 ## Mark as read
 
 ```
-POST /api/notifications/:id/read
+POST /v1/notifications/:id/read
 ```
 
 Marks a single notification as read (`readAt` is set to now). The notification is excluded from `unreadCount` on all subsequent polls.
@@ -211,7 +211,7 @@ Marks a single notification as read (`readAt` is set to now). The notification i
 ## Get preferences
 
 ```
-GET /api/notifications/preferences
+GET /v1/notifications/preferences
 ```
 
 Returns the notification preference for every type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model).
@@ -238,7 +238,7 @@ Returns the notification preference for every type. Types the tenant has never e
 ## Update preferences
 
 ```
-PATCH /api/notifications/preferences
+PATCH /v1/notifications/preferences
 ```
 
 Bulk-upsert one or more preferences. Send only the types you want to change; unmentioned types are unchanged.
@@ -262,7 +262,7 @@ When `enabled` is `false` for a type, the API will not create new notifications 
 
 ### Response
 
-**200 OK** — same shape as `GET /api/notifications/preferences`, reflecting the full updated state.
+**200 OK** — same shape as `GET /v1/notifications/preferences`, reflecting the full updated state.
 
 ### Errors
 
@@ -284,11 +284,11 @@ When `enabled` is `false` for a type, the API will not create new notifications 
 │    Verify X-Comprobify-Signature on each incoming request           │
 │                                                                     │
 │  Fallback / catch-up:                                               │
-│    Poll GET /api/notifications?sinceId=<lastSeenId> every 60s       │
+│    Poll GET /v1/notifications?sinceId=<lastSeenId> every 60s       │
 │    Store highest id seen → pass as sinceId on next poll             │
 │                                                                     │
 │  When user opens notification panel:                                │
 │    Mark read in frontend DB per user                                │
-│    When all users have read → POST /api/notifications/:id/read      │
+│    When all users have read → POST /v1/notifications/:id/read      │
 └─────────────────────────────────────────────────────────────────────┘
 ```

@@ -3,12 +3,12 @@
 Retrieves a paginated list of documents for the authenticated issuer with optional filtering by status, document type, and date range.
 
 ```
-GET /api/documents
+GET /v1/documents
 ```
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
 
 ## Query parameters
 

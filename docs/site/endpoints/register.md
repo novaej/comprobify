@@ -3,7 +3,7 @@
 Self-service registration. Creates a tenant, issuer, and sandbox API key in one call. The returned API key is shown **once** — store it immediately.
 
 ```
-POST /api/register
+POST /v1/register
 ```
 
 ## Authentication
@@ -12,7 +12,7 @@ None — public endpoint.
 
 ## Rate limiting
 
-Shared with `POST /api/resend-verification` — 5 requests per hour per IP.
+Shared with `POST /v1/resend-verification` — 5 requests per hour per IP.
 
 ## Request body
 
@@ -29,13 +29,13 @@ Shared with `POST /api/resend-verification` — 5 requests per hour per IP.
 | `mainAddress` | string | No | Main address |
 | `branchCode` | string | Yes | 3-digit branch code, e.g. `001` |
 | `issuePointCode` | string | Yes | 3-digit issue point code, e.g. `001` |
-| `environment` | string | No | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /api/tenants/promote` to move to production. |
+| `environment` | string | No | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /v1/tenants/promote` to move to production. |
 | `emissionType` | string | Yes | `1` (normal emission) |
 | `requiredAccounting` | boolean | Yes | Whether the business is required to keep accounting |
 | `specialTaxpayer` | string | No | Special taxpayer code |
 | `branchAddress` | string | No | Branch address |
 | `documentTypes` | array | No | Document type codes to enable (default: `["01"]`). Must be supported types. |
-| `initialSequentials` | array | No | (Deprecated — ignored at registration) Starting sequential numbers per document type to use at promotion time. Pass these to `POST /api/tenants/promote` instead. |
+| `initialSequentials` | array | No | (Deprecated — ignored at registration) Starting sequential numbers per document type to use at promotion time. Pass these to `POST /v1/tenants/promote` instead. |
 | `language` | string | No | Language for outgoing emails. Supported: `es` (default), `en`. Stored on the tenant and used for all subsequent emails including resends. |
 | `verificationRedirectUrl` | string | No | Frontend URL where the verification link in the email will point. The token is appended as `?token=<token>`. If omitted, the link goes directly to the API's verify endpoint. |
 
@@ -44,15 +44,15 @@ Shared with `POST /api/resend-verification` — 5 requests per hour per IP.
 When set, the verification email contains a link to your frontend page:
 
 ```
-https://app.yourdomain.com/verify?token=<64-char-hex>
+https://app.comprobify.com/verify?token=<64-char-hex>
 ```
 
-Your frontend page should display a confirmation UI and then call `GET /api/verify-email?token=<token>` on user action.
+Your frontend page should display a confirmation UI and then call `GET /v1/verify-email?token=<token>` on user action.
 
 When omitted, the link goes directly to the API:
 
 ```
-https://api.yourdomain.com/api/verify-email?token=<64-char-hex>
+https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 ```
 
 **Validation:** in production (`APP_ENV=production`) the URL must use `https`. In staging, `http` is also accepted.
@@ -105,5 +105,5 @@ If the email is already registered and not suspended, the current sandbox key is
 
 - The tenant starts in `PENDING_VERIFICATION` status. A verification email is sent immediately (fire-and-forget).
 - Unverified tenants can use sandbox but cannot promote to production.
-- The verification token expires after the configured TTL (default 24 hours). Use `POST /api/resend-verification` to issue a fresh one.
+- The verification token expires after the configured TTL (default 24 hours). Use `POST /v1/resend-verification` to issue a fresh one.
 - The endpoint is idempotent on the email address — safe to retry if the API key was lost.

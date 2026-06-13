@@ -3,14 +3,14 @@
 Retries the authorization email for a specific document.
 
 ```
-POST /api/documents/:accessKey/email-retry
+POST /v1/documents/:accessKey/email-retry
 ```
 
 By default only retries if `email_status` is `PENDING` or `FAILED`. Add `?force=true` to resend even if the email was already successfully sent.
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
 
 ## Path parameters
 

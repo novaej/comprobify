@@ -8,7 +8,7 @@ A uniqueness or state conflict prevented the operation from completing.
 
 ### `ALREADY_VERIFIED`
 
-`POST /api/resend-verification` was called for an email address whose account is already active (email already verified). There is nothing to resend.
+`POST /v1/resend-verification` was called for an email address whose account is already active (email already verified). There is nothing to resend.
 
 **What to do:** No action needed — the account is verified and can be used normally.
 
@@ -31,7 +31,7 @@ An `Idempotency-Key` header was supplied with a value that has already been used
   "status":   409,
   "code":     "ALREADY_VERIFIED",
   "detail":   "This account is already verified.",
-  "instance": "/api/resend-verification"
+  "instance": "/v1/resend-verification"
 }
 ```
 
@@ -42,6 +42,6 @@ An `Idempotency-Key` header was supplied with a value that has already been used
   "status":   409,
   "code":     "CONFLICT",
   "detail":   "Idempotency-Key reuse: the request body does not match the original request",
-  "instance": "/api/documents"
+  "instance": "/v1/documents"
 }
 ```

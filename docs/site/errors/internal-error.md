@@ -13,7 +13,7 @@ An unexpected error occurred on the server. This is not caused by the request co
   "title":    "Internal Server Error",
   "status":   500,
   "code":     "INTERNAL_ERROR",
-  "instance": "/api/documents/1503.../send"
+  "instance": "/v1/documents/1503.../send"
 }
 ```
 

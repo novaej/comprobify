@@ -3,7 +3,7 @@
 Returns all active issuers (branches / issue points) belonging to the authenticated tenant.
 
 ```
-GET /api/issuers
+GET /v1/issuers
 ```
 
 ## Authentication
