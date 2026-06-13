@@ -14,7 +14,7 @@
     {
       "key": "api_key",
       "value": "",
-      "description": "Bearer API key issued for the tenant (from Register or POST /api/keys)",
+      "description": "Bearer API key issued for the tenant (from Register or POST /v1/keys)",
       "type": "string"
     },
     {
@@ -71,12 +71,12 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/register",
+              "raw": "{{base_url}}/v1/register",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "register"
               ]
             },
@@ -145,7 +145,7 @@
                 {
                   "key": "environment",
                   "value": "1",
-                  "description": "Deprecated — ignored. All new accounts start in sandbox. Use POST /api/tenants/promote to move to production.",
+                  "description": "Deprecated — ignored. All new accounts start in sandbox. Use POST /v1/tenants/promote to move to production.",
                   "type": "text",
                   "disabled": true
                 },
@@ -195,12 +195,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/verify-email?token={{verification_token}}",
+              "raw": "{{base_url}}/v1/verify-email?token={{verification_token}}",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "verify-email"
               ],
               "query": [
@@ -224,12 +224,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/resend-verification",
+              "raw": "{{base_url}}/v1/resend-verification",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "resend-verification"
               ]
             },
@@ -242,7 +242,7 @@
                 }
               }
             },
-            "description": "Resends the verification email. Generates a fresh token (invalidating the previous one) and resets the expiry.\n\nTwo rate limits apply:\n- IP-based: shared with POST /api/register — 5 requests per hour per IP.\n- Per-account cooldown: 60 seconds between resends for the same email. Returns 429 if not elapsed.\n\nReturns the same generic message whether or not the email exists (no enumeration)."
+            "description": "Resends the verification email. Generates a fresh token (invalidating the previous one) and resets the expiry.\n\nTwo rate limits apply:\n- IP-based: shared with POST /v1/register — 5 requests per hour per IP.\n- Per-account cooldown: 60 seconds between resends for the same email. Returns 429 if not elapsed.\n\nReturns the same generic message whether or not the email exists (no enumeration)."
           }
         }
       ]
@@ -272,12 +272,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/tenants/language",
+              "raw": "{{base_url}}/v1/tenants/language",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "tenants",
                 "language"
               ]
@@ -305,12 +305,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/tenants/promote",
+              "raw": "{{base_url}}/v1/tenants/promote",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "tenants",
                 "promote"
               ]
@@ -348,12 +348,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/keys",
+              "raw": "{{base_url}}/v1/keys",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "keys"
               ]
             },
@@ -371,12 +371,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/keys",
+              "raw": "{{base_url}}/v1/keys",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "keys"
               ]
             },
@@ -397,12 +397,12 @@
           "request": {
             "method": "DELETE",
             "url": {
-              "raw": "{{base_url}}/api/keys/{{api_key_id}}",
+              "raw": "{{base_url}}/v1/keys/{{api_key_id}}",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "keys",
                 "{{api_key_id}}"
               ]
@@ -431,12 +431,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/issuers",
+              "raw": "{{base_url}}/v1/issuers",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "issuers"
               ]
             },
@@ -448,12 +448,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/issuers/{{issuer_id}}",
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "issuers",
                 "{{issuer_id}}"
               ]
@@ -466,12 +466,12 @@
           "request": {
             "method": "POST",
             "url": {
-              "raw": "{{base_url}}/api/issuers",
+              "raw": "{{base_url}}/v1/issuers",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "issuers"
               ]
             },
@@ -531,12 +531,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/issuers/{{issuer_id}}/document-types",
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/document-types",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "issuers",
                 "{{issuer_id}}",
                 "document-types"
@@ -556,12 +556,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/issuers/{{issuer_id}}/document-types",
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/document-types",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "issuers",
                 "{{issuer_id}}",
                 "document-types"
@@ -584,12 +584,12 @@
           "request": {
             "method": "DELETE",
             "url": {
-              "raw": "{{base_url}}/api/issuers/{{issuer_id}}/document-types/01",
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/document-types/01",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "issuers",
                 "{{issuer_id}}",
                 "document-types",
@@ -627,7 +627,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               },
               {
                 "key": "Idempotency-Key",
@@ -636,12 +636,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents",
+              "raw": "{{base_url}}/v1/documents",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents"
               ]
             },
@@ -654,7 +654,7 @@
                 }
               }
             },
-            "description": "Creates, XSD-validates, and signs a new electronic invoice. Returns the document with status `SIGNED`.\n\nAfter a successful response, copy the `accessKey` value into the `access_key` collection variable.\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use. Get the id from `GET /api/issuers`.\n\nThe `Idempotency-Key` header makes creation idempotent — generate it once per intended invoice and reuse on retries."
+            "description": "Creates, XSD-validates, and signs a new electronic invoice. Returns the document with status `SIGNED`.\n\nAfter a successful response, copy the `accessKey` value into the `access_key` collection variable.\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use. Get the id from `GET /v1/issuers`.\n\nThe `Idempotency-Key` header makes creation idempotent — generate it once per intended invoice and reuse on retries."
           }
         },
         {
@@ -665,16 +665,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents?page=1&limit=10",
+              "raw": "{{base_url}}/v1/documents?page=1&limit=10",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents"
               ],
               "query": [
@@ -727,16 +727,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents/{{access_key}}",
+              "raw": "{{base_url}}/v1/documents/{{access_key}}",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents",
                 "{{access_key}}"
               ]
@@ -752,16 +752,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents/{{access_key}}/send",
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/send",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents",
                 "{{access_key}}",
                 "send"
@@ -778,16 +778,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents/{{access_key}}/authorize",
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/authorize",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents",
                 "{{access_key}}",
                 "authorize"
@@ -808,16 +808,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents/{{access_key}}/rebuild",
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/rebuild",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents",
                 "{{access_key}}",
                 "rebuild"
@@ -843,16 +843,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents/{{access_key}}/ride",
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/ride",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents",
                 "{{access_key}}",
                 "ride"
@@ -869,16 +869,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents/{{access_key}}/xml",
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/xml",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents",
                 "{{access_key}}",
                 "xml"
@@ -895,16 +895,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents/{{access_key}}/events",
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/events",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents",
                 "{{access_key}}",
                 "events"
@@ -921,16 +921,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents/{{access_key}}/email-retry",
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/email-retry",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents",
                 "{{access_key}}",
                 "email-retry"
@@ -955,16 +955,16 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /api/issuers)"
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/documents/email-retry",
+              "raw": "{{base_url}}/v1/documents/email-retry",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "documents",
                 "email-retry"
               ]
@@ -993,12 +993,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/catalogs/id-types",
+              "raw": "{{base_url}}/v1/catalogs/id-types",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "catalogs",
                 "id-types"
               ]
@@ -1011,12 +1011,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/catalogs/payment-methods",
+              "raw": "{{base_url}}/v1/catalogs/payment-methods",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "catalogs",
                 "payment-methods"
               ]
@@ -1029,12 +1029,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/catalogs/term-units",
+              "raw": "{{base_url}}/v1/catalogs/term-units",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "catalogs",
                 "term-units"
               ]
@@ -1047,12 +1047,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/catalogs/tax-types",
+              "raw": "{{base_url}}/v1/catalogs/tax-types",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "catalogs",
                 "tax-types"
               ]
@@ -1065,12 +1065,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/catalogs/tax-rates",
+              "raw": "{{base_url}}/v1/catalogs/tax-rates",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "catalogs",
                 "tax-rates"
               ]
@@ -1107,9 +1107,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/notifications",
+              "raw": "{{base_url}}/v1/notifications",
               "host": ["{{base_url}}"],
-              "path": ["api", "notifications"],
+              "path": ["v1", "notifications"],
               "query": [
                 {
                   "key": "sinceId",
@@ -1128,9 +1128,9 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/notifications/{{notification_id}}/read",
+              "raw": "{{base_url}}/v1/notifications/{{notification_id}}/read",
               "host": ["{{base_url}}"],
-              "path": ["api", "notifications", "{{notification_id}}", "read"]
+              "path": ["v1", "notifications", "{{notification_id}}", "read"]
             },
             "description": "Marks a notification as read at the tenant level. Call this only when every user with access to the notification has acknowledged it on the frontend side. After this call, the notification no longer contributes to `unreadCount` on future polls.\n\nCopy a notification `id` from the List Notifications response into the `notification_id` variable."
           }
@@ -1141,9 +1141,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/notifications/preferences",
+              "raw": "{{base_url}}/v1/notifications/preferences",
               "host": ["{{base_url}}"],
-              "path": ["api", "notifications", "preferences"]
+              "path": ["v1", "notifications", "preferences"]
             },
             "description": "Returns the full notification preference list for the tenant — one entry per notification type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model)."
           }
@@ -1159,9 +1159,9 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/notifications/preferences",
+              "raw": "{{base_url}}/v1/notifications/preferences",
               "host": ["{{base_url}}"],
-              "path": ["api", "notifications", "preferences"]
+              "path": ["v1", "notifications", "preferences"]
             },
             "body": {
               "mode": "raw",
@@ -1202,13 +1202,13 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/webhooks",
+              "raw": "{{base_url}}/v1/webhooks",
               "host": ["{{base_url}}"],
-              "path": ["api", "webhooks"]
+              "path": ["v1", "webhooks"]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"url\": \"https://app.example.com/api/comprobify/events\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\", \"CERT_EXPIRING\", \"CERT_EXPIRED\"]\n}",
+              "raw": "{\n  \"url\": \"https://app.example.com/v1/comprobify/events\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\", \"CERT_EXPIRING\", \"CERT_EXPIRED\"]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1224,9 +1224,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/webhooks",
+              "raw": "{{base_url}}/v1/webhooks",
               "host": ["{{base_url}}"],
-              "path": ["api", "webhooks"]
+              "path": ["v1", "webhooks"]
             },
             "description": "Returns all active webhook endpoints for the tenant. Signing secrets are never included in list responses."
           }
@@ -1242,13 +1242,13 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/webhooks/{{webhook_id}}",
+              "raw": "{{base_url}}/v1/webhooks/{{webhook_id}}",
               "host": ["{{base_url}}"],
-              "path": ["api", "webhooks", "{{webhook_id}}"]
+              "path": ["v1", "webhooks", "{{webhook_id}}"]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"url\": \"https://app.example.com/api/comprobify/events-v2\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\"],\n  \"active\": true\n}",
+              "raw": "{\n  \"url\": \"https://app.example.com/v1/comprobify/events-v2\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\"],\n  \"active\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1264,9 +1264,9 @@
             "method": "DELETE",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/webhooks/{{webhook_id}}",
+              "raw": "{{base_url}}/v1/webhooks/{{webhook_id}}",
               "host": ["{{base_url}}"],
-              "path": ["api", "webhooks", "{{webhook_id}}"]
+              "path": ["v1", "webhooks", "{{webhook_id}}"]
             },
             "description": "Soft-deletes a webhook endpoint (`active = false`). The endpoint stops receiving deliveries immediately. Past delivery records are preserved for audit purposes.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
           }
@@ -1298,12 +1298,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/tenants",
+              "raw": "{{base_url}}/v1/admin/tenants",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "tenants"
               ]
@@ -1326,12 +1326,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/tenants",
+              "raw": "{{base_url}}/v1/admin/tenants",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "tenants"
               ]
@@ -1349,12 +1349,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/tenants/{{tenant_id}}/tier",
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/tier",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "tenants",
                 "{{tenant_id}}",
@@ -1383,12 +1383,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/tenants/{{tenant_id}}/status",
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/status",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "tenants",
                 "{{tenant_id}}",
@@ -1413,12 +1413,12 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/tenants/{{tenant_id}}/verify",
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/verify",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "tenants",
                 "{{tenant_id}}",
@@ -1439,12 +1439,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/tenants/{{tenant_id}}/promote",
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/promote",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "tenants",
                 "{{tenant_id}}",
@@ -1474,12 +1474,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/admin/tenants/{{tenant_id}}/api-keys",
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/api-keys",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "tenants",
                 "{{tenant_id}}",
@@ -1503,12 +1503,12 @@
           "request": {
             "method": "POST",
             "url": {
-              "raw": "{{base_url}}/api/admin/issuers",
+              "raw": "{{base_url}}/v1/admin/issuers",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "issuers"
               ]
@@ -1611,7 +1611,7 @@
                 }
               ]
             },
-            "description": "Creates a new issuer for a tenant by uploading a P12 certificate. Requires `tenantId`. **Does NOT return an API key** — mint one separately via `POST /api/admin/tenants/:id/api-keys`.\n\nAfter a successful response, copy the issuer `id` into `issuer_id`."
+            "description": "Creates a new issuer for a tenant by uploading a P12 certificate. Requires `tenantId`. **Does NOT return an API key** — mint one separately via `POST /v1/admin/tenants/:id/api-keys`.\n\nAfter a successful response, copy the issuer `id` into `issuer_id`."
           }
         },
         {
@@ -1619,12 +1619,12 @@
           "request": {
             "method": "POST",
             "url": {
-              "raw": "{{base_url}}/api/admin/issuers",
+              "raw": "{{base_url}}/v1/admin/issuers",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "issuers"
               ]
@@ -1712,7 +1712,7 @@
                 }
               ]
             },
-            "description": "Creates a new branch issuer by copying the certificate from an existing issuer. No P12 file needed. Requires `tenantId`. **Does NOT return an API key** — mint one separately via `POST /api/admin/tenants/:id/api-keys`."
+            "description": "Creates a new branch issuer by copying the certificate from an existing issuer. No P12 file needed. Requires `tenantId`. **Does NOT return an API key** — mint one separately via `POST /v1/admin/tenants/:id/api-keys`."
           }
         },
         {
@@ -1720,12 +1720,12 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/admin/issuers",
+              "raw": "{{base_url}}/v1/admin/issuers",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "issuers"
               ]
@@ -1738,12 +1738,12 @@
           "request": {
             "method": "DELETE",
             "url": {
-              "raw": "{{base_url}}/api/admin/api-keys/{{api_key_id}}",
+              "raw": "{{base_url}}/v1/admin/api-keys/{{api_key_id}}",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
+                "v1",
                 "admin",
                 "api-keys",
                 "{{api_key_id}}"
@@ -1758,9 +1758,9 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/jobs/notifications",
+              "raw": "{{base_url}}/v1/admin/jobs/notifications",
               "host": ["{{base_url}}"],
-              "path": ["api", "admin", "jobs", "notifications"]
+              "path": ["v1", "admin", "jobs", "notifications"]
             },
             "description": "Runs all periodic notification jobs across every non-suspended tenant:\n\n1. **Certificate expiry checks** — inspects `cert_expiry` for every active issuer and upserts `CERT_EXPIRING` / `CERT_EXPIRED` alerts. Auto-dismisses alerts when a cert has been renewed (> 30 days remaining).\n\n2. **Webhook retry queue** — retries all `RETRYING` webhook deliveries past their scheduled `next_retry_at` time.\n\nThis endpoint is designed to be called by an external scheduler (cron, infrastructure job) on a regular interval — every 5 minutes is a reasonable default. The job is **idempotent**: running it multiple times is safe.\n\nResponse includes `tenantsChecked` and a `retries` breakdown (`attempted`, `succeeded`, `failed`, `exhausted`)."
           }

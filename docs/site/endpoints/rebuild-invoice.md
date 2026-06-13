@@ -3,14 +3,14 @@
 Corrects and re-signs a rejected document. The rebuilt document keeps the same `accessKey`, `sequential`, and `issueDate` as the original.
 
 ```
-POST /api/documents/:accessKey/rebuild
+POST /v1/documents/:accessKey/rebuild
 ```
 
 Use this when a document is in `RETURNED` or `NOT_AUTHORIZED` status. After rebuilding, send it again with [Send to SRI](send-to-sri.md).
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
 
 ## Path parameters
 

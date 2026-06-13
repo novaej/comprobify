@@ -3,7 +3,7 @@
 Creates a new branch or issue point for the authenticated tenant. The new issuer inherits the RUC, business name, and certificate from an existing issuer of the tenant. **No new API key is minted** — your existing tenant key already covers every branch via the `X-Issuer-Id` header.
 
 ```
-POST /api/issuers
+POST /v1/issuers
 ```
 
 ## Authentication
@@ -69,7 +69,7 @@ A new branch is counted when `branchCode` does not yet exist for the tenant. Add
 }
 ```
 
-The returned `id` is what you pass as `X-Issuer-Id` on document requests targeting this branch. New branches inherit the tenant's current environment (sandbox or production). Use [`POST /api/tenants/promote`](promote-tenant.md) to promote the entire tenant to production.
+The returned `id` is what you pass as `X-Issuer-Id` on document requests targeting this branch. New branches inherit the tenant's current environment (sandbox or production). Use [`POST /v1/tenants/promote`](promote-tenant.md) to promote the entire tenant to production.
 
 ## Errors
 

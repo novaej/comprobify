@@ -3,12 +3,12 @@
 Downloads the RIDE (Representación Impresa del Documento Electrónico) as a PDF. Only available for authorized documents.
 
 ```
-GET /api/documents/:accessKey/ride
+GET /v1/documents/:accessKey/ride
 ```
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
 
 ## Path parameters
 

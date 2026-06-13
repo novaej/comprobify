@@ -3,10 +3,10 @@
 Returns profile information for a single issuer owned by the authenticated tenant.
 
 ```
-GET /api/issuers/:id
+GET /v1/issuers/:id
 ```
 
-> **Migrated from `GET /api/issuers/me`** (removed in May 2026). Since API keys are tenant-scoped, "the current issuer" is no longer well-defined — you must name the issuer by id. List all of your tenant's issuers with `GET /api/issuers`.
+> **Migrated from `GET /v1/issuers/me`** (removed in May 2026). Since API keys are tenant-scoped, "the current issuer" is no longer well-defined — you must name the issuer by id. List all of your tenant's issuers with `GET /v1/issuers`.
 
 ## Authentication
 
@@ -16,7 +16,7 @@ GET /api/issuers/:id
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id (from `GET /api/issuers`) |
+| `id` | Numeric issuer id (from `GET /v1/issuers`) |
 
 ## Response
 

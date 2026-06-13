@@ -3,7 +3,7 @@
 Resends the verification email to a registered but unverified tenant. Generates a fresh token (invalidating the previous one) and resets the expiry.
 
 ```
-POST /api/resend-verification
+POST /v1/resend-verification
 ```
 
 ## Authentication
@@ -14,7 +14,7 @@ None — public endpoint.
 
 Two independent limits apply:
 
-- **IP-based:** shared with `POST /api/register` — 5 requests per hour per IP.
+- **IP-based:** shared with `POST /v1/register` — 5 requests per hour per IP.
 - **Per-account cooldown:** 60 seconds between resends for the same email address. Breaching this returns `429`.
 
 ## Request body

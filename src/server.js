@@ -28,7 +28,7 @@ class Server {
 
   routes() {
     this.app.use('/health', require('./routes/health.routes'));
-    this.app.use('/api', require('./routes'));
+    this.app.use('/v1', require('./routes'));
   }
 
   errorHandling() {

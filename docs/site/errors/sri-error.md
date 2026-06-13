@@ -14,7 +14,7 @@ A network error occurred while communicating with the SRI SOAP service. This is 
   "status":   502,
   "code":     "SRI_SUBMISSION_FAILED",
   "detail":   "SRI service unavailable",
-  "instance": "/api/documents/1503.../send",
+  "instance": "/v1/documents/1503.../send",
   "sriMessages": [
     {
       "identifier": "35",

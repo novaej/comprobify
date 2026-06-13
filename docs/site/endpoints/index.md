@@ -8,35 +8,35 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/register` | Self-service: create tenant + issuer + sandbox API key. Idempotent — if the email already exists, revokes the current sandbox key and returns a new one (200). |
-| `GET` | `/api/verify-email` | Verify email with token from registration email |
-| `POST` | `/api/resend-verification` | Resend verification email (regenerates token) |
+| `POST` | `/v1/register` | Self-service: create tenant + issuer + sandbox API key. Idempotent — if the email already exists, revokes the current sandbox key and returns a new one (200). |
+| `GET` | `/v1/verify-email` | Verify email with token from registration email |
+| `POST` | `/v1/resend-verification` | Resend verification email (regenerates token) |
 
 ## Tenants (authenticated)
 
 | Method | Path | Description |
 |---|---|---|
-| `PATCH` | `/api/tenants/language` | Update the preferred language for outgoing emails |
-| `POST` | `/api/tenants/promote` | Promote the tenant to production — revokes all sandbox keys and creates matching production keys |
+| `PATCH` | `/v1/tenants/language` | Update the preferred language for outgoing emails |
+| `POST` | `/v1/tenants/promote` | Promote the tenant to production — revokes all sandbox keys and creates matching production keys |
 
 ## Issuers (authenticated)
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/issuers` | List all active issuers (branches / issue points) for the tenant |
-| `POST` | `/api/issuers` | Create a new branch or issue point — inherits cert from an existing issuer of the tenant. Does NOT mint a new API key. |
-| `GET` | `/api/issuers/:id` | Get a single issuer's profile (name, RUC, cert expiry) |
-| `GET` | `/api/issuers/:id/document-types` | List active document types for the issuer |
-| `POST` | `/api/issuers/:id/document-types` | Enable a document type for the issuer |
-| `DELETE` | `/api/issuers/:id/document-types/:code` | Disable a document type for the issuer |
+| `GET` | `/v1/issuers` | List all active issuers (branches / issue points) for the tenant |
+| `POST` | `/v1/issuers` | Create a new branch or issue point — inherits cert from an existing issuer of the tenant. Does NOT mint a new API key. |
+| `GET` | `/v1/issuers/:id` | Get a single issuer's profile (name, RUC, cert expiry) |
+| `GET` | `/v1/issuers/:id/document-types` | List active document types for the issuer |
+| `POST` | `/v1/issuers/:id/document-types` | Enable a document type for the issuer |
+| `DELETE` | `/v1/issuers/:id/document-types/:code` | Disable a document type for the issuer |
 
 ## API keys (authenticated)
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/keys` | List all active keys for the tenant (label, environment, created_at) |
-| `POST` | `/api/keys` | Mint a new named key (`label`, optional `environment`) |
-| `DELETE` | `/api/keys/:id` | Revoke an API key. Cannot revoke the key used for the current request. |
+| `GET` | `/v1/keys` | List all active keys for the tenant (label, environment, created_at) |
+| `POST` | `/v1/keys` | Mint a new named key (`label`, optional `environment`) |
+| `DELETE` | `/v1/keys/:id` | Revoke an API key. Cannot revoke the key used for the current request. |
 
 ## Documents
 
@@ -44,17 +44,17 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/documents` | List documents with filtering and pagination |
-| `POST` | `/api/documents` | Create and sign an invoice |
-| `GET` | `/api/documents/:accessKey` | Get a document by access key |
-| `POST` | `/api/documents/:accessKey/send` | Submit signed document to SRI |
-| `GET` | `/api/documents/:accessKey/authorize` | Check SRI authorization status |
-| `POST` | `/api/documents/:accessKey/rebuild` | Rebuild and re-sign a rejected document |
-| `GET` | `/api/documents/:accessKey/ride` | Download RIDE PDF |
-| `GET` | `/api/documents/:accessKey/xml` | Download signed XML |
-| `GET` | `/api/documents/:accessKey/events` | Get audit event history |
-| `POST` | `/api/documents/email-retry` | Retry all failed/pending emails (batch) |
-| `POST` | `/api/documents/:accessKey/email-retry` | Retry email for a single document |
+| `GET` | `/v1/documents` | List documents with filtering and pagination |
+| `POST` | `/v1/documents` | Create and sign an invoice |
+| `GET` | `/v1/documents/:accessKey` | Get a document by access key |
+| `POST` | `/v1/documents/:accessKey/send` | Submit signed document to SRI |
+| `GET` | `/v1/documents/:accessKey/authorize` | Check SRI authorization status |
+| `POST` | `/v1/documents/:accessKey/rebuild` | Rebuild and re-sign a rejected document |
+| `GET` | `/v1/documents/:accessKey/ride` | Download RIDE PDF |
+| `GET` | `/v1/documents/:accessKey/xml` | Download signed XML |
+| `GET` | `/v1/documents/:accessKey/events` | Get audit event history |
+| `POST` | `/v1/documents/email-retry` | Retry all failed/pending emails (batch) |
+| `POST` | `/v1/documents/:accessKey/email-retry` | Retry email for a single document |
 
 ## Notifications (authenticated)
 
@@ -62,10 +62,10 @@ Tenant-level alerts for document events and certificate status. Supply `X-Issuer
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/api/notifications` | List active notifications (read and unread). Optional `?sinceId=<id>` for catch-up polling. |
-| `POST` | `/api/notifications/:id/read` | Mark a notification as read |
-| `GET` | `/api/notifications/preferences` | Get notification type preferences for the tenant |
-| `PATCH` | `/api/notifications/preferences` | Enable or disable notification types |
+| `GET` | `/v1/notifications` | List active notifications (read and unread). Optional `?sinceId=<id>` for catch-up polling. |
+| `POST` | `/v1/notifications/:id/read` | Mark a notification as read |
+| `GET` | `/v1/notifications/preferences` | Get notification type preferences for the tenant |
+| `PATCH` | `/v1/notifications/preferences` | Enable or disable notification types |
 
 ## Webhooks (authenticated)
 
@@ -73,26 +73,26 @@ Register HTTPS callback URLs to receive event notifications in near-real time.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/webhooks` | Register a new webhook endpoint (secret shown once) |
-| `GET` | `/api/webhooks` | List active webhook endpoints (secrets excluded) |
-| `PATCH` | `/api/webhooks/:id` | Update URL, event subscriptions, or active flag |
-| `DELETE` | `/api/webhooks/:id` | Deregister an endpoint (soft-delete) |
+| `POST` | `/v1/webhooks` | Register a new webhook endpoint (secret shown once) |
+| `GET` | `/v1/webhooks` | List active webhook endpoints (secrets excluded) |
+| `PATCH` | `/v1/webhooks/:id` | Update URL, event subscriptions, or active flag |
+| `DELETE` | `/v1/webhooks/:id` | Deregister an endpoint (soft-delete) |
 
 ## Admin
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/admin/tenants` | Create tenant (manual onboarding, status ACTIVE) |
-| `GET` | `/api/admin/tenants` | List all tenants |
-| `PATCH` | `/api/admin/tenants/:id/tier` | Update tenant subscription tier |
-| `PATCH` | `/api/admin/tenants/:id/status` | Activate or suspend a tenant |
-| `POST` | `/api/admin/tenants/:id/verify` | Manually verify a tenant's email |
-| `POST` | `/api/admin/tenants/:id/promote` | Promote a tenant to production (admin override — skips ACTIVE status check) |
-| `POST` | `/api/admin/tenants/:id/api-keys` | Mint a tenant-scoped API key (admin) |
-| `POST` | `/api/admin/issuers` | Create issuer for a tenant (requires `tenantId`). Does NOT return an API key — mint one via `/api/admin/tenants/:id/api-keys`. |
-| `GET` | `/api/admin/issuers` | List all issuers |
-| `DELETE` | `/api/admin/api-keys/:id` | Revoke an API key |
-| `POST` | `/api/admin/jobs/notifications` | Run cert-expiry checks for all tenants + process webhook retry queue |
+| `POST` | `/v1/admin/tenants` | Create tenant (manual onboarding, status ACTIVE) |
+| `GET` | `/v1/admin/tenants` | List all tenants |
+| `PATCH` | `/v1/admin/tenants/:id/tier` | Update tenant subscription tier |
+| `PATCH` | `/v1/admin/tenants/:id/status` | Activate or suspend a tenant |
+| `POST` | `/v1/admin/tenants/:id/verify` | Manually verify a tenant's email |
+| `POST` | `/v1/admin/tenants/:id/promote` | Promote a tenant to production (admin override — skips ACTIVE status check) |
+| `POST` | `/v1/admin/tenants/:id/api-keys` | Mint a tenant-scoped API key (admin) |
+| `POST` | `/v1/admin/issuers` | Create issuer for a tenant (requires `tenantId`). Does NOT return an API key — mint one via `/v1/admin/tenants/:id/api-keys`. |
+| `GET` | `/v1/admin/issuers` | List all issuers |
+| `DELETE` | `/v1/admin/api-keys/:id` | Revoke an API key |
+| `POST` | `/v1/admin/jobs/notifications` | Run cert-expiry checks for all tenants + process webhook retry queue |
 
 ## Monitoring
 

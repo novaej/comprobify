@@ -6,12 +6,12 @@ All catalog endpoints require authentication.
 
 ---
 
-## GET /api/catalogs/id-types
+## GET /v1/catalogs/id-types
 
 Returns buyer identification types.
 
 ```
-GET /api/catalogs/id-types
+GET /v1/catalogs/id-types
 ```
 
 **Response**
@@ -31,12 +31,12 @@ GET /api/catalogs/id-types
 
 ---
 
-## GET /api/catalogs/payment-methods
+## GET /v1/catalogs/payment-methods
 
 Returns SRI payment method codes.
 
 ```
-GET /api/catalogs/payment-methods
+GET /v1/catalogs/payment-methods
 ```
 
 **Response**
@@ -59,12 +59,12 @@ GET /api/catalogs/payment-methods
 
 ---
 
-## GET /api/catalogs/term-units
+## GET /v1/catalogs/term-units
 
 Returns accepted payment term units (SRI `unidadTiempo`). Use together with `payments[].term` to express installment plans (`pagos a plazos`).
 
 ```
-GET /api/catalogs/term-units
+GET /v1/catalogs/term-units
 ```
 
 **Response**
@@ -81,12 +81,12 @@ GET /api/catalogs/term-units
 
 ---
 
-## GET /api/catalogs/tax-types
+## GET /v1/catalogs/tax-types
 
 Returns SRI tax type codes.
 
 ```
-GET /api/catalogs/tax-types
+GET /v1/catalogs/tax-types
 ```
 
 **Response**
@@ -104,12 +104,12 @@ GET /api/catalogs/tax-types
 
 ---
 
-## GET /api/catalogs/tax-rates
+## GET /v1/catalogs/tax-rates
 
 Returns tax rate codes grouped by tax type. Use `taxCode` + `rateCode` together when specifying taxes on invoice items.
 
 ```
-GET /api/catalogs/tax-rates
+GET /v1/catalogs/tax-rates
 ```
 
 **Response**

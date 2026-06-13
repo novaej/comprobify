@@ -13,7 +13,7 @@ All endpoints below take the issuer id as a URL parameter and verify it belongs 
 ## List document types
 
 ```
-GET /api/issuers/:id/document-types
+GET /v1/issuers/:id/document-types
 ```
 
 Returns the active document types for the named issuer.
@@ -22,7 +22,7 @@ Returns the active document types for the named issuer.
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id (from `GET /api/issuers`) |
+| `id` | Numeric issuer id (from `GET /v1/issuers`) |
 
 ### Response
 
@@ -38,7 +38,7 @@ Returns the active document types for the named issuer.
 ## Add a document type
 
 ```
-POST /api/issuers/:id/document-types
+POST /v1/issuers/:id/document-types
 ```
 
 Enables a new document type for the issuer. If the type was previously removed, it is reactivated.
@@ -85,7 +85,7 @@ Returns the full updated list of active document types.
 ## Remove a document type
 
 ```
-DELETE /api/issuers/:id/document-types/:code
+DELETE /v1/issuers/:id/document-types/:code
 ```
 
 Disables a document type for the issuer. The last active type cannot be removed.

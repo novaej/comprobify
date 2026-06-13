@@ -3,9 +3,9 @@
 Tenant-facing API key management. Mint named keys for each integration (frontend, ERP, mobile app, sandbox test rig, etc.), list them, and revoke leaked or unused ones.
 
 ```
-GET    /api/keys
-POST   /api/keys
-DELETE /api/keys/:id
+GET    /v1/keys
+POST   /v1/keys
+DELETE /v1/keys/:id
 ```
 
 ## Authentication
@@ -17,7 +17,7 @@ DELETE /api/keys/:id
 ## List keys
 
 ```
-GET /api/keys
+GET /v1/keys
 ```
 
 Returns every active key for the tenant. The plaintext token is **never** returned — only labels, environments, and ids.
@@ -53,7 +53,7 @@ Returns every active key for the tenant. The plaintext token is **never** return
 ## Mint a new key
 
 ```
-POST /api/keys
+POST /v1/keys
 ```
 
 Creates a new tenant-scoped key. The plaintext token is shown **once** in the response and never stored — record it immediately.
@@ -96,7 +96,7 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 ## Revoke a key
 
 ```
-DELETE /api/keys/:id
+DELETE /v1/keys/:id
 ```
 
 Marks the key as inactive. The key cannot be used to authenticate any future request.
@@ -105,7 +105,7 @@ Marks the key as inactive. The key cannot be used to authenticate any future req
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric id of the key (from `GET /api/keys`) |
+| `id` | Numeric id of the key (from `GET /v1/keys`) |
 
 ### Response
 

@@ -3,7 +3,7 @@
 Creates, validates, and signs a new electronic invoice.
 
 ```
-POST /api/documents
+POST /v1/documents
 ```
 
 ## Authentication
@@ -15,7 +15,7 @@ POST /api/documents
 | Header | Required | Description |
 |---|---|---|
 | `Authorization` | Yes | Bearer API key |
-| `X-Issuer-Id` | Yes | Numeric id of the issuing branch (from `GET /api/issuers`). Identifies which branch and certificate to use. |
+| `X-Issuer-Id` | Yes | Numeric id of the issuing branch (from `GET /v1/issuers`). Identifies which branch and certificate to use. |
 | `Content-Type` | Yes | `application/json` |
 | `Idempotency-Key` | No | Unique string (max 255 chars) — see [idempotency](#idempotency) |
 
@@ -94,7 +94,7 @@ POST /api/documents
 | `payments[].method` | string | Yes | 2-digit SRI payment method code |
 | `payments[].total` | string | Yes | Numeric payment amount |
 | `payments[].term` | number | No | Payment term length — maps to SRI `plazo` |
-| `payments[].termUnit` | string | No | Payment term unit code — maps to SRI `unidadTiempo`. Must be one of the values returned by `GET /api/catalogs/term-units` (e.g. `"dias"`, `"meses"`) |
+| `payments[].termUnit` | string | No | Payment term unit code — maps to SRI `unidadTiempo`. Must be one of the values returned by `GET /v1/catalogs/term-units` (e.g. `"dias"`, `"meses"`) |
 | `additionalInfo` | array | No | Key-value pairs included in the XML as `campoAdicional` |
 
 ## Response

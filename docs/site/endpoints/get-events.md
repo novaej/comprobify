@@ -3,12 +3,12 @@
 Returns the full audit event history for a document in chronological order.
 
 ```
-GET /api/documents/:accessKey/events
+GET /v1/documents/:accessKey/events
 ```
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /api/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
 
 ## Path parameters
 

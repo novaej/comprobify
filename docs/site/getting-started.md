@@ -17,7 +17,7 @@ You can also download the collection JSON directly: [`comprobify.postman_collect
 Create your account, issuer, and sandbox API key in a single call. Each RUC can only be registered once.
 
 ```http
-POST /api/register
+POST /v1/register
 Content-Type: multipart/form-data
 ```
 
@@ -28,7 +28,7 @@ Content-Type: multipart/form-data
 | `businessName` | Legal company name as it appears on your RUC |
 | `branchCode` | 3-digit SRI branch code (e.g. `001` for the main branch) |
 | `issuePointCode` | 3-digit SRI issue point code (e.g. `001`) |
-| `environment` | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /api/tenants/promote` to move to production. |
+| `environment` | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /v1/tenants/promote` to move to production. |
 | `emissionType` | SRI emission type: always `1` (normal) |
 | `requiredAccounting` | `true` if your company is required to keep accounting records (*obligado a llevar contabilidad*), `false` otherwise |
 | `cert` | Your `.p12` digital certificate file issued by the SRI CA (Banco Central or Security Data) |
@@ -71,7 +71,7 @@ The account starts on the **FREE** tier (100 documents, 1 branch, 1 issuing poin
 A verification email is sent to the address you registered with. Click the link, or call the endpoint directly with the token from the email:
 
 ```http
-GET /api/verify-email?token=<token>
+GET /v1/verify-email?token=<token>
 ```
 
 Email verification is required before you can promote to production. You can issue sandbox invoices immediately without verifying.
@@ -98,7 +98,7 @@ This is the most important concept to understand before integrating.
 
 **One API key covers your entire account (all branches).** API keys are **tenant-scoped**, not issuer-scoped. One key can address any of your branches; you declare the target branch via the `X-Issuer-Id` header on each request.
 
-Your account (tenant) can have multiple issuers — each one is a unique pair of `branchCode` and `issuePointCode` (e.g., `001/001`, `001/002`, `002/001`). When you call `POST /api/documents`, the API uses the key to identify your tenant, then uses `X-Issuer-Id` to determine:
+Your account (tenant) can have multiple issuers — each one is a unique pair of `branchCode` and `issuePointCode` (e.g., `001/001`, `001/002`, `002/001`). When you call `POST /v1/documents`, the API uses the key to identify your tenant, then uses `X-Issuer-Id` to determine:
 - Which branch and issue point to embed in the document
 - Which digital certificate to sign with
 - Which sequential number sequence to draw from
@@ -106,7 +106,7 @@ Your account (tenant) can have multiple issuers — each one is a unique pair of
 ### Listing your issuers
 
 ```http
-GET /api/issuers
+GET /v1/issuers
 Authorization: Bearer <your-api-key>
 ```
 
@@ -114,10 +114,10 @@ Returns every issuer (branch / issue point) under your tenant with its numeric `
 
 ### Adding a new branch or issue point
 
-Once your email is verified, call `POST /api/issuers` with your API key:
+Once your email is verified, call `POST /v1/issuers` with your API key:
 
 ```http
-POST /api/issuers
+POST /v1/issuers
 Authorization: Bearer <your-api-key>
 Content-Type: multipart/form-data
 
@@ -138,26 +138,26 @@ No new API key is minted — the key you already have covers every branch under 
 
 ### Multiple named keys per tenant
 
-Since one tenant-scoped key covers all your branches, you can mint additional keys via `POST /api/keys` to track which integration is making each call (frontend, ERP, mobile app, etc.):
+Since one tenant-scoped key covers all your branches, you can mint additional keys via `POST /v1/keys` to track which integration is making each call (frontend, ERP, mobile app, etc.):
 
 ```http
-POST /api/keys
+POST /v1/keys
 Authorization: Bearer <your-api-key>
 Content-Type: application/json
 
 { "label": "ERP integration", "environment": "sandbox" }
 ```
 
-Use `GET /api/keys` to list them and `DELETE /api/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that the tenant has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others).
+Use `GET /v1/keys` to list them and `DELETE /v1/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that the tenant has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others).
 
 ### Key lifecycle
 
 | Stage | Key environment | What to do |
 |---|---|---|
 | After registration | Sandbox | Use for testing against the SRI test environment. |
-| After `POST /api/tenants/promote` | Production | All sandbox keys are revoked and production mirrors are returned in the response. |
-| Adding integrations | Same tenant | Mint named keys via `POST /api/keys` for per-integration observability. |
-| Lost key | — | Mint a replacement via `POST /api/keys`, revoke the old one via `DELETE /api/keys/:id`. |
+| After `POST /v1/tenants/promote` | Production | All sandbox keys are revoked and production mirrors are returned in the response. |
+| Adding integrations | Same tenant | Mint named keys via `POST /v1/keys` for per-integration observability. |
+| Lost key | — | Mint a replacement via `POST /v1/keys`, revoke the old one via `DELETE /v1/keys/:id`. |
 
 ### Why tenant-scoped keys?
 
@@ -170,12 +170,12 @@ One key covers your whole account, so a frontend or ERP that operates on multipl
 Register an HTTPS URL on your server to receive event notifications in near-real time — document authorizations, certificate alerts, and any future event types the API produces.
 
 ```http
-POST /api/webhooks
+POST /v1/webhooks
 Authorization: Bearer <your-api-key>
 Content-Type: application/json
 
 {
-  "url": "https://app.example.com/api/comprobify/events",
+  "url": "https://app.example.com/v1/comprobify/events",
   "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRING", "CERT_EXPIRED"]
 }
 ```
@@ -187,7 +187,7 @@ Response:
   "ok": true,
   "endpoint": {
     "id": 1,
-    "url": "https://app.example.com/api/comprobify/events",
+    "url": "https://app.example.com/v1/comprobify/events",
     "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRING", "CERT_EXPIRED"],
     "active": true
   },
@@ -197,16 +197,16 @@ Response:
 
 **Store the `secret` immediately — it is shown only once.** Use it to verify the `X-Comprobify-Signature` header on every incoming request.
 
-Omit `eventTypes` (or pass `[]`) to subscribe to all event types. You can register up to the limit for your plan (FREE: 1, STARTER: 2, GROWTH: 5, BUSINESS: 10) and manage them via `GET / PATCH / DELETE /api/webhooks`.
+Omit `eventTypes` (or pass `[]`) to subscribe to all event types. You can register up to the limit for your plan (FREE: 1, STARTER: 2, GROWTH: 5, BUSINESS: 10) and manage them via `GET / PATCH / DELETE /v1/webhooks`.
 
-> **If you cannot expose a public HTTPS URL** (local development, behind a firewall), poll `GET /api/notifications?sinceId=<lastId>` instead. Store the highest `id` seen from each poll and pass it on the next request to efficiently catch up — see [Notifications](endpoints/notifications.md).
+> **If you cannot expose a public HTTPS URL** (local development, behind a firewall), poll `GET /v1/notifications?sinceId=<lastId>` instead. Store the highest `id` seen from each poll and pass it on the next request to efficiently catch up — see [Notifications](endpoints/notifications.md).
 
 ---
 
 ## 5. Create an invoice
 
 ```http
-POST /api/documents
+POST /v1/documents
 Authorization: Bearer <your-api-key>
 X-Issuer-Id: <issuer-id>
 Content-Type: application/json
@@ -234,7 +234,7 @@ Returns the signed document with status `SIGNED`. See [Create Invoice](endpoints
 ## 6. Send to SRI
 
 ```http
-POST /api/documents/:accessKey/send
+POST /v1/documents/:accessKey/send
 ```
 
 Submits the signed XML to the SRI. The document moves to `RECEIVED` or `RETURNED`.
@@ -247,7 +247,7 @@ Submits the signed XML to the SRI. The document moves to `RECEIVED` or `RETURNED
 ## 7. Check authorization
 
 ```http
-GET /api/documents/:accessKey/authorize
+GET /v1/documents/:accessKey/authorize
 ```
 
 Queries the SRI for the authorization result.
@@ -262,7 +262,7 @@ Queries the SRI for the authorization result.
 Once you have verified your email and tested your integration in sandbox:
 
 ```http
-POST /api/tenants/promote
+POST /v1/tenants/promote
 Authorization: Bearer <your-api-key>
 Content-Type: application/json
 
@@ -302,7 +302,7 @@ Distribute each token to the integration that previously used the sandbox key wi
 | Growth | 5,000 | 10 | 5 | 5 | 120 req/min |
 | Business | 20,000 | Unlimited | Unlimited | 10 | 300 req/min |
 
-The document quota is shared across all branches and document types. When you reach it, `POST /api/documents` returns `402 QUOTA_EXCEEDED`. Contact support to upgrade your plan.
+The document quota is shared across all branches and document types. When you reach it, `POST /v1/documents` returns `402 QUOTA_EXCEEDED`. Contact support to upgrade your plan.
 
 Attempting to create a branch beyond the tier limit returns `402 PAYMENT_REQUIRED`.
 
@@ -310,7 +310,7 @@ Attempting to create a branch beyond the tier limit returns `402 PAYMENT_REQUIRE
 
 ## Idempotency
 
-`POST /api/documents` accepts an optional `Idempotency-Key` header. If you retry the same request after a timeout, send the same key — the API returns the existing document instead of creating a duplicate. Use a unique key per intended invoice (e.g. a UUID), and keep it consistent across retries.
+`POST /v1/documents` accepts an optional `Idempotency-Key` header. If you retry the same request after a timeout, send the same key — the API returns the existing document instead of creating a duplicate. Use a unique key per intended invoice (e.g. a UUID), and keep it consistent across retries.
 
 ---
 
@@ -318,7 +318,7 @@ Attempting to create a branch beyond the tier limit returns `402 PAYMENT_REQUIRE
 
 Requests are rate-limited per API key based on your subscription tier (see table above). When you exceed the limit, the API returns [`429 Too Many Requests`](errors/too-many-requests.md). Implement exponential backoff: wait 1s, then 2s, then 4s before retrying.
 
-`POST /api/register` is additionally limited to **5 requests per hour per IP address**, regardless of tier.
+`POST /v1/register` is additionally limited to **5 requests per hour per IP address**, regardless of tier.
 
 ---
 

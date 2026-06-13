@@ -3,10 +3,10 @@
 Register HTTPS callback URLs to receive event notifications in near-real time. When the API creates or updates a notification (e.g. a document is authorized, a certificate is expiring), it immediately POSTs a signed payload to every active endpoint that has subscribed to that event type.
 
 ```
-POST   /api/webhooks
-GET    /api/webhooks
-PATCH  /api/webhooks/:id
-DELETE /api/webhooks/:id
+POST   /v1/webhooks
+GET    /v1/webhooks
+PATCH  /v1/webhooks/:id
+DELETE /v1/webhooks/:id
 ```
 
 For the Mailgun email-delivery webhook (an inbound webhook from Mailgun to this API), see [Mailgun Webhook](mailgun-webhook.md).
@@ -31,7 +31,7 @@ For the Mailgun email-delivery webhook (an inbound webhook from Mailgun to this 
 ```json
 {
   "id":         1,
-  "url":        "https://app.example.com/api/comprobify/events",
+  "url":        "https://app.example.com/v1/comprobify/events",
   "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRING"],
   "active":     true,
   "createdAt":  "2026-05-31T10:00:00.000Z",
@@ -55,7 +55,7 @@ For the Mailgun email-delivery webhook (an inbound webhook from Mailgun to this 
 ## Register an endpoint
 
 ```
-POST /api/webhooks
+POST /v1/webhooks
 ```
 
 Creates a new webhook endpoint and returns the signing secret. **The secret is shown exactly once** — store it immediately.
@@ -64,7 +64,7 @@ Creates a new webhook endpoint and returns the signing secret. **The secret is s
 
 ```json
 {
-  "url":        "https://app.example.com/api/comprobify/events",
+  "url":        "https://app.example.com/v1/comprobify/events",
   "eventTypes": ["DOCUMENT_AUTHORIZED"]
 }
 ```
@@ -83,7 +83,7 @@ Creates a new webhook endpoint and returns the signing secret. **The secret is s
   "ok": true,
   "endpoint": {
     "id":         1,
-    "url":        "https://app.example.com/api/comprobify/events",
+    "url":        "https://app.example.com/v1/comprobify/events",
     "eventTypes": ["DOCUMENT_AUTHORIZED"],
     "active":     true,
     "createdAt":  "2026-05-31T10:00:00.000Z",
@@ -108,7 +108,7 @@ Store `secret` securely. It is used to verify the `X-Comprobify-Signature` heade
 ## List endpoints
 
 ```
-GET /api/webhooks
+GET /v1/webhooks
 ```
 
 Returns all active endpoints for the tenant (signing secrets are never included).
@@ -129,7 +129,7 @@ Returns all active endpoints for the tenant (signing secrets are never included)
 ## Update an endpoint
 
 ```
-PATCH /api/webhooks/:id
+PATCH /v1/webhooks/:id
 ```
 
 Update the URL, event subscriptions, or active flag for an existing endpoint. All fields are optional — send only what you want to change.
@@ -138,7 +138,7 @@ Update the URL, event subscriptions, or active flag for an existing endpoint. Al
 
 ```json
 {
-  "url":        "https://app.example.com/api/comprobify/events-v2",
+  "url":        "https://app.example.com/v1/comprobify/events-v2",
   "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRED"],
   "active":     true
 }
@@ -168,7 +168,7 @@ Update the URL, event subscriptions, or active flag for an existing endpoint. Al
 ## Deregister an endpoint
 
 ```
-DELETE /api/webhooks/:id
+DELETE /v1/webhooks/:id
 ```
 
 Soft-deletes the endpoint (`active = false`). The endpoint stops receiving deliveries immediately. Past delivery records are preserved in `webhook_deliveries` for audit purposes.
@@ -286,4 +286,4 @@ Use `deliveryId` to deduplicate. A retry of the same delivery has the same `deli
 | 3 | 2 minutes after attempt 2 fails |
 | FAILED | After 3 failed attempts — no further retries |
 
-If all retries are exhausted, use `GET /api/notifications?sinceId=<lastId>` to catch up on missed events.
+If all retries are exhausted, use `GET /v1/notifications?sinceId=<lastId>` to catch up on missed events.

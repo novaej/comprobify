@@ -11,7 +11,7 @@ All error responses use [RFC 7807 Problem Details](https://www.rfc-editor.org/rf
   "status":   400,
   "code":     "VALIDATION_FAILED",
   "detail":   "Validation failed",
-  "instance": "/api/documents"
+  "instance": "/v1/documents"
 }
 ```
 
@@ -52,7 +52,7 @@ When `code` is `VALIDATION_FAILED`, an additional `errors` array lists each fiel
   "status": 400,
   "code":   "VALIDATION_FAILED",
   "detail": "Validation failed",
-  "instance": "/api/documents",
+  "instance": "/v1/documents",
   "errors": [
     {
       "field":   "buyer.email",
@@ -84,7 +84,7 @@ When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contai
   "status": 502,
   "code":   "SRI_SUBMISSION_FAILED",
   "detail": "SRI rejected the document",
-  "instance": "/api/documents/1503.../send",
+  "instance": "/v1/documents/1503.../send",
   "sriMessages": [
     {
       "identifier": "35",

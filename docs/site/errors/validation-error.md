@@ -14,7 +14,7 @@ One or more fields in the request body failed validation.
   "status":   400,
   "code":     "VALIDATION_FAILED",
   "detail":   "Validation failed",
-  "instance": "/api/documents",
+  "instance": "/v1/documents",
   "errors": [
     {
       "field":   "buyer.email",
