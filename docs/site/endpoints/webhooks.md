@@ -9,7 +9,7 @@ PATCH  /api/webhooks/:id
 DELETE /api/webhooks/:id
 ```
 
-For the Mailgun email-delivery webhook (an inbound webhook from Mailgun to this API), see the admin setup documentation.
+For the Mailgun email-delivery webhook (an inbound webhook from Mailgun to this API), see [Mailgun Webhook](mailgun-webhook.md).
 
 ## Authentication
 

@@ -84,13 +84,14 @@ export default defineConfig({
             collapsed: false,
             items: [
               { text: 'Notifications', link: '/endpoints/notifications' },
+              { text: 'Webhook Endpoints', link: '/endpoints/webhooks' },
             ],
           },
           {
             text: 'Webhooks',
             collapsed: false,
             items: [
-              { text: 'Mailgun Webhook', link: '/endpoints/webhooks' },
+              { text: 'Mailgun Webhook', link: '/endpoints/mailgun-webhook' },
             ],
           },
           {
