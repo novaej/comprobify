@@ -30,7 +30,7 @@ A generic not-found response for other resources (documents, API keys, etc.). Re
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/not-found",
+  "type":     "https://docs.comprobify.com/errors/not-found",
   "title":    "Not Found",
   "status":   404,
   "code":     "ISSUER_NOT_FOUND",
@@ -41,7 +41,7 @@ A generic not-found response for other resources (documents, API keys, etc.). Re
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/not-found",
+  "type":     "https://docs.comprobify.com/errors/not-found",
   "title":    "Not Found",
   "status":   404,
   "code":     "NOT_FOUND",

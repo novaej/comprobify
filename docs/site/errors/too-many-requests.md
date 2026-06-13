@@ -55,7 +55,7 @@ async function requestWithRetry(fn, maxRetries = 3) {
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/too-many-requests",
+  "type":     "https://docs.comprobify.com/errors/too-many-requests",
   "title":    "Too Many Requests",
   "status":   429,
   "code":     "RESEND_COOLDOWN",
@@ -66,7 +66,7 @@ async function requestWithRetry(fn, maxRetries = 3) {
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/too-many-requests",
+  "type":     "https://docs.comprobify.com/errors/too-many-requests",
   "title":    "Too Many Requests",
   "status":   429,
   "code":     "TOO_MANY_REQUESTS",

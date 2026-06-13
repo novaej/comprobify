@@ -5,7 +5,7 @@ const TIERS = require('../constants/subscription-tiers');
 
 const handler = (req, res) => {
   res.status(429).json({
-    type: 'https://example.com/errors/too-many-requests',
+    type: 'https://docs.comprobify.com/errors/too-many-requests',
     title: 'Too Many Requests',
     status: 429,
     code: 'TOO_MANY_REQUESTS',

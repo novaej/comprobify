@@ -5,7 +5,7 @@
 ## Quick Links
 
 ### Public API documentation
-- [novaej.github.io/comprobify](https://novaej.github.io/comprobify) — Endpoint reference, error codes, and getting started guide for API consumers
+- [docs.comprobify.com](https://docs.comprobify.com) — Endpoint reference, error codes, and getting started guide for API consumers
 
 ### Getting Started
 - [GETTING_STARTED.md](../GETTING_STARTED.md) — Local setup from scratch

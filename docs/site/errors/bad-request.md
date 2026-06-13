@@ -94,7 +94,7 @@ A generic bad request not covered by a specific code above. Read the `detail` fi
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/bad-request",
+  "type":     "https://docs.comprobify.com/errors/bad-request",
   "title":    "Bad Request",
   "status":   400,
   "code":     "CERTIFICATE_EXPIRED",

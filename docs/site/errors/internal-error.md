@@ -9,7 +9,7 @@ An unexpected error occurred on the server. This is not caused by the request co
 
 ```json
 {
-  "type":     "https://novaej.github.io/comprobify/errors/internal-error",
+  "type":     "https://docs.comprobify.com/errors/internal-error",
   "title":    "Internal Server Error",
   "status":   500,
   "code":     "INTERNAL_ERROR",
