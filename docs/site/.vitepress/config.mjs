@@ -3,7 +3,7 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'Comprobify API',
   description: 'REST API for Ecuador SRI electronic invoicing',
-  base: '/comprobify/',
+  base: '/',
   cleanUrls: true,
 
   themeConfig: {
