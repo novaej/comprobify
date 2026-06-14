@@ -34,12 +34,12 @@ api_keys
 
 ### Auth flow
 1. `authenticate` middleware: SHA-256 of the Bearer token → join `api_keys` × `tenants` → sets `req.tenant`, `req.apiKey`, `req.keyHash`. No issuer resolved.
-2. `resolveIssuer` middleware (mounted on `/api/documents/*`): reads `X-Issuer-Id` header, fetches the issuer, validates `issuer.tenant_id === req.tenant.id` (else 403), validates `req.apiKey.environment === (issuer.sandbox ? 'sandbox' : 'production')` (else 401), sets `req.issuer`.
-3. Issuer-management routes (`/api/issuers/:id/...`) bypass `resolveIssuer` and instead read the issuer from `:id` in the URL with the same ownership check inline in the controller.
+2. `resolveIssuer` middleware (mounted on `/v1/documents/*`): reads `X-Issuer-Id` header, fetches the issuer, validates `issuer.tenant_id === req.tenant.id` (else 403), validates `req.apiKey.environment === (issuer.sandbox ? 'sandbox' : 'production')` (else 401), sets `req.issuer`.
+3. Issuer-management routes (`/v1/issuers/:id/...`) bypass `resolveIssuer` and instead read the issuer from `:id` in the URL with the same ownership check inline in the controller.
 
 ### Request contract
 ```
-POST /api/documents
+POST /v1/documents
 Authorization: Bearer cmp_xxx
 X-Issuer-Id: 42
 Idempotency-Key: abc-123
@@ -47,7 +47,7 @@ Idempotency-Key: abc-123
 Missing header → `400 ISSUER_ID_REQUIRED`. Foreign issuer → `403 ISSUER_FORBIDDEN`. Env mismatch → `401`.
 
 ### Multi-key model
-Tenants can mint multiple named keys (e.g. `frontend-prod`, `erp`, `mobile-app`) via `GET / POST / DELETE /api/keys`. The `label` field is purely for human observability. Each key carries an `environment` (sandbox or production) stamped at creation; production keys can only be minted after the tenant has promoted at least one issuer to production.
+Tenants can mint multiple named keys (e.g. `frontend-prod`, `erp`, `mobile-app`) via `GET / POST / DELETE /v1/keys`. The `label` field is purely for human observability. Each key carries an `environment` (sandbox or production) stamped at creation; production keys can only be minted after the tenant has promoted at least one issuer to production.
 
 ## Consequences
 

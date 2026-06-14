@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-`POST /api/invoices` is not idempotent by design — every call creates a new invoice with a new sequential number and access key. Network timeouts, client retries, and background queue workers can therefore produce duplicate invoices. With email delivery live, each duplicate invoice also fires a duplicate notification to the buyer.
+`POST /v1/documents` is not idempotent by design — every call creates a new invoice with a new sequential number and access key. Network timeouts, client retries, and background queue workers can therefore produce duplicate invoices. With email delivery live, each duplicate invoice also fires a duplicate notification to the buyer.
 
 The fix must satisfy three constraints:
 
@@ -18,7 +18,7 @@ The fix must satisfy three constraints:
 
 ## Decision
 
-Accept an `Idempotency-Key` HTTP request header on `POST /api/invoices`. The key is caller-supplied (e.g. an internal order ID or UUID). The API stores the key and a SHA-256 hash of the request body in two new nullable columns on `documents` (`idempotency_key`, `payload_hash`). A partial unique index (`WHERE idempotency_key IS NOT NULL`) enforces uniqueness at the database level.
+Accept an `Idempotency-Key` HTTP request header on `POST /v1/documents`. The key is caller-supplied (e.g. an internal order ID or UUID). The API stores the key and a SHA-256 hash of the request body in two new nullable columns on `documents` (`idempotency_key`, `payload_hash`). A partial unique index (`WHERE idempotency_key IS NOT NULL`) enforces uniqueness at the database level.
 
 **Lookup flow (before opening any transaction):**
 1. If no key → proceed normally (no idempotency tracking).

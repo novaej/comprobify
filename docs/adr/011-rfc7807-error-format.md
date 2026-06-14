@@ -33,7 +33,7 @@ Adopt [RFC 7807 — Problem Details for HTTP APIs](https://www.rfc-editor.org/rf
   "status":   400,
   "code":     "VALIDATION_FAILED",
   "detail":   "Validation failed",
-  "instance": "/api/documents",
+  "instance": "/v1/documents",
   "errors": [
     { "field": "buyer.email", "message": "Buyer email is required and must be a valid email address", "code": "buyer.email" }
   ]

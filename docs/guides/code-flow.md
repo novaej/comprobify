@@ -99,7 +99,7 @@ src/routes/index.js          → mounts /documents
 src/routes/documents.routes.js  → defines the endpoints
 ```
 
-The top-level `index.js` is a simple aggregator. Adding a new resource (e.g. `/api/credit-notes`) means adding one line here without touching anything else.
+The top-level `index.js` is a simple aggregator. Adding a new resource (e.g. `/v1/credit-notes`) means adding one line here without touching anything else.
 
 Each route in `documents.routes.js` follows the same pattern:
 
@@ -107,12 +107,12 @@ Each route in `documents.routes.js` follows the same pattern:
 authenticate  →  [rate limit]  →  [optional middleware]  →  [validator chain]  →  validateRequest  →  asyncHandler(controller.fn)
 ```
 
-`authenticate` is mounted first via `router.use(asyncHandler(authenticate))` at the top of the router, so every endpoint in the file requires a valid API key before any other middleware runs. On `/api/documents/*` it is followed by `resolveIssuer`, which reads `X-Issuer-Id` and sets `req.issuer` after validating tenant ownership and environment match. Rate limiting is applied per-route: `readLimiter` on GET endpoints (300 req/min per key), `writeLimiter` on POST endpoints (60 req/min per key).
+`authenticate` is mounted first via `router.use(asyncHandler(authenticate))` at the top of the router, so every endpoint in the file requires a valid API key before any other middleware runs. On `/v1/documents/*` it is followed by `resolveIssuer`, which reads `X-Issuer-Id` and sets `req.issuer` after validating tenant ownership and environment match. Rate limiting is applied per-route: `readLimiter` on GET endpoints (300 req/min per key), `writeLimiter` on POST endpoints (60 req/min per key).
 
 **Why this pattern?**
 
 - **`authenticate`**: verifies the `Authorization: Bearer <token>` header and sets `req.tenant` + `req.apiKey` before any business logic runs. Centralising authentication at the router level means no endpoint can accidentally be reached unauthenticated.
-- **`resolveIssuer`**: reads `X-Issuer-Id` and sets `req.issuer` — only mounted on `/api/documents/*` where issuer scoping is required. Issuer-management routes use a URL `:id` param and inline ownership check instead.
+- **`resolveIssuer`**: reads `X-Issuer-Id` and sets `req.issuer` — only mounted on `/v1/documents/*` where issuer scoping is required. Issuer-management routes use a URL `:id` param and inline ownership check instead.
 - **`[rate limit]`** (`readLimiter` or `writeLimiter`): per-API-key rate limiting prevents abuse. Applied immediately after authentication so the rate limit key (`req.keyHash`) is available. See `src/middleware/rate-limit.js`.
 - **Optional middleware** (e.g. `extractIdempotencyKey`): thin, synchronous header extraction that runs before body validation. Keeps HTTP-level concerns out of the controller.
 - **Validator chain** (`express-validator`): declarative field rules applied before the controller runs. Keeps validation logic out of the controller.
@@ -141,7 +141,7 @@ Authorization: Bearer <token>          ← authenticate
   ├── tenant.status === SUSPENDED → AppError 403
   └── req.tenant + req.apiKey + req.keyHash set; req.issuer left unset
 
-X-Issuer-Id: <issuer-id>              ← resolveIssuer (only on /api/documents/*)
+X-Issuer-Id: <issuer-id>              ← resolveIssuer (only on /v1/documents/*)
   │
   ├── missing or non-integer → AppError 400 BAD_REQUEST
   ├── issuerModel.findById(id)
@@ -220,7 +220,7 @@ The `ok: false` / `ok: true` convention on all responses lets callers check a si
 
 The original monolith (`document.service.js`) was split into five focused services. Each service handles one phase of the document lifecycle. All services receive `issuer` as a parameter — they never look up the issuer themselves.
 
-### `document-creation.service.js` — POST /api/documents
+### `document-creation.service.js` — POST /v1/documents
 
 Step-by-step:
 
@@ -674,7 +674,7 @@ Generates the RIDE (Representación Impresa del Documento Electrónico) PDF for 
 ## Request lifecycle summary
 
 ```
-POST /api/documents
+POST /v1/documents
   │
   ├── express.json()              parse JSON body
   ├── authenticate                SHA-256(Bearer token) → api_keys ⋈ tenants → req.tenant + req.apiKey (401 if invalid, 403 if SUSPENDED)
@@ -704,7 +704,7 @@ POST /api/documents
 → 201 { ok: true, document: { accessKey, documentType, sequential, status, ... } }  (new)
 → 200 { ok: true, document: {...} }   (idempotent replay)
 
-POST /api/documents/:key/send
+POST /v1/documents/:key/send
   └── authenticate → req.issuer
         └── documentTransmission.sendToSri(accessKey, issuer)
               ├── assertTransition(status, RECEIVED)   [throws 400 if not SIGNED]
@@ -713,7 +713,7 @@ POST /api/documents/:key/send
               ├── documentModel.updateStatus(RECEIVED | RETURNED)
               └── documentEventModel.create(SENT)
 
-GET /api/documents/:key/authorize
+GET /v1/documents/:key/authorize
   └── authenticate → req.issuer
         └── documentTransmission.checkAuthorization(accessKey, issuer)
               ├── assertTransition(status, AUTHORIZED)  [throws 400 if not RECEIVED]
@@ -727,7 +727,7 @@ GET /api/documents/:key/authorize
                     ├── mailgunProvider.send(to, attachments)
                     └── documentModel.updateStatus({ email_status }) + EMAIL_SENT/EMAIL_FAILED event
 
-POST /api/documents/:key/rebuild
+POST /v1/documents/:key/rebuild
   └── authenticate → req.issuer
         └── documentRebuild.rebuild(accessKey, body, issuer)
               ├── assertTransition(status, SIGNED)  [throws 400 if not RETURNED/NOT_AUTHORIZED]
@@ -737,13 +737,13 @@ POST /api/documents/:key/rebuild
               ├── documentModel.updateStatus(SIGNED, { xml, payload, totals, buyer })
               └── documentEventModel.create(REBUILT)
 
-GET /api/documents/:key/events
+GET /v1/documents/:key/events
   └── authenticate → req.issuer
         └── documentQuery.getEvents(accessKey, issuer)
               └── documentEventModel.findByDocumentId(document.id)
               → [{ id, eventType, fromStatus, toStatus, detail, createdAt }, ...]
 
-GET /api/documents/:key/ride
+GET /v1/documents/:key/ride
   └── authenticate → req.issuer
         └── rideService.generate
               ├── assert status === 'AUTHORIZED'
@@ -753,14 +753,14 @@ GET /api/documents/:key/ride
 
 → 200 application/pdf (Content-Disposition: attachment; filename="RIDE-{accessKey}.pdf")
 
-GET /api/documents/:key/xml
+GET /v1/documents/:key/xml
   └── authenticate → req.issuer
         └── documentQuery.getXml(accessKey, issuer)
               └── authorization_xml if AUTHORIZED, else signed_xml
 
 → 200 application/xml (Content-Disposition: attachment; filename="{accessKey}.xml")
 
-POST /api/documents/email-retry         ← batch
+POST /v1/documents/email-retry         ← batch
   └── authenticate → req.issuer
         └── documentEmail.retryFailedEmails(issuer)
               └── documentModel.findPendingEmails(issuerId)  (status=AUTHORIZED, email_status IN (PENDING,FAILED), max 100)
@@ -768,7 +768,7 @@ POST /api/documents/email-retry         ← batch
 
 → 200 { ok: true, result: { sent: N, failed: N } }
 
-POST /api/documents/:key/email-retry    ← single
+POST /v1/documents/:key/email-retry    ← single
   └── authenticate → req.issuer
         └── documentEmail.retrySingleEmail(accessKey, { force }, issuer)
               ├── assert status === 'AUTHORIZED'

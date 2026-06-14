@@ -25,7 +25,7 @@ The question was how to correlate an incoming Mailgun event back to the right do
 
 1. **Store the Mailgun message ID at send time.** `mailgun.provider.send()` returns `response.id` from the SDK and strips the surrounding angle brackets (Mailgun returns `<id@domain>` from the API but sends `id@domain` in webhook headers). This cleaned ID is stored in `documents.email_message_id`.
 
-2. **Expose `POST /api/mailgun/webhook`.** A dedicated route receives Mailgun's delivery events. The middleware `verify-mailgun-webhook.js` performs HMAC-SHA256 verification against `MAILGUN_WEBHOOK_SIGNING_KEY` with a 5-minute timestamp window (replay protection). Requests with an invalid or missing signature return 401.
+2. **Expose `POST /v1/mailgun/webhook`.** A dedicated route receives Mailgun's delivery events. The middleware `verify-mailgun-webhook.js` performs HMAC-SHA256 verification against `MAILGUN_WEBHOOK_SIGNING_KEY` with a 5-minute timestamp window (replay protection). Requests with an invalid or missing signature return 401.
 
 3. **Handle all four event types in `mailgun-webhook.service.js`:**
    - `delivered` → `email_status: DELIVERED`, `EMAIL_DELIVERED` event
@@ -101,7 +101,7 @@ The question was how to correlate an incoming Mailgun event back to the right do
 
 ### Negative
 - If the webhook is unreachable when Mailgun fires (server down, ngrok not running in dev), Mailgun retries for several hours. If all retries fail, `email_status` stays `SENT` indefinitely — there is no polling fallback.
-- `MAILGUN_WEBHOOK_SIGNING_KEY` must be configured and the `/api/mailgun/webhook` URL must be publicly reachable. Misconfiguration silently degrades to no delivery tracking.
+- `MAILGUN_WEBHOOK_SIGNING_KEY` must be configured and the `/v1/mailgun/webhook` URL must be publicly reachable. Misconfiguration silently degrades to no delivery tracking.
 
 ### Mitigation
 - Mailgun's dashboard (Sending → Logs) remains the authoritative record of delivery events and can be consulted manually when `email_status` seems stale.

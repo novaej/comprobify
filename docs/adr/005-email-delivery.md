@@ -35,10 +35,10 @@ Use **Mailgun** as the email provider, accessed via the official `mailgun.js` SD
 - `mailgun.js` + `form-data` add ~12 transitive packages to the dependency tree.
 
 ### Mitigation
-- `email_status` column on `documents` tracks `PENDING / SENT / FAILED / SKIPPED / DELIVERED / COMPLAINED` — any failure is retryable via `POST /api/documents/email-retry` (batch) or `POST /api/documents/:accessKey/email-retry` (single).
+- `email_status` column on `documents` tracks `PENDING / SENT / FAILED / SKIPPED / DELIVERED / COMPLAINED` — any failure is retryable via `POST /v1/documents/email-retry` (batch) or `POST /v1/documents/:accessKey/email-retry` (single).
 - Email is **fire-and-forget** in `checkAuthorization()` — a send failure never blocks or rolls back the `AUTHORIZED` status update.
 - `EMAIL_FAILED` events are written to `document_events` with the error message for audit trail.
-- Mailgun's async delivery result (delivered, permanent failure, temporary failure, spam complaint) is captured via `POST /api/mailgun/webhook` (ADR-010), which updates `email_status` and writes the corresponding event. `SENT` therefore means "queued by Mailgun"; `DELIVERED` means confirmed delivery.
+- Mailgun's async delivery result (delivered, permanent failure, temporary failure, spam complaint) is captured via `POST /v1/mailgun/webhook` (ADR-010), which updates `email_status` and writes the corresponding event. `SENT` therefore means "queued by Mailgun"; `DELIVERED` means confirmed delivery.
 
 ### Alternatives Considered
 - **nodemailer + SMTP**: More flexible but requires managing an SMTP relay or running a mail server. Deliverability (SPF, DKIM, bounce handling) becomes the application's responsibility. No built-in event log.

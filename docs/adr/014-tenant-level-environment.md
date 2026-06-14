@@ -19,11 +19,11 @@ ADR-013 already moved API keys to the tenant level. The logical next step was to
 
 2. **`issuer.sandbox` in service code is a virtual field.** `resolveIssuer` middleware sets `req.issuer.sandbox = req.tenant.sandbox` after fetching the issuer, so all downstream document services can continue to read `issuer.sandbox` without change.
 
-3. **Promotion is tenant-level.** `POST /api/tenants/promote` flips `tenants.sandbox = false`, seeds production sequentials for all issuers × document types, revokes all sandbox API keys, and creates matching production keys — one per revoked sandbox key, preserving the label (key mirroring).
+3. **Promotion is tenant-level.** `POST /v1/tenants/promote` flips `tenants.sandbox = false`, seeds production sequentials for all issuers × document types, revokes all sandbox API keys, and creates matching production keys — one per revoked sandbox key, preserving the label (key mirroring).
 
-4. **Key mirroring.** Because tenants may have multiple named keys (e.g. `frontend-prod`, `erp`, `mobile-app`), the promote response returns all new production tokens. The caller must distribute them. Tokens are shown once — if lost, the tenant must mint new keys via `POST /api/keys`.
+4. **Key mirroring.** Because tenants may have multiple named keys (e.g. `frontend-prod`, `erp`, `mobile-app`), the promote response returns all new production tokens. The caller must distribute them. Tokens are shown once — if lost, the tenant must mint new keys via `POST /v1/keys`.
 
-5. **Admin override.** `POST /api/admin/tenants/:id/promote` performs the same operation but skips the ACTIVE status check, matching the pattern of other admin overrides.
+5. **Admin override.** `POST /v1/admin/tenants/:id/promote` performs the same operation but skips the ACTIVE status check, matching the pattern of other admin overrides.
 
 ---
 
