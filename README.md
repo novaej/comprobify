@@ -39,7 +39,7 @@ Node.js REST API for generating, digitally signing, and submitting electronic in
 ## Document Lifecycle
 
 ```
-POST /api/documents  (Idempotency-Key header)
+POST /v1/documents  (Idempotency-Key header)
        │  Generate → Sign → Save
        ▼
     SIGNED
@@ -64,24 +64,24 @@ GET /:key/xml   →  Authorization XML (application/xml)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/documents` | Create, validate (XSD), sign, and persist a new document |
-| `GET` | `/api/documents/:accessKey` | Retrieve document metadata by access key |
-| `POST` | `/api/documents/:accessKey/send` | Submit signed XML to SRI reception service |
-| `GET` | `/api/documents/:accessKey/authorize` | Poll SRI authorization service for final status |
-| `POST` | `/api/documents/:accessKey/rebuild` | Correct and re-sign a RETURNED or NOT_AUTHORIZED document |
-| `GET` | `/api/documents/:accessKey/ride` | Download RIDE PDF for an AUTHORIZED document |
-| `GET` | `/api/documents/:accessKey/xml` | Download authorization XML (or signed XML if not yet authorized) |
-| `GET` | `/api/documents/:accessKey/events` | Full audit trail for the document |
-| `POST` | `/api/documents/email-retry` | Batch retry all PENDING/FAILED emails (max 100) |
-| `POST` | `/api/documents/:accessKey/email-retry` | Retry email for one document (`?force=true` to resend already-sent) |
-| `POST` | `/api/admin/issuers` | Create issuer (P12 upload or branch copy) |
-| `GET` | `/api/admin/issuers` | List all issuers |
-| `POST` | `/api/admin/tenants/:id/api-keys` | Generate a new Bearer API key for a tenant |
-| `DELETE` | `/api/admin/api-keys/:id` | Revoke an API key |
-| `GET` | `/api/keys` | List the tenant's active API keys |
-| `POST` | `/api/keys` | Mint a new named API key for the tenant |
-| `DELETE` | `/api/keys/:id` | Revoke a tenant API key |
-| `POST` | `/api/mailgun/webhook` | Receive Mailgun delivery events (HMAC-verified) |
+| `POST` | `/v1/documents` | Create, validate (XSD), sign, and persist a new document |
+| `GET` | `/v1/documents/:accessKey` | Retrieve document metadata by access key |
+| `POST` | `/v1/documents/:accessKey/send` | Submit signed XML to SRI reception service |
+| `GET` | `/v1/documents/:accessKey/authorize` | Poll SRI authorization service for final status |
+| `POST` | `/v1/documents/:accessKey/rebuild` | Correct and re-sign a RETURNED or NOT_AUTHORIZED document |
+| `GET` | `/v1/documents/:accessKey/ride` | Download RIDE PDF for an AUTHORIZED document |
+| `GET` | `/v1/documents/:accessKey/xml` | Download authorization XML (or signed XML if not yet authorized) |
+| `GET` | `/v1/documents/:accessKey/events` | Full audit trail for the document |
+| `POST` | `/v1/documents/email-retry` | Batch retry all PENDING/FAILED emails (max 100) |
+| `POST` | `/v1/documents/:accessKey/email-retry` | Retry email for one document (`?force=true` to resend already-sent) |
+| `POST` | `/v1/admin/issuers` | Create issuer (P12 upload or branch copy) |
+| `GET` | `/v1/admin/issuers` | List all issuers |
+| `POST` | `/v1/admin/tenants/:id/api-keys` | Generate a new Bearer API key for a tenant |
+| `DELETE` | `/v1/admin/api-keys/:id` | Revoke an API key |
+| `GET` | `/v1/keys` | List the tenant's active API keys |
+| `POST` | `/v1/keys` | Mint a new named API key for the tenant |
+| `DELETE` | `/v1/keys/:id` | Revoke a tenant API key |
+| `POST` | `/v1/mailgun/webhook` | Receive Mailgun delivery events (HMAC-verified) |
 
 ---
 
@@ -208,7 +208,7 @@ See **[GETTING_STARTED.md](GETTING_STARTED.md)** for full local setup instructio
 - [ ] `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` set for email delivery (or omit to disable)
 - [ ] `EMAIL_FROM` set to a verified sender address matching the Mailgun domain
 - [ ] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard
-- [ ] Webhook endpoint (`/api/mailgun/webhook`) publicly reachable via HTTPS
+- [ ] Webhook endpoint (`/v1/mailgun/webhook`) publicly reachable via HTTPS
 
 ---
 
