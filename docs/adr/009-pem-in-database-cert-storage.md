@@ -32,11 +32,11 @@ Extract the private key PEM and certificate PEM from the P12 at upload time, sto
 
 **`helpers/signer.js` refactored** from `sign(certPath, password, xml)` to `sign(privateKeyPem, certPem, xml)` — no file I/O at signing time.
 
-**Admin API** (`/api/admin/*`, protected by `ADMIN_SECRET` env var via constant-time comparison):
-- `POST /api/admin/issuers` — accepts a multipart P12 upload (`cert` field) or a `sourceIssuerId` for branch copies. Parses the P12 in-process using `node-forge`, extracts PEMs, validates the certificate's validity period, stores everything in the database, and returns an initial Bearer API key (printed once, never stored in plaintext).
-- `GET /api/admin/issuers` — lists all issuers (no PEM fields exposed).
-- `POST /api/admin/issuers/:id/api-keys` — generates an additional key for an existing issuer. Accepts optional `revokeExisting: true` to revoke all active keys for that issuer before issuing the new one (useful for key rotation or recovering from a lost key).
-- `DELETE /api/admin/api-keys/:id` — revokes a key by setting `active = false`.
+**Admin API** (`/v1/admin/*`, protected by `ADMIN_SECRET` env var via constant-time comparison):
+- `POST /v1/admin/issuers` — accepts a multipart P12 upload (`cert` field) or a `sourceIssuerId` for branch copies. Parses the P12 in-process using `node-forge`, extracts PEMs, validates the certificate's validity period, stores everything in the database, and returns an initial Bearer API key (printed once, never stored in plaintext).
+- `GET /v1/admin/issuers` — lists all issuers (no PEM fields exposed).
+- `POST /v1/admin/issuers/:id/api-keys` — generates an additional key for an existing issuer. Accepts optional `revokeExisting: true` to revoke all active keys for that issuer before issuing the new one (useful for key rotation or recovering from a lost key).
+- `DELETE /v1/admin/api-keys/:id` — revokes a key by setting `active = false`.
 - Optional `initialSequentials` — array of `{ documentType, sequential }` objects; seeds one counter per entry, enabling migrating issuers that have already issued documents outside this system.
 
 **`multer` (memoryStorage)** handles the P12 upload — the file is held in RAM as a `Buffer` during the request and never written to disk.
