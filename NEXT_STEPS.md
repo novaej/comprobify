@@ -241,19 +241,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 
 ## 11. Notification Scheduler Trigger
 
-**Priority: Medium — required for cert-expiry alerts and webhook delivery retries**
-
-The `POST /api/admin/jobs/notifications` endpoint exists and works, but nothing calls it on a schedule yet. `notification-scheduler-staging.yml` is written but disabled because running every 5 minutes consumes ~8,640 GitHub Actions minutes/month — well over the 2,000 free-plan limit.
-
-**Options (pick one):**
-
-1. **External cron service (recommended for production)** — [cron-job.org](https://cron-job.org) or EasyCron free tier. Create a job that POSTs to `https://your-app-url/api/admin/jobs/notifications` with `Authorization: Bearer <ADMIN_SECRET>` on a 5-minute interval. Zero GitHub minutes consumed, more reliable timing than GitHub's best-effort scheduler.
-
-2. **GitHub Actions with a longer interval (acceptable for staging)** — change the cron in `notification-scheduler-staging.yml` to `*/30 * * * *` (every 30 minutes). Drops usage to ~1,440 minutes/month, within the free limit. Cert-expiry checks don't need sub-minute precision. To enable: uncomment the `schedule` trigger and remove the `if: false` guard on the job.
-
-3. **Same for production** — when the production environment is provisioned, create `notification-scheduler-prod.yml` (copy of staging file) and use an external cron service pointed at the production URL/secret. See the "Production status" section in `docs/deployment.md`.
-
-**Effort:** Low — no code changes; configuration only.
+**Status: Done** — cron-job.org job configured to `POST /v1/admin/jobs/notifications` every 5 minutes for staging. When production is provisioned, add a second cron-job.org job pointing at the production URL (see step 7 in the "Production status" section of `docs/deployment.md`).
 
 ---
 

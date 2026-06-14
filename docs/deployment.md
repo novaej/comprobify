@@ -127,7 +127,6 @@ git push origin main
 |------|---------|--------|
 | `.github/workflows/release-staging.yml` | Push of tag `vX.Y.Z` | Fast-forwards `staging` to the tagged commit and pushes it |
 | `.github/workflows/deploy-staging.yml` | Push to `staging` | Calls the Render deploy hook for `comprobify-staging` |
-| `.github/workflows/notification-scheduler-staging.yml` | Schedule (every 5 min) + manual | Calls `POST /v1/admin/jobs/notifications` on the staging deployment |
 | `.github/workflows/release-production.yml` | *(disabled)* GitHub Release published | Fast-forwards `production` to the released commit and pushes it |
 | `.github/workflows/deploy-production.yml` | *(disabled)* Push to `production` | Calls the Render deploy hook for `comprobify-production` |
 
@@ -149,7 +148,7 @@ To enable production once it's provisioned:
 4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
 5. In `deploy-production.yml`: uncomment the `push: branches: [production]` trigger and remove the `if: false` guard on the `deploy` job
 6. Add branch protection to `production` (restrict who can push to the automation only; no force pushes) — see GitHub repository setup below
-7. Copy `notification-scheduler-staging.yml` to `notification-scheduler-prod.yml`, change the environment to `production`, and point `STAGING_API_BASE_URL` → `PRODUCTION_API_BASE_URL` and `ADMIN_SECRET` at the production GitHub environment secrets
+7. Set up a cron-job.org job (or equivalent external cron service) to `POST /v1/admin/jobs/notifications` on the production URL every 5 minutes with `Authorization: Bearer <ADMIN_SECRET>`
 
 ---
 
@@ -190,8 +189,6 @@ Per-environment secrets, scoped to the matching GitHub Environment (`staging` no
 | Secret | Environment | Used by |
 |---|---|---|
 | `RENDER_DEPLOY_HOOK_URL` | `staging` | `deploy-staging.yml` |
-| `STAGING_API_BASE_URL` | `staging` | `notification-scheduler-staging.yml` |
-| `ADMIN_SECRET` | `staging` | `notification-scheduler-staging.yml` (must match the value set in Render's staging env vars) |
 | `RENDER_DEPLOY_HOOK_URL` | `production` *(when provisioned)* | `deploy-production.yml` |
 
 Note `release-staging.yml` / `release-production.yml` don't need extra secrets — they push to branches using the workflow's own `contents: write` permission.
@@ -240,7 +237,7 @@ WHERE schema_name IN ('public', 'sandbox');
 ```
 
 ### 4. Custom domain (optional but recommended before production)
-- [ ] Add custom domain in Render → service → Settings → Custom Domains (e.g. `staging-api.comprobify.com`)
+- [ ] Add custom domain in Render → service → Settings → Custom Domains (e.g. `api-staging.comprobify.com`)
 - [ ] Add CNAME record in Cloudflare DNS: type `CNAME`, name `staging-api`, target = Render hostname, **proxy off (gray cloud)** initially
 - [ ] Wait for Render to verify the domain and issue the TLS cert, then optionally enable Cloudflare proxy (orange cloud) — set Cloudflare SSL/TLS mode to **Full (strict)**
 - [ ] Update `APP_BASE_URL` in Render env vars to the custom domain URL
@@ -248,8 +245,6 @@ WHERE schema_name IN ('public', 'sandbox');
 
 ### 6. GitHub secrets
 - [ ] `RENDER_DEPLOY_HOOK_URL` → Render service → Settings → Deploy Hook → copy URL → GitHub environment secret
-- [ ] `STAGING_API_BASE_URL` (or `PRODUCTION_API_BASE_URL`) → GitHub environment secret
-- [ ] `ADMIN_SECRET` → GitHub environment secret (must match the value set in Render)
 - [ ] `RELEASE_PUSH_TOKEN` → GitHub repository secret (fine-grained PAT with `Contents: Read and write` on this repo)
 
 ### 7. Verify
