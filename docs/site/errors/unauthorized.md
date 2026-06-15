@@ -19,7 +19,6 @@ The API key is missing, malformed, invalid, or has been revoked.
 **What to do:**
 - Ensure the `Authorization` header is present and formatted correctly: `Bearer <api-key>`
 - Verify the key has not been revoked — mint a new one via `POST /v1/keys` if needed
-- Admin endpoints require the admin secret in `Authorization: Bearer <ADMIN_SECRET>`, not a regular API key
 
 ## Example responses
 

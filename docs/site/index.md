@@ -40,11 +40,7 @@ Authorization: Bearer <api-key>
 X-Issuer-Id: <issuer-id>
 ```
 
-Issuer-management and key-management endpoints need only the Bearer key. Admin endpoints use a separate secret:
-
-```
-Authorization: Bearer <admin-secret>
-```
+Issuer-management and key-management endpoints need only the Bearer key.
 
 See [Getting Started](getting-started.md) for details on the key model, multiple branches, and minting named keys per integration.
 

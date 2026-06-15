@@ -30,24 +30,7 @@ Creation, transmission, rebuild, and query services need zero changes.
 
 ---
 
-## 2. Outbound Webhook Notifications
-
-**Priority: Medium — important for client integrations**
-
-Client systems currently have to poll `GET /:key/authorize` to know when a document becomes `AUTHORIZED` or `RETURNED`. Webhooks push status changes instead.
-
-**What:**
-- `webhook_url` column on `issuers` (set via admin API)
-- `src/services/webhook.service.js` — `POST webhook_url` with `{ accessKey, status, previousStatus, timestamp }` signed with `HMAC-SHA256(WEBHOOK_SECRET, body)`
-- Called fire-and-forget after every `STATUS_CHANGED` event
-- Retry on failure (3 attempts, exponential backoff)
-- `WEBHOOK_DELIVERED` / `WEBHOOK_FAILED` event types — requires updating the `chk_document_events_event_type` CHECK constraint
-
-**Effort:** Medium — new migration, new service, update transmission service.
-
----
-
-## 3. Async Worker for SRI Submission
+## 2. Async Worker for SRI Submission
 
 **Priority: Medium — important for production reliability**
 
@@ -61,11 +44,11 @@ Client systems currently have to poll `GET /:key/authorize` to know when a docum
 - Worker also polls `RECEIVED` documents older than N minutes to check authorization
 - State machine and DB trigger must be updated to allow `SIGNED → PENDING_SEND`
 
-**Effort:** High — new worker process, new status, migration, state machine update. Pairs well with outbound webhooks (item 2) to notify clients of async results.
+**Effort:** High — new worker process, new status, migration, state machine update. Pairs well with webhook notifications to push async results to clients.
 
 ---
 
-## 4. Issuer Logo in Emails
+## 3. Issuer Logo in Emails
 
 **Priority: Low — cosmetic improvement**
 
@@ -79,7 +62,7 @@ The `logo_path` column exists on `issuers` but is not rendered in the authorizat
 
 ---
 
-## 5. Docker / Containerisation
+## 4. Docker / Containerisation
 
 **Priority: Low — depends on deployment target**
 
@@ -94,7 +77,7 @@ Not needed if deploying to a PaaS (Railway, Render, Fly.io). Useful for self-hos
 
 ---
 
-## 6. Dashboard Stats Endpoint
+## 5. Dashboard Stats Endpoint
 
 **Priority: Medium — needed for comprobify-web dashboard**
 
@@ -147,7 +130,7 @@ GROUP BY document_type
 
 ---
 
-## 7. API Key Usage Tracking
+## 6. API Key Usage Tracking
 
 **Priority: Medium — observability for named integrations**
 
@@ -169,7 +152,7 @@ Rate limiting is already per `keyHash` (in-memory, enforces throttling). But the
 - Audit trail: `created_at` + `last_used_at` + `request_count` per key tells the full lifecycle story
 
 **Notes:**
-- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 10) or an APM tool
+- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 9) or an APM tool
 - The background UPDATE is a single indexed write per request (`WHERE id = $1`); acceptable overhead for the observability gain
 - Per-issuer document volume is already derivable from `documents.issuer_id` — this adds the per-integration request-level dimension
 
@@ -177,7 +160,7 @@ Rate limiting is already per `keyHash` (in-memory, enforces throttling). But the
 
 ---
 
-## 8. Reporting
+## 7. Reporting
 
 **Priority: Low — depends on client requirements**
 
@@ -192,7 +175,7 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 ---
 
-## 9. Registration DoS Monitoring
+## 8. Registration DoS Monitoring
 
 **Priority: Low — risk mitigation**
 
@@ -209,7 +192,7 @@ The existing `registrationLimiter` (5 req/hour per IP) limits per-IP burst, but 
 
 ---
 
-## 10. Structured Request Logging
+## 9. Structured Request Logging
 
 **Priority: Medium — important for a B2B API where documents have legal weight**
 
@@ -231,7 +214,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 **Implementation:**
 1. Add `express-winston` (or a thin custom middleware) to emit one structured JSON log line per request after the response is sent — attach `tenantId`, `issuerId`, `keyHash` from `req` after `authenticate` runs
 2. Ship logs to **Datadog** or **Betterstack** (both have free tiers; Betterstack integrates in ~10 lines for Node)
-3. The item 7 `request_count` counter on `api_keys` still has value as a cheap "is this key alive" check without a log query — these two are complementary, not alternatives
+3. The item 6 `request_count` counter on `api_keys` still has value as a cheap "is this key alive" check without a log query — these two are complementary, not alternatives
 
 **Note:** log the `keyHash`, never the plaintext token. All sensitive fields (`encrypted_private_key`, cert PEM, passwords) must be excluded.
 
@@ -239,13 +222,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 
 ---
 
-## 11. Notification Scheduler Trigger
-
-**Status: Done** — cron-job.org job configured to `POST /v1/admin/jobs/notifications` every 5 minutes for staging. When production is provisioned, add a second cron-job.org job pointing at the production URL (see step 7 in the "Production status" section of `docs/deployment.md`).
-
----
-
-## 12. API Key Scopes
+## 10. API Key Scopes
 
 **Priority: Low — defer until first concrete use case**
 

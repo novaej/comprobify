@@ -1,6 +1,6 @@
 # Endpoints
 
-Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-Id: <issuer-id>`. Tenant settings, issuer management, and key management require only `Authorization: Bearer <api-key>`. Admin endpoints require `Authorization: Bearer <admin-secret>`. Registration and email verification are public.
+Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-Id: <issuer-id>`. Tenant settings, issuer management, and key management require only `Authorization: Bearer <api-key>`. Registration and email verification are public.
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
 
@@ -58,7 +58,7 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 
 ## Notifications (authenticated)
 
-Tenant-level alerts for document events and certificate status. Supply `X-Issuer-Id` to filter to a specific issuer; omit for an all-issuer admin view. Use `?sinceId=<id>` to efficiently poll only new notifications since your last request.
+Tenant-level alerts for document events and certificate status. Supply `X-Issuer-Id` to filter to a specific issuer; omit to receive notifications across all your issuers. Use `?sinceId=<id>` to efficiently poll only new notifications since your last request.
 
 | Method | Path | Description |
 |---|---|---|
@@ -77,22 +77,6 @@ Register HTTPS callback URLs to receive event notifications in near-real time.
 | `GET` | `/v1/webhooks` | List active webhook endpoints (secrets excluded) |
 | `PATCH` | `/v1/webhooks/:id` | Update URL, event subscriptions, or active flag |
 | `DELETE` | `/v1/webhooks/:id` | Deregister an endpoint (soft-delete) |
-
-## Admin
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/v1/admin/tenants` | Create tenant (manual onboarding, status ACTIVE) |
-| `GET` | `/v1/admin/tenants` | List all tenants |
-| `PATCH` | `/v1/admin/tenants/:id/tier` | Update tenant subscription tier |
-| `PATCH` | `/v1/admin/tenants/:id/status` | Activate or suspend a tenant |
-| `POST` | `/v1/admin/tenants/:id/verify` | Manually verify a tenant's email |
-| `POST` | `/v1/admin/tenants/:id/promote` | Promote a tenant to production (admin override — skips ACTIVE status check) |
-| `POST` | `/v1/admin/tenants/:id/api-keys` | Mint a tenant-scoped API key (admin) |
-| `POST` | `/v1/admin/issuers` | Create issuer for a tenant (requires `tenantId`). Does NOT return an API key — mint one via `/v1/admin/tenants/:id/api-keys`. |
-| `GET` | `/v1/admin/issuers` | List all issuers |
-| `DELETE` | `/v1/admin/api-keys/:id` | Revoke an API key |
-| `POST` | `/v1/admin/jobs/notifications` | Run cert-expiry checks for all tenants + process webhook retry queue |
 
 ## Monitoring
 
