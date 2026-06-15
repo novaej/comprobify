@@ -239,7 +239,7 @@ POST /v1/documents/:accessKey/send
 
 Submits the signed XML to the SRI. The document moves to `RECEIVED` or `RETURNED`.
 
-- **`RECEIVED`** — SRI accepted the document for processing. Proceed to step 6.
+- **`RECEIVED`** — SRI accepted the document for processing. Proceed to step 7.
 - **`RETURNED`** — SRI rejected the document (invalid data, schema error, etc.). Fix the issue and [rebuild](endpoints/rebuild-invoice.md) before resending.
 
 ---
