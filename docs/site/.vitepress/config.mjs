@@ -27,6 +27,7 @@ export default defineConfig({
             collapsed: false,
             items: [
               { text: 'Register', link: '/endpoints/register' },
+              { text: 'Verify Email', link: '/endpoints/verify-email' },
               { text: 'Resend Verification', link: '/endpoints/resend-verification' },
             ],
           },
