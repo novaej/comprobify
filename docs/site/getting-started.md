@@ -28,7 +28,6 @@ Content-Type: multipart/form-data
 | `businessName` | Legal company name as it appears on your RUC |
 | `branchCode` | 3-digit SRI branch code (e.g. `001` for the main branch) |
 | `issuePointCode` | 3-digit SRI issue point code (e.g. `001`) |
-| `environment` | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /v1/tenants/promote` to move to production. |
 | `emissionType` | SRI emission type: always `1` (normal) |
 | `requiredAccounting` | `true` if your company is required to keep accounting records (*obligado a llevar contabilidad*), `false` otherwise |
 | `cert` | Your `.p12` digital certificate file issued by the SRI CA (Banco Central or Security Data) |

@@ -91,7 +91,6 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
       mainAddress: sourceIssuer.main_address || null,
       branchCode: fields.branchCode,
       issuePointCode: fields.issuePointCode,
-      environment: sourceIssuer.environment,
       emissionType: sourceIssuer.emission_type,
       requiredAccounting: sourceIssuer.required_accounting,
       specialTaxpayer: sourceIssuer.special_taxpayer || null,

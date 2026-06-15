@@ -29,10 +29,6 @@ const register = [
     .matches(/^\d{3}$/)
     .withMessage('issuePointCode must be a 3-digit string'),
 
-  body('environment')
-    .isIn(['1', '2'])
-    .withMessage('environment must be 1 (test) or 2 (production)'),
-
   body('emissionType')
     .isIn(['1'])
     .withMessage('emissionType must be 1'),

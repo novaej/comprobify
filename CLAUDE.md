@@ -110,7 +110,7 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Rate limiting:** per-API-key request rate limits prevent abuse and quota exhaustion. Applied via `src/middleware/rate-limit.js` using `express-rate-limit`: 60 req/min on write endpoints (POST), 300 req/min on read endpoints (GET). Keyed by `req.keyHash` (SHA-256 token hash). Returns RFC 7807 `429 TOO_MANY_REQUESTS` response. Configurable via `RATE_LIMIT_WINDOW_MS` (default: 60000ms) and `RATE_LIMIT_MAX` (default: 60) env vars. See `docs/site/errors/too-many-requests.md` for client retry guidance.
 
-**Sandbox environment + SRI routing:** `APP_ENV` (`staging` | `production`) combined with `tenants.sandbox` (boolean, default `true`) controls which SRI SOAP endpoint is used and what `ambiente` digit is embedded in the access key and XML. `issuers` no longer has a `sandbox` column — `issuer.sandbox` in all service code is a virtual field set by `resolveIssuer` middleware (`req.issuer.sandbox = req.tenant.sandbox`).
+**Sandbox environment + SRI routing:** `APP_ENV` (`staging` | `production`) combined with `tenants.sandbox` (boolean, default `true`) controls which SRI SOAP endpoint is used and what `ambiente` digit is embedded in the access key and XML. `tenants.sandbox` is the **single source of truth** for a tenant's intended SRI environment — `true` means SRI test, `false` means eligible for SRI production (subject to the staging safety rail below). `issuers` no longer has an `environment` column (dropped in migration 049) — `issuer.sandbox` in all service code is a virtual field set by `resolveIssuer` middleware (`req.issuer.sandbox = req.tenant.sandbox`).
 
 | `APP_ENV`    | `tenant.sandbox = true` | `tenant.sandbox = false` |
 |---|---|---|
