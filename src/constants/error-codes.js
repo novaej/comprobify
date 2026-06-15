@@ -85,6 +85,10 @@ const ErrorCodes = Object.freeze({
   /** Webhook endpoint not found or belongs to a different tenant */
   WEBHOOK_ENDPOINT_NOT_FOUND: 'WEBHOOK_ENDPOINT_NOT_FOUND',
 
+  // --- File upload ---
+  /** Multipart file upload is malformed or contains an unexpected field */
+  INVALID_FILE_UPLOAD: 'INVALID_FILE_UPLOAD',
+
   // --- Infrastructure (internal errors) ---
   /** AES-GCM decryption failed — possible data corruption or wrong key */
   DECRYPTION_FAILED: 'DECRYPTION_FAILED',

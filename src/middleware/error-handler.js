@@ -1,4 +1,6 @@
+const multer = require('multer');
 const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 const config = require('../config');
 
 function buildTypeUrl(slug) {
@@ -8,6 +10,20 @@ function buildTypeUrl(slug) {
 }
 
 const errorHandler = (err, req, res, _next) => {
+  if (err instanceof multer.MulterError) {
+    return res
+      .set('Content-Type', 'application/problem+json')
+      .status(400)
+      .json({
+        type: buildTypeUrl('bad-request'),
+        title: 'Bad Request',
+        status: 400,
+        code: ErrorCodes.INVALID_FILE_UPLOAD,
+        detail: err.message,
+        instance: req.originalUrl,
+      });
+  }
+
   if (err instanceof AppError) {
     const body = {
       type: buildTypeUrl(err.typeSlug),
