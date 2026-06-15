@@ -47,7 +47,7 @@ async function sendInvoiceAuthorized(document) {
 async function sendVerificationEmail(email, token, redirectUrl = null, language = 'es') {
   const verificationUrl = redirectUrl
     ? `${redirectUrl}?token=${token}`
-    : `${config.appBaseUrl}/api/verify-email?token=${token}`;
+    : `${config.appBaseUrl}/v1/verify-email?token=${token}`;
   const { subject, text, html } = verifyEmailTemplate.render(verificationUrl, config.verificationTokenTtlHours, language);
   const provider = emailFactory.getProvider();
 
