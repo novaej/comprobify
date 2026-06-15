@@ -6,7 +6,7 @@ Import the full collection to test every endpoint directly from Postman — all 
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
 
-> **First time setup:** after importing, open the collection, go to **Variables**, and set `base_url`, `api_key`, and `admin_secret`. After creating an invoice, copy the returned `accessKey` into the `access_key` variable.
+> **First time setup:** after importing, open the collection, go to **Variables**, and set `base_url` and `api_key`. After creating an invoice, copy the returned `accessKey` into the `access_key` variable.
 
 You can also download the collection JSON directly: [`comprobify.postman_collection.json`](https://raw.githubusercontent.com/novaej/comprobify/main/postman/comprobify.postman_collection.json)
 
