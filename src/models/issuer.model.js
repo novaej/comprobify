@@ -15,19 +15,19 @@ async function findFirst() {
   return rows[0] || null;
 }
 
-async function create({ tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry }) {
+async function create({ tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry }) {
   const { rows } = await db.query(
-    `INSERT INTO issuers (tenant_id, ruc, business_name, trade_name, main_address, branch_code, issue_point_code, environment, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    `INSERT INTO issuers (tenant_id, ruc, business_name, trade_name, main_address, branch_code, issue_point_code, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING *`,
-    [tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, environment, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry]
+    [tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry]
   );
   return rows[0];
 }
 
 async function findAll() {
   const { rows } = await db.query(
-    `SELECT id, tenant_id, ruc, business_name, trade_name, environment, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active
+    `SELECT id, tenant_id, ruc, business_name, trade_name, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active
      FROM issuers
      ORDER BY id`
   );

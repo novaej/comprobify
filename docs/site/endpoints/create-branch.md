@@ -34,7 +34,7 @@ Write limiter — tier-dependent (10–300 req/min per API key).
 When no P12 file is uploaded, the following fields are copied from the source issuer (either the one named in `sourceIssuerId` or the tenant's first issuer):
 
 - `ruc`, `businessName`, `tradeName`, `mainAddress`
-- `environment`, `emissionType`, `requiredAccounting`, `specialTaxpayer`
+- `emissionType`, `requiredAccounting`, `specialTaxpayer`
 - Certificate data (`encryptedPrivateKey`, `certificatePem`, `certFingerprint`, `certExpiry`)
 
 ### Tier limits
