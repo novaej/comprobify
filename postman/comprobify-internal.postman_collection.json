@@ -143,13 +143,6 @@
                   "src": ""
                 },
                 {
-                  "key": "environment",
-                  "value": "1",
-                  "description": "Deprecated — ignored. All new accounts start in sandbox. Use POST /v1/tenants/promote to move to production.",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
                   "key": "specialTaxpayer",
                   "value": "",
                   "description": "Optional special taxpayer resolution number",
@@ -167,6 +160,13 @@
                   "key": "documentTypes",
                   "value": "[\"01\"]",
                   "description": "Optional. Document type codes to enable (default: [\"01\"])",
+                  "type": "text",
+                  "disabled": true
+                },
+                {
+                  "key": "initialSequentials",
+                  "value": "[{\"documentType\": \"01\", \"sequential\": 1}]",
+                  "description": "Optional. Starting sequential numbers per document type. Any type not listed defaults to 1.",
                   "type": "text",
                   "disabled": true
                 },
@@ -1108,8 +1108,13 @@
             ],
             "url": {
               "raw": "{{base_url}}/v1/notifications",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "notifications"],
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "notifications"
+              ],
               "query": [
                 {
                   "key": "sinceId",
@@ -1129,8 +1134,15 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/v1/notifications/{{notification_id}}/read",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "notifications", "{{notification_id}}", "read"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "{{notification_id}}",
+                "read"
+              ]
             },
             "description": "Marks a notification as read at the tenant level. Call this only when every user with access to the notification has acknowledged it on the frontend side. After this call, the notification no longer contributes to `unreadCount` on future polls.\n\nCopy a notification `id` from the List Notifications response into the `notification_id` variable."
           }
@@ -1142,8 +1154,14 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/v1/notifications/preferences",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "notifications", "preferences"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "preferences"
+              ]
             },
             "description": "Returns the full notification preference list for the tenant — one entry per notification type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model)."
           }
@@ -1160,8 +1178,14 @@
             ],
             "url": {
               "raw": "{{base_url}}/v1/notifications/preferences",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "notifications", "preferences"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "notifications",
+                "preferences"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1203,8 +1227,13 @@
             ],
             "url": {
               "raw": "{{base_url}}/v1/webhooks",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "webhooks"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "webhooks"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1225,8 +1254,13 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/v1/webhooks",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "webhooks"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "webhooks"
+              ]
             },
             "description": "Returns all active webhook endpoints for the tenant. Signing secrets are never included in list responses."
           }
@@ -1243,8 +1277,14 @@
             ],
             "url": {
               "raw": "{{base_url}}/v1/webhooks/{{webhook_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "webhooks", "{{webhook_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "webhooks",
+                "{{webhook_id}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -1265,8 +1305,14 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/v1/webhooks/{{webhook_id}}",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "webhooks", "{{webhook_id}}"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "webhooks",
+                "{{webhook_id}}"
+              ]
             },
             "description": "Soft-deletes a webhook endpoint (`active = false`). The endpoint stops receiving deliveries immediately. Past delivery records are preserved for audit purposes.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
           }
@@ -1759,8 +1805,15 @@
             "header": [],
             "url": {
               "raw": "{{base_url}}/v1/admin/jobs/notifications",
-              "host": ["{{base_url}}"],
-              "path": ["v1", "admin", "jobs", "notifications"]
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "jobs",
+                "notifications"
+              ]
             },
             "description": "Runs all periodic notification jobs across every non-suspended tenant:\n\n1. **Certificate expiry checks** — inspects `cert_expiry` for every active issuer and upserts `CERT_EXPIRING` / `CERT_EXPIRED` alerts. Auto-dismisses alerts when a cert has been renewed (> 30 days remaining).\n\n2. **Webhook retry queue** — retries all `RETRYING` webhook deliveries past their scheduled `next_retry_at` time.\n\nThis endpoint is designed to be called by an external scheduler (cron, infrastructure job) on a regular interval — every 5 minutes is a reasonable default. The job is **idempotent**: running it multiple times is safe.\n\nResponse includes `tenantsChecked` and a `retries` breakdown (`attempted`, `succeeded`, `failed`, `exhausted`)."
           }

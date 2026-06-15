@@ -29,15 +29,31 @@ Shared with `POST /v1/resend-verification` — 5 requests per hour per IP.
 | `mainAddress` | string | No | Main address |
 | `branchCode` | string | Yes | 3-digit branch code, e.g. `001` |
 | `issuePointCode` | string | Yes | 3-digit issue point code, e.g. `001` |
-| `environment` | string | No | (Deprecated — ignored) Historically controlled SRI environment. All new accounts start in sandbox; use `POST /v1/tenants/promote` to move to production. |
 | `emissionType` | string | Yes | `1` (normal emission) |
 | `requiredAccounting` | boolean | Yes | Whether the business is required to keep accounting |
 | `specialTaxpayer` | string | No | Special taxpayer code |
 | `branchAddress` | string | No | Branch address |
 | `documentTypes` | array | No | Document type codes to enable (default: `["01"]`). Must be supported types. |
-| `initialSequentials` | array | No | (Deprecated — ignored at registration) Starting sequential numbers per document type to use at promotion time. Pass these to `POST /v1/tenants/promote` instead. |
+| `initialSequentials` | array | No | Starting sequential numbers per document type. Any type not listed defaults to `1`. See structure below. |
 | `language` | string | No | Language for outgoing emails. Supported: `es` (default), `en`. Stored on the tenant and used for all subsequent emails including resends. |
 | `verificationRedirectUrl` | string | No | Frontend URL where the verification link in the email will point. The token is appended as `?token=<token>`. If omitted, the link goes directly to the API's verify endpoint. |
+
+### `initialSequentials` structure
+
+Each entry sets the first sequential number that will be issued for a given document type on this issuer. Useful when migrating from another system and you need continuity.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `documentType` | string | Yes | Document type code, e.g. `"01"` |
+| `sequential` | integer | Yes | Next sequential number to issue (≥ 1) |
+
+```json
+{
+  "initialSequentials": [
+    { "documentType": "01", "sequential": 500 }
+  ]
+}
+```
 
 ### `verificationRedirectUrl` behaviour
 
