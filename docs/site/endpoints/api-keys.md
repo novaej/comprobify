@@ -127,13 +127,13 @@ Marks the key as inactive. The key cannot be used to authenticate any future req
 
 ## Key environment + targeted issuer
 
-When a key is used on a document request, the `resolveIssuer` middleware validates that the key's `environment` matches the targeted issuer's environment:
+When a key is used on a document request, the `resolveIssuer` middleware validates that the key's `environment` matches the targeted issuer's effective environment. The `sandbox` flag lives on the **tenant** — `resolveIssuer` reads `tenant.sandbox` and rejects any key/issuer mismatch:
 
-| Key environment | Issuer `sandbox` | Result |
+| Key environment | Tenant `sandbox` | Result |
 |---|---|---|
 | `sandbox` | `true` | OK |
-| `sandbox` | `false` | `401` — sandbox key cannot address a production issuer |
-| `production` | `true` | `401` — production key cannot address a sandbox issuer |
+| `sandbox` | `false` | `401` — sandbox key cannot address a production tenant |
+| `production` | `true` | `401` — production key cannot address a sandbox tenant |
 | `production` | `false` | OK |
 
 This is the only safeguard preventing accidental cross-environment requests; treat the environment as part of the key's identity, like Stripe's `sk_test_…` vs `sk_live_…` convention.
