@@ -40,7 +40,7 @@ async function create(body, idempotencyKey = null, issuer) {
   const payloadHash = idempotencyKey ? hashPayload(body) : null;
 
   const documentType = body.documentType;
-  const issueDate = body.issueDate || moment().format('DD/MM/YYYY');
+  const issueDate = body.issueDate || moment().utcOffset(-5).format('DD/MM/YYYY');
 
   const allowedTypes = await issuerDocumentTypeModel.findActiveByIssuerId(issuer.id);
   if (!allowedTypes.includes(documentType)) {
