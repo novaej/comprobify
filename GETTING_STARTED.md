@@ -416,6 +416,42 @@ curl -s http://localhost:8080/api/documents/$ACCESS_KEY/events \
 
 ---
 
+## Testing the Docker image locally
+
+The normal local workflow is `npm start`. Use this section only when you need to verify that the Docker image itself builds and runs correctly — for example, after modifying the `Dockerfile`.
+
+**Prerequisites:** Docker Desktop (or Docker Engine) installed and running.
+
+### Build and run
+
+```bash
+# Build the image
+docker build -t comprobify .
+
+# Run it, injecting your local .env
+docker run --env-file .env -p 8080:8080 comprobify
+```
+
+The API is available at **http://localhost:8080** — same as `npm start`.
+
+> **Database connectivity:** the container connects to your database over the network using the `DB_HOST` value in `.env`. If your local PostgreSQL is not accessible from inside Docker (e.g. `DB_HOST=localhost`), change it to `host.docker.internal` temporarily so the container can reach the host machine's PostgreSQL.
+
+### Verify xmllint is present
+
+```bash
+docker run --rm comprobify which xmllint
+# → /usr/bin/xmllint
+```
+
+### Clean up
+
+```bash
+docker rm -f $(docker ps -aq --filter ancestor=comprobify)
+docker rmi comprobify
+```
+
+---
+
 ## Reset the database (dev only)
 
 To wipe all data and start fresh:

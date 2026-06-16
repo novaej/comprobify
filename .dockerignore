@@ -1,0 +1,7 @@
+node_modules
+.env
+.env.*
+docs
+*.md
+.git
+.gitignore

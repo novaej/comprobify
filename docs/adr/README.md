@@ -100,3 +100,4 @@ YYYY-MM-DD
 | [013](013-tenant-scoped-api-keys.md) | Tenant-Scoped API Keys with Per-Request Issuer Header | Accepted | 2026-05-11 |
 | [014](014-tenant-level-environment.md) | Tenant-Level Environment (sandbox vs production) | Accepted | 2026-05-12 |
 | [015](015-notifications.md) | Notification and Webhook System | Accepted | 2026-05-31 |
+| [016](016-dockerfile-deployment.md) | Dockerfile for Production Deployment | Accepted | 2026-06-16 |
