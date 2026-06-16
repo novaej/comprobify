@@ -50,6 +50,9 @@ The original payload is available in the `requestPayload` field on the [Get Docu
 | Code | Status | When |
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | Request body fails field validation |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key |
-| `NOT_FOUND` | 404 | Document not found |
+| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
 | `BAD_REQUEST` | 400 | Document is not in `RETURNED` or `NOT_AUTHORIZED` status |
+| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
+| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
+| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
+| `NOT_FOUND` | 404 | Document not found |

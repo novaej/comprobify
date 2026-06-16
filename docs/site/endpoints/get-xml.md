@@ -32,5 +32,8 @@ Content-Disposition: attachment; filename="<accessKey>.xml"
 
 | Code | Status | When |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | Missing or invalid API key |
+| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
+| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
+| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
+| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
 | `NOT_FOUND` | 404 | Document not found |

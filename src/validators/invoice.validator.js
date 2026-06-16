@@ -14,7 +14,7 @@ const createInvoice = [
     .withMessage('Issue date must be in DD/MM/YYYY format')
     .bail()
     .custom((value) => {
-      if (value !== moment().format('DD/MM/YYYY')) {
+      if (value !== moment().utcOffset(-5).format('DD/MM/YYYY')) {
         throw new Error('Issue date must be today — SRI rejects past and future dates');
       }
       return true;

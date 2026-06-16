@@ -56,5 +56,8 @@ GET /v1/documents
 
 | Code | Status | When |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | Missing or invalid API key |
+| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
 | `VALIDATION_FAILED` | 400 | Invalid query parameter (e.g., invalid status, invalid date format) |
+| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
+| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
+| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
