@@ -59,7 +59,7 @@ async function processEvent(body) {
 
   const document = await documentModel.findByEmailMessageId(messageId);
   if (document) {
-    await processDocumentEvent(document, event, recipient, severity);
+    await processDocumentEvent(document, event, recipient, severity, document.sandbox);
     return;
   }
 
@@ -69,25 +69,25 @@ async function processEvent(body) {
   }
 }
 
-async function processDocumentEvent(document, event, recipient, severity) {
+async function processDocumentEvent(document, event, recipient, severity, sandbox = false) {
   if (event === 'delivered') {
-    await documentModel.updateEmailStatus(document.id, EmailStatus.DELIVERED);
-    await documentEventModel.create(document.id, EventType.EMAIL_DELIVERED, null, null, { to: recipient });
+    await documentModel.updateEmailStatus(document.id, EmailStatus.DELIVERED, sandbox);
+    await documentEventModel.create(document.id, EventType.EMAIL_DELIVERED, null, null, { to: recipient }, null, null, sandbox);
     return;
   }
 
   if (event === 'complained') {
-    await documentModel.updateEmailStatus(document.id, EmailStatus.COMPLAINED);
-    await documentEventModel.create(document.id, EventType.EMAIL_COMPLAINED, null, null, { to: recipient });
+    await documentModel.updateEmailStatus(document.id, EmailStatus.COMPLAINED, sandbox);
+    await documentEventModel.create(document.id, EventType.EMAIL_COMPLAINED, null, null, { to: recipient }, null, null, sandbox);
     return;
   }
 
   // event === 'failed'
   if (severity === 'temporary') {
-    await documentEventModel.create(document.id, EventType.EMAIL_TEMP_FAILED, null, null, { to: recipient, severity });
+    await documentEventModel.create(document.id, EventType.EMAIL_TEMP_FAILED, null, null, { to: recipient, severity }, null, null, sandbox);
   } else {
-    await documentModel.updateEmailStatus(document.id, EmailStatus.FAILED);
-    await documentEventModel.create(document.id, EventType.EMAIL_FAILED, null, null, { to: recipient, severity });
+    await documentModel.updateEmailStatus(document.id, EmailStatus.FAILED, sandbox);
+    await documentEventModel.create(document.id, EventType.EMAIL_FAILED, null, null, { to: recipient, severity }, null, null, sandbox);
   }
 }
 
