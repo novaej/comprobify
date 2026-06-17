@@ -61,7 +61,8 @@ async function updateStatus(id, status, extraFields = {}, issuerId = null, sandb
     idx++;
   }
 
-  const sql = `UPDATE documents SET ${sets.join(', ')} WHERE id = $1 RETURNING *`;
+  const schema = sandbox ? 'sandbox' : 'public';
+  const sql = `UPDATE ${schema}.documents SET ${sets.join(', ')} WHERE id = $1 RETURNING *`;
 
   const { rows } = issuerId != null
     ? await db.queryAsIssuer(issuerId, sql, params, sandbox)
