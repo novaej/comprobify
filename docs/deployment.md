@@ -135,7 +135,7 @@ git push origin main
 1. **Tag pushed** (`vX.Y.Z`) — `release-staging.yml` checks out the tag and fast-forward-merges `staging` to it, then pushes
 2. **Push to `staging`** — `deploy-staging.yml` calls the `RENDER_DEPLOY_HOOK_URL` for `comprobify-staging`
 
-Render handles the rest: installs dependencies (`npm ci`), runs the start command (`npm start`), and applies database migrations (`npm run migrate`) as part of the deploy.
+Render handles the rest: builds the Docker image (which installs `libxml2-utils` and runs `npm ci --omit=dev`), then starts the container. Migrations run automatically at startup — `app.js` calls `migrate()` before the server begins accepting requests.
 
 ### Production status
 
@@ -197,7 +197,7 @@ Note `release-staging.yml` / `release-production.yml` don't need extra secrets �
 
 - `comprobify-staging` web service already exists, linked to the `staging` branch via deploy hook
 - When ready: create `comprobify-production` (its own web service + paid Postgres instance for backups/PITR), with independent env vars and secrets from staging — see "Production status" above
-- Configure migrations (`npm run migrate`) to run as part of every deploy on both services
+- Migrations run automatically at startup via `app.js` — no separate deploy step needed
 
 ---
 
@@ -218,8 +218,8 @@ ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO comprobify_app;
 ### 2. Render service
 - [ ] Set all required env vars before first deploy (see Environment variables table below) — `APP_ENV`, `APP_BASE_URL`, `DB_*`, `ENCRYPTION_KEY`, `ADMIN_SECRET`, `EMAIL_PROVIDER=none`
 - [ ] `APP_BASE_URL` matches the actual Render URL (update after Render assigns one)
-- [ ] Build command: `npm ci`, Start command: `npm start`
-- [ ] Confirm first deploy succeeds and all migrations are listed as applied in the build log
+- [ ] Runtime: Docker (Render auto-detects the `Dockerfile` in the repo root)
+- [ ] Confirm first deploy succeeds and all migrations are listed as applied in the startup log
 
 ### 3. Sandbox schema grants
 After migrations run, migration 033 creates the `sandbox` schema. Grant access in Neon's SQL Editor:
@@ -331,12 +331,14 @@ The SRI endpoint is determined at runtime by combining the `APP_ENV` variable wi
 
 Migrations are cumulative SQL files in `db/migrations/`, run by `db/migrate.js`.
 
-**Apply migrations:**
+**On deployed environments:** migrations run automatically at startup — `app.js` calls `migrate()` before the server begins accepting requests. Every deploy applies any pending migrations with no manual step required.
+
+**Locally:**
 ```bash
 npm run migrate
 ```
 
-The runner tracks applied migrations in a `migrations` table — already-applied files are skipped. It is safe to run on every deploy.
+The runner tracks applied migrations in a `migrations` table — already-applied files are skipped. It is safe to run on every startup.
 
 **Never modify an applied migration file.** Create a new numbered file instead.
 
