@@ -162,6 +162,8 @@ npm install
 npm run migrate
 ```
 
+> **Migrations run automatically on every startup** — `app.js` calls the migrator before the server starts, both locally and on deployed environments. Already-applied migrations are skipped, so it is safe to run on every boot. You only need to run this manually if you want to apply migrations without starting the server.
+
 This applies all 33 migrations, creating tables: `issuers`, `api_keys`, `documents`, `sequential_numbers`, `sri_responses`, `document_line_items`, `document_events`, and the catalog tables (`cat_document_types`, `cat_emission_types`, `cat_id_types`, `cat_tax_types`, `cat_tax_rates`, `cat_payment_methods`). It also installs two PostgreSQL triggers for document state machine and immutability enforcement, enables Row-Level Security on all tenant-scoped tables, and creates the `sandbox` schema (an identical copy of the tenant-scoped tables for test documents). Already-applied migrations are skipped automatically.
 
 > **After migrating — grant sandbox schema access:** migration 033 creates the `sandbox` schema. If the migration runner connects as `comprobify_app` (recommended), `comprobify_app` owns the schema and no extra grants are needed. If you ran migrations as a superuser (`postgres`), grant access manually:
