@@ -1,9 +1,8 @@
 const db = require('../config/database');
 
-async function bulkCreate(documentId, items, client) {
+async function bulkCreate(documentId, items, client, sandbox = false) {
   if (!items || items.length === 0) return [];
 
-  const q = client || db;
   const COLS_PER_ROW = 10;
   const values = [];
   const placeholders = [];
@@ -35,8 +34,10 @@ async function bulkCreate(documentId, items, client) {
     );
   });
 
+  const q = client || db;
+  const schema = client ? '' : (sandbox ? 'sandbox.' : 'public.');
   const { rows } = await q.query(
-    `INSERT INTO document_line_items
+    `INSERT INTO ${schema}document_line_items
       (document_id, main_code, aux_code, description, quantity, unit_price, discount, subtotal, taxes, line_total)
      VALUES ${placeholders.join(', ')}
      RETURNING *`,
