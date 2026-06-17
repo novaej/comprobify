@@ -9,13 +9,17 @@ const EmailStatus = require('../constants/email-status');
  * Normalises Mailgun webhook payload across v3 and legacy formats.
  * Returns { event, messageId, recipient, severity } or null if unrecognised.
  */
+function stripAngleBrackets(id) {
+  return id ? id.replace(/^<|>$/g, '') : id;
+}
+
 function normalisePayload(body) {
   // v3 format: { 'event-data': { event, message: { headers: { 'message-id': ... } }, recipient, severity } }
   if (body['event-data']) {
     const data = body['event-data'];
     return {
       event:     data.event,
-      messageId: data.message && data.message.headers && data.message.headers['message-id'],
+      messageId: stripAngleBrackets(data.message && data.message.headers && data.message.headers['message-id']),
       recipient: data.recipient,
       severity:  data.severity,
     };
@@ -24,7 +28,7 @@ function normalisePayload(body) {
   // Legacy format: { event, 'message-id': ..., recipient, severity }
   return {
     event:     body.event,
-    messageId: body['message-id'],
+    messageId: stripAngleBrackets(body['message-id']),
     recipient: body.recipient,
     severity:  body.severity,
   };
