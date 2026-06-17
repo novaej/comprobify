@@ -1,7 +1,8 @@
 const db = require('../config/database');
 
 async function create(documentId, eventType, fromStatus, toStatus, detail, client, issuerId = null, sandbox = false) {
-  const sql = `INSERT INTO document_events (document_id, event_type, from_status, to_status, detail)
+  const schema = sandbox ? 'sandbox' : 'public';
+  const sql = `INSERT INTO ${schema}.document_events (document_id, event_type, from_status, to_status, detail)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING *`;
   const params = [documentId, eventType, fromStatus || null, toStatus || null, detail ? JSON.stringify(detail) : null];

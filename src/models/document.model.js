@@ -88,15 +88,19 @@ async function findByIdempotencyKey(key, issuerId = null, sandbox = false) {
 
 async function findByEmailMessageId(messageId) {
   const { rows } = await db.query(
-    'SELECT * FROM documents WHERE email_message_id = $1',
+    `SELECT *, false AS sandbox FROM public.documents WHERE email_message_id = $1
+     UNION ALL
+     SELECT *, true AS sandbox FROM sandbox.documents WHERE email_message_id = $1
+     LIMIT 1`,
     [messageId]
   );
   return rows[0] || null;
 }
 
-async function updateEmailStatus(id, emailStatus) {
+async function updateEmailStatus(id, emailStatus, sandbox = false) {
+  const schema = sandbox ? 'sandbox' : 'public';
   const { rows } = await db.query(
-    `UPDATE documents SET email_status = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+    `UPDATE ${schema}.documents SET email_status = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
     [id, emailStatus]
   );
   return rows[0] || null;
