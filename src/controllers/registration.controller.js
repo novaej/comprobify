@@ -1,7 +1,8 @@
 const registrationService = require('../services/registration.service');
 
 const register = async (req, res) => {
-  const result = await registrationService.register(req.body, req.file?.buffer, req.body.certPassword);
+  const logoBuffer = req.files?.logo?.[0]?.buffer || null;
+  const result = await registrationService.register(req.body, req.file?.buffer, req.body.certPassword, logoBuffer);
   const { tenant, issuer, apiKey, recovered } = result;
   res.status(recovered ? 200 : 201).json({ ok: true, tenant, issuer, apiKey });
 };

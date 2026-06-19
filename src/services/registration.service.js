@@ -31,7 +31,7 @@ function formatTenant(row) {
   };
 }
 
-async function register(fields, p12Buffer, p12Password) {
+async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   const existing = await tenantModel.findByEmail(fields.email);
   if (existing) {
     if (existing.status === TenantStatus.SUSPENDED) {
@@ -108,6 +108,7 @@ async function register(fields, p12Buffer, p12Password) {
       certificatePem: parsed.certPem,
       certFingerprint: parsed.certFingerprint,
       certExpiry: parsed.certExpiry,
+      logo: logoBuffer,
     });
   } catch (err) {
     if (err.code === '23505') {

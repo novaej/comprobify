@@ -101,4 +101,14 @@ const list = async (req, res) => {
   res.json({ ok: true, issuers });
 };
 
-module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType };
+const uploadLogo = async (req, res) => {
+  const issuer = await loadOwnedIssuer(req);
+  if (!req.file) {
+    throw new AppError('A logo image file is required', 400, ErrorCodes.INVALID_FILE_UPLOAD);
+  }
+  const updated = await issuerModel.updateLogo(issuer.id, req.tenant.id, req.file.buffer);
+  if (!updated) throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
+  res.json({ ok: true });
+};
+
+module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType, uploadLogo };

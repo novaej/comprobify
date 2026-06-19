@@ -65,7 +65,7 @@ async function generate(accessKeyOrDocument, issuerOverride = null) {
     branchAddress: issuer.branch_address || null,
     specialTaxpayer: issuer.special_taxpayer || null,
     requiredAccounting: issuer.required_accounting || null,
-    logoPath: issuer.logo_path || null,
+    logoBuffer: issuer.logo || null,
     branchCode: issuer.branch_code,
     issuePointCode: issuer.issue_point_code,
     emissionType: issuer.emission_type,

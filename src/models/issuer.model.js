@@ -15,14 +15,22 @@ async function findFirst() {
   return rows[0] || null;
 }
 
-async function create({ tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry }) {
+async function create({ tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, logo = null }) {
   const { rows } = await db.query(
-    `INSERT INTO issuers (tenant_id, ruc, business_name, trade_name, main_address, branch_code, issue_point_code, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    `INSERT INTO issuers (tenant_id, ruc, business_name, trade_name, main_address, branch_code, issue_point_code, emission_type, required_accounting, special_taxpayer, branch_address, encrypted_private_key, certificate_pem, cert_fingerprint, cert_expiry, logo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING *`,
-    [tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry]
+    [tenantId, ruc, businessName, tradeName, mainAddress, branchCode, issuePointCode, emissionType, requiredAccounting, specialTaxpayer, branchAddress, encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, logo]
   );
   return rows[0];
+}
+
+async function updateLogo(issuerId, tenantId, logoBuffer) {
+  const { rows } = await db.query(
+    'UPDATE issuers SET logo = $1 WHERE id = $2 AND tenant_id = $3 AND active = true RETURNING id',
+    [logoBuffer, issuerId, tenantId]
+  );
+  return rows[0] || null;
 }
 
 async function findAll() {
@@ -52,4 +60,4 @@ async function findAllByTenantId(tenantId) {
   return rows;
 }
 
-module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll };
+module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo };
