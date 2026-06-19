@@ -8,8 +8,22 @@ const authenticate = require('../middleware/authenticate');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_TYPES } = require('../builders');
 const v = require('../validators/issuer.validator');
+const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 
 const upload = multer({ storage: multer.memoryStorage() });
+
+const LOGO_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif']);
+const uploadLogo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!LOGO_MIME_TYPES.has(file.mimetype)) {
+      return cb(new AppError('Logo must be a PNG, JPEG, or GIF image', 400, ErrorCodes.INVALID_FILE_UPLOAD));
+    }
+    cb(null, true);
+  },
+});
 
 const router = Router();
 
@@ -37,8 +51,18 @@ const removeDocumentTypeValidator = [
 router.get('/', readLimiter, asyncHandler(controller.list));
 router.post('/', writeLimiter, upload.single('cert'), v.createBranch, validateRequest, asyncHandler(controller.createBranch));
 
+const handleLogoUpload = (req, res, next) => {
+  uploadLogo.single('logo')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      return next(new AppError(err.message, 400, ErrorCodes.INVALID_FILE_UPLOAD));
+    }
+    next(err);
+  });
+};
+
 // Single-issuer operations (issuer id in URL; ownership verified in controller)
 router.get('/:id', readLimiter, idParam, validateRequest, asyncHandler(controller.getById));
+router.patch('/:id/logo', writeLimiter, idParam, validateRequest, handleLogoUpload, asyncHandler(controller.uploadLogo));
 router.get('/:id/document-types', readLimiter, idParam, validateRequest, asyncHandler(controller.listDocumentTypes));
 router.post('/:id/document-types', writeLimiter, idParam, addDocumentTypeValidator, validateRequest, asyncHandler(controller.addDocumentType));
 router.delete('/:id/document-types/:code', writeLimiter, idParam, removeDocumentTypeValidator, validateRequest, asyncHandler(controller.removeDocumentType));

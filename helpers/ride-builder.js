@@ -1,6 +1,5 @@
 'use strict';
 
-const fs  = require('fs');
 const PDFDocument = require('pdfkit');
 const bwipjs      = require('bwip-js');
 const moment      = require('moment');
@@ -120,12 +119,10 @@ async function drawHeader(doc, data, y) {
     let ly = y + P;
 
     // Logo
-    if (data.logoPath) {
+    if (data.logoBuffer) {
       try {
-        if (fs.existsSync(data.logoPath)) {
-          doc.image(data.logoPath, lx + P, ly, { fit: [lw, 60] });
-          ly += 64;
-        }
+        doc.image(data.logoBuffer, lx + P, ly, { fit: [lw, 60] });
+        ly += 64;
       } catch { /* unreadable — skip */ }
     }
 
@@ -485,6 +482,7 @@ function drawBottomSection(doc, data, y) {
        { size: 7, align: 'right' });
     ly += rh;
   });
+  hline(doc, lx, ly, LEFT_W, C_DARK);
 
   // ── Right: Tax totals ─────────────────────────────────────────────────────
   let ry = y;

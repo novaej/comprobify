@@ -26,6 +26,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `GET` | `/v1/issuers` | List all active issuers (branches / issue points) for the tenant |
 | `POST` | `/v1/issuers` | Create a new branch or issue point — inherits cert from an existing issuer of the tenant. Does NOT mint a new API key. |
 | `GET` | `/v1/issuers/:id` | Get a single issuer's profile (name, RUC, cert expiry) |
+| `PATCH` | `/v1/issuers/:id/logo` | Upload or replace the issuer logo shown in RIDE PDFs (PNG/JPEG/GIF, max 500 KB) |
 | `GET` | `/v1/issuers/:id/document-types` | List active document types for the issuer |
 | `POST` | `/v1/issuers/:id/document-types` | Enable a document type for the issuer |
 | `DELETE` | `/v1/issuers/:id/document-types/:code` | Disable a document type for the issuer |

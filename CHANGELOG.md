@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Issuer logo on RIDE PDFs** — issuers can now upload a company logo that renders in the top-left corner of every RIDE PDF (including email attachments). Logo is stored as `BYTEA` in `issuers.logo` (migration 050, replaces the unused `logo_path` column). Two ways to set it:
+  - `POST /v1/register` — optional `logo` file field (PNG, JPEG, or GIF; max 500 KB) in the registration `multipart/form-data` request.
+  - `PATCH /v1/issuers/:id/logo` — new authenticated endpoint to upload or replace the logo for an existing issuer.
+
+### Fixed
+- **RIDE PDF "Forma de pago" section missing bottom border** — the last payment row had no closing line. The outer `strokeBox` only provided the overall section border; individual rows drew an `hline` at their top but not their bottom. A closing `hline` is now drawn after the last payment row.
+
 ### Changed (BREAKING)
 - **Route prefix changed from `/api` to `/v1`** — all endpoints are now served under `/v1/` (e.g. `POST /v1/documents`). Update all client `base_url` values. Base URL: `https://api.comprobify.com/v1`.
 - **Docs migrated to Cloudflare Pages** — public API documentation is now at `https://docs.comprobify.com` (previously `https://novaej.github.io/comprobify`). The RFC 7807 `type` URL in all error responses now points to the new domain when `DOCS_BASE_URL` is set.
