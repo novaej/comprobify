@@ -9,7 +9,7 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'authorization_xml', 'authorization_number', 'authorization_date',
   // Rebuild data — updated only when transitioning back to SIGNED
   'unsigned_xml', 'signed_xml', 'request_payload', 'subtotal', 'total',
-  'buyer_id', 'buyer_name', 'buyer_id_type',
+  'buyer_id', 'buyer_name', 'buyer_id_type', 'buyer_email',
 ]);
 
 async function create({ issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload, buyerEmail, idempotencyKey, payloadHash }, client) {
@@ -44,7 +44,7 @@ async function findById(id) {
   return rows[0] || null;
 }
 
-async function updateStatus(id, status, extraFields = {}, issuerId = null, sandbox = false) {
+async function updateStatus(id, status, extraFields = {}, issuerId = null, sandbox = false, client = null) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
       throw new Error(`updateStatus: unknown column "${col}"`);
@@ -64,9 +64,14 @@ async function updateStatus(id, status, extraFields = {}, issuerId = null, sandb
   const schema = sandbox ? 'sandbox' : 'public';
   const sql = `UPDATE ${schema}.documents SET ${sets.join(', ')} WHERE id = $1 RETURNING *`;
 
-  const { rows } = issuerId != null
-    ? await db.queryAsIssuer(issuerId, sql, params, sandbox)
-    : await db.query(sql, params);
+  let rows;
+  if (client) {
+    ({ rows } = await client.query(sql, params));
+  } else if (issuerId != null) {
+    ({ rows } = await db.queryAsIssuer(issuerId, sql, params, sandbox));
+  } else {
+    ({ rows } = await db.query(sql, params));
+  }
   return rows[0] || null;
 }
 
