@@ -47,4 +47,8 @@ async function bulkCreate(documentId, items, client, sandbox = false) {
   return rows;
 }
 
-module.exports = { bulkCreate };
+async function deleteByDocumentId(documentId, client) {
+  await client.query('DELETE FROM document_line_items WHERE document_id = $1', [documentId]);
+}
+
+module.exports = { bulkCreate, deleteByDocumentId };

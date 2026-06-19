@@ -1,6 +1,8 @@
 const moment = require('moment');
 const config = require('../config');
+const db = require('../config/database');
 const documentModel = require('../models/document.model');
+const documentLineItemModel = require('../models/document-line-item.model');
 const documentEventModel = require('../models/document-event.model');
 const signingService = require('./signing.service');
 const xmlValidator = require('./xml-validator.service');
@@ -45,18 +47,37 @@ async function rebuild(accessKey, body, issuer) {
 
   const signedXml = signingService.signXml(unsignedXml, issuer.encrypted_private_key, issuer.certificate_pem);
 
-  const updated = await documentModel.updateStatus(document.id, DocumentStatus.SIGNED, {
-    unsigned_xml: unsignedXml,
-    signed_xml: signedXml,
-    request_payload: JSON.stringify(body),
-    subtotal: builder.subtotal,
-    total: builder.total,
-    buyer_id: body.buyer.id,
-    buyer_name: body.buyer.name,
-    buyer_id_type: body.buyer.idType,
-  }, issuer.id, issuer.sandbox);
+  const fromStatus = document.status;
+  const client = await db.getClient();
+  let updated;
+  try {
+    await client.query('BEGIN');
+    await db.setIssuerContext(client, issuer.id, issuer.sandbox);
 
-  await documentEventModel.create(document.id, EventType.REBUILT, document.status, DocumentStatus.SIGNED, {}, null, issuer.id, issuer.sandbox);
+    updated = await documentModel.updateStatus(document.id, DocumentStatus.SIGNED, {
+      unsigned_xml: unsignedXml,
+      signed_xml: signedXml,
+      request_payload: JSON.stringify(body),
+      subtotal: builder.subtotal,
+      total: builder.total,
+      buyer_id: body.buyer.id,
+      buyer_name: body.buyer.name,
+      buyer_id_type: body.buyer.idType,
+      buyer_email: body.buyer.email,
+    }, issuer.id, issuer.sandbox, client);
+
+    await documentLineItemModel.deleteByDocumentId(document.id, client);
+    await documentLineItemModel.bulkCreate(document.id, body.items, client);
+
+    await documentEventModel.create(document.id, EventType.REBUILT, fromStatus, DocumentStatus.SIGNED, {}, client);
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 
   return formatDocument(updated);
 }
