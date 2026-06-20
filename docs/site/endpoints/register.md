@@ -22,7 +22,7 @@ Shared with `POST /v1/resend-verification` — 5 requests per hour per IP.
 |---|---|---|---|
 | `cert` | file | Yes | P12 certificate file from SRI |
 | `certPassword` | string | No | P12 password (omit if none) |
-| `logo` | file | No | Company logo to display in RIDE PDFs. Accepted formats: PNG, JPEG, GIF. Max size: 500 KB. Can be updated later via `PATCH /v1/issuers/:id/logo`. |
+| `logo` | file | No | Company logo to display in RIDE PDFs. Accepted formats: **PNG** (recommended), JPEG, GIF. Max size: **500 KB**. Recommended dimensions: **600 × 170 px** (landscape, ~3.5:1 ratio). Can be uploaded or replaced later via `PATCH /v1/issuers/:id/logo`. |
 | `email` | string | Yes | Tenant contact email — used for verification and invoice notifications |
 | `ruc` | string | Yes | 13-digit RUC |
 | `businessName` | string | Yes | Legal business name (max 300 chars) |

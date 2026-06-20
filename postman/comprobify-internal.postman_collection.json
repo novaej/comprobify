@@ -143,6 +143,12 @@
                   "src": ""
                 },
                 {
+                  "key": "logo",
+                  "type": "file",
+                  "description": "Optional company logo for RIDE PDFs. PNG recommended (transparent background). Max 500 KB. Recommended: 600x170 px, landscape (~3.5:1 ratio).",
+                  "disabled": true
+                },
+                {
                   "key": "specialTaxpayer",
                   "value": "",
                   "description": "Optional special taxpayer resolution number",
