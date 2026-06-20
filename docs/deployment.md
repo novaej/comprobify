@@ -152,6 +152,51 @@ To enable production once it's provisioned:
 
 ---
 
+## Scheduled jobs
+
+The API has one scheduled job that must be triggered by an **external cron service** — it is not self-scheduled. [cron-job.org](https://cron-job.org) is used for both environments.
+
+### `POST /v1/admin/jobs/notifications`
+
+Runs two tasks on every call:
+
+1. **Certificate expiry checks** — inspects `cert_expiry` for every active issuer across all non-suspended tenants and upserts `CERT_EXPIRING` / `CERT_EXPIRED` alerts. Auto-dismisses alerts when a certificate is renewed (> 30 days remaining).
+2. **Webhook retry queue** — retries all webhook deliveries in `RETRYING` status whose `next_retry_at` has passed.
+
+The job is **idempotent** — running it multiple times within the same minute is safe.
+
+### cron-job.org setup
+
+| Setting | Value |
+|---|---|
+| **Method** | `POST` |
+| **Staging URL** | `https://api-staging.comprobify.com/v1/admin/jobs/notifications` |
+| **Production URL** | `https://api.comprobify.com/v1/admin/jobs/notifications` *(once provisioned)* |
+| **Schedule** | Every 5 minutes |
+| **Header** | `Authorization: Bearer <ADMIN_SECRET>` |
+| **Expected response** | `200 OK` with JSON body |
+
+> The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
+
+### Response shape
+
+```json
+{
+  "ok": true,
+  "tenantsChecked": 12,
+  "retries": {
+    "attempted": 3,
+    "succeeded": 2,
+    "failed": 1,
+    "exhausted": 0
+  }
+}
+```
+
+Monitor the cron-job.org execution log for non-200 responses. A sustained failure usually means the `ADMIN_SECRET` has rotated or the service is down.
+
+---
+
 ## GitHub repository setup
 
 ### 1. Branches
