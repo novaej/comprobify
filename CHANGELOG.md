@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`GET /v1/tenants/me`** — resolves the tenant owning the authenticated API key (`id`, `email`, `subscriptionTier`, `status`, `documentCount`, `documentQuota`, `sandbox`). No DB lookup — echoes what `authenticate` middleware already resolved from the key. Lets a third-party app that only holds an API key (no RUC/P12 on hand) discover its numeric `tenant.id`, e.g. to link an existing account or correlate webhook deliveries.
+
 ### Fixed
 - **Email retry could resend a `DELIVERED` or `COMPLAINED` email without `?force=true`** — the guard in `retrySingleEmail` only checked for `email_status === SENT`. Now blocks retry on any terminal success status (`SENT`, `DELIVERED`, `COMPLAINED`) unless `force=true` is explicitly passed.
 - **Logo upload at registration could exceed 500 KB** — `POST /v1/register`'s multer instance enforces a single 10 MB whole-request limit (shared with the P12 cert field), so it could not cap the logo field individually. `registration.controller.js` now checks the logo file's size directly and throws `INVALID_FILE_UPLOAD` (400) if it exceeds 500 KB, matching the limit already enforced by `PATCH /v1/issuers/:id/logo`.

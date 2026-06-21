@@ -35,6 +35,7 @@ export default defineConfig({
             text: 'Tenants',
             collapsed: false,
             items: [
+              { text: 'Get Current Tenant', link: '/endpoints/tenant-me' },
               { text: 'Update Language', link: '/endpoints/tenant-language' },
               { text: 'Promote to Production', link: '/endpoints/promote-tenant' },
             ],

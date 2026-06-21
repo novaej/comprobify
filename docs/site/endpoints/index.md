@@ -16,6 +16,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/v1/tenants/me` | Resolve the tenant (id, email, tier, status, quota, environment) for the authenticated API key |
 | `PATCH` | `/v1/tenants/language` | Update the preferred language for outgoing emails |
 | `POST` | `/v1/tenants/promote` | Promote the tenant to production — revokes all sandbox keys and creates matching production keys |
 
