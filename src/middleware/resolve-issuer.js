@@ -1,6 +1,7 @@
 const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
+const requireMatchingEnvironment = require('./require-matching-environment');
 
 /**
  * Resolves the target issuer for the request from the X-Issuer-Id header.
@@ -36,20 +37,13 @@ const resolveIssuer = async (req, _res, next) => {
     return next(new AppError('Issuer does not belong to this tenant', 403, ErrorCodes.ISSUER_FORBIDDEN));
   }
 
-  const expectedEnv = req.tenant.sandbox ? 'sandbox' : 'production';
-  if (req.apiKey.environment !== expectedEnv) {
-    return next(new AppError(
-      `This API key was created for the ${req.apiKey.environment} environment. ` +
-      `The tenant is ${expectedEnv}. Use a key created for the matching environment.`,
-      401,
-      ErrorCodes.API_KEY_ENV_MISMATCH
-    ));
-  }
-
-  // Attach sandbox as a virtual field so downstream services can read issuer.sandbox
-  // without needing a separate tenant reference.
-  req.issuer = { ...issuer, sandbox: req.tenant.sandbox };
-  next();
+  requireMatchingEnvironment(req, _res, (err) => {
+    if (err) return next(err);
+    // Attach sandbox as a virtual field so downstream services can read issuer.sandbox
+    // without needing a separate tenant reference.
+    req.issuer = { ...issuer, sandbox: req.tenant.sandbox };
+    next();
+  });
 };
 
 module.exports = resolveIssuer;
