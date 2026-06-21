@@ -9,8 +9,6 @@ PATCH  /v1/webhooks/:id
 DELETE /v1/webhooks/:id
 ```
 
-For the Mailgun email-delivery webhook (an inbound webhook from Mailgun to this API), see [Mailgun Webhook](mailgun-webhook.md).
-
 ## Authentication
 
 `Authorization: Bearer <api-key>` — any active key for the tenant.
