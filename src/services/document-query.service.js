@@ -1,3 +1,4 @@
+const moment = require('moment');
 const documentModel = require('../models/document.model');
 const documentEventModel = require('../models/document-event.model');
 const NotFoundError = require('../errors/not-found-error');
@@ -35,7 +36,13 @@ async function getEvents(accessKey, issuer) {
 }
 
 async function list(issuer, filters = {}) {
-  const { documents, pagination } = await documentModel.findByIssuerId(issuer.id, filters, issuer.sandbox);
+  // The API contract takes from/to as DD/MM/YYYY (validated by listDocumentsQuery), but
+  // issue_date is a DATE column — convert to an unambiguous ISO date before it reaches the model.
+  const parsedFilters = { ...filters };
+  if (filters.from) parsedFilters.from = moment(filters.from, 'DD/MM/YYYY').format('YYYY-MM-DD');
+  if (filters.to) parsedFilters.to = moment(filters.to, 'DD/MM/YYYY').format('YYYY-MM-DD');
+
+  const { documents, pagination } = await documentModel.findByIssuerId(issuer.id, parsedFilters, issuer.sandbox);
   const formattedDocuments = documents.map(formatDocument);
   return { data: formattedDocuments, pagination };
 }

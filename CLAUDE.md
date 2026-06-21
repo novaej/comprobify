@@ -250,7 +250,7 @@ chore: update express to 4.22.1
 | `src/services/document-transmission.service.js` | SRI send + authorization check + fire-and-forget email |
 | `src/services/document-rebuild.service.js` | Rebuild from RETURNED/NOT_AUTHORIZED |
 | `src/services/document-email.service.js` | Batch and single email retry |
-| `src/services/document-query.service.js` | Read-only document lookups |
+| `src/services/document-query.service.js` | Read-only document lookups. `list()` converts the `from`/`to` query filters from the API's DD/MM/YYYY contract to `YYYY-MM-DD` (via `moment`) before they reach `document.model.js` — `issue_date` is a `DATE` column and the validator only checks the DD/MM/YYYY regex, it does not convert the value |
 | `src/services/email.service.js` | Sends RIDE PDF + XML on authorization via provider; returns `{ sent, messageId }` |
 | `src/services/email/index.js` | Email provider factory (`EMAIL_PROVIDER` env var) |
 | `src/services/email/providers/mailgun.provider.js` | Mailgun SDK wrapper; returns `{ messageId }` (angle brackets stripped) |
