@@ -40,7 +40,7 @@ The `code` on each entry is the field path with array indices stripped — use i
 
 ```js
 const fieldMessages = {
-  'buyer.email':    'El correo del comprador es inválido.',
-  'items.quantity': 'La cantidad debe ser un número.',
+  'buyer.email':    'Buyer email is invalid.',
+  'items.quantity': 'Quantity must be a number.',
 };
 ```

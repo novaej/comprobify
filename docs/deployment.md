@@ -152,6 +152,100 @@ To enable production once it's provisioned:
 
 ---
 
+## Mailgun webhook setup
+
+The API exposes an inbound webhook endpoint that Mailgun calls to report email delivery events. It updates `email_status` on documents and verification emails so the API has an accurate delivery audit trail.
+
+```
+POST /v1/mailgun/webhook
+```
+
+This is **not called by your application** — it is registered once with Mailgun so that Mailgun calls it automatically when a delivery event occurs.
+
+### Mailgun dashboard setup
+
+In the Mailgun dashboard, go to **Sending → Webhooks** for your domain and register:
+
+```
+https://<your-api-host>/v1/mailgun/webhook
+```
+
+Enable exactly these three event types:
+
+| Event | Purpose |
+|---|---|
+| `delivered` | Marks `email_status` as `DELIVERED` |
+| `failed` | Permanent failure → `FAILED`; temporary failure → logged, Mailgun retries automatically |
+| `complained` | Spam report → `COMPLAINED` |
+
+Other event types (opened, clicked, unsubscribed, etc.) are ignored — no harm in enabling them, but they produce no effect.
+
+> **One webhook per environment.** Staging and production use separate Mailgun domains. Register the webhook on each domain pointing to the corresponding environment's URL.
+
+### Security
+
+Every incoming request is verified with HMAC-SHA256 using `MAILGUN_WEBHOOK_SIGNING_KEY` (found in Mailgun → Webhooks → Signing key). Requests that fail signature verification are rejected with `401`. Replayed requests (duplicate timestamps) are also rejected automatically.
+
+### Event handling
+
+| Mailgun event | Severity | Outcome |
+|---|---|---|
+| `delivered` | — | `email_status` → `DELIVERED`, event `EMAIL_DELIVERED` appended |
+| `failed` | `permanent` | `email_status` → `FAILED`, event `EMAIL_FAILED` appended |
+| `failed` | `temporary` | status unchanged (Mailgun retries), event `EMAIL_TEMP_FAILED` appended |
+| `complained` | — | `email_status` → `COMPLAINED`, event `EMAIL_COMPLAINED` appended |
+
+Both invoice emails and tenant verification emails are tracked through this endpoint. Lookup is by `email_message_id`, stored on each document and tenant row when the email is sent.
+
+The endpoint always returns `200 OK` with `{ "ok": true }` for recognised events. Mailgun treats any non-2xx response as a failure and retries.
+
+---
+
+## Scheduled jobs
+
+The API has one scheduled job that must be triggered by an **external cron service** — it is not self-scheduled. [cron-job.org](https://cron-job.org) is used for both environments.
+
+### `POST /v1/admin/jobs/notifications`
+
+Runs two tasks on every call:
+
+1. **Certificate expiry checks** — inspects `cert_expiry` for every active issuer across all non-suspended tenants and upserts `CERT_EXPIRING` / `CERT_EXPIRED` alerts. Auto-dismisses alerts when a certificate is renewed (> 30 days remaining).
+2. **Webhook retry queue** — retries all webhook deliveries in `RETRYING` status whose `next_retry_at` has passed.
+
+The job is **idempotent** — running it multiple times within the same minute is safe.
+
+### cron-job.org setup
+
+| Setting | Value |
+|---|---|
+| **Method** | `POST` |
+| **Staging URL** | `https://api-staging.comprobify.com/v1/admin/jobs/notifications` |
+| **Production URL** | `https://api.comprobify.com/v1/admin/jobs/notifications` *(once provisioned)* |
+| **Schedule** | Every 5 minutes |
+| **Header** | `Authorization: Bearer <ADMIN_SECRET>` |
+| **Expected response** | `200 OK` with JSON body |
+
+> The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
+
+### Response shape
+
+```json
+{
+  "ok": true,
+  "tenantsChecked": 12,
+  "retries": {
+    "attempted": 3,
+    "succeeded": 2,
+    "failed": 1,
+    "exhausted": 0
+  }
+}
+```
+
+Monitor the cron-job.org execution log for non-200 responses. A sustained failure usually means the `ADMIN_SECRET` has rotated or the service is down.
+
+---
+
 ## GitHub repository setup
 
 ### 1. Branches

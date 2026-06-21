@@ -90,13 +90,6 @@ export default defineConfig({
             ],
           },
           {
-            text: 'Webhooks',
-            collapsed: false,
-            items: [
-              { text: 'Mailgun Webhook', link: '/endpoints/mailgun-webhook' },
-            ],
-          },
-          {
             text: 'Monitoring',
             collapsed: false,
             items: [

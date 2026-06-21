@@ -284,7 +284,7 @@ When `enabled` is `false` for a type, the API will not create new notifications 
 │    Verify X-Comprobify-Signature on each incoming request           │
 │                                                                     │
 │  Fallback / catch-up:                                               │
-│    Poll GET /v1/notifications?sinceId=<lastSeenId> every 60s       │
+│    Poll GET /v1/notifications?sinceId=<lastSeenId> every 60–300s   │
 │    Store highest id seen → pass as sinceId on next poll             │
 │                                                                     │
 │  When user opens notification panel:                                │
@@ -292,3 +292,14 @@ When `enabled` is `false` for a type, the API will not create new notifications 
 │    When all users have read → POST /v1/notifications/:id/read      │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Choosing a poll interval
+
+The `DOCUMENT_AUTHORIZED` notification type aggregates multiple authorizations that occur within a **60-second window** into a single row. Polling more frequently than 60 seconds would catch the row mid-aggregation — it will update again within the same window anyway, so there is no benefit to polling faster than that.
+
+| Scenario | Recommended interval |
+|---|---|
+| Webhooks configured (polling is fallback only) | 300 s (5 min) — any missed event is caught up on the next cycle |
+| No webhooks, polling is the only delivery mechanism | 60 s — matches the aggregation window; going lower gives no benefit |
+
+Do not poll below 60 seconds — it will not surface new data sooner and adds unnecessary load.

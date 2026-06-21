@@ -54,7 +54,10 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
     await documentModel.updateStatus(document.id, document.status, { email_status: EmailStatus.SKIPPED }, issuer.id, issuer.sandbox);
     return { sent: false, reason: 'no_email' };
   }
-  if (document.email_status === EmailStatus.SENT && !force) {
+  const alreadyDelivered = document.email_status === EmailStatus.SENT
+    || document.email_status === EmailStatus.DELIVERED
+    || document.email_status === EmailStatus.COMPLAINED;
+  if (alreadyDelivered && !force) {
     return { sent: false, reason: 'already_sent' };
   }
 
