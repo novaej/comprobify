@@ -75,7 +75,7 @@ The returned `id` is what you pass as `X-Issuer-Id` on document requests targeti
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | Missing or invalid fields, or the tenant has no existing issuer to inherit from and no P12 was uploaded |
+| `400` | `VALIDATION_FAILED` | Missing or invalid fields, or the tenant has no existing issuer to inherit from and no P12 was uploaded |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `402` | `PAYMENT_REQUIRED` | Branch or issue point limit reached for this tier |
 | `403` | `FORBIDDEN` | Tenant email not yet verified |

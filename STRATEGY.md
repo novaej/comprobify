@@ -202,7 +202,7 @@ The frontend is a UI layer on top of the existing API. No backend changes requir
 See [FRONTEND_MVP.md](FRONTEND_MVP.md) for screens, tech stack, auth approach, and
 deployment plan.
 
-**One API gap to fill before the frontend can launch:** `GET /api/documents` (paginated list
+**One API gap to fill before the frontend can launch:** `GET /v1/documents` (paginated list
 filtered by authenticated issuer). Everything else already exists.
 
 ---

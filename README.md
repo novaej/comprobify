@@ -106,22 +106,22 @@ Both SRI SOAP calls (`sendReceipt`, `checkAuthorization`) use exponential-backof
 Every lifecycle transition writes a row to `document_events` (type, from/to status, detail JSON), giving a full tamper-evident history of each document.
 
 **Structured line items**
-Invoice details are persisted to `invoice_details` (one row per item) alongside the full signed XML, enabling future reporting queries without re-parsing the XML.
+Invoice details are persisted to `document_line_items` (one row per item) alongside the full signed XML, enabling future reporting queries without re-parsing the XML.
 
 **RIDE PDF generation**
 `GET /:accessKey/ride` generates the official *Representación Impresa del Documento Electrónico* on-the-fly for any `AUTHORIZED` document. Built with PDFKit (A4) and bwip-js (Code 128 barcode). Includes all SRI-mandatory fields: issuer data, buyer, line items, tax breakdown separated by legal category (15%, 0%, No objeto, Exento), payment methods, authorization number, access key barcode, and ESTADO: AUTORIZADO.
 
 **Email delivery and webhook tracking**
-When a document becomes `AUTHORIZED`, an email is sent to the buyer with the RIDE PDF and the authorization XML attached — both generated on-the-fly. Delivery is fire-and-forget (non-blocking). The Mailgun message ID is stored in `documents.email_message_id`. A Mailgun webhook (`POST /api/mailgun/webhook`) receives delivery events and updates `email_status` from `SENT` to `DELIVERED`, `FAILED`, or `COMPLAINED`. Temporary failures are logged without changing status (Mailgun retries internally). All webhook calls are HMAC-SHA256 verified. Failed sends can be retried via `POST /:key/email-retry` (single) or `POST /email-retry` (batch, up to 100).
+When a document becomes `AUTHORIZED`, an email is sent to the buyer with the RIDE PDF and the authorization XML attached — both generated on-the-fly. Delivery is fire-and-forget (non-blocking). The Mailgun message ID is stored in `documents.email_message_id`. A Mailgun webhook (`POST /v1/mailgun/webhook`) receives delivery events and updates `email_status` from `SENT` to `DELIVERED`, `FAILED`, or `COMPLAINED`. Temporary failures are logged without changing status (Mailgun retries internally). All webhook calls are HMAC-SHA256 verified. Failed sends can be retried via `POST /:key/email-retry` (single) or `POST /email-retry` (batch, up to 100).
 
 **Idempotency key**
-`POST /api/documents` accepts an optional `Idempotency-Key` header. If the same key is sent again with the same body, the original document is returned (HTTP 200) instead of creating a duplicate. If the body differs, a 409 Conflict is returned. Concurrent requests with the same key are safe — uniqueness is enforced at the database level via a partial index, and the race-losing request receives the winning document as a replay.
+`POST /v1/documents` accepts an optional `Idempotency-Key` header. If the same key is sent again with the same body, the original document is returned (HTTP 200) instead of creating a duplicate. If the body differs, a 409 Conflict is returned. Concurrent requests with the same key are safe — uniqueness is enforced at the database level via a partial index, and the race-losing request receives the winning document as a replay.
 
 **Per-API-key rate limiting**
 All authenticated endpoints are rate-limited to prevent abuse and quota exhaustion. Write endpoints (POST) are limited to 60 requests per minute; read endpoints (GET) to 300 per minute. Limits are per API key — a compromised or misbehaving key cannot exhaust resources for other tenants. Rate limit exceeded responses return RFC 7807 formatted 429 errors. Configurable via environment variables.
 
 **Tenant-scoped API keys with per-request issuer targeting**
-API keys belong to the tenant, not to a single branch. A tenant can mint multiple named keys (`frontend-prod`, `erp`, `mobile`) via `POST /api/keys` and pick which key represents which integration. Every document endpoint requires an `X-Issuer-Id` header naming the target branch. The auth pipeline (`authenticate` then `resolveIssuer`) validates that the issuer belongs to the calling tenant and that the key's environment (sandbox / production) matches the issuer's environment. See [ADR-013](docs/adr/013-tenant-scoped-api-keys.md).
+API keys belong to the tenant, not to a single branch. A tenant can mint multiple named keys (`frontend-prod`, `erp`, `mobile`) via `POST /v1/keys` and pick which key represents which integration. Every document endpoint requires an `X-Issuer-Id` header naming the target branch. The auth pipeline (`authenticate` then `resolveIssuer`) validates that the issuer belongs to the calling tenant and that the key's environment (sandbox / production) matches the issuer's environment. See [ADR-013](docs/adr/013-tenant-scoped-api-keys.md).
 
 **Error monitoring**
 Unexpected `5xx` failures are reported to [Sentry](https://sentry.io) via `@sentry/node`, tagged with the running `environment` (`staging` / `production`). Sentry's Express error handler is mounted directly before the central RFC 7807 error handler, so it captures genuine internal errors with full stack traces and request context — without intercepting expected `AppError` 4xx responses (validation, not found, quota, etc.). Configured via the optional `SENTRY_DSN` env var; unset locally so development never reports.
@@ -155,7 +155,7 @@ Unexpected `5xx` failures are reported to [Sentry](https://sentry.io) via `@sent
 │   └── ride-builder.js        PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js)
 ├── db/
 │   ├── migrate.js             Migration runner
-│   └── migrations/            SQL migration files (001–030)
+│   └── migrations/            SQL migration files (001–050)
 ├── assets/
 │   ├── factura_V2.1.0.xsd     Official SRI invoice schema
 │   └── xmldsig-core-schema.xsd  W3C XML-DSig schema (imported by factura XSD)
@@ -202,7 +202,7 @@ See **[GETTING_STARTED.md](GETTING_STARTED.md)** for full local setup instructio
 - [ ] `DB_PASSWORD` set and database not exposed publicly
 - [ ] `DB_SSL=true` in production
 - [ ] `.env` never committed to version control
-- [ ] SRI `environment` column set to `2` only on production issuers
+- [ ] `tenants.sandbox = false` only for tenants explicitly promoted to production (`issuers.environment` no longer exists — dropped in migration 049)
 - [ ] All error stack traces suppressed from HTTP responses (handled by `error-handler.js`)
 - [ ] `xmllint` (`libxml2-utils`) installed on the server
 - [ ] `MAILGUN_API_KEY` and `MAILGUN_DOMAIN` set for email delivery (or omit to disable)

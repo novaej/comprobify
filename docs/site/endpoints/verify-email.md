@@ -30,7 +30,7 @@ None — public endpoint. The token in the query string acts as the credential.
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | `token` is missing, not hexadecimal, or not exactly 64 characters |
+| `400` | `VALIDATION_FAILED` | `token` is missing, not hexadecimal, or not exactly 64 characters |
 | `400` | `INVALID_OR_EXPIRED_TOKEN` | Token does not match any pending tenant, or has expired |
 
 ## Notes

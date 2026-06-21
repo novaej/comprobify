@@ -34,7 +34,7 @@ Bearer token — API key required.
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | `language` is missing or not a supported value |
+| `400` | `VALIDATION_FAILED` | `language` is missing or not a supported value |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `FORBIDDEN` | Account is suspended |
 | `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |

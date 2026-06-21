@@ -112,8 +112,9 @@ If the email is already registered and not suspended, the current sandbox key is
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | Missing or invalid fields, or missing P12 file |
+| `400` | `VALIDATION_FAILED` | Missing or invalid fields, or missing P12 file |
 | `400` | `BAD_REQUEST` | P12 file is corrupt or the certificate password is wrong |
+| `400` | `INVALID_FILE_UPLOAD` | Logo file exceeds 500 KB |
 | `403` | `FORBIDDEN` | The account is suspended |
 | `409` | `CONFLICT` | RUC already registered under a different email |
 | `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
