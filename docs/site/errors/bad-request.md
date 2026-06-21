@@ -86,6 +86,12 @@ You cannot revoke the API key that authenticated the current request.
 
 **What to do:** Use a different active API key to revoke this one. List your keys with `GET /v1/keys`.
 
+### `INVALID_FILE_UPLOAD`
+
+A file upload (e.g. a P12 certificate or issuer logo) is missing, the wrong MIME type, or exceeds the field's size limit. The `detail` field names the specific constraint that failed — for example, a logo over 500 KB on `POST /v1/register` or `PATCH /v1/issuers/:id/logo`.
+
+**What to do:** Check the file against the limits documented on the endpoint (e.g. [Upload Issuer Logo](../endpoints/upload-issuer-logo.md)) and re-upload.
+
 ### `BAD_REQUEST` (fallback)
 
 A generic bad request not covered by a specific code above. Read the `detail` field for the reason.

@@ -268,6 +268,25 @@
       },
       "item": [
         {
+          "name": "Get Current Tenant",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "me"
+              ]
+            },
+            "description": "Resolves the tenant owning the authenticated API key (id, email, subscriptionTier, status, documentCount, documentQuota, sandbox). Useful for a third-party app that only has an API key and needs to discover its numeric tenant id."
+          }
+        },
+        {
           "name": "Update Preferred Language",
           "request": {
             "method": "PATCH",
@@ -1570,14 +1589,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"Initial key\",\n  \"environment\": \"sandbox\"\n}",
+              "raw": "{\n  \"label\": \"Initial key\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Generates a new tenant-scoped API key. The plaintext token is returned only once \u2014 store it immediately.\n\n`label` is optional (max 100 chars). `environment` is `\"sandbox\"` (default) or `\"production\"`.\n\nCopy the returned key value into the `api_key` collection variable."
+            "description": "Generates a new tenant-scoped API key. The plaintext token is returned only once \u2014 store it immediately.\n\n`label` is optional (max 100 chars). `environment` is optional \u2014 omit it to default to the tenant's current active environment (`sandbox` or `production`), or pass `\"sandbox\"`/`\"production\"` explicitly to override.\n\nCopy the returned key value into the `api_key` collection variable."
           }
         },
         {

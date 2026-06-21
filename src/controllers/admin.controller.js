@@ -57,7 +57,7 @@ const createApiKey = async (req, res) => {
   const apiKey = await adminService.createApiKey(
     tenantId,
     req.body.label,
-    req.body.environment || 'sandbox',
+    req.body.environment,
     req.body.revokeExisting === true,
   );
   res.status(201).json({ ok: true, apiKey });

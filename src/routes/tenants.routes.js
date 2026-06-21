@@ -4,7 +4,8 @@ const controller = require('../controllers/tenant.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
-const { writeLimiter } = require('../middleware/rate-limit');
+const requireMatchingEnvironment = require('../middleware/require-matching-environment');
+const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_LANGUAGES } = require('../locales');
 const { SUPPORTED_TYPES } = require('../builders');
 
@@ -37,6 +38,7 @@ const promoteValidator = [
     .withMessage('each initialSequentials entry must have a sequential >= 1'),
 ];
 
+router.get('/me', readLimiter, requireMatchingEnvironment, asyncHandler(controller.getMe));
 router.patch('/language', updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
 router.post('/promote', writeLimiter, promoteValidator, validateRequest, asyncHandler(controller.promote));
 

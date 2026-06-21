@@ -36,7 +36,7 @@ PATCH /v1/issuers/:id/logo
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | `id` is not a positive integer |
+| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
 | `400` | `INVALID_FILE_UPLOAD` | No file provided, file exceeds 500 KB, or unsupported MIME type |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `ISSUER_FORBIDDEN` | Issuer belongs to a different tenant |

@@ -24,7 +24,7 @@ describe('DocumentEventModel', () => {
     const result = await documentEventModel.create(42, 'CREATED', null, 'SIGNED', { accessKey: '123' });
 
     expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO document_events'),
+      expect.stringContaining('INSERT INTO public.document_events'),
       [42, 'CREATED', null, 'SIGNED', JSON.stringify({ accessKey: '123' })]
     );
     expect(result.event_type).toBe('CREATED');

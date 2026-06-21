@@ -87,7 +87,7 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | `label` too long or `environment` invalid |
+| `400` | `VALIDATION_FAILED` | `label` too long or `environment` invalid |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `FORBIDDEN` | Tenant email not verified, OR attempting to mint a production key before any issuer has been promoted |
 

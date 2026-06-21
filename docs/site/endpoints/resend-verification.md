@@ -46,7 +46,7 @@ The message is intentionally generic — the endpoint does not reveal whether th
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | `email` field is missing or invalid |
+| `400` | `VALIDATION_FAILED` | `email` field is missing or invalid |
 | `409` | `CONFLICT` | The account is already verified |
 | `403` | `FORBIDDEN` | The account has been suspended |
 | `429` | `TOO_MANY_REQUESTS` | IP rate limit exceeded, or 60-second per-account cooldown not yet elapsed |

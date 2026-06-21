@@ -206,21 +206,26 @@ async function listIssuers() {
   return rows.map(formatIssuer);
 }
 
-async function createApiKey(tenantId, label, environment = 'sandbox', revokeExistingInEnv = false) {
+async function createApiKey(tenantId, label, environment, revokeExistingInEnv = false) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
-  if (!['sandbox', 'production'].includes(environment)) {
-    throw new AppError(`environment must be 'sandbox' or 'production', got: '${environment}'`, 400);
+
+  // Default to the tenant's current active environment rather than hardcoding
+  // 'sandbox' — a tenant already promoted to production should get production
+  // keys by default unless the admin explicitly asks for sandbox.
+  const resolvedEnvironment = environment || (tenant.sandbox ? 'sandbox' : 'production');
+  if (!['sandbox', 'production'].includes(resolvedEnvironment)) {
+    throw new AppError(`environment must be 'sandbox' or 'production', got: '${resolvedEnvironment}'`, 400);
   }
   if (revokeExistingInEnv) {
-    await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, environment);
+    await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, resolvedEnvironment);
   }
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId,
     keyHash: sha256Hex(plainToken),
     label: label || null,
-    environment,
+    environment: resolvedEnvironment,
   });
   return plainToken;
 }

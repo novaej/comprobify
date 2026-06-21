@@ -116,6 +116,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `INVALID_STATE_TRANSITION` | Document operation is not valid for its current status |
 | `DOCUMENT_NOT_AUTHORIZED` | Operation (RIDE, email) requires document status `AUTHORIZED` |
 | `SELF_REVOCATION_FORBIDDEN` | Cannot revoke the API key used to authenticate this request |
+| `INVALID_FILE_UPLOAD` | Uploaded file is missing, the wrong type, or exceeds the field's size limit (e.g. a logo over 500 KB) |
 | `BAD_REQUEST` | Other malformed request (fallback — read `detail`) |
 
 ### 401 Unauthorized

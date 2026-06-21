@@ -76,7 +76,7 @@ Returns the full updated list of active document types.
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | `documentType` is missing or not a supported type |
+| `400` | `VALIDATION_FAILED` | `documentType` is missing or not a supported type |
 | `403` | `FORBIDDEN` | Issuer belongs to a different tenant |
 | `404` | `NOT_FOUND` | Issuer id does not exist |
 
@@ -112,7 +112,7 @@ Returns the full updated list of active document types.
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_ERROR` | `code` is not a supported type |
+| `400` | `VALIDATION_FAILED` | `code` is not a supported type |
 | `400` | `BAD_REQUEST` | Attempting to remove the last active document type |
 | `403` | `FORBIDDEN` | Issuer belongs to a different tenant |
 | `404` | `NOT_FOUND` | Issuer id does not exist, or the document type is not currently active for this issuer |

@@ -10,12 +10,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`GET /v1/tenants/me`** — resolves the tenant owning the authenticated API key (`id`, `email`, `subscriptionTier`, `status`, `documentCount`, `documentQuota`, `sandbox`). No DB lookup — echoes what `authenticate` middleware already resolved from the key. Lets a third-party app that only holds an API key (no RUC/P12 on hand) discover its numeric `tenant.id`, e.g. to link an existing account or correlate webhook deliveries.
+
+### Fixed
+- **Email retry could resend a `DELIVERED` or `COMPLAINED` email without `?force=true`** — the guard in `retrySingleEmail` only checked for `email_status === SENT`. Now blocks retry on any terminal success status (`SENT`, `DELIVERED`, `COMPLAINED`) unless `force=true` is explicitly passed.
+- **Logo upload at registration could exceed 500 KB** — `POST /v1/register`'s multer instance enforces a single 10 MB whole-request limit (shared with the P12 cert field), so it could not cap the logo field individually. `registration.controller.js` now checks the logo file's size directly and throws `INVALID_FILE_UPLOAD` (400) if it exceeds 500 KB, matching the limit already enforced by `PATCH /v1/issuers/:id/logo`.
+
+### Added
 - **Issuer logo on RIDE PDFs** — issuers can now upload a company logo that renders in the top-left corner of every RIDE PDF (including email attachments). Logo is stored as `BYTEA` in `issuers.logo` (migration 050, replaces the unused `logo_path` column). Two ways to set it:
   - `POST /v1/register` — optional `logo` file field (PNG, JPEG, or GIF; max 500 KB) in the registration `multipart/form-data` request.
   - `PATCH /v1/issuers/:id/logo` — new authenticated endpoint to upload or replace the logo for an existing issuer.
 
 ### Fixed
 - **RIDE PDF "Forma de pago" section missing bottom border** — the last payment row had no closing line. The outer `strokeBox` only provided the overall section border; individual rows drew an `hline` at their top but not their bottom. A closing `hline` is now drawn after the last payment row.
+- **Rebuild silently dropped a corrected `buyer_email` and left stale line items** — `buyer_email` was missing from `MUTABLE_EXTRA_COLUMNS` in `document.model.js` and was never passed to `updateStatus`, so a corrected buyer email on `POST /:key/rebuild` was ignored. Separately, line items (including tax `rateCode` changes) were never deleted and re-inserted on rebuild, leaving the original rows in `document_line_items` unchanged alongside the new signed XML. Both fixes are now wrapped in a single transaction (`document-rebuild.service.js`) so the document update, line-item replacement (`documentLineItemModel.deleteByDocumentId` + `bulkCreate`), and `REBUILT` audit event are atomic.
+- **Bypass-mode writes on tenant-scoped tables could violate RLS if the issuer context was omitted** — `documentModel.updateStatus`, `documentLineItemModel.bulkCreate`, and `documentEventModel.create` now explicitly qualify the `sandbox`/`public` schema prefix in their `db.query()` (no client, no issuerId) bypass path, so a caller that omits the issuer context can no longer produce an RLS violation.
+- **Mailgun webhook events for sandbox documents never updated `email_status`** — `findByEmailMessageId` queried `public.documents` only, so sandbox documents (created while `tenant.sandbox = true`) never transitioned from `SENT` to `DELIVERED`/`FAILED`/`COMPLAINED`. The query now `UNION ALL`s across `public.documents` and `sandbox.documents`, returns a `sandbox` boolean on the result row, and threads it through to both `updateEmailStatus` and `documentEventModel.create` so the update and audit event land in the correct schema. See ADR-010.
+- **Mailgun webhook audit events violated RLS** — `documentEventModel.create` calls in the webhook path passed `issuerId = null`, routing through the no-context `db.query()` bypass, which the `document_events` RLS policy rejects for `INSERT`. `document.issuer_id` (available from the `findByEmailMessageId` result) is now passed through, routing the insert via `db.queryAsIssuer` so the RLS context is set correctly.
 
 ### Changed (BREAKING)
 - **Route prefix changed from `/api` to `/v1`** — all endpoints are now served under `/v1/` (e.g. `POST /v1/documents`). Update all client `base_url` values. Base URL: `https://api.comprobify.com/v1`.

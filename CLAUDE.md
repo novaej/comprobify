@@ -41,7 +41,7 @@ src/models/        PostgreSQL CRUD (parameterised queries only)
 src/builders/      XML document construction (builder registry)
 src/errors/        AppError → ValidationError / NotFoundError / SriError / ConflictError / QuotaExceededError
 helpers/           signer.js (XAdES-BES), access-key-generator.js (Module 11), ride-builder.js (RIDE PDF)
-db/migrations/     SQL migration files 001–048
+db/migrations/     SQL migration files 001–050
 assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 ```
 
@@ -66,21 +66,23 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Certificate storage:** private key PEM stored AES-256-GCM encrypted in `issuers.encrypted_private_key`; certificate PEM stored plaintext in `issuers.certificate_pem`. Decrypted at signing time only. Encryption key lives in `ENCRYPTION_KEY` env var.
 
-**Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. Self-service endpoint is `POST /api/issuers` (omit `sourceIssuerId` to inherit from the tenant's first existing issuer). Creating a branch does NOT mint a new API key — the tenant's existing key covers every branch via the `X-Issuer-Id` header. New branches inherit the tenant's current environment (sandbox or production).
+**Issuer logo:** stored as `BYTEA` in `issuers.logo` (migration 050; replaces the dropped `logo_path` column). Two upload paths: optional `logo` field on `POST /v1/register` (multipart, validated in `registration.controller.js`), or `PATCH /v1/issuers/:id/logo` for an existing issuer (PNG/JPEG/GIF, max 500 KB). The registration multer instance has a 10 MB **whole-request** `fileSize` limit (it must also accommodate the P12 cert upload), so the 500 KB logo cap cannot be enforced by multer there — `registration.controller.js` checks `logoFile.size` manually and throws `INVALID_FILE_UPLOAD` if exceeded. The dedicated logo-upload route's multer instance has no other file fields, so its `limits: { fileSize: 500 * 1024 }` enforces the cap natively. `ride.service.js` reads `issuer.logo` and passes it to `helpers/ride-builder.js`, which renders it in the top-left header of every RIDE PDF (including email attachments).
 
-**Tenant model:** `tenants` is the root billing entity. One tenant owns one RUC with one or more branches and issuing points (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `sandbox` (boolean, default `true`), `document_count`, `document_quota`, `preferred_language` (default `'es'`). Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines per-tier `documentQuota`, `maxBranches`, `maxIssuePointsPerBranch`, and rate limits. `PATCH /api/tenants/language` updates the preferred language after registration.
+**Multi-branch support:** one RUC can have multiple issuer rows with different `(branch_code, issue_point_code)` pairs. When creating a branch, supply `sourceIssuerId` instead of a P12 file — the service copies `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, `cert_expiry` from the source row. Self-service endpoint is `POST /v1/issuers` (omit `sourceIssuerId` to inherit from the tenant's first existing issuer). Creating a branch does NOT mint a new API key — the tenant's existing key covers every branch via the `X-Issuer-Id` header. New branches inherit the tenant's current environment (sandbox or production).
 
-**Email localisation:** outgoing emails are localised using `src/locales/` — a cross-cutting layer shared by email templates and (in future) API responses. `getTranslations(lang)` returns the locale object for the given language code, falling back to `'es'`. Each locale file exports a plain object keyed by domain (`email.verifyEmail.*`, `email.invoiceAuthorized.*`). Templates own HTML structure; locales own strings. `SUPPORTED_LANGUAGES` exported from `src/locales/index.js` is the single source of truth for accepted language codes — used by validators on `POST /api/register` and `PATCH /api/tenants/language`. The invoice-authorized email is localised using the **issuer's tenant** `preferred_language` (there is no buyer-language field — `email.service.js` resolves it via `issuer.tenant_id` → `tenantModel.findById`), not the buyer's.
+**Tenant model:** `tenants` is the root billing entity. One tenant owns one RUC with one or more branches and issuing points (limited by tier). Fields: `email`, `subscription_tier` (FREE/STARTER/GROWTH/BUSINESS), `status` (PENDING_VERIFICATION/ACTIVE/SUSPENDED), `sandbox` (boolean, default `true`), `document_count`, `document_quota`, `preferred_language` (default `'es'`). Tenants are NOT user accounts — no password, no session. The API key IS the credential. `src/constants/subscription-tiers.js` defines per-tier `documentQuota`, `maxBranches`, `maxIssuePointsPerBranch`, and rate limits. `PATCH /v1/tenants/language` updates the preferred language after registration. `GET /v1/tenants/me` resolves identity for a holder of an API key with no other context (e.g. a third-party app linking an existing account) — it returns `req.tenant` as-is, with no DB call, since `authenticate` middleware has already resolved it from the key. The route also runs `requireMatchingEnvironment` (same check `resolveIssuer` uses) so a key minted for one environment cannot resolve identity while the tenant is active in the other — see `src/middleware/require-matching-environment.js`.
 
-**Self-service registration:** `POST /api/register` (public) — creates tenant + issuer + sandbox API key in one call. Tenant starts PENDING_VERIFICATION. A verification email is sent (fire-and-forget). The returned API key is shown once. `GET /api/verify-email?token=xxx` activates the tenant. Unverified tenants can use sandbox but cannot promote to production. Optional `verificationRedirectUrl` field redirects the email link to a frontend page (e.g. `https://app.example.com/verify?token=xxx`) instead of directly to the API — stored on the tenant row and used for all subsequent verification emails including resends. Token TTL is configurable via `VERIFICATION_TOKEN_TTL_HOURS` (default 24h). `POST /api/resend-verification` enforces a 60-second server-side cooldown (checked against `tenants.verification_email_sent_at`) in addition to the IP rate limit.
+**Email localisation:** outgoing emails are localised using `src/locales/` — a cross-cutting layer shared by email templates and (in future) API responses. `getTranslations(lang)` returns the locale object for the given language code, falling back to `'es'`. Each locale file exports a plain object keyed by domain (`email.verifyEmail.*`, `email.invoiceAuthorized.*`). Templates own HTML structure; locales own strings. `SUPPORTED_LANGUAGES` exported from `src/locales/index.js` is the single source of truth for accepted language codes — used by validators on `POST /v1/register` and `PATCH /v1/tenants/language`. The invoice-authorized email is localised using the **issuer's tenant** `preferred_language` (there is no buyer-language field — `email.service.js` resolves it via `issuer.tenant_id` → `tenantModel.findById`), not the buyer's.
 
-**User-facing promotion:** `POST /api/tenants/promote` (authenticated) — checks tenant is ACTIVE, flips `tenants.sandbox = false`, seeds production sequentials for all issuers × document types, revokes all sandbox API keys, and creates matching production keys (one per revoked sandbox key, same label). Returns `{ apiKeys: [{ label, apiKey }] }` — all tokens shown once, store immediately. This is one-way. Admin override: `POST /api/admin/tenants/:id/promote` (skips ACTIVE status check).
+**Self-service registration:** `POST /v1/register` (public) — creates tenant + issuer + sandbox API key in one call. Tenant starts PENDING_VERIFICATION. A verification email is sent (fire-and-forget). The returned API key is shown once. `GET /v1/verify-email?token=xxx` activates the tenant. Unverified tenants can use sandbox but cannot promote to production. Optional `verificationRedirectUrl` field redirects the email link to a frontend page (e.g. `https://app.example.com/verify?token=xxx`) instead of directly to the API — stored on the tenant row and used for all subsequent verification emails including resends. Token TTL is configurable via `VERIFICATION_TOKEN_TTL_HOURS` (default 24h). `POST /v1/resend-verification` enforces a 60-second server-side cooldown (checked against `tenants.verification_email_sent_at`) in addition to the IP rate limit.
 
-**Admin API:** `ADMIN_SECRET` env var (64-char hex) protects all `/api/admin/*` routes via `src/middleware/authenticate-admin.js` (constant-time comparison) with a 20 req/min IP-based rate limiter. Admin tenant routes: create (status ACTIVE, no verification), list, update tier, update status (activate/suspend), manual verify. Admin issuer routes: create (requires `tenantId`), list, promote (override, no tenant status check). Admin key routes: create, revoke.
+**User-facing promotion:** `POST /v1/tenants/promote` (authenticated) — checks tenant is ACTIVE, flips `tenants.sandbox = false`, seeds production sequentials for all issuers × document types, revokes all sandbox API keys, and creates matching production keys (one per revoked sandbox key, same label). Returns `{ apiKeys: [{ label, apiKey }] }` — all tokens shown once, store immediately. This is one-way. Admin override: `POST /v1/admin/tenants/:id/promote` (skips ACTIVE status check).
 
-**Tenant-scoped API keys (ADR-013):** API keys belong to a tenant, not an issuer. One tenant can mint multiple named keys (e.g. `frontend-prod`, `erp`, `mobile-app`) via `GET / POST / DELETE /api/keys`. Each key carries an `environment` column (`'sandbox'` or `'production'`). The `authenticate` middleware sets `req.tenant` + `req.apiKey` + `req.keyHash`, rejects keys for SUSPENDED tenants (403), and does NOT set `req.issuer` — issuer resolution is delegated to the next middleware.
+**Admin API:** `ADMIN_SECRET` env var (64-char hex) protects all `/v1/admin/*` routes via `src/middleware/authenticate-admin.js` (constant-time comparison) with a 20 req/min IP-based rate limiter. Admin tenant routes: create (status ACTIVE, no verification), list, update tier, update status (activate/suspend), manual verify. Admin issuer routes: create (requires `tenantId`), list, promote (override, no tenant status check). Admin key routes: create, revoke. `POST /v1/admin/tenants/:id/api-keys` defaults `environment` to the tenant's *current* active environment (`tenant.sandbox ? 'sandbox' : 'production'`) when the body omits it — it does not hardcode `'sandbox'`, so creating a key for an already-promoted tenant without specifying `environment` yields a production key.
 
-**Per-request issuer resolution:** every authenticated document-endpoint request must include an `X-Issuer-Id` header. The `resolveIssuer` middleware (mounted on `/api/documents/*`) fetches the issuer, validates `issuer.tenant_id === req.tenant.id` (403 ISSUER_FORBIDDEN if not), validates `req.apiKey.environment === (issuer.sandbox ? 'sandbox' : 'production')` (401 on mismatch), and sets `req.issuer`. Issuer-management routes (`/api/issuers/:id/...`) bypass this middleware and instead read the issuer from `:id` in the URL with an inline ownership check.
+**Tenant-scoped API keys (ADR-013):** API keys belong to a tenant, not an issuer. One tenant can mint multiple named keys (e.g. `frontend-prod`, `erp`, `mobile-app`) via `GET / POST / DELETE /v1/keys`. Each key carries an `environment` column (`'sandbox'` or `'production'`). The `authenticate` middleware sets `req.tenant` + `req.apiKey` + `req.keyHash`, rejects keys for SUSPENDED tenants (403), and does NOT set `req.issuer` — issuer resolution is delegated to the next middleware.
+
+**Per-request issuer resolution:** every authenticated document-endpoint request must include an `X-Issuer-Id` header. The `resolveIssuer` middleware (mounted on `/v1/documents/*`) fetches the issuer, validates `issuer.tenant_id === req.tenant.id` (403 ISSUER_FORBIDDEN if not), validates `req.apiKey.environment === (issuer.sandbox ? 'sandbox' : 'production')` (401 on mismatch), and sets `req.issuer`. Issuer-management routes (`/v1/issuers/:id/...`) bypass this middleware and instead read the issuer from `:id` in the URL with an inline ownership check.
 
 **Document quota enforcement:** at the start of every document creation transaction, `UPDATE tenants SET document_count = document_count + 1 WHERE id = $1 AND document_count < document_quota RETURNING id` runs atomically. If no row returns, a `QuotaExceededError` (402 QUOTA_EXCEEDED) is thrown and the transaction rolls back.
 
@@ -100,13 +102,13 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Builder registry:** `src/builders/index.js` maps document type codes to builder classes. Adding a new document type = new builder + one registry entry. `SUPPORTED_TYPES` (exported from `src/builders/index.js`) is derived from the registry keys and used by validators and `issuer.service.js` to enforce type eligibility. When adding a new builder, `SUPPORTED_TYPES` automatically includes it — no manual update needed.
 
-**Issuer document types:** `issuer_document_types` table records which document types each issuer is allowed to use. Defaults to `['01']` at registration/admin create. Checked at document creation time — attempting to create a disallowed type returns 400. Managed via `GET/POST /api/issuers/:id/document-types` and `DELETE /api/issuers/:id/document-types/:code`. At promotion, production sequentials are seeded for all active types (using `initialSequentials` values if provided, otherwise 1). Adding a new document type to the system requires a new builder, not a migration.
+**Issuer document types:** `issuer_document_types` table records which document types each issuer is allowed to use. Defaults to `['01']` at registration/admin create. Checked at document creation time — attempting to create a disallowed type returns 400. Managed via `GET/POST /v1/issuers/:id/document-types` and `DELETE /v1/issuers/:id/document-types/:code`. At promotion, production sequentials are seeded for all active types (using `initialSequentials` values if provided, otherwise 1). Adding a new document type to the system requires a new builder, not a migration.
 
-**Idempotency key:** `POST /api/documents` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
+**Idempotency key:** `POST /v1/documents` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
 
 **Email delivery:** when a document becomes `AUTHORIZED`, `emailService.sendInvoiceAuthorized()` is called fire-and-forget. It generates the RIDE PDF and XML on the fly and sends both as attachments via Mailgun. The Mailgun message ID (angle brackets stripped) is stored in `documents.email_message_id`. Per-document status tracked in `documents.email_status` (`PENDING` → `SENT` / `FAILED` / `SKIPPED`). Failed sends retried via `POST /email-retry` (batch) or `POST /:key/email-retry` (single, add `?force=true` to resend an already-sent email). Provider swappable via `EMAIL_PROVIDER` env var + new file in `src/services/email/providers/`.
 
-**Mailgun webhook:** `POST /api/mailgun/webhook` receives Mailgun delivery events and updates `email_status`: `delivered` → `DELIVERED`, `failed`+`permanent` → `FAILED`, `failed`+`temporary` → status unchanged + `EMAIL_TEMP_FAILED` event (Mailgun retries), `complained` → `COMPLAINED`. All requests verified with HMAC-SHA256 via `verify-mailgun-webhook.js` middleware (`MAILGUN_WEBHOOK_SIGNING_KEY` config key). Lookup is by `email_message_id` — `findByEmailMessageId` searches **both** `public.documents` and `sandbox.documents` via `UNION ALL` and returns a `sandbox` boolean on the row. That flag is passed to `updateEmailStatus` and `documentEventModel.create` so the update and audit event land in the correct schema. See ADR-010.
+**Mailgun webhook:** `POST /v1/mailgun/webhook` receives Mailgun delivery events and updates `email_status`: `delivered` → `DELIVERED`, `failed`+`permanent` → `FAILED`, `failed`+`temporary` → status unchanged + `EMAIL_TEMP_FAILED` event (Mailgun retries), `complained` → `COMPLAINED`. All requests verified with HMAC-SHA256 via `verify-mailgun-webhook.js` middleware (`MAILGUN_WEBHOOK_SIGNING_KEY` config key). Lookup is by `email_message_id` — `findByEmailMessageId` searches **both** `public.documents` and `sandbox.documents` via `UNION ALL` and returns a `sandbox` boolean on the row. That flag is passed to `updateEmailStatus` and `documentEventModel.create` so the update and audit event land in the correct schema. See ADR-010.
 
 **Rate limiting:** per-API-key request rate limits prevent abuse and quota exhaustion. Applied via `src/middleware/rate-limit.js` using `express-rate-limit`: 60 req/min on write endpoints (POST), 300 req/min on read endpoints (GET). Keyed by `req.keyHash` (SHA-256 token hash). Returns RFC 7807 `429 TOO_MANY_REQUESTS` response. Configurable via `RATE_LIMIT_WINDOW_MS` (default: 60000ms) and `RATE_LIMIT_MAX` (default: 60) env vars. See `docs/site/errors/too-many-requests.md` for client retry guidance.
 
@@ -128,9 +130,9 @@ All authenticated service code paths must use one of these two helpers. Only the
 
 **Notification and webhook system (ADR-015):** tenant-level alerts delivered via webhooks (primary) and polling (fallback). Two creation paths:
 - *Event-driven* — `notificationService.createDocumentAuthorized(document, issuer)` is called fire-and-forget from `document-transmission.service.js` when SRI authorises a document. Multiple authorisations within a 60-second window are aggregated into one notification row (same `id`, incrementing `count`). Failure never affects the HTTP response.
-- *Scheduled* — `notificationService.runCertChecksForTenant(tenantId, prefs)` checks certificate expiry for all tenant issuers and upserts `CERT_EXPIRING`/`CERT_EXPIRED` alerts. Called by `notification-scheduler.service.runAll()`, which is triggered by `POST /api/admin/jobs/notifications` (called by external cron). Consumers do NOT call any sync endpoint.
-After every notification create/update, `webhookDeliveryService.fanOut(notification)` fans the event out to all active, subscribed webhook endpoints (fire-and-forget). Failed deliveries are retried by the admin job. Consumers can also fall back to `GET /api/notifications?sinceId=<id>` for catch-up polling.
-`notifications`, `notification_preferences`, `webhook_endpoints`, and `webhook_deliveries` tables use `db.query()` directly (not issuer-scoped; no RLS). Optional `X-Issuer-Id` filter on `GET /api/notifications`: parsed by `parseOptionalIssuerId()` in the controller. When supplied, the query adds `AND (issuer_id = $2 OR issuer_id IS NULL)`. Adding a new notification type requires updating the CHECK constraints in both `044_notifications.sql` (or a new migration) and `045_notification_preferences.sql`, plus entries in `NotificationTypes` and `NotificationSeverity` constants.
+- *Scheduled* — `notificationService.runCertChecksForTenant(tenantId, prefs)` checks certificate expiry for all tenant issuers and upserts `CERT_EXPIRING`/`CERT_EXPIRED` alerts. Called by `notification-scheduler.service.runAll()`, which is triggered by `POST /v1/admin/jobs/notifications` (called by external cron). Consumers do NOT call any sync endpoint.
+After every notification create/update, `webhookDeliveryService.fanOut(notification)` fans the event out to all active, subscribed webhook endpoints (fire-and-forget). Failed deliveries are retried by the admin job. Consumers can also fall back to `GET /v1/notifications?sinceId=<id>` for catch-up polling.
+`notifications`, `notification_preferences`, `webhook_endpoints`, and `webhook_deliveries` tables use `db.query()` directly (not issuer-scoped; no RLS). Optional `X-Issuer-Id` filter on `GET /v1/notifications`: parsed by `parseOptionalIssuerId()` in the controller. When supplied, the query adds `AND (issuer_id = $2 OR issuer_id IS NULL)`. Adding a new notification type requires updating the CHECK constraints in both `044_notifications.sql` (or a new migration) and `045_notification_preferences.sql`, plus entries in `NotificationTypes` and `NotificationSeverity` constants.
 
 **Error monitoring (Sentry):** unexpected `5xx` failures are reported to Sentry via `@sentry/node`. `instrument.js` (project root) calls `Sentry.init({ dsn, environment, sendDefaultPii: false })` and is required at the very top of `app.js` — before any other module — so the SDK can auto-instrument `http`, `express`, and `pg`. `Sentry.setupExpressErrorHandler(app)` is mounted in `server.js` immediately before the central `errorHandler`, so it only reports errors with `statusCode >= 500` (or none) and then forwards unchanged; expected `AppError` 4xx responses (validation, not found, quota, etc.) are never sent. `environment` is always `staging` or `production` (mirrors `config.appEnv`), filterable in the Sentry UI. `SENTRY_DSN` is optional — when unset (e.g. local development), the client is a no-op and nothing is transmitted.
 
@@ -140,10 +142,10 @@ After every notification create/update, `webhookDeliveryService.fanOut(notificat
 
 ## Document Lifecycle
 
-All document endpoints require the `X-Issuer-Id` header (the numeric issuer id, returned by `GET /api/issuers`).
+All document endpoints require the `X-Issuer-Id` header (the numeric issuer id, returned by `GET /v1/issuers`).
 
 ```
-POST /api/documents             → SIGNED   (Idempotency-Key header optional, documentType defaults to '01')
+POST /v1/documents             → SIGNED   (Idempotency-Key header optional, documentType defaults to '01')
 POST /:key/send                 → RECEIVED | RETURNED
 GET  /:key/authorize            → AUTHORIZED | NOT_AUTHORIZED  (+fires email)
 POST /:key/rebuild              → SIGNED  (from RETURNED or NOT_AUTHORIZED)
@@ -152,7 +154,7 @@ GET  /:key/xml                  → application/xml  (authorization XML or signe
 GET  /:key/events               → audit trail for the document
 POST /email-retry               → batch retry all PENDING/FAILED emails
 POST /:key/email-retry          → retry single email (?force=true to resend SENT)
-POST /api/mailgun/webhook       → Mailgun delivery event → update email_status (HMAC-verified)
+POST /v1/mailgun/webhook       → Mailgun delivery event → update email_status (HMAC-verified)
 ```
 
 `rebuild` corrects invoice content (taxes, items, buyer, payments) and re-signs using the same `access_key`, `sequential`, and `issue_date`. Used when SRI returns RETURNED or NOT_AUTHORIZED.
@@ -217,9 +219,10 @@ chore: update express to 4.22.1
 17. Throwing `new AppError(message, status)` with a generic HTTP-status code when a more specific code exists — clients need specific codes (`CERTIFICATE_EXPIRED`, `ISSUER_FORBIDDEN`, etc.) to react correctly without parsing `detail` strings. Always import from `src/constants/error-codes.js` and pass the code as the third argument.
 18. Adding a new `AppError` throw without adding the code to `src/constants/error-codes.js` first — codes defined inline as string literals are not documented, not discoverable, and can silently diverge across call sites.
 19. Adding a new notification type without updating **both** CHECK constraints (`chk_notifications_type` in migration 044 and `chk_notification_preferences_type` in migration 045) — the INSERT will fail at runtime. Also add the type to `src/constants/notification-types.js`.
-20. Calling `notificationService.runChecksForTenant()` directly from a tenant request — cert checks are now API-owned and run by the admin scheduler (`POST /api/admin/jobs/notifications`). No sync endpoint is exposed to tenants. `runCertChecksForTenant` is an exported function for the scheduler, not for controllers.
+20. Calling `notificationService.runChecksForTenant()` directly from a tenant request — cert checks are now API-owned and run by the admin scheduler (`POST /v1/admin/jobs/notifications`). No sync endpoint is exposed to tenants. `runCertChecksForTenant` is an exported function for the scheduler, not for controllers.
 21. Forgetting to fire `webhookDeliveryService.fanOut(notification)` after creating or updating a notification — all new notification creation paths must fan out to webhook subscribers. The pattern is `if (notification) fireWebhookFanOut(notification)` using the lazy-require helper in `notification.service.js`.
-22. Returning the webhook secret in PATCH/list responses — the secret is shown **once only** at registration (in the `POST /api/webhooks` response). Never include `row.secret` in any other response shape.
+22. Returning the webhook secret in PATCH/list responses — the secret is shown **once only** at registration (in the `POST /v1/webhooks` response). Never include `row.secret` in any other response shape.
+23. Relying on a multer instance's `limits.fileSize` to cap one specific field when the same instance handles other fields too — the limit applies to the whole request, not per field (e.g. registration's multer covers both the P12 cert and the logo with one 10 MB ceiling). When a field needs its own stricter cap, check `req.files.<field>[0].size` manually in the controller and throw `AppError` with `INVALID_FILE_UPLOAD`.
 
 ---
 
@@ -236,9 +239,10 @@ chore: update express to 4.22.1
 | `src/config/validate.js` | Startup config validation — throws if critical env vars are missing or malformed |
 | `src/middleware/authenticate.js` | Bearer token → SHA-256 → DB lookup → `req.tenant` + `req.apiKey` + `req.keyHash`; checks suspension. Does NOT set `req.issuer`. |
 | `src/middleware/resolve-issuer.js` | Reads `X-Issuer-Id` header → fetches issuer → validates tenant ownership + env match → sets `req.issuer` |
+| `src/middleware/require-matching-environment.js` | Shared 401 `API_KEY_ENV_MISMATCH` check (`req.apiKey.environment` vs `req.tenant.sandbox`) — used by `resolve-issuer.js` and `GET /v1/tenants/me` |
 | `src/services/api-key.service.js` | Tenant-facing key management — list, create (named, sandbox/production), revoke |
-| `src/routes/api-keys.routes.js` | Mounts `GET / POST / DELETE /api/keys` for tenants to manage their own keys |
-| `src/middleware/authenticate-admin.js` | `ADMIN_SECRET` constant-time check for `/api/admin/*` |
+| `src/routes/api-keys.routes.js` | Mounts `GET / POST / DELETE /v1/keys` for tenants to manage their own keys |
+| `src/middleware/authenticate-admin.js` | `ADMIN_SECRET` constant-time check for `/v1/admin/*` |
 | `src/middleware/rate-limit.js` | Tier-aware per-key rate limiting + `adminLimiter` (20 req/min IP-based) |
 | `src/middleware/idempotency.js` | Extracts + validates `Idempotency-Key` header |
 | `src/middleware/verify-mailgun-webhook.js` | HMAC-SHA256 + replay protection for Mailgun webhook |
@@ -246,12 +250,12 @@ chore: update express to 4.22.1
 | `src/services/document-transmission.service.js` | SRI send + authorization check + fire-and-forget email |
 | `src/services/document-rebuild.service.js` | Rebuild from RETURNED/NOT_AUTHORIZED |
 | `src/services/document-email.service.js` | Batch and single email retry |
-| `src/services/document-query.service.js` | Read-only document lookups |
+| `src/services/document-query.service.js` | Read-only document lookups. `list()` converts the `from`/`to` query filters from the API's DD/MM/YYYY contract to `YYYY-MM-DD` (via `moment`) before they reach `document.model.js` — `issue_date` is a `DATE` column and the validator only checks the DD/MM/YYYY regex, it does not convert the value |
 | `src/services/email.service.js` | Sends RIDE PDF + XML on authorization via provider; returns `{ sent, messageId }` |
 | `src/services/email/index.js` | Email provider factory (`EMAIL_PROVIDER` env var) |
 | `src/services/email/providers/mailgun.provider.js` | Mailgun SDK wrapper; returns `{ messageId }` (angle brackets stripped) |
 | `src/services/mailgun-webhook.service.js` | Normalises Mailgun v3/legacy payload, looks up doc by `email_message_id`, updates status |
-| `src/controllers/mailgun-webhook.controller.js` | Thin handler for `POST /api/mailgun/webhook` |
+| `src/controllers/mailgun-webhook.controller.js` | Thin handler for `POST /v1/mailgun/webhook` |
 | `src/routes/mailgun-webhook.routes.js` | Mounts webhook route with HMAC verification |
 | `src/services/email/templates/invoice-authorized.js` | Localised email subject + text + HTML (`render(document, issuer, language)`); strings come from `getTranslations(language).email.invoiceAuthorized` |
 | `src/services/ride.service.js` | RIDE PDF generation — on-demand, not persisted |
@@ -267,9 +271,9 @@ chore: update express to 4.22.1
 | `src/services/notification.service.js` | Notification orchestration — `createDocumentAuthorized` (event-driven, fire-and-forget + webhook fan-out), `runCertChecksForTenant` (called by scheduler), `listForTenant`, `markRead`, `getPreferences`, `updatePreferences` |
 | `src/services/webhook-delivery.service.js` | Webhook fan-out and retry — `fanOut(notification)` (fire-and-forget, fans to all subscribed endpoints), `processDueRetries()` (picks up RETRYING rows), HMAC-SHA256 signing |
 | `src/services/webhook-endpoint.service.js` | Webhook endpoint CRUD — `create` (tier limit check, secret generation), `list`, `update`, `deregister` |
-| `src/services/notification-scheduler.service.js` | Admin job orchestrator — `runAll()` runs cert checks for all non-suspended tenants + webhook retries; called by `POST /api/admin/jobs/notifications` |
-| `src/controllers/notification.controller.js` | Handlers for `GET /api/notifications` (with optional `?sinceId=`), `POST /api/notifications/:id/read`, `GET / PATCH /api/notifications/preferences` |
-| `src/controllers/webhook-endpoint.controller.js` | Handlers for `POST / GET / PATCH / DELETE /api/webhooks` |
+| `src/services/notification-scheduler.service.js` | Admin job orchestrator — `runAll()` runs cert checks for all non-suspended tenants + webhook retries; called by `POST /v1/admin/jobs/notifications` |
+| `src/controllers/notification.controller.js` | Handlers for `GET /v1/notifications` (with optional `?sinceId=`), `POST /v1/notifications/:id/read`, `GET / PATCH /v1/notifications/preferences` |
+| `src/controllers/webhook-endpoint.controller.js` | Handlers for `POST / GET / PATCH / DELETE /v1/webhooks` |
 | `src/routes/notifications.routes.js` | Notification routes — all authenticated; no sync endpoint |
 | `src/routes/webhook-endpoints.routes.js` | Webhook endpoint routes — all authenticated |
 | `src/validators/webhook-endpoint.validator.js` | Validators for webhook endpoint create/update |
@@ -280,10 +284,10 @@ chore: update express to 4.22.1
 | `src/models/tenant-event.model.js` | Tenant event log — `create`, `findByTenantId`; uses `db.query()` (not issuer-scoped) |
 | `src/services/certificate.service.js` | P12 parsing — shared by registration and admin service |
 | `src/services/registration.service.js` | Self-service registration + resend verification — creates tenant + issuer + sandbox API key; logs tenant events |
-| `src/controllers/registration.controller.js` | Handlers for `POST /api/register`, `POST /api/resend-verification`, and `GET /api/verify-email` |
+| `src/controllers/registration.controller.js` | Handlers for `POST /v1/register`, `POST /v1/resend-verification`, and `GET /v1/verify-email` |
 | `src/routes/registration.routes.js` | Public registration, resend-verification, and email verification routes |
-| `src/routes/issuers.routes.js` | Authenticated issuer routes: promote, document type list/add/remove |
-| `src/controllers/issuer.controller.js` | Handlers for promote and document type management |
+| `src/routes/issuers.routes.js` | Authenticated issuer routes: promote, document type list/add/remove, branch creation, logo upload |
+| `src/controllers/issuer.controller.js` | Handlers for promote, document type management, and `PATCH /v1/issuers/:id/logo` |
 | `src/services/issuer.service.js` | `listDocumentTypes`, `addDocumentType`, `removeDocumentType` — validates against `SUPPORTED_TYPES` |
 | `src/models/issuer-document-type.model.js` | `bulkCreate`, `findActiveByIssuerId`, `activate`, `deactivate` — uses `db.query()` (not issuer-scoped) |
 | `src/constants/subscription-tiers.js` | Tier definitions: `documentQuota`, `maxBranches`, `maxIssuePointsPerBranch`, rate limits |
@@ -293,18 +297,18 @@ chore: update express to 4.22.1
 | `src/locales/index.js` | `getTranslations(lang)` + `SUPPORTED_LANGUAGES` + `DEFAULT_LANGUAGE` — single source of truth for i18n |
 | `src/locales/en.js` / `src/locales/es.js` | Locale string objects keyed by domain (`email.verifyEmail.*`) |
 | `src/services/tenant.service.js` | Tenant mutations — `updateLanguage`, `promote` (with ACTIVE status check) |
-| `src/controllers/tenant.controller.js` | Thin handlers for `PATCH /api/tenants/*` and `POST /api/tenants/promote` |
-| `src/routes/tenants.routes.js` | Authenticated tenant routes: language update + promotion |
+| `src/controllers/tenant.controller.js` | Thin handlers for `GET /v1/tenants/me`, `PATCH /v1/tenants/language`, and `POST /v1/tenants/promote` |
+| `src/routes/tenants.routes.js` | Authenticated tenant routes: get current tenant, language update, promotion |
 | `src/services/admin.service.js` | Tenant + issuer + API key management |
 | `src/controllers/admin.controller.js` | Thin HTTP handlers for admin routes |
-| `src/routes/admin.routes.js` | `/api/admin/*` — admin auth + rate limit, tenant/issuer/key CRUD |
+| `src/routes/admin.routes.js` | `/v1/admin/*` — admin auth + rate limit, tenant/issuer/key CRUD |
 | `src/models/api-key.model.js` | Tenant-scoped key CRUD — `findByKeyHash` (joins tenants), `create({ tenantId, ... })`, `findActiveByTenantId`, `findByIdAndTenantId`, `revoke`, `revokeAllByTenantIdAndEnvironment` |
 | `src/errors/conflict-error.js` | AppError subclass for HTTP 409 |
 | `src/errors/quota-exceeded-error.js` | AppError subclass for HTTP 402 QUOTA_EXCEEDED |
 | `src/builders/index.js` | Builder registry |
-| `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js) |
+| `helpers/ride-builder.js` | PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js; renders `issuer.logo` in the top-left header when present) |
 | `src/constants/document-state-machine.js` | `TRANSITIONS` map + `canTransition` / `assertTransition` |
 | `src/config/database.js` | pg Pool + `query` (bypass) + `setIssuerContext(client, issuerId, sandbox)` + `queryAsIssuer(issuerId, sql, params, sandbox)` — sets both RLS context and `search_path` |
-| `db/migrations/` | SQL migration files 001–043 (031: RLS; 033: sandbox schema; 034: api_key environment; 042: api_keys tenant-scoped; 043: sandbox moved from issuers to tenants) |
+| `db/migrations/` | SQL migration files 001–050 (031: RLS; 033: sandbox schema; 034: api_key environment; 042: api_keys tenant-scoped; 043: sandbox moved from issuers to tenants; 044–047: notifications + webhooks; 048: term unit catalog; 049: drop issuer environment; 050: issuer logo) |
 | `assets/factura_V2.1.0.xsd` | Official SRI invoice schema |
 | `.example.env` | Environment variable template |
