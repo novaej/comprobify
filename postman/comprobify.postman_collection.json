@@ -769,6 +769,31 @@
           }
         },
         {
+          "name": "Document Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Issuer-Id",
+                "value": "{{issuer_id}}",
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/documents/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "stats"
+              ]
+            },
+            "description": "Returns a per-type document breakdown for the current month plus an all-time needs-attention count, for dashboard summaries."
+          }
+        },
+        {
           "name": "Get Document",
           "request": {
             "method": "GET",

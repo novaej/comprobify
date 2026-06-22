@@ -1,6 +1,7 @@
 const moment = require('moment');
 const documentModel = require('../models/document.model');
 const documentEventModel = require('../models/document-event.model');
+const catalogModel = require('../models/catalog.model');
 const NotFoundError = require('../errors/not-found-error');
 const { formatDocument } = require('../presenters/document.presenter');
 
@@ -47,4 +48,16 @@ async function list(issuer, filters = {}) {
   return { data: formattedDocuments, pagination };
 }
 
-module.exports = { getByAccessKey, getXml, getEvents, list };
+async function getStats(issuer) {
+  const { byType, needsAttention } = await documentModel.getStats(issuer.id, issuer.sandbox);
+
+  const formattedByType = await Promise.all(byType.map(async (row) => ({
+    type: await catalogModel.getDocumentTypeLabel(row.document_type),
+    issued: parseInt(row.issued, 10),
+    authorizedTotal: Number(row.authorized_total).toFixed(2),
+  })));
+
+  return { thisMonth: { byType: formattedByType }, needsAttention };
+}
+
+module.exports = { getByAccessKey, getXml, getEvents, list, getStats };

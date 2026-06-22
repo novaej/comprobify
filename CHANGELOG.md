@@ -10,6 +10,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`GET /v1/documents/stats`** — per-document-type breakdown (`issued` count + `authorizedTotal`) for the current calendar month, plus an all-time `needsAttention` count (`RETURNED` + `NOT_AUTHORIZED`). Powers the comprobify-web dashboard's revenue summary.
 - **`GET /v1/tenants/me`** — resolves the tenant owning the authenticated API key (`id`, `email`, `subscriptionTier`, `status`, `documentCount`, `documentQuota`, `sandbox`). No DB lookup — echoes what `authenticate` middleware already resolved from the key. Lets a third-party app that only holds an API key (no RUC/P12 on hand) discover its numeric `tenant.id`, e.g. to link an existing account or correlate webhook deliveries.
 
 ### Fixed

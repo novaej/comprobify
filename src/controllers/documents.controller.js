@@ -69,4 +69,9 @@ const list = async (req, res) => {
   res.json({ ok: true, ...result });
 };
 
-module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, list };
+const getStats = async (req, res) => {
+  const stats = await documentQuery.getStats(req.issuer);
+  res.json({ ok: true, stats });
+};
+
+module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, list, getStats };

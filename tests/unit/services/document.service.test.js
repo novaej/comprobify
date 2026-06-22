@@ -2,6 +2,7 @@ jest.mock('../../../src/models/issuer.model');
 jest.mock('../../../src/models/document.model');
 jest.mock('../../../src/models/document-line-item.model');
 jest.mock('../../../src/models/document-event.model');
+jest.mock('../../../src/models/catalog.model');
 jest.mock('../../../src/models/issuer-document-type.model');
 jest.mock('../../../src/services/sequential.service');
 jest.mock('../../../src/services/access-key.service');
@@ -28,6 +29,7 @@ const db = require('../../../src/config/database');
 const documentModel = require('../../../src/models/document.model');
 const documentLineItemModel = require('../../../src/models/document-line-item.model');
 const documentEventModel = require('../../../src/models/document-event.model');
+const catalogModel = require('../../../src/models/catalog.model');
 const issuerDocumentTypeModel = require('../../../src/models/issuer-document-type.model');
 const sequentialService = require('../../../src/services/sequential.service');
 const accessKeyService = require('../../../src/services/access-key.service');
@@ -243,6 +245,38 @@ describe('DocumentQueryService', () => {
     documentModel.findByAccessKey.mockResolvedValue(null);
     const result = await documentQuery.getByAccessKey('0000000000000000000000000000000000000000000000000', mockIssuer);
     expect(result).toBeNull();
+  });
+
+  test('getStats maps document type codes to labels and formats totals', async () => {
+    documentModel.getStats.mockResolvedValue({
+      byType: [
+        { document_type: '01', issued: '5', authorized_total: '1800' },
+        { document_type: '06', issued: '2', authorized_total: '0' },
+      ],
+      needsAttention: 3,
+    });
+    catalogModel.getDocumentTypeLabel.mockImplementation((code) => Promise.resolve({ '01': 'FAC', '06': 'REM' }[code]));
+
+    const result = await documentQuery.getStats(mockIssuer);
+
+    expect(documentModel.getStats).toHaveBeenCalledWith(mockIssuer.id, mockIssuer.sandbox);
+    expect(result).toEqual({
+      thisMonth: {
+        byType: [
+          { type: 'FAC', issued: 5, authorizedTotal: '1800.00' },
+          { type: 'REM', issued: 2, authorizedTotal: '0.00' },
+        ],
+      },
+      needsAttention: 3,
+    });
+  });
+
+  test('getStats returns an empty byType array when no documents were issued this month', async () => {
+    documentModel.getStats.mockResolvedValue({ byType: [], needsAttention: 0 });
+
+    const result = await documentQuery.getStats(mockIssuer);
+
+    expect(result).toEqual({ thisMonth: { byType: [] }, needsAttention: 0 });
   });
 });
 

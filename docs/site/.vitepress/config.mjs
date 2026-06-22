@@ -63,6 +63,7 @@ export default defineConfig({
             collapsed: false,
             items: [
               { text: 'List Documents', link: '/endpoints/list-documents' },
+              { text: 'Document Stats', link: '/endpoints/document-stats' },
               { text: 'Create Invoice', link: '/endpoints/create-invoice' },
               { text: 'Get Document', link: '/endpoints/get-document' },
               { text: 'Send to SRI', link: '/endpoints/send-to-sri' },

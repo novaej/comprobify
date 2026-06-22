@@ -194,4 +194,38 @@ async function findByIssuerId(issuerId, filters = {}, sandbox = false) {
   }
 }
 
-module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId };
+async function getStats(issuerId, sandbox = false) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await db.setIssuerContext(client, issuerId, sandbox);
+
+    const { rows: byType } = await client.query(
+      `SELECT document_type,
+              COUNT(*) AS issued,
+              COALESCE(SUM(CASE WHEN status = $2 THEN total END), 0) AS authorized_total
+       FROM documents
+       WHERE issuer_id = $1
+         AND issue_date >= DATE_TRUNC('month', CURRENT_DATE)
+         AND issue_date <  DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
+       GROUP BY document_type`,
+      [issuerId, DocumentStatus.AUTHORIZED]
+    );
+
+    const { rows: attentionRows } = await client.query(
+      `SELECT COUNT(*) AS count FROM documents
+       WHERE issuer_id = $1 AND status IN ($2, $3)`,
+      [issuerId, DocumentStatus.RETURNED, DocumentStatus.NOT_AUTHORIZED]
+    );
+
+    await client.query('COMMIT');
+    return { byType, needsAttention: parseInt(attentionRows[0].count, 10) };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId, getStats };

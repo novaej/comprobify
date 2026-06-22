@@ -47,6 +47,7 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/v1/documents` | List documents with filtering and pagination |
+| `GET` | `/v1/documents/stats` | Per-type document stats for the current month + needs-attention count |
 | `POST` | `/v1/documents` | Create and sign an invoice |
 | `GET` | `/v1/documents/:accessKey` | Get a document by access key |
 | `POST` | `/v1/documents/:accessKey/send` | Submit signed document to SRI |
