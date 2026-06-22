@@ -24,7 +24,7 @@ const listDocumentsQuery = [
     .withMessage('To date must be in DD/MM/YYYY format'),
   query('documentType')
     .optional()
-    .isIn(['01'])
+    .isIn(['01', '03', '04', '05', '06', '07'])
     .withMessage('documentType must be a supported document type code'),
   query('page')
     .optional()
@@ -34,6 +34,26 @@ const listDocumentsQuery = [
     .optional()
     .isInt({ min: 1, max: 100 })
     .withMessage('Limit must be between 1 and 100'),
+  query('sortBy')
+    .optional()
+    .isIn(['sequential', 'buyerName', 'issueDate', 'status'])
+    .withMessage('sortBy must be one of sequential, buyerName, issueDate, status'),
+  query('sortDir')
+    .optional()
+    .isIn(['asc', 'desc'])
+    .withMessage('sortDir must be asc or desc'),
+  query('sequential')
+    .optional()
+    .isString()
+    .trim()
+    .notEmpty()
+    .withMessage('sequential must not be empty'),
+  query('buyerName')
+    .optional()
+    .isString()
+    .trim()
+    .notEmpty()
+    .withMessage('buyerName must not be empty'),
 ];
 
 module.exports = { accessKeyParam, listDocumentsQuery };

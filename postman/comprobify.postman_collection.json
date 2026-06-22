@@ -762,10 +762,34 @@
                   "value": "31/12/2026",
                   "description": "Filter by issue date <= DD/MM/YYYY",
                   "disabled": true
+                },
+                {
+                  "key": "sequential",
+                  "value": "000000001",
+                  "description": "Filter by sequential, contains match (case-insensitive)",
+                  "disabled": true
+                },
+                {
+                  "key": "buyerName",
+                  "value": "ACME",
+                  "description": "Filter by buyer name, contains match (case-insensitive)",
+                  "disabled": true
+                },
+                {
+                  "key": "sortBy",
+                  "value": "issueDate",
+                  "description": "Sort by: sequential, buyerName, issueDate, status. Defaults to created_at DESC when omitted.",
+                  "disabled": true
+                },
+                {
+                  "key": "sortDir",
+                  "value": "desc",
+                  "description": "Sort direction: asc, desc. Defaults to desc when sortBy is given without sortDir.",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Lists documents for the specified issuer with optional filtering and pagination. Returns documents sorted by creation date (newest first)."
+            "description": "Lists documents for the specified issuer with optional filtering, sorting, and pagination. Defaults to creation date (newest first) when no sortBy is given."
           }
         },
         {
