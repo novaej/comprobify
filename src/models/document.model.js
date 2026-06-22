@@ -169,7 +169,7 @@ async function findByIssuerId(issuerId, filters = {}, sandbox = false) {
   }
 
   if (filters.sequential) {
-    conditions.push(`sequential ILIKE '%' || $${paramIndex} || '%'`);
+    conditions.push(`LPAD(sequential::text, 9, '0') ILIKE '%' || $${paramIndex} || '%'`);
     params.push(filters.sequential);
     paramIndex++;
   }

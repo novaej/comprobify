@@ -64,10 +64,10 @@ describe('DocumentModel.findByIssuerId', () => {
     expect(selectSql()).toContain('ORDER BY status DESC');
   });
 
-  test('adds a parameterised ILIKE condition for sequential filter', async () => {
+  test('adds a parameterised, zero-padded ILIKE condition for sequential filter', async () => {
     await documentModel.findByIssuerId(1, { sequential: '000123' });
 
-    expect(selectSql()).toContain("sequential ILIKE '%' || $2 || '%'");
+    expect(selectSql()).toContain("LPAD(sequential::text, 9, '0') ILIKE '%' || $2 || '%'");
     expect(selectParams()).toEqual([1, '000123', 10, 0]);
   });
 
@@ -91,7 +91,7 @@ describe('DocumentModel.findByIssuerId', () => {
     const sql = selectSql();
     expect(sql).toContain('status = $2');
     expect(sql).toContain('document_type = $3');
-    expect(sql).toContain("sequential ILIKE '%' || $4 || '%'");
+    expect(sql).toContain("LPAD(sequential::text, 9, '0') ILIKE '%' || $4 || '%'");
     expect(sql).toContain("buyer_name ILIKE '%' || $5 || '%'");
     expect(sql).toContain('ORDER BY status ASC');
     expect(selectParams()).toEqual([1, 'AUTHORIZED', '01', '42', 'acme', 10, 0]);

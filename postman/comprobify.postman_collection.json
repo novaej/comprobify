@@ -766,7 +766,7 @@
                 {
                   "key": "sequential",
                   "value": "000000001",
-                  "description": "Filter by sequential, contains match (case-insensitive)",
+                  "description": "Filter by sequential, contains match against the zero-padded 9-digit value (case-insensitive)",
                   "disabled": true
                 },
                 {
