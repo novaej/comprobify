@@ -277,7 +277,21 @@ async function revokeApiKey(id) {
   return row;
 }
 
+async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
+  const issuer = await issuerModel.findById(issuerId);
+  if (!issuer) throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
+
+  const parsed = certificateService.parseCertificate(p12Buffer, p12Password || '');
+  const updated = await issuerModel.updateCertificate(issuer.id, issuer.tenant_id, {
+    encryptedPrivateKey: cryptoService.encrypt(parsed.privateKeyPem),
+    certificatePem: parsed.certPem,
+    certFingerprint: parsed.certFingerprint,
+    certExpiry: parsed.certExpiry,
+  });
+  return { certFingerprint: updated.cert_fingerprint, certExpiry: updated.cert_expiry };
+}
+
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant,
-  createIssuer, listIssuers, createApiKey, revokeApiKey, promoteTenant,
+  createIssuer, listIssuers, createApiKey, revokeApiKey, promoteTenant, renewIssuerCertificate,
 };

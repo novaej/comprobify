@@ -511,6 +511,44 @@
           }
         },
         {
+          "name": "Renew Certificate",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "cert",
+                  "type": "file",
+                  "src": "",
+                  "description": "P12/PFX certificate file from an authorized Ecuadorian CA (BANCO CENTRAL or SECURITY DATA)"
+                },
+                {
+                  "key": "certPassword",
+                  "value": "",
+                  "type": "text",
+                  "description": "Optional. Password protecting the P12 file, if any.",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/certificate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "issuers",
+                "{{issuer_id}}",
+                "certificate"
+              ]
+            },
+            "description": "Replaces the P12 certificate (private key + X.509 cert) for an issuer \u2014 e.g. when it has expired. Does not affect already-signed documents, since each signed invoice embeds its own copy of the certificate inside the XML signature; only future signing operations use the new certificate."
+          }
+        },
+        {
           "name": "Create Branch",
           "request": {
             "method": "POST",
@@ -762,10 +800,59 @@
                   "value": "31/12/2026",
                   "description": "Filter by issue date <= DD/MM/YYYY",
                   "disabled": true
+                },
+                {
+                  "key": "sequential",
+                  "value": "000000001",
+                  "description": "Filter by sequential, contains match against the zero-padded 9-digit value (case-insensitive)",
+                  "disabled": true
+                },
+                {
+                  "key": "buyerName",
+                  "value": "ACME",
+                  "description": "Filter by buyer name, contains match (case-insensitive)",
+                  "disabled": true
+                },
+                {
+                  "key": "sortBy",
+                  "value": "issueDate",
+                  "description": "Sort by: sequential, buyerName, issueDate, status. Defaults to created_at DESC when omitted.",
+                  "disabled": true
+                },
+                {
+                  "key": "sortDir",
+                  "value": "desc",
+                  "description": "Sort direction: asc, desc. Defaults to desc when sortBy is given without sortDir.",
+                  "disabled": true
                 }
               ]
             },
-            "description": "Lists documents for the specified issuer with optional filtering and pagination. Returns documents sorted by creation date (newest first)."
+            "description": "Lists documents for the specified issuer with optional filtering, sorting, and pagination. Defaults to creation date (newest first) when no sortBy is given."
+          }
+        },
+        {
+          "name": "Document Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Issuer-Id",
+                "value": "{{issuer_id}}",
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/documents/stats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "stats"
+              ]
+            },
+            "description": "Returns a per-type document breakdown for the current month plus an all-time needs-attention count, for dashboard summaries."
           }
         },
         {

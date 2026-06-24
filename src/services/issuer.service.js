@@ -42,6 +42,20 @@ async function removeDocumentType(issuerId, documentType) {
   return issuerDocumentTypeModel.findActiveByIssuerId(issuerId);
 }
 
+async function renewCertificate(issuer, p12Buffer, p12Password) {
+  const parsed = certificateService.parseCertificate(p12Buffer, p12Password || '');
+  const updated = await issuerModel.updateCertificate(issuer.id, issuer.tenant_id, {
+    encryptedPrivateKey: cryptoService.encrypt(parsed.privateKeyPem),
+    certificatePem: parsed.certPem,
+    certFingerprint: parsed.certFingerprint,
+    certExpiry: parsed.certExpiry,
+  });
+  if (!updated) {
+    throw new AppError('Issuer not found', 404, ErrorCodes.ISSUER_NOT_FOUND);
+  }
+  return { certFingerprint: updated.cert_fingerprint, certExpiry: updated.cert_expiry };
+}
+
 async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password) {
   const tierConfig = TIERS[tenant.subscriptionTier];
 
@@ -159,4 +173,4 @@ async function listIssuers(tenantId) {
   }));
 }
 
-module.exports = { createBranch, listDocumentTypes, addDocumentType, removeDocumentType, listIssuers };
+module.exports = { createBranch, listDocumentTypes, addDocumentType, removeDocumentType, listIssuers, renewCertificate };

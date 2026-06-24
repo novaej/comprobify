@@ -63,6 +63,7 @@ const handleLogoUpload = (req, res, next) => {
 // Single-issuer operations (issuer id in URL; ownership verified in controller)
 router.get('/:id', readLimiter, idParam, validateRequest, asyncHandler(controller.getById));
 router.patch('/:id/logo', writeLimiter, idParam, validateRequest, handleLogoUpload, asyncHandler(controller.uploadLogo));
+router.patch('/:id/certificate', writeLimiter, upload.single('cert'), idParam, validateRequest, asyncHandler(controller.renewCertificate));
 router.get('/:id/document-types', readLimiter, idParam, validateRequest, asyncHandler(controller.listDocumentTypes));
 router.post('/:id/document-types', writeLimiter, idParam, addDocumentTypeValidator, validateRequest, asyncHandler(controller.addDocumentType));
 router.delete('/:id/document-types/:code', writeLimiter, idParam, removeDocumentTypeValidator, validateRequest, asyncHandler(controller.removeDocumentType));

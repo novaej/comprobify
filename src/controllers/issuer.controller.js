@@ -111,4 +111,13 @@ const uploadLogo = async (req, res) => {
   res.json({ ok: true });
 };
 
-module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType, uploadLogo };
+const renewCertificate = async (req, res) => {
+  const issuer = await loadOwnedIssuer(req);
+  if (!req.file) {
+    throw new AppError('A P12 certificate file is required', 400, ErrorCodes.INVALID_FILE_UPLOAD);
+  }
+  const { certFingerprint, certExpiry } = await issuerService.renewCertificate(issuer, req.file.buffer, req.body.certPassword);
+  res.json({ ok: true, certFingerprint, certExpiry });
+};
+
+module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType, uploadLogo, renewCertificate };

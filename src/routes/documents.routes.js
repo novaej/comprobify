@@ -16,6 +16,7 @@ router.use(asyncHandler(resolveIssuer));
 
 // Read endpoints
 router.get('/', readLimiter, listDocumentsQuery, validateRequest, asyncHandler(controller.list));
+router.get('/stats', readLimiter, asyncHandler(controller.getStats));
 router.get('/:accessKey', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getByAccessKey));
 router.get('/:accessKey/authorize', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.checkAuthorization));
 router.get('/:accessKey/ride', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getRide));

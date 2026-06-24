@@ -28,6 +28,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `POST` | `/v1/issuers` | Create a new branch or issue point — inherits cert from an existing issuer of the tenant. Does NOT mint a new API key. |
 | `GET` | `/v1/issuers/:id` | Get a single issuer's profile (name, RUC, cert expiry) |
 | `PATCH` | `/v1/issuers/:id/logo` | Upload or replace the issuer logo shown in RIDE PDFs (PNG/JPEG/GIF, max 500 KB) |
+| `PATCH` | `/v1/issuers/:id/certificate` | Renew the issuer's P12 certificate (private key + cert) — e.g. when it has expired |
 | `GET` | `/v1/issuers/:id/document-types` | List active document types for the issuer |
 | `POST` | `/v1/issuers/:id/document-types` | Enable a document type for the issuer |
 | `DELETE` | `/v1/issuers/:id/document-types/:code` | Disable a document type for the issuer |
@@ -47,6 +48,7 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/v1/documents` | List documents with filtering and pagination |
+| `GET` | `/v1/documents/stats` | Per-type document stats for the current month + needs-attention count |
 | `POST` | `/v1/documents` | Create and sign an invoice |
 | `GET` | `/v1/documents/:accessKey` | Get a document by access key |
 | `POST` | `/v1/documents/:accessKey/send` | Submit signed document to SRI |

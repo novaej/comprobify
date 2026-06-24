@@ -24,6 +24,7 @@ router.post('/tenants/:id/promote',      v.promoteTenant,      validateRequest, 
 // Issuers
 router.post('/issuers', upload.single('cert'), v.createIssuer, validateRequest, asyncHandler(controller.createIssuer));
 router.get('/issuers',                                                           asyncHandler(controller.listIssuers));
+router.patch('/issuers/:id/certificate', upload.single('cert'), v.renewIssuerCertificate, validateRequest, asyncHandler(controller.renewIssuerCertificate));
 
 // API keys (tenant-scoped)
 router.post('/tenants/:id/api-keys', v.createApiKey,       validateRequest, asyncHandler(controller.createApiKey));

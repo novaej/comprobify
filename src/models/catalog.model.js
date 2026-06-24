@@ -61,6 +61,11 @@ async function getTermUnitLabel(code) {
   return map.get(code) || code;
 }
 
+async function getDocumentTypeLabel(code) {
+  const map = await loadMap('documentTypeLabels', 'SELECT code AS key, short_name AS label FROM cat_document_types');
+  return map.get(code) || code;
+}
+
 async function getTaxRateDescription(taxCode, rateCode) {
   const map = await loadMap(
     'taxRateDescriptions',
@@ -110,6 +115,7 @@ module.exports = {
   getIdTypeLabel,
   getPaymentMethodLabel,
   getTermUnitLabel,
+  getDocumentTypeLabel,
   getTaxRateDescription,
   listIdTypes,
   listPaymentMethods,

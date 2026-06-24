@@ -27,8 +27,19 @@ async function create({ tenantId, ruc, businessName, tradeName, mainAddress, bra
 
 async function updateLogo(issuerId, tenantId, logoBuffer) {
   const { rows } = await db.query(
-    'UPDATE issuers SET logo = $1 WHERE id = $2 AND tenant_id = $3 AND active = true RETURNING id',
+    'UPDATE issuers SET logo = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3 AND active = true RETURNING id',
     [logoBuffer, issuerId, tenantId]
+  );
+  return rows[0] || null;
+}
+
+async function updateCertificate(issuerId, tenantId, { encryptedPrivateKey, certificatePem, certFingerprint, certExpiry }) {
+  const { rows } = await db.query(
+    `UPDATE issuers
+     SET encrypted_private_key = $1, certificate_pem = $2, cert_fingerprint = $3, cert_expiry = $4, updated_at = NOW()
+     WHERE id = $5 AND tenant_id = $6 AND active = true
+     RETURNING id, cert_fingerprint, cert_expiry`,
+    [encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, issuerId, tenantId]
   );
   return rows[0] || null;
 }
@@ -60,4 +71,4 @@ async function findAllByTenantId(tenantId) {
   return rows;
 }
 
-module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo };
+module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo, updateCertificate };

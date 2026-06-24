@@ -48,6 +48,7 @@ export default defineConfig({
               { text: 'Get Issuer', link: '/endpoints/get-issuer-me' },
               { text: 'Create Branch', link: '/endpoints/create-branch' },
               { text: 'Upload Logo', link: '/endpoints/upload-issuer-logo' },
+              { text: 'Renew Certificate', link: '/endpoints/renew-issuer-certificate' },
               { text: 'Document Types', link: '/endpoints/document-types' },
             ],
           },
@@ -63,6 +64,7 @@ export default defineConfig({
             collapsed: false,
             items: [
               { text: 'List Documents', link: '/endpoints/list-documents' },
+              { text: 'Document Stats', link: '/endpoints/document-stats' },
               { text: 'Create Invoice', link: '/endpoints/create-invoice' },
               { text: 'Get Document', link: '/endpoints/get-document' },
               { text: 'Send to SRI', link: '/endpoints/send-to-sri' },

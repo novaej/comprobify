@@ -48,75 +48,7 @@ Creation, transmission, rebuild, and query services need zero changes.
 
 ---
 
-## 3. Docker / Containerisation
-
-**Priority: Low — depends on deployment target**
-
-Not needed if deploying to a PaaS (Railway, Render, Fly.io). Useful for self-hosted VPS deployments or local onboarding.
-
-**What:**
-- `Dockerfile` (multi-stage: build → production image)
-- `docker-compose.yml` with app + PostgreSQL services for local development
-- Health endpoint required for container liveness probes
-
-**Effort:** Low.
-
----
-
-## 4. Dashboard Stats Endpoint
-
-**Priority: Medium — needed for comprobify-web dashboard**
-
-`GET /v1/documents/stats` returns a per-type breakdown for the current month plus an all-time "needs attention" count. Frontend computes net revenue from the breakdown (FAC + LIQ + DEB − CRE from `authorizedTotal` values).
-
-**Response shape:**
-```json
-{
-  "ok": true,
-  "stats": {
-    "thisMonth": {
-      "byType": [
-        { "type": "FAC", "issued": 5, "authorizedTotal": "1800.00" },
-        { "type": "CRE", "issued": 2, "authorizedTotal": "260.00" }
-      ]
-    },
-    "needsAttention": 3
-  }
-}
-```
-
-**Field rules:**
-- `byType` — only types with at least one document issued this month (omit empty types)
-- `authorizedTotal` — sum of `total` for `AUTHORIZED` docs, decimal string `"0.00"` if none
-- `needsAttention` — count of `RETURNED` or `NOT_AUTHORIZED` docs, all-time
-- REM / RET included in `byType` with `authorizedTotal = "0.00"` (no monetary value)
-
-**Type code mapping** (DB → response):
-`'01'→FAC`, `'03'→LIQ`, `'04'→CRE`, `'05'→DEB`, `'06'→REM`, `'07'→RET`
-
-**Implementation:**
-1. `document.model.js` — add `getStats(issuerId, sandbox)`: two queries inside a single `getClient()` transaction with `setIssuerContext` (monthly GROUP BY document_type + all-time RETURNED/NOT_AUTHORIZED count)
-2. `document-query.service.js` — add `getStats(issuer)`: maps DB codes to friendly names, formats `authorizedTotal` as decimal strings
-3. `documents.controller.js` — add `getStats` handler
-4. `documents.routes.js` — add `GET /stats` **before** `GET /:accessKey` (route ordering critical)
-
-**SQL (monthly):**
-```sql
-SELECT document_type,
-       COUNT(*) AS issued,
-       COALESCE(SUM(CASE WHEN status = 'AUTHORIZED' THEN total END), 0) AS authorized_total
-FROM documents
-WHERE issuer_id = $1
-  AND issue_date >= DATE_TRUNC('month', CURRENT_DATE)
-  AND issue_date <  DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
-GROUP BY document_type
-```
-
-**Effort:** Low — no migration, no new tables, fits existing patterns exactly.
-
----
-
-## 5. API Key Usage Tracking
+## 3. API Key Usage Tracking
 
 **Priority: Medium — observability for named integrations**
 
@@ -138,7 +70,7 @@ Rate limiting is already per `keyHash` (in-memory, enforces throttling). But the
 - Audit trail: `created_at` + `last_used_at` + `request_count` per key tells the full lifecycle story
 
 **Notes:**
-- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 8) or an APM tool
+- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 6) or an APM tool
 - The background UPDATE is a single indexed write per request (`WHERE id = $1`); acceptable overhead for the observability gain
 - Per-issuer document volume is already derivable from `documents.issuer_id` — this adds the per-integration request-level dimension
 
@@ -146,7 +78,7 @@ Rate limiting is already per `keyHash` (in-memory, enforces throttling). But the
 
 ---
 
-## 6. Reporting
+## 4. Reporting
 
 **Priority: Low — depends on client requirements**
 
@@ -161,7 +93,7 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 ---
 
-## 7. Registration DoS Monitoring
+## 5. Registration DoS Monitoring
 
 **Priority: Low — risk mitigation**
 
@@ -178,7 +110,7 @@ The existing `registrationLimiter` (5 req/hour per IP) limits per-IP burst, but 
 
 ---
 
-## 8. Structured Request Logging
+## 6. Structured Request Logging
 
 **Priority: Medium — important for a B2B API where documents have legal weight**
 
@@ -200,7 +132,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 **Implementation:**
 1. Add `express-winston` (or a thin custom middleware) to emit one structured JSON log line per request after the response is sent — attach `tenantId`, `issuerId`, `keyHash` from `req` after `authenticate` runs
 2. Ship logs to **Datadog** or **Betterstack** (both have free tiers; Betterstack integrates in ~10 lines for Node)
-3. The item 5 `request_count` counter on `api_keys` still has value as a cheap "is this key alive" check without a log query — these two are complementary, not alternatives
+3. The item 3 `request_count` counter on `api_keys` still has value as a cheap "is this key alive" check without a log query — these two are complementary, not alternatives
 
 **Note:** log the `keyHash`, never the plaintext token. All sensitive fields (`encrypted_private_key`, cert PEM, passwords) must be excluded.
 
@@ -208,7 +140,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 
 ---
 
-## 9. API Key Scopes
+## 7. API Key Scopes
 
 **Priority: Low — defer until first concrete use case**
 

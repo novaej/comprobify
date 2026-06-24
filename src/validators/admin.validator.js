@@ -115,6 +115,10 @@ const createIssuer = [
   }),
 ];
 
+const renewIssuerCertificate = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
 const promoteTenant = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 
@@ -166,5 +170,5 @@ const revokeApiKey = [
 
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
-  createIssuer, createApiKey, revokeApiKey,
+  createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
 };

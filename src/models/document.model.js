@@ -2,6 +2,13 @@ const db = require('../config/database');
 const DocumentStatus = require('../constants/document-status');
 const EmailStatus = require('../constants/email-status');
 
+const SORT_COLUMNS = {
+  sequential: 'sequential',
+  buyerName: 'buyer_name',
+  issueDate: 'issue_date',
+  status: 'status',
+};
+
 const MUTABLE_EXTRA_COLUMNS = new Set([
   // Email tracking — always updatable
   'email_status', 'email_sent_at', 'email_error', 'email_message_id',
@@ -161,7 +168,22 @@ async function findByIssuerId(issuerId, filters = {}, sandbox = false) {
     paramIndex++;
   }
 
+  if (filters.sequential) {
+    conditions.push(`LPAD(sequential::text, 9, '0') ILIKE '%' || $${paramIndex} || '%'`);
+    params.push(filters.sequential);
+    paramIndex++;
+  }
+
+  if (filters.buyerName) {
+    conditions.push(`buyer_name ILIKE '%' || $${paramIndex} || '%'`);
+    params.push(filters.buyerName);
+    paramIndex++;
+  }
+
   const whereClause = conditions.join(' AND ');
+  const orderBy = filters.sortBy
+    ? `${SORT_COLUMNS[filters.sortBy]} ${filters.sortDir === 'asc' ? 'ASC' : 'DESC'}`
+    : 'created_at DESC';
   const limitParamIndex = paramIndex;
   const offsetParamIndex = paramIndex + 1;
   const params2 = [...params, limit, offset];
@@ -180,7 +202,7 @@ async function findByIssuerId(issuerId, filters = {}, sandbox = false) {
     const total = parseInt(countResult.rows[0].count, 10);
 
     const { rows } = await client.query(
-      `SELECT * FROM documents WHERE ${whereClause} ORDER BY created_at DESC LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
+      `SELECT * FROM documents WHERE ${whereClause} ORDER BY ${orderBy} LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
       params2
     );
 
@@ -194,4 +216,38 @@ async function findByIssuerId(issuerId, filters = {}, sandbox = false) {
   }
 }
 
-module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId };
+async function getStats(issuerId, sandbox = false) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await db.setIssuerContext(client, issuerId, sandbox);
+
+    const { rows: byType } = await client.query(
+      `SELECT document_type,
+              COUNT(*) AS issued,
+              COALESCE(SUM(CASE WHEN status = $2 THEN total END), 0) AS authorized_total
+       FROM documents
+       WHERE issuer_id = $1
+         AND issue_date >= DATE_TRUNC('month', CURRENT_DATE)
+         AND issue_date <  DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month'
+       GROUP BY document_type`,
+      [issuerId, DocumentStatus.AUTHORIZED]
+    );
+
+    const { rows: attentionRows } = await client.query(
+      `SELECT COUNT(*) AS count FROM documents
+       WHERE issuer_id = $1 AND status IN ($2, $3)`,
+      [issuerId, DocumentStatus.RETURNED, DocumentStatus.NOT_AUTHORIZED]
+    );
+
+    await client.query('COMMIT');
+    return { byType, needsAttention: parseInt(attentionRows[0].count, 10) };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId, getStats };

@@ -1,5 +1,7 @@
 const adminService = require('../services/admin.service');
 const notificationSchedulerService = require('../services/notification-scheduler.service');
+const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 
 // Tenants
 const createTenant = async (req, res) => {
@@ -41,6 +43,18 @@ const createIssuer = async (req, res) => {
 const listIssuers = async (req, res) => {
   const issuers = await adminService.listIssuers();
   res.json({ ok: true, issuers });
+};
+
+const renewIssuerCertificate = async (req, res) => {
+  if (!req.file) {
+    throw new AppError('A P12 certificate file is required', 400, ErrorCodes.INVALID_FILE_UPLOAD);
+  }
+  const { certFingerprint, certExpiry } = await adminService.renewIssuerCertificate(
+    parseInt(req.params.id, 10),
+    req.file.buffer,
+    req.body.certPassword,
+  );
+  res.json({ ok: true, certFingerprint, certExpiry });
 };
 
 const promoteTenant = async (req, res) => {
@@ -89,5 +103,5 @@ const runNotificationJobs = async (req, res) => {
 
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
-  createIssuer, listIssuers, createApiKey, revokeApiKey, runNotificationJobs,
+  createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
 };
