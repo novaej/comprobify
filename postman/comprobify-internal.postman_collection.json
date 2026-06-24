@@ -517,6 +517,44 @@
           }
         },
         {
+          "name": "Renew Certificate",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "cert",
+                  "type": "file",
+                  "src": "",
+                  "description": "P12/PFX certificate file from an authorized Ecuadorian CA (BANCO CENTRAL or SECURITY DATA)"
+                },
+                {
+                  "key": "certPassword",
+                  "value": "",
+                  "type": "text",
+                  "description": "Optional. Password protecting the P12 file, if any.",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/certificate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "issuers",
+                "{{issuer_id}}",
+                "certificate"
+              ]
+            },
+            "description": "Replaces the P12 certificate (private key + X.509 cert) for an issuer \u2014 e.g. when it has expired. Does not affect already-signed documents, since each signed invoice embeds its own copy of the certificate inside the XML signature; only future signing operations use the new certificate."
+          }
+        },
+        {
           "name": "Create Branch",
           "request": {
             "method": "POST",
@@ -1856,6 +1894,45 @@
               ]
             },
             "description": "Returns all active issuers across all tenants."
+          }
+        },
+        {
+          "name": "Renew Issuer Certificate (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "cert",
+                  "type": "file",
+                  "src": "",
+                  "description": "P12/PFX certificate file from an authorized Ecuadorian CA (BANCO CENTRAL or SECURITY DATA)"
+                },
+                {
+                  "key": "certPassword",
+                  "value": "",
+                  "type": "text",
+                  "description": "Optional. Password protecting the P12 file, if any.",
+                  "disabled": true
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/admin/issuers/{{issuer_id}}/certificate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "issuers",
+                "{{issuer_id}}",
+                "certificate"
+              ]
+            },
+            "description": "Admin override \u2014 renews the P12 certificate for any issuer, no tenant ownership check. Uses the admin_secret as the Bearer token."
           }
         },
         {

@@ -10,6 +10,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`PATCH /v1/issuers/:id/certificate`** — renews the P12 certificate (private key + X.509 cert) stored for an existing issuer, e.g. when it has expired. Reuses `certificateService.parseCertificate` + `cryptoService.encrypt` from issuer creation; updates only the targeted issuer row (sibling branches that inherited the cert via `sourceIssuerId` are unaffected). Does not touch already-signed documents — each signed invoice embeds its own certificate copy inside the XML signature. Admin override at `PATCH /v1/admin/issuers/:id/certificate` (no tenant ownership check).
 - **`GET /v1/documents/stats`** — per-document-type breakdown (`issued` count + `authorizedTotal`) for the current calendar month, plus an all-time `needsAttention` count (`RETURNED` + `NOT_AUTHORIZED`). Powers the comprobify-web dashboard's revenue summary.
 - **`GET /v1/tenants/me`** — resolves the tenant owning the authenticated API key (`id`, `email`, `subscriptionTier`, `status`, `documentCount`, `documentQuota`, `sandbox`). No DB lookup — echoes what `authenticate` middleware already resolved from the key. Lets a third-party app that only holds an API key (no RUC/P12 on hand) discover its numeric `tenant.id`, e.g. to link an existing account or correlate webhook deliveries.
 

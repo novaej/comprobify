@@ -33,6 +33,17 @@ async function updateLogo(issuerId, tenantId, logoBuffer) {
   return rows[0] || null;
 }
 
+async function updateCertificate(issuerId, tenantId, { encryptedPrivateKey, certificatePem, certFingerprint, certExpiry }) {
+  const { rows } = await db.query(
+    `UPDATE issuers
+     SET encrypted_private_key = $1, certificate_pem = $2, cert_fingerprint = $3, cert_expiry = $4
+     WHERE id = $5 AND tenant_id = $6 AND active = true
+     RETURNING id, cert_fingerprint, cert_expiry`,
+    [encryptedPrivateKey, certificatePem, certFingerprint, certExpiry, issuerId, tenantId]
+  );
+  return rows[0] || null;
+}
+
 async function findAll() {
   const { rows } = await db.query(
     `SELECT id, tenant_id, ruc, business_name, trade_name, branch_code, issue_point_code, cert_expiry, cert_fingerprint, active
@@ -60,4 +71,4 @@ async function findAllByTenantId(tenantId) {
   return rows;
 }
 
-module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo };
+module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo, updateCertificate };
