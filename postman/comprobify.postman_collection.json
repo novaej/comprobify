@@ -745,6 +745,48 @@
           }
         },
         {
+          "name": "Create Credit Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Issuer-Id",
+                "value": "{{issuer_id}}",
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers). Must have document type 04 enabled."
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "description": "Optional \u2014 unique per intended credit note. Reuse on retries to avoid duplicates."
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "documents"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"04\",\n  \"issueDate\": \"05/04/2026\",\n  \"buyer\": {\n    \"idType\": \"05\",\n    \"id\": \"1234567890\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"address\": \"Av. Amazonas 123\"\n  },\n  \"originalDocument\": {\n    \"documentType\": \"01\",\n    \"number\": \"001-001-000000027\",\n    \"issueDate\": \"03/04/2026\"\n  },\n  \"motivo\": \"Devolucion de mercaderia por defecto de fabricacion\",\n  \"items\": [\n    {\n      \"mainCode\": \"PROD-001\",\n      \"auxiliaryCode\": \"AUX-001\",\n      \"description\": \"Web development service\",\n      \"quantity\": \"1.00\",\n      \"unitPrice\": \"100.00\",\n      \"discount\": \"0.00\",\n      \"taxes\": [\n        {\n          \"code\": \"2\",\n          \"rateCode\": \"2\",\n          \"rate\": \"15.00\",\n          \"taxableBase\": \"100.00\",\n          \"taxAmount\": \"15.00\"\n        }\n      ]\n    }\n  ],\n  \"additionalInfo\": [\n    { \"name\": \"Contract\", \"value\": \"CTR-2026-001\" }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Creates, XSD-validates, and signs a new credit note referencing a previously authorized invoice. Returns the document with status `SIGNED`.\n\nUnlike Create Invoice, this body has no `payments` block and instead requires `originalDocument` (the invoice being credited \u2014 its document type, number, and issue date) plus a `motivo` (reason for the credit note).\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use \u2014 the issuer must have document type `04` enabled first (see Add Document Type).\n\nThe `Idempotency-Key` header makes creation idempotent \u2014 generate it once per intended credit note and reuse on retries."
+          }
+        },
+        {
           "name": "List Documents",
           "request": {
             "method": "GET",

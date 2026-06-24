@@ -124,3 +124,4 @@ Returns the full updated list of active document types.
 | Code | Description |
 |---|---|
 | `01` | Factura (Invoice) |
+| `04` | Nota de Crédito (Credit Note) — see [Create Credit Note](create-credit-note.md) for the request body, which differs from an invoice's |
