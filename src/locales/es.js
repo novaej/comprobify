@@ -1,10 +1,11 @@
 module.exports = {
   email: {
     invoiceAuthorized: {
-      subject: (formattedSeq, issuerName) => `Factura Electrónica N° ${formattedSeq} — ${issuerName}`,
+      documentTypeLabels: { '01': 'Factura', '04': 'Nota de Crédito' },
+      subject: (docTypeLabel, formattedSeq, issuerName) => `${docTypeLabel} Electrónica N° ${formattedSeq} — ${issuerName}`,
       greeting: (buyerName) => `Estimado/a ${buyerName},`,
       intro: 'Nos complacemos en informarle que su comprobante electrónico ha sido autorizado por el SRI.',
-      labelInvoiceNumber: 'Factura N°',
+      labelInvoiceNumber: (docTypeLabel) => `${docTypeLabel} N°`,
       labelIssueDate: 'Fecha de emisión',
       labelTotal: 'Total',
       labelAuthorizationNumber: 'Número de autorización',

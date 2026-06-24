@@ -10,10 +10,9 @@ See [STRATEGY.md](STRATEGY.md) for product context, pricing model, and phased ro
 
 **Priority: High — required for full SRI compliance**
 
-Only facturas (`01`) are currently supported. The builder registry pattern already makes adding new types straightforward.
+Facturas (`01`) and notas de crédito (`04`) are supported. The builder registry pattern makes adding new types straightforward, but each type needs its own validator — see "Adding a new document type" in `docs/guides/coding-guidelines.md`.
 
 **Priority order:**
-- `04` — Nota de crédito (credit note)
 - `07` — Comprobante de retención (retention voucher)
 - `05` — Nota de débito (debit note)
 - `03` — Liquidación de compra
@@ -22,11 +21,11 @@ Only facturas (`01`) are currently supported. The builder registry pattern alrea
 **Per new type:**
 1. New builder class in `src/builders/` extending `BaseDocumentBuilder`
 2. One registry entry in `src/builders/index.js`
-3. New XSD asset in `assets/` (download from SRI portal)
-4. Update `xml-validator.service.js` to select schema by `documentType`
-5. Add the type code to the `isIn([...])` validator in `invoice.validator.js`
+3. New XSD asset in `assets/` (download from SRI portal), added to `XSD_PATHS` in `xml-validator.service.js`
+4. New validator file reflecting that type's actual required fields (do not bolt onto `createInvoice`'s `isIn([...])`); register it in `src/middleware/select-document-validator.js`
+5. Add the type's label to `helpers/ride-builder.js` and `src/locales/{es,en}.js`'s `email.invoiceAuthorized.documentTypeLabels`
 
-Creation, transmission, rebuild, and query services need zero changes.
+Creation and rebuild services already guard invoice-only logic (e.g. the payments-total check) behind `Array.isArray(body.payments)`, so they need zero changes unless the new type introduces another invoice-only assumption. Transmission and query services need zero changes.
 
 ---
 

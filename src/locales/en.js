@@ -1,10 +1,11 @@
 module.exports = {
   email: {
     invoiceAuthorized: {
-      subject: (formattedSeq, issuerName) => `Electronic Invoice No. ${formattedSeq} — ${issuerName}`,
+      documentTypeLabels: { '01': 'Invoice', '04': 'Credit Note' },
+      subject: (docTypeLabel, formattedSeq, issuerName) => `Electronic ${docTypeLabel} No. ${formattedSeq} — ${issuerName}`,
       greeting: (buyerName) => `Dear ${buyerName},`,
       intro: 'We are pleased to inform you that your electronic receipt has been authorized by the SRI.',
-      labelInvoiceNumber: 'Invoice No.',
+      labelInvoiceNumber: (docTypeLabel) => `${docTypeLabel} No.`,
       labelIssueDate: 'Issue date',
       labelTotal: 'Total',
       labelAuthorizationNumber: 'Authorization number',

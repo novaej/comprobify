@@ -1,9 +1,11 @@
 const InvoiceBuilder = require('./invoice.builder');
+const CreditNoteBuilder = require('./credit-note.builder');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 
 const builders = {
   '01': InvoiceBuilder,
+  '04': CreditNoteBuilder,
 };
 
 function getBuilder(documentTypeCode, issuer) {

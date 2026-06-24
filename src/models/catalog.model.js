@@ -41,6 +41,11 @@ async function isValidPaymentMethod(code) {
   return set.has(code);
 }
 
+async function isValidDocumentType(code) {
+  const set = await loadSet('documentTypes', 'SELECT code FROM cat_document_types');
+  return set.has(code);
+}
+
 async function isValidTermUnit(code) {
   const set = await loadSet('termUnits', 'SELECT code FROM cat_term_units');
   return set.has(code);
@@ -63,6 +68,11 @@ async function getTermUnitLabel(code) {
 
 async function getDocumentTypeLabel(code) {
   const map = await loadMap('documentTypeLabels', 'SELECT code AS key, short_name AS label FROM cat_document_types');
+  return map.get(code) || code;
+}
+
+async function getDocumentTypeDescription(code) {
+  const map = await loadMap('documentTypeDescriptions', 'SELECT code AS key, description AS label FROM cat_document_types');
   return map.get(code) || code;
 }
 
@@ -111,11 +121,13 @@ module.exports = {
   isValidTaxType,
   isValidTaxRate,
   isValidPaymentMethod,
+  isValidDocumentType,
   isValidTermUnit,
   getIdTypeLabel,
   getPaymentMethodLabel,
   getTermUnitLabel,
   getDocumentTypeLabel,
+  getDocumentTypeDescription,
   getTaxRateDescription,
   listIdTypes,
   listPaymentMethods,
