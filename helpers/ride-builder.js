@@ -23,6 +23,9 @@ function fmt(n, d = 2) { return parseFloat(n || 0).toFixed(d); }
 function environmentLabel(env)  { return env  === '2' ? 'PRODUCCIÓN'                  : 'PRUEBAS'; }
 function emissionLabel(code)    { return code === '2' ? 'INDISPONIBILIDAD DE SISTEMA' : 'NORMAL';  }
 
+const DOCUMENT_TYPE_HEADER_LABELS = { '01': 'FACTURA', '04': 'NOTA DE CRÉDITO' };
+function documentTypeHeaderLabel(code) { return DOCUMENT_TYPE_HEADER_LABELS[code] || 'COMPROBANTE'; }
+
 async function makeBarcodeBuffer(text) {
   try {
     return await bwipjs.toBuffer({
@@ -90,7 +93,7 @@ async function drawHeader(doc, data, y) {
     P,                                                    // top padding
     Math.max(mh(doc, 'R.U.C.:', 36, { size: 8 }),
              mh(doc, data.ruc, rw - 40, { size: 10, bold: true })) + 4,
-    mh(doc, 'FACTURA', rw, { size: 14, bold: true }) + 4,
+    mh(doc, documentTypeHeaderLabel(data.documentType), rw, { size: 14, bold: true }) + 4,
     mh(doc, `No.    ${data.branchCode}-${data.issuePointCode}-${data.sequential}`, rw, { size: 8 }) + 4,
     mh(doc, 'NÚMERO DE AUTORIZACIÓN', rw, { size: 7 }) + 2,
     mh(doc, data.authorizationNumber || '', rw, { size: 7.5 }) + 5,
@@ -186,8 +189,8 @@ async function drawHeader(doc, data, y) {
     wt(doc, data.ruc, ri + 40, ry, rw - 40, { size: 10, bold: true });
     ry += rightRows[1];
 
-    // FACTURA
-    wt(doc, 'FACTURA', ri, ry, rw, { size: 14, bold: true });
+    // Document type label
+    wt(doc, documentTypeHeaderLabel(data.documentType), ri, ry, rw, { size: 14, bold: true });
     ry += rightRows[2];
 
     // No.
@@ -375,6 +378,18 @@ function paymentLabel(p) {
   return `${base} (${p.term} ${unit})`;
 }
 
+// Builds the "Documento que se modifica" rows for a credit note's RIDE — replaces the
+// "Forma de pago" block, which doesn't apply since credit notes carry no payments.
+function buildModifiedDocRows(data) {
+  const doc = data.originalDocument || {};
+  return [
+    { label: 'Comprobante', value: doc.documentTypeLabel || doc.documentType || '' },
+    { label: 'Número', value: doc.number || '' },
+    { label: 'Fecha de emisión', value: doc.issueDate || '' },
+    { label: 'Motivo', value: data.motivo || '' },
+  ];
+}
+
 // ─── Section 4: Additional info + payments (left) / Tax totals (right) ───────
 function drawBottomSection(doc, data, y) {
   const LEFT_W  = Math.round(CW * 0.54);
@@ -387,7 +402,9 @@ function drawBottomSection(doc, data, y) {
   const addlEntries = Array.isArray(data.additionalInfo)
     ? data.additionalInfo.slice(0, 15)
     : [];
+  const isCreditNote = data.documentType === '04';
   const payments = data.payments || [];
+  const modifiedDocRows = isCreditNote ? buildModifiedDocRows(data) : [];
   const totals   = buildTotalRows(data);
 
   const MIN_ROW  = 13;   // minimum row height in points
@@ -424,6 +441,14 @@ function drawBottomSection(doc, data, y) {
     ) + 4;
   });
 
+  // Modified-document rows (credit notes only): same key/value layout as addlEntries —
+  // "Motivo" can be long free text, so it needs to wrap rather than right-align like an amount
+  const modifiedDocRowH = modifiedDocRows.map((row) => Math.max(
+    MIN_ROW,
+    mh(doc, `${row.label}:`, KEY_W - P, { size: 7, bold: true }),
+    mh(doc, String(row.value), VAL_W,   { size: 7 })
+  ) + 4);
+
   // Tax totals: height accounts for two-line labels (e.g. AHORRO POR SUBSIDIO)
   const totalRowH = totals.map((row) => Math.max(
     MIN_ROW,
@@ -435,8 +460,10 @@ function drawBottomSection(doc, data, y) {
   const addlBlockH = addlEntries.length > 0
     ? HDR_H + addlRowH.reduce((s, h) => s + h, 0)
     : 0;
-  const payBlockH  = HDR_H + payRowH.reduce((s, h) => s + h, 0);
-  const leftH      = addlBlockH + payBlockH;
+  const secondBlockH = isCreditNote
+    ? HDR_H + modifiedDocRowH.reduce((s, h) => s + h, 0)
+    : HDR_H + payRowH.reduce((s, h) => s + h, 0);
+  const leftH      = addlBlockH + secondBlockH;
   const rightH     = totalRowH.reduce((s, h) => s + h, 0);
 
   const SECTION_H  = Math.max(leftH, rightH);
@@ -463,25 +490,40 @@ function drawBottomSection(doc, data, y) {
     });
   }
 
-  // ── Left: Forma de pago ───────────────────────────────────────────────────
+  // ── Left: Forma de pago (invoices) / Documento que se modifica (credit notes) ─────
   hline(doc, lx, ly, LEFT_W, C_DARK);
   fillBox(doc, lx, ly, LEFT_W, HDR_H, C_BG_HDR);
-  wt(doc, 'Forma de pago', lx + P,          ly + 3, PAY_LBL_W - P,     { size: 7.5, bold: true });
-  wt(doc, 'Valor',         lx + PAY_LBL_W + P, ly + 3, PAY_VAL_W - P * 2,
-     { size: 7.5, bold: true, align: 'right' });
-  vline(doc, lx + PAY_LBL_W, ly, HDR_H, C_DARK);
-  ly += HDR_H;
 
-  payments.forEach((p, i) => {
-    const rh    = payRowH[i];
-    const label = paymentLabel(p);
-    hline(doc, lx, ly, LEFT_W, C_BORDER);
-    vline(doc, lx + PAY_LBL_W, ly, rh, C_DARK);
-    wt(doc, label,        lx + P,           ly + 3, PAY_LBL_W - P * 2, { size: 7 });
-    wt(doc, fmt(p.total), lx + PAY_LBL_W + P, ly + 3, PAY_VAL_W - P * 2,
-       { size: 7, align: 'right' });
-    ly += rh;
-  });
+  if (isCreditNote) {
+    wt(doc, 'Documento que se modifica', lx + P, ly + 3, LEFT_W - P * 2,
+       { size: 7.5, bold: true, align: 'center' });
+    ly += HDR_H;
+
+    modifiedDocRows.forEach((row, i) => {
+      const rh = modifiedDocRowH[i];
+      hline(doc, lx, ly, LEFT_W, C_BORDER);
+      wt(doc, `${row.label}:`,    lx + P,         ly + 3, KEY_W - P, { size: 7, bold: true });
+      wt(doc, String(row.value), lx + KEY_W + P,  ly + 3, VAL_W,     { size: 7 });
+      ly += rh;
+    });
+  } else {
+    wt(doc, 'Forma de pago', lx + P,          ly + 3, PAY_LBL_W - P,     { size: 7.5, bold: true });
+    wt(doc, 'Valor',         lx + PAY_LBL_W + P, ly + 3, PAY_VAL_W - P * 2,
+       { size: 7.5, bold: true, align: 'right' });
+    vline(doc, lx + PAY_LBL_W, ly, HDR_H, C_DARK);
+    ly += HDR_H;
+
+    payments.forEach((p, i) => {
+      const rh    = payRowH[i];
+      const label = paymentLabel(p);
+      hline(doc, lx, ly, LEFT_W, C_BORDER);
+      vline(doc, lx + PAY_LBL_W, ly, rh, C_DARK);
+      wt(doc, label,        lx + P,           ly + 3, PAY_LBL_W - P * 2, { size: 7 });
+      wt(doc, fmt(p.total), lx + PAY_LBL_W + P, ly + 3, PAY_VAL_W - P * 2,
+         { size: 7, align: 'right' });
+      ly += rh;
+    });
+  }
   hline(doc, lx, ly, LEFT_W, C_DARK);
 
   // ── Right: Tax totals ─────────────────────────────────────────────────────

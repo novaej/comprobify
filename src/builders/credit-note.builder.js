@@ -1,14 +1,13 @@
 const BaseDocumentBuilder = require('./base.builder');
 
-class InvoiceBuilder extends BaseDocumentBuilder {
+class CreditNoteBuilder extends BaseDocumentBuilder {
   constructor(issuer) {
-    super(issuer, '01', '2.1.0');
+    super(issuer, '04', '1.1.0');
   }
 
-  buildInfoFactura(body) {
-    const { issueDate, buyer, guiaRemision, items, payments } = body;
+  buildInfoNotaCredito(body) {
+    const { issueDate, buyer, originalDocument, motivo, items } = body;
 
-    // Calculate totals from items
     let subtotal = 0;
     const taxTotals = {};
 
@@ -28,21 +27,22 @@ class InvoiceBuilder extends BaseDocumentBuilder {
     }
 
     const totalTax = Object.values(taxTotals).reduce((sum, t) => sum + t.valor, 0);
-    const totalDiscount = items.reduce((sum, i) => sum + parseFloat(i.discount || '0'), 0);
     const grandTotal = subtotal + totalTax;
 
-    this.data.infoFactura = {
+    this.data.infoNotaCredito = {
       fechaEmision: issueDate,
       ...(this.issuer.branch_address && { dirEstablecimiento: this.issuer.branch_address }),
-      ...(this.issuer.special_taxpayer && { contribuyenteEspecial: this.issuer.special_taxpayer }),
-      ...(this.issuer.required_accounting && { obligadoContabilidad: this.issuer.required_accounting }),
       tipoIdentificacionComprador: buyer.idType,
-      ...(guiaRemision && { guiaRemision }),
       razonSocialComprador: buyer.name,
       identificacionComprador: buyer.id,
-      ...(buyer.address && { direccionComprador: buyer.address }),
+      ...(this.issuer.special_taxpayer && { contribuyenteEspecial: this.issuer.special_taxpayer }),
+      ...(this.issuer.required_accounting && { obligadoContabilidad: this.issuer.required_accounting }),
+      codDocModificado: originalDocument.documentType,
+      numDocModificado: originalDocument.number,
+      fechaEmisionDocSustento: originalDocument.issueDate,
       totalSinImpuestos: subtotal.toFixed(2),
-      totalDescuento: totalDiscount.toFixed(2),
+      valorModificacion: grandTotal.toFixed(2),
+      moneda: 'DOLAR',
       totalConImpuestos: {
         totalImpuesto: Object.values(taxTotals).map((t) => ({
           codigo: t.codigo,
@@ -51,17 +51,7 @@ class InvoiceBuilder extends BaseDocumentBuilder {
           valor: t.valor.toFixed(2),
         })),
       },
-      propina: '0.00',
-      importeTotal: grandTotal.toFixed(2),
-      moneda: 'DOLAR',
-      pagos: {
-        pago: payments.map((p) => ({
-          formaPago: p.method,
-          total: p.total,
-          ...(p.term !== undefined && { plazo: String(p.term) }),
-          ...(p.termUnit && { unidadTiempo: p.termUnit }),
-        })),
-      },
+      motivo,
     };
 
     this.subtotal = subtotal.toFixed(2);
@@ -70,13 +60,15 @@ class InvoiceBuilder extends BaseDocumentBuilder {
     return this;
   }
 
+  // Element names (codigoInterno/codigoAdicional) follow the SRI ficha técnica for
+  // notaCredito — confirm against assets/notaCredito_V1.1.0.xsd once available.
   buildDetalles(items) {
     this.data.detalles = {
       detalle: items.map((item) => {
         const itemTotal = parseFloat(item.quantity) * parseFloat(item.unitPrice) - parseFloat(item.discount || '0');
         return {
-          codigoPrincipal: item.mainCode,
-          ...(item.auxCode && { codigoAuxiliar: item.auxCode }),
+          codigoInterno: item.mainCode,
+          ...(item.auxCode && { codigoAdicional: item.auxCode }),
           descripcion: item.description,
           cantidad: item.quantity,
           precioUnitario: item.unitPrice,
@@ -114,11 +106,11 @@ class InvoiceBuilder extends BaseDocumentBuilder {
 
   build(body, accessKey, sequential) {
     this.buildInfoTributaria({ accessKey, sequential });
-    this.buildInfoFactura(body);
+    this.buildInfoNotaCredito(body);
     this.buildDetalles(body.items);
     this.buildAdditionalInfo(body.additionalInfo);
-    return this.toXml('factura');
+    return this.toXml('notaCredito');
   }
 }
 
-module.exports = InvoiceBuilder;
+module.exports = CreditNoteBuilder;

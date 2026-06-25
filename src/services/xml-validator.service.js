@@ -6,14 +6,22 @@ const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
 
-const XSD_PATH = path.join(__dirname, '../../assets/factura_V2.1.0.xsd');
+const XSD_PATHS = {
+  '01': path.join(__dirname, '../../assets/factura_V2.1.0.xsd'),
+  '04': path.join(__dirname, '../../assets/nota_credito_V1.1.0.xsd'),
+};
 
-async function validate(xmlString) {
+async function validate(xmlString, documentType = '01') {
+  const xsdPath = XSD_PATHS[documentType];
+  if (!xsdPath) {
+    throw new Error(`No XSD schema registered for document type: ${documentType}`);
+  }
+
   // Write XML to a temp file — xmllint requires a file path, not stdin, for --schema
   const tmpFile = path.join(os.tmpdir(), `sri-validate-${process.pid}-${Date.now()}.xml`);
   try {
     await fs.writeFile(tmpFile, xmlString, 'utf8');
-    await execFileAsync('xmllint', ['--noout', '--schema', XSD_PATH, tmpFile], {
+    await execFileAsync('xmllint', ['--noout', '--schema', xsdPath, tmpFile], {
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     return { valid: true };

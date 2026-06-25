@@ -97,7 +97,7 @@ Each sequential counter is stored in PostgreSQL and incremented inside an explic
 The P12 certificate password is stored AES-256-GCM encrypted in the database. The encryption key lives only in the environment — never in the codebase or the DB.
 
 **XSD pre-validation**
-The unsigned XML is validated against `factura_V2.1.0.xsd` before signing. Invalid documents are rejected with a structured 400 error listing the specific XSD violations, saving the crypto cost and avoiding cryptic SRI SOAP faults.
+The unsigned XML is validated against the official SRI schema for the document type (`factura_V2.1.0.xsd` for invoices, `nota_credito_V1.1.0.xsd` for credit notes) before signing. Invalid documents are rejected with a structured 400 error listing the specific XSD violations, saving the crypto cost and avoiding cryptic SRI SOAP faults.
 
 **Retry logic**
 Both SRI SOAP calls (`sendReceipt`, `checkAuthorization`) use exponential-backoff retry (1 s → 2 s → 4 s, 3 attempts) on network-level failures only — HTTP-level SRI responses are never retried.
@@ -158,7 +158,8 @@ Unexpected `5xx` failures are reported to [Sentry](https://sentry.io) via `@sent
 │   └── migrations/            SQL migration files (001–050)
 ├── assets/
 │   ├── factura_V2.1.0.xsd     Official SRI invoice schema
-│   └── xmldsig-core-schema.xsd  W3C XML-DSig schema (imported by factura XSD)
+│   ├── nota_credito_V1.1.0.xsd  Official SRI credit note schema
+│   └── xmldsig-core-schema.xsd  W3C XML-DSig schema (imported by both XSDs)
 ├── tests/
 │   ├── unit/                  Jest unit tests (all deps mocked)
 │   └── integration/           Jest integration tests (requires test DB)

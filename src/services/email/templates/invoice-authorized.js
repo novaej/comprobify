@@ -19,15 +19,17 @@ function render(document, issuer, language = 'es') {
   const issuerName = issuer.business_name;
   const issuerRuc = issuer.ruc;
   const accessKey = document.access_key;
+  const docTypeLabel = t.documentTypeLabels[document.document_type] || t.documentTypeLabels['01'];
 
-  const subject = t.subject(formattedSeq, issuerName);
+  const subject = t.subject(docTypeLabel, formattedSeq, issuerName);
+  const labelInvoiceNumber = t.labelInvoiceNumber(docTypeLabel);
 
   const text = [
     t.greeting(buyerName),
     '',
     t.intro,
     '',
-    `  ${t.labelInvoiceNumber}:  ${formattedSeq}`,
+    `  ${labelInvoiceNumber}:  ${formattedSeq}`,
     `  ${t.labelIssueDate}:  ${issueDate}`,
     `  ${t.labelTotal}:  $${total}`,
     `  ${t.labelAuthorizationNumber}:  ${authNumber}`,
@@ -52,7 +54,7 @@ function render(document, issuer, language = 'es') {
   <p>${escapeHtml(t.greeting(buyerName))}</p>
   <p>${escapeHtml(t.intro)}</p>
   <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
-    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelInvoiceNumber)}</td><td style="padding: 6px 12px;">${escapeHtml(formattedSeq)}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(labelInvoiceNumber)}</td><td style="padding: 6px 12px;">${escapeHtml(formattedSeq)}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelIssueDate)}</td><td style="padding: 6px 12px;">${escapeHtml(issueDate)}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelTotal)}</td><td style="padding: 6px 12px;">$${escapeHtml(total)}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelAuthorizationNumber)}</td><td style="padding: 6px 12px;">${escapeHtml(authNumber)}</td></tr>

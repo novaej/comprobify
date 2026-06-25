@@ -11,6 +11,36 @@ async function getByAccessKey(accessKey, issuer) {
   return formatDocument(document);
 }
 
+async function getCreditNotes(accessKey, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+
+  // Reconstruct this document's own NNN-NNN-NNNNNNNNN number — credit notes store the
+  // document they reference this way (request_payload.originalDocument.number), not by id.
+  const originalNumber = `${issuer.branch_code}-${issuer.issue_point_code}-${String(document.sequential).padStart(9, '0')}`;
+
+  const creditNotes = await documentModel.findCreditNotesByOriginalDocument(
+    issuer.id, document.document_type, originalNumber, issuer.sandbox
+  );
+
+  const creditedTotal = creditNotes.reduce((sum, cn) => sum + parseFloat(cn.total), 0);
+  const remaining = parseFloat(document.total) - creditedTotal;
+
+  return {
+    originalDocument: { accessKey: document.access_key, total: document.total },
+    creditedTotal: creditedTotal.toFixed(2),
+    remaining: remaining.toFixed(2),
+    creditNotes: creditNotes.map((cn) => ({
+      accessKey: cn.access_key,
+      sequential: String(cn.sequential).padStart(9, '0'),
+      total: cn.total,
+      issueDate: moment(cn.issue_date).format('DD/MM/YYYY'),
+    })),
+  };
+}
+
 async function getXml(accessKey, issuer) {
   const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) {
@@ -60,4 +90,4 @@ async function getStats(issuer) {
   return { thisMonth: { byType: formattedByType }, needsAttention };
 }
 
-module.exports = { getByAccessKey, getXml, getEvents, list, getStats };
+module.exports = { getByAccessKey, getCreditNotes, getXml, getEvents, list, getStats };

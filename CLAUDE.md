@@ -104,6 +104,8 @@ assets/            factura_V2.1.0.xsd + xmldsig-core-schema.xsd
 
 **Issuer document types:** `issuer_document_types` table records which document types each issuer is allowed to use. Defaults to `['01']` at registration/admin create. Checked at document creation time — attempting to create a disallowed type returns 400. Managed via `GET/POST /v1/issuers/:id/document-types` and `DELETE /v1/issuers/:id/document-types/:code`. At promotion, production sequentials are seeded for all active types (using `initialSequentials` values if provided, otherwise 1). Adding a new document type to the system requires a new builder, not a migration.
 
+**Credit note balance lookup:** `GET /v1/documents/:accessKey/credit-notes` returns the sum of all `AUTHORIZED` credit notes (`document_type = '04'`) already issued against a given document, plus a `remaining` balance, so the caller can enforce "this credit note can't exceed the original's remaining balance." There is no foreign key linking a credit note to the document it credits — `document-creation.service.js` only stores the raw request body in `request_payload` — so the lookup reconstructs the original's own `NNN-NNN-NNNNNNNNN` number from `issuer.branch_code` + `issuer.issue_point_code` + the zero-padded `sequential`, then matches credit notes whose `request_payload->'originalDocument'->>'number'` and `->>'documentType'` equal it (see `documentModel.findCreditNotesByOriginalDocument`). Only `AUTHORIZED` credit notes count toward consumed balance — `SIGNED`/`RECEIVED` (still pending) and `RETURNED`/`NOT_AUTHORIZED` (rejected) are excluded. Deliberately does not hardcode the original document's type as `'01'` — SRI permits other document types to be credited too. The `request_payload` JSONB path query has no supporting index; fine at current volume, but would need one if `documents` grows large. Known race: two credit notes created back-to-back before the first authorizes won't see each other in this sum — accepted, not solved by locking.
+
 **Idempotency key:** `POST /v1/documents` accepts an optional `Idempotency-Key` header. The key and a SHA-256 hash of the request body are stored in `documents.idempotency_key` / `documents.payload_hash`. A duplicate key with the same payload returns the existing document (200). A duplicate key with a different payload throws `ConflictError` (409). Concurrent races are handled by catching `23505` in the transaction rollback path. See `src/middleware/idempotency.js` and ADR-006.
 
 **Email delivery:** when a document becomes `AUTHORIZED`, `emailService.sendInvoiceAuthorized()` is called fire-and-forget. It generates the RIDE PDF and XML on the fly and sends both as attachments via Mailgun. The Mailgun message ID (angle brackets stripped) is stored in `documents.email_message_id`. Per-document status tracked in `documents.email_status` (`PENDING` → `SENT` / `FAILED` / `SKIPPED`). Failed sends retried via `POST /email-retry` (batch) or `POST /:key/email-retry` (single, add `?force=true` to resend an already-sent email). Provider swappable via `EMAIL_PROVIDER` env var + new file in `src/services/email/providers/`.
@@ -147,13 +149,14 @@ After every notification create/update, `webhookDeliveryService.fanOut(notificat
 All document endpoints require the `X-Issuer-Id` header (the numeric issuer id, returned by `GET /v1/issuers`).
 
 ```
-POST /v1/documents             → SIGNED   (Idempotency-Key header optional, documentType defaults to '01')
+POST /v1/documents             → SIGNED   (Idempotency-Key header optional, documentType required — no default)
 POST /:key/send                 → RECEIVED | RETURNED
 GET  /:key/authorize            → AUTHORIZED | NOT_AUTHORIZED  (+fires email)
 POST /:key/rebuild              → SIGNED  (from RETURNED or NOT_AUTHORIZED)
 GET  /:key/ride                 → application/pdf  (AUTHORIZED only)
 GET  /:key/xml                  → application/xml  (authorization XML or signed XML)
 GET  /:key/events               → audit trail for the document
+GET  /:key/credit-notes         → sum of AUTHORIZED credit notes issued against this document + remaining balance
 POST /email-retry               → batch retry all PENDING/FAILED emails
 POST /:key/email-retry          → retry single email (?force=true to resend SENT)
 POST /v1/mailgun/webhook       → Mailgun delivery event → update email_status (HMAC-verified)
@@ -253,7 +256,7 @@ chore: update express to 4.22.1
 | `src/services/document-transmission.service.js` | SRI send + authorization check + fire-and-forget email |
 | `src/services/document-rebuild.service.js` | Rebuild from RETURNED/NOT_AUTHORIZED |
 | `src/services/document-email.service.js` | Batch and single email retry |
-| `src/services/document-query.service.js` | Read-only document lookups. `list()` converts the `from`/`to` query filters from the API's DD/MM/YYYY contract to `YYYY-MM-DD` (via `moment`) before they reach `document.model.js` — `issue_date` is a `DATE` column and the validator only checks the DD/MM/YYYY regex, it does not convert the value |
+| `src/services/document-query.service.js` | Read-only document lookups. `list()` converts the `from`/`to` query filters from the API's DD/MM/YYYY contract to `YYYY-MM-DD` (via `moment`) before they reach `document.model.js` — `issue_date` is a `DATE` column and the validator only checks the DD/MM/YYYY regex, it does not convert the value. `getCreditNotes()` reconstructs the document's own `NNN-NNN-NNNNNNNNN` number and sums `AUTHORIZED` credit notes referencing it — see Credit Note Balance Lookup above |
 | `src/services/email.service.js` | Sends RIDE PDF + XML on authorization via provider; returns `{ sent, messageId }` |
 | `src/services/email/index.js` | Email provider factory (`EMAIL_PROVIDER` env var) |
 | `src/services/email/providers/mailgun.provider.js` | Mailgun SDK wrapper; returns `{ messageId }` (angle brackets stripped) |

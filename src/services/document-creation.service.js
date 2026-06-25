@@ -103,18 +103,21 @@ async function create(body, idempotencyKey = null, issuer) {
     const builder = getBuilder(documentType, effectiveIssuer);
     const unsignedXml = builder.build({ ...body, issueDate }, accessKey, sequential);
 
-    // Validate that payments sum matches the calculated invoice total
-    const paymentsTotal = parseFloat(
-      body.payments.reduce((sum, p) => sum + parseFloat(p.total), 0).toFixed(2)
-    );
-    if (paymentsTotal !== parseFloat(builder.total)) {
-      throw new ValidationError([
-        `payments total (${paymentsTotal.toFixed(2)}) does not match invoice total (${builder.total})`,
-      ]);
+    // Validate that payments sum matches the calculated invoice total — only applies to
+    // document types that carry a payments block (e.g. invoices; credit notes don't)
+    if (Array.isArray(body.payments)) {
+      const paymentsTotal = parseFloat(
+        body.payments.reduce((sum, p) => sum + parseFloat(p.total), 0).toFixed(2)
+      );
+      if (paymentsTotal !== parseFloat(builder.total)) {
+        throw new ValidationError([
+          `payments total (${paymentsTotal.toFixed(2)}) does not match invoice total (${builder.total})`,
+        ]);
+      }
     }
 
     // Validate against XSD — throws ValidationError if invalid, rolls back transaction
-    const xsdResult = await xmlValidator.validate(unsignedXml);
+    const xsdResult = await xmlValidator.validate(unsignedXml, documentType);
     if (!xsdResult.valid) {
       throw new ValidationError(xsdResult.errors);
     }

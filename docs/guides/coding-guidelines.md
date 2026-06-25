@@ -52,7 +52,7 @@ if (document.status !== DocumentStatus.SIGNED) {
 
 ## Adding a new document type
 
-The builder registry makes this a five-step process:
+The builder registry handles the XML/signing side cheaply, but **don't assume a new document type can reuse the invoice request body or validator** — check the SRI XSD first. Credit notes (`04`), for example, have no `payments` block and need a reference to the original document plus a reason (`motivo`); a single shared validator with one more `isIn` value silently lets invalid request shapes through to the builder.
 
 **1. Create the builder** — extend `BaseDocumentBuilder`:
 
@@ -84,11 +84,13 @@ const builders = {
 };
 ```
 
-**3. Add the XSD** for the new document type to `assets/` (download from SRI).
+**3. Add the XSD** for the new document type to `assets/` (download from SRI), and add it to the `XSD_PATHS` map in `xml-validator.service.js`. Read the literal XSD to get exact element names/order — don't guess from the invoice builder, since names can differ (e.g. `numDocModificado`, `valorModificacion`).
 
-**4. Update `xml-validator.service.js`** to select the correct schema by document type code.
+**4. Create a dedicated validator** (`src/validators/{document-type}.validator.js`) reflecting that type's actual required fields — don't add the new type code to `createInvoice`'s `isIn([...])`. Register the new validator chain in `src/middleware/select-document-validator.js`'s `validatorsByType` map; it picks the right chain off `req.body.documentType` and runs it via `.run(req)` before `validateRequest`. Both `POST /v1/documents` and `POST /:accessKey/rebuild` use this dispatcher.
 
-**5. Add the type code** to the `isIn([...])` list in `src/validators/invoice.validator.js` (`documentType` field — this field is **required** on every `POST /v1/documents` call; there is no default).
+**5. Generalize any service-layer assumption that doesn't hold for the new type.** `document-creation.service.js` and `document-rebuild.service.js` only validate the payments-total match `if (Array.isArray(body.payments))` — guard any other invoice-only logic the same way rather than assuming every document type has it.
+
+**6. RIDE + email labels.** `helpers/ride-builder.js` and `src/locales/{es,en}.js`'s `email.invoiceAuthorized` block resolve a label by document type code rather than hardcoding "Factura"/"Invoice" — add the new type's label in both places.
 
 ---
 

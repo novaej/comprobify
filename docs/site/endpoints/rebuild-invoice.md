@@ -8,6 +8,8 @@ POST /v1/documents/:accessKey/rebuild
 
 Use this when a document is in `RETURNED` or `NOT_AUTHORIZED` status. After rebuilding, send it again with [Send to SRI](send-to-sri.md).
 
+Works for any document type — the body shape must match the document's existing `documentType`. The example below is for an invoice (`01`); for a credit note (`04`), use the [Create Credit Note](create-credit-note.md) body shape instead (no `payments`, requires `originalDocument` + `motivo`).
+
 ## Authentication
 
 `Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)

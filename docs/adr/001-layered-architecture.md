@@ -37,7 +37,7 @@ Route → Validator → Controller → Service → Model / Builder / Helper
 
 ### Positive
 - Each layer is testable in isolation — unit tests mock exactly one layer boundary
-- Adding a new document type requires only a new builder + registry entry, with no changes to controllers or services
+- Adding a new document type requires only a new builder + registry entry, with no changes to controllers. Services stay almost untouched too — implementing the credit note type (`04`) only required guarding one invoice-only assumption (the payments-total check) behind `Array.isArray(body.payments)`; the validator and signing/transmission flow needed no service-layer changes
 - Services can be reused by future consumers (CLI, queue worker) without any HTTP layer
 - Clear place for each kind of code — no ambiguity about where a new function belongs
 

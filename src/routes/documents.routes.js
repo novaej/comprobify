@@ -6,7 +6,7 @@ const extractIdempotencyKey = require('../middleware/idempotency');
 const authenticate = require('../middleware/authenticate');
 const resolveIssuer = require('../middleware/resolve-issuer');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
-const { createInvoice } = require('../validators/invoice.validator');
+const selectDocumentValidator = require('../middleware/select-document-validator');
 const { accessKeyParam, listDocumentsQuery } = require('../validators/common.validator');
 
 const router = Router();
@@ -22,12 +22,13 @@ router.get('/:accessKey/authorize', readLimiter, accessKeyParam, validateRequest
 router.get('/:accessKey/ride', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getRide));
 router.get('/:accessKey/xml', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getXml));
 router.get('/:accessKey/events', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getEvents));
+router.get('/:accessKey/credit-notes', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getCreditNotes));
 
 // Write endpoints
-router.post('/', writeLimiter, extractIdempotencyKey, createInvoice, validateRequest, asyncHandler(controller.create));
+router.post('/', writeLimiter, extractIdempotencyKey, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.create));
 router.post('/email-retry', writeLimiter, asyncHandler(controller.retryEmails));
 router.post('/:accessKey/send', writeLimiter, accessKeyParam, validateRequest, asyncHandler(controller.sendToSri));
-router.post('/:accessKey/rebuild', writeLimiter, accessKeyParam, createInvoice, validateRequest, asyncHandler(controller.rebuild));
+router.post('/:accessKey/rebuild', writeLimiter, accessKeyParam, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.rebuild));
 router.post('/:accessKey/email-retry', writeLimiter, accessKeyParam, validateRequest, asyncHandler(controller.retrySingleEmail));
 
 module.exports = router;

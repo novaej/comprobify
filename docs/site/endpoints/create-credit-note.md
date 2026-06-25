@@ -1,12 +1,16 @@
-# Create Invoice
+# Create Credit Note
 
-Creates, validates, and signs a new electronic invoice.
+Creates, validates, and signs a new electronic credit note (*nota de crédito*) referencing a previously authorized invoice.
 
 ```
 POST /v1/documents
 ```
 
-For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-note.md) — the request body is different (no `payments` block; requires `originalDocument` + `motivo` instead).
+This is the same endpoint as [Create Invoice](create-invoice.md) — the request body shape is selected by `documentType`. A credit note's body has no `payments` block and instead requires `originalDocument` (the invoice being credited) plus a `motivo` (reason).
+
+The issuer must have document type `04` enabled — see [Document Types](document-types.md).
+
+Before submitting, check [Get Credit Notes](get-credit-notes.md) against the original document's access key to see how much of its total has already been credited — the API does not reject a credit note for exceeding the original's remaining balance, since SRI itself doesn't enforce that; it's a client-side guard.
 
 ## Authentication
 
@@ -25,8 +29,8 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
 
 ```json
 {
-  "documentType": "01",
-  "issueDate": "15/03/2026",
+  "documentType": "04",
+  "issueDate": "05/04/2026",
   "buyer": {
     "idType": "05",
     "id": "1234567890",
@@ -34,6 +38,12 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
     "email": "john@example.com",
     "address": "Av. Amazonas 123"
   },
+  "originalDocument": {
+    "documentType": "01",
+    "number": "001-001-000000027",
+    "issueDate": "03/04/2026"
+  },
+  "motivo": "Devolución de mercadería por defecto de fabricación",
   "items": [
     {
       "mainCode": "PROD-001",
@@ -53,14 +63,6 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
       ]
     }
   ],
-  "payments": [
-    {
-      "method": "01",
-      "total": "115.00",
-      "term": 30,
-      "termUnit": "dias"
-    }
-  ],
   "additionalInfo": [
     { "name": "Contract", "value": "CTR-2026-001" }
   ]
@@ -71,14 +73,17 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `documentType` | string | Yes | Document type code. Use `"01"` for this body shape (factura). For `"04"` (credit note), see [Create Credit Note](create-credit-note.md) |
+| `documentType` | string | Yes | Must be `"04"` for this body shape |
 | `issueDate` | string | No | Date in `DD/MM/YYYY` format. Must be today's date — SRI rejects past and future dates. Defaults to today if omitted |
 | `buyer.idType` | string | Yes | 2-digit SRI identification type code (e.g. `"05"` = cedula, `"04"` = RUC) |
 | `buyer.id` | string | Yes | Buyer identification number (max 20 chars) |
 | `buyer.name` | string | Yes | Buyer full name or business name (max 300 chars) |
 | `buyer.email` | string | Yes | Buyer email — RIDE and XML are sent here on authorization |
 | `buyer.address` | string | No | Buyer address (max 300 chars) |
-| `guiaRemision` | string | No | Delivery note number in `NNN-NNN-NNNNNNNNN` format (e.g. `001-001-000000001`) |
+| `originalDocument.documentType` | string | Yes | SRI document type code of the document being credited (e.g. `"01"` for a factura) |
+| `originalDocument.number` | string | Yes | Access-key-style number of the original document, format `NNN-NNN-NNNNNNNNN` |
+| `originalDocument.issueDate` | string | Yes | Issue date of the original document, `DD/MM/YYYY` |
+| `motivo` | string | Yes | Reason for the credit note (max 300 chars) |
 | `items` | array | Yes | At least one item required |
 | `items[].mainCode` | string | Yes | Product/service main code |
 | `items[].auxiliaryCode` | string | No | Secondary code |
@@ -92,11 +97,6 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
 | `items[].taxes[].rate` | string | Yes | Tax rate percentage |
 | `items[].taxes[].taxableBase` | string | Yes | Amount the tax is applied to |
 | `items[].taxes[].taxAmount` | string | Yes | Calculated tax amount |
-| `payments` | array | Yes | At least one payment required |
-| `payments[].method` | string | Yes | 2-digit SRI payment method code |
-| `payments[].total` | string | Yes | Numeric payment amount |
-| `payments[].term` | number | No | Payment term length — maps to SRI `plazo` |
-| `payments[].termUnit` | string | No | Payment term unit code — maps to SRI `unidadTiempo`. Must be one of the values returned by `GET /v1/catalogs/term-units` (e.g. `"dias"`, `"meses"`) |
 | `additionalInfo` | array | No | Key-value pairs included in the XML as `campoAdicional` |
 
 ## Response
@@ -108,11 +108,11 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
 {
   "ok": true,
   "document": {
-    "accessKey": "1503202601179234567800110010010000000011234567810",
-    "documentType": "01",
-    "sequential": "000000001",
+    "accessKey": "0504202604179234567800110010010000000271234567810",
+    "documentType": "04",
+    "sequential": "000000027",
     "status": "SIGNED",
-    "issueDate": "15/03/2026",
+    "issueDate": "05/04/2026",
     "total": "115.00",
     "email": {
       "status": "PENDING"
@@ -123,7 +123,7 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
 
 ## Idempotency
 
-Include an `Idempotency-Key` header to make creation idempotent. Generate the key once per intended invoice and reuse it across retries:
+Include an `Idempotency-Key` header to make creation idempotent. Generate the key once per intended credit note and reuse it across retries:
 
 - Same key + same payload → returns the existing document (no duplicate created)
 - Same key + different payload → `409 Conflict`
@@ -133,7 +133,7 @@ Include an `Idempotency-Key` header to make creation idempotent. Generate the ke
 | Code | Status | When |
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | Request body fails field validation |
-| `DOCUMENT_TYPE_NOT_ENABLED` | 400 | The issuer does not have document type `01` enabled — see [Document Types](document-types.md) |
+| `DOCUMENT_TYPE_NOT_ENABLED` | 400 | The issuer does not have document type `04` enabled — see [Document Types](document-types.md) |
 | `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
 | `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production issuer or vice versa) |
 | `FORBIDDEN` | 403 | The `X-Issuer-Id` issuer belongs to a different tenant |

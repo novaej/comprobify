@@ -46,6 +46,22 @@ async function findByAccessKey(accessKey, issuerId = null, sandbox = false) {
   return rows[0] || null;
 }
 
+async function findCreditNotesByOriginalDocument(issuerId, originalDocumentType, originalDocumentNumber, sandbox = false) {
+  const { rows } = await db.queryAsIssuer(
+    issuerId,
+    `SELECT access_key, sequential, total, issue_date, status
+     FROM documents
+     WHERE document_type = '04'
+       AND issuer_id = $1
+       AND status = $2
+       AND request_payload->'originalDocument'->>'number' = $3
+       AND request_payload->'originalDocument'->>'documentType' = $4`,
+    [issuerId, DocumentStatus.AUTHORIZED, originalDocumentNumber, originalDocumentType],
+    sandbox
+  );
+  return rows;
+}
+
 async function findById(id) {
   const { rows } = await db.query('SELECT * FROM documents WHERE id = $1', [id]);
   return rows[0] || null;
@@ -250,4 +266,4 @@ async function getStats(issuerId, sandbox = false) {
   }
 }
 
-module.exports = { create, findByAccessKey, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId, getStats };
+module.exports = { create, findByAccessKey, findCreditNotesByOriginalDocument, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId, getStats };

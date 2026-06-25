@@ -49,7 +49,7 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 |---|---|---|
 | `GET` | `/v1/documents` | List documents with filtering and pagination |
 | `GET` | `/v1/documents/stats` | Per-type document stats for the current month + needs-attention count |
-| `POST` | `/v1/documents` | Create and sign an invoice |
+| `POST` | `/v1/documents` | Create and sign a document — invoice ([Create Invoice](create-invoice.md)) or credit note ([Create Credit Note](create-credit-note.md)), selected by `documentType` |
 | `GET` | `/v1/documents/:accessKey` | Get a document by access key |
 | `POST` | `/v1/documents/:accessKey/send` | Submit signed document to SRI |
 | `GET` | `/v1/documents/:accessKey/authorize` | Check SRI authorization status |
@@ -57,6 +57,7 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 | `GET` | `/v1/documents/:accessKey/ride` | Download RIDE PDF |
 | `GET` | `/v1/documents/:accessKey/xml` | Download signed XML |
 | `GET` | `/v1/documents/:accessKey/events` | Get audit event history |
+| `GET` | `/v1/documents/:accessKey/credit-notes` | Sum of `AUTHORIZED` credit notes issued against this document + remaining balance |
 | `POST` | `/v1/documents/email-retry` | Retry all failed/pending emails (batch) |
 | `POST` | `/v1/documents/:accessKey/email-retry` | Retry email for a single document |
 

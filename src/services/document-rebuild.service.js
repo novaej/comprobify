@@ -31,16 +31,18 @@ async function rebuild(accessKey, body, issuer) {
   const builder = getBuilder(document.document_type, effectiveIssuer);
   const unsignedXml = builder.build({ ...body, issueDate }, document.access_key, document.sequential);
 
-  const paymentsTotal = parseFloat(
-    body.payments.reduce((sum, p) => sum + parseFloat(p.total), 0).toFixed(2)
-  );
-  if (paymentsTotal !== parseFloat(builder.total)) {
-    throw new ValidationError([
-      `payments total (${paymentsTotal.toFixed(2)}) does not match invoice total (${builder.total})`,
-    ]);
+  if (Array.isArray(body.payments)) {
+    const paymentsTotal = parseFloat(
+      body.payments.reduce((sum, p) => sum + parseFloat(p.total), 0).toFixed(2)
+    );
+    if (paymentsTotal !== parseFloat(builder.total)) {
+      throw new ValidationError([
+        `payments total (${paymentsTotal.toFixed(2)}) does not match invoice total (${builder.total})`,
+      ]);
+    }
   }
 
-  const xsdResult = await xmlValidator.validate(unsignedXml);
+  const xsdResult = await xmlValidator.validate(unsignedXml, document.document_type);
   if (!xsdResult.valid) {
     throw new ValidationError(xsdResult.errors);
   }

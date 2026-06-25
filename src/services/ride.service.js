@@ -30,7 +30,7 @@ async function generate(accessKeyOrDocument, issuerOverride = null) {
   // Resolve catalog labels for buyer id type
   const idTypeLabel = await catalogModel.getIdTypeLabel(document.buyer_id_type);
 
-  // Resolve payment method and term unit labels
+  // Resolve payment method and term unit labels (invoices only — credit notes have no payments)
   const payments = await Promise.all(
     (payload.payments || []).map(async (p) => ({
       ...p,
@@ -38,6 +38,14 @@ async function generate(accessKeyOrDocument, issuerOverride = null) {
       ...(p.termUnit && { termUnitLabel: await catalogModel.getTermUnitLabel(p.termUnit) }),
     }))
   );
+
+  // Resolve the modified document's type label for credit notes
+  const originalDocument = payload.originalDocument
+    ? {
+      ...payload.originalDocument,
+      documentTypeLabel: await catalogModel.getDocumentTypeDescription(payload.originalDocument.documentType),
+    }
+    : null;
 
   // Collect distinct tax rates and resolve descriptions
   // In the payload, the field is tax.code (not tax.taxCode)
@@ -71,6 +79,7 @@ async function generate(accessKeyOrDocument, issuerOverride = null) {
     emissionType: issuer.emission_type,
 
     // Document
+    documentType: document.document_type,
     accessKey: document.access_key,
     sequential: String(document.sequential).padStart(9, '0'),
     issueDate: document.issue_date,
@@ -85,8 +94,12 @@ async function generate(accessKeyOrDocument, issuerOverride = null) {
     // Items
     items: payload.items || [],
 
-    // Payments
+    // Payments (invoices only)
     payments,
+
+    // Modified document reference + reason (credit notes only)
+    originalDocument,
+    motivo: payload.motivo || null,
 
     // Totals
     subtotal: document.subtotal,
