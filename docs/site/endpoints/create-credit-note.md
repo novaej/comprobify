@@ -10,6 +10,8 @@ This is the same endpoint as [Create Invoice](create-invoice.md) — the request
 
 The issuer must have document type `04` enabled — see [Document Types](document-types.md).
 
+Before submitting, check [Get Credit Notes](get-credit-notes.md) against the original document's access key to see how much of its total has already been credited — the API does not reject a credit note for exceeding the original's remaining balance, since SRI itself doesn't enforce that; it's a client-side guard.
+
 ## Authentication
 
 `Authorization: Bearer <api-key>`

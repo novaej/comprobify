@@ -57,6 +57,7 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 | `GET` | `/v1/documents/:accessKey/ride` | Download RIDE PDF |
 | `GET` | `/v1/documents/:accessKey/xml` | Download signed XML |
 | `GET` | `/v1/documents/:accessKey/events` | Get audit event history |
+| `GET` | `/v1/documents/:accessKey/credit-notes` | Sum of `AUTHORIZED` credit notes issued against this document + remaining balance |
 | `POST` | `/v1/documents/email-retry` | Retry all failed/pending emails (batch) |
 | `POST` | `/v1/documents/:accessKey/email-retry` | Retry email for a single document |
 

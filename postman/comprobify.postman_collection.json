@@ -1092,6 +1092,32 @@
           }
         },
         {
+          "name": "Get Credit Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Issuer-Id",
+                "value": "{{issuer_id}}",
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/credit-notes",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "{{access_key}}",
+                "credit-notes"
+              ]
+            },
+            "description": "Returns the sum of all AUTHORIZED credit notes already issued against this document (use the original invoice's access key, not a credit note's own key), plus the remaining balance. Only AUTHORIZED credit notes count \u2014 pending or rejected ones are excluded."
+          }
+        },
+        {
           "name": "Retry Single Email",
           "request": {
             "method": "POST",
