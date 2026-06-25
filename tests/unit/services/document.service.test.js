@@ -278,6 +278,73 @@ describe('DocumentQueryService', () => {
 
     expect(result).toEqual({ thisMonth: { byType: [] }, needsAttention: 0 });
   });
+
+  describe('getCreditNotes', () => {
+    test('throws NotFoundError when the original document does not exist', async () => {
+      documentModel.findByAccessKey.mockResolvedValue(null);
+
+      await expect(documentQuery.getCreditNotes('0'.repeat(49), mockIssuer)).rejects.toThrow('Document not found');
+    });
+
+    test('reconstructs the originalDocument number from issuer branch/issue point + padded sequential', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({
+        access_key: 'orig-key', document_type: '01', sequential: 27, total: '115.00',
+      });
+      documentModel.findCreditNotesByOriginalDocument.mockResolvedValue([]);
+
+      await documentQuery.getCreditNotes('orig-key', mockIssuer);
+
+      expect(documentModel.findCreditNotesByOriginalDocument).toHaveBeenCalledWith(
+        mockIssuer.id, '01', '001-001-000000027', mockIssuer.sandbox
+      );
+    });
+
+    test('sums credit note totals and computes remaining balance', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({
+        access_key: 'orig-key', document_type: '01', sequential: 27, total: '115.00',
+      });
+      documentModel.findCreditNotesByOriginalDocument.mockResolvedValue([
+        { access_key: 'cn-1', sequential: 12, total: '30.00', issue_date: new Date('2026-04-01T12:00:00Z') },
+        { access_key: 'cn-2', sequential: 13, total: '5.00', issue_date: new Date('2026-04-02T12:00:00Z') },
+      ]);
+
+      const result = await documentQuery.getCreditNotes('orig-key', mockIssuer);
+
+      expect(result.originalDocument).toEqual({ accessKey: 'orig-key', total: '115.00' });
+      expect(result.creditedTotal).toBe('35.00');
+      expect(result.remaining).toBe('80.00');
+      expect(result.creditNotes).toEqual([
+        { accessKey: 'cn-1', sequential: '000000012', total: '30.00', issueDate: '01/04/2026' },
+        { accessKey: 'cn-2', sequential: '000000013', total: '5.00', issueDate: '02/04/2026' },
+      ]);
+    });
+
+    test('returns "0.00" credited and full remaining when no credit notes exist', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({
+        access_key: 'orig-key', document_type: '01', sequential: 27, total: '115.00',
+      });
+      documentModel.findCreditNotesByOriginalDocument.mockResolvedValue([]);
+
+      const result = await documentQuery.getCreditNotes('orig-key', mockIssuer);
+
+      expect(result.creditedTotal).toBe('0.00');
+      expect(result.remaining).toBe('115.00');
+      expect(result.creditNotes).toEqual([]);
+    });
+
+    test('does not hardcode the original document type — passes through whatever type it is', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({
+        access_key: 'orig-key', document_type: '03', sequential: 5, total: '50.00',
+      });
+      documentModel.findCreditNotesByOriginalDocument.mockResolvedValue([]);
+
+      await documentQuery.getCreditNotes('orig-key', mockIssuer);
+
+      expect(documentModel.findCreditNotesByOriginalDocument).toHaveBeenCalledWith(
+        mockIssuer.id, '03', expect.any(String), mockIssuer.sandbox
+      );
+    });
+  });
 });
 
 describe('DocumentTransmissionService', () => {
