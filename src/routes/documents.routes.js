@@ -22,6 +22,7 @@ router.get('/:accessKey/authorize', readLimiter, accessKeyParam, validateRequest
 router.get('/:accessKey/ride', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getRide));
 router.get('/:accessKey/xml', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getXml));
 router.get('/:accessKey/events', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getEvents));
+router.get('/:accessKey/credit-notes', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getCreditNotes));
 
 // Write endpoints
 router.post('/', writeLimiter, extractIdempotencyKey, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.create));

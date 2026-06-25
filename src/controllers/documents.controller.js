@@ -19,6 +19,11 @@ const getByAccessKey = async (req, res) => {
   res.json({ ok: true, document });
 };
 
+const getCreditNotes = async (req, res) => {
+  const result = await documentQuery.getCreditNotes(req.params.accessKey, req.issuer);
+  res.json({ ok: true, ...result });
+};
+
 const sendToSri = async (req, res) => {
   const result = await documentTransmission.sendToSri(req.params.accessKey, req.issuer);
   res.json({ ok: true, document: result });
@@ -74,4 +79,4 @@ const getStats = async (req, res) => {
   res.json({ ok: true, stats });
 };
 
-module.exports = { create, getByAccessKey, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, list, getStats };
+module.exports = { create, getByAccessKey, getCreditNotes, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, list, getStats };
