@@ -203,6 +203,21 @@ chore: update express to 4.22.1
 
 ---
 
+## Releasing
+
+**Always create release tags with `npm version`, never `git tag` directly.** `npm version <patch|minor|major>` bumps `package.json` + `package-lock.json`, commits that bump, and creates the `v*.*.*` tag on that same commit — in one atomic step. npm's default tag prefix is `v`, matching this repo's existing tag scheme exactly.
+
+```bash
+npm version minor      # or patch / major
+git push && git push --tags
+```
+
+Pushing the tag triggers `release-staging.yml`, which fast-forwards `staging` to it — the tag is treated as an **immutable** "build this" snapshot. Never push a follow-up commit to `main` that changes the version after a tag is created; that would leave the tagged commit's `package.json` permanently out of sync with its own tag name, and would race with `staging` already having been fast-forwarded to it. If `package.json`'s version and the latest git tag ever drift apart, fix it with a manual one-off sync commit (`chore:`), then resume using `npm version` for every release after that.
+
+Before running `npm version`, rename `CHANGELOG.md`'s `## [Unreleased]` header to `## [X.Y.Z] — <today's date>` (matching the version `npm version` is about to create) and start a fresh empty `## [Unreleased]` above it — so the tagged commit's `package.json` version and its `CHANGELOG.md` entry land together.
+
+---
+
 ## Common Mistakes to Avoid
 
 1. Calling a model directly from a controller — always go through the service.
