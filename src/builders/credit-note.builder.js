@@ -2,7 +2,7 @@ const BaseDocumentBuilder = require('./base.builder');
 
 class CreditNoteBuilder extends BaseDocumentBuilder {
   constructor(issuer) {
-    super(issuer, '04');
+    super(issuer, '04', '1.1.0');
   }
 
   buildInfoNotaCredito(body) {

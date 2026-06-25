@@ -2,7 +2,7 @@ const BaseDocumentBuilder = require('./base.builder');
 
 class InvoiceBuilder extends BaseDocumentBuilder {
   constructor(issuer) {
-    super(issuer, '01');
+    super(issuer, '01', '2.1.0');
   }
 
   buildInfoFactura(body) {

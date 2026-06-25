@@ -42,6 +42,16 @@ describe('CreditNoteBuilder', () => {
     expect(xml).toContain('</notaCredito>');
   });
 
+  test('declares schema version 1.1.0, not factura\'s 2.1.0', () => {
+    // SRI rejects the document (DEVUELTA, error 35) if the root version attribute doesn't
+    // match a schema registered for codDoc 04 — 2.1.0 only exists for facturas.
+    const builder = new CreditNoteBuilder(mockIssuer);
+    const xml = builder.build(validBody, '1'.repeat(49), 27);
+
+    expect(xml).toContain('version="1.1.0"');
+    expect(xml).not.toContain('version="2.1.0"');
+  });
+
   test('infoTributaria carries codDoc 04', () => {
     const builder = new CreditNoteBuilder(mockIssuer);
     const xml = builder.build(validBody, '1'.repeat(49), 27);

@@ -1,9 +1,10 @@
 const js2xmlparser = require('js2xmlparser');
 
 class BaseDocumentBuilder {
-  constructor(issuer, documentType) {
+  constructor(issuer, documentType, schemaVersion) {
     this.issuer = issuer;
     this.documentType = documentType;
+    this.schemaVersion = schemaVersion;
     this.data = {};
   }
 
@@ -30,7 +31,7 @@ class BaseDocumentBuilder {
     return {
       '@': {
         id: 'comprobante',
-        version: '2.1.0',
+        version: this.schemaVersion,
       },
     };
   }

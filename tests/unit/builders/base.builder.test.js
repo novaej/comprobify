@@ -45,7 +45,7 @@ describe('BaseDocumentBuilder', () => {
   });
 
   test('toXml generates valid XML with attributes', () => {
-    const builder = new BaseDocumentBuilder(mockIssuer, '01');
+    const builder = new BaseDocumentBuilder(mockIssuer, '01', '2.1.0');
     builder.buildInfoTributaria({ accessKey: '1'.repeat(49), sequential: 1 });
     const xml = builder.toXml('factura');
 
@@ -55,5 +55,14 @@ describe('BaseDocumentBuilder', () => {
     expect(xml).toContain('version="2.1.0"');
     expect(xml).toContain('<infoTributaria>');
     expect(xml).toContain('</factura>');
+  });
+
+  test('toXml uses the schema version passed to the constructor, not a hardcoded one', () => {
+    const builder = new BaseDocumentBuilder(mockIssuer, '04', '1.1.0');
+    builder.buildInfoTributaria({ accessKey: '1'.repeat(49), sequential: 1 });
+    const xml = builder.toXml('notaCredito');
+
+    expect(xml).toContain('version="1.1.0"');
+    expect(xml).not.toContain('version="2.1.0"');
   });
 });
