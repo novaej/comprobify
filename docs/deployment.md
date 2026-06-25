@@ -7,21 +7,24 @@
 Two long-lived branches map to deployed environments. They are **automation-owned** — promoted forward by tags and GitHub Releases, never by direct or manual merges. Feature/fix branches are always cut from `main` and merged back via pull request.
 
 ```
-  feature/xyz              main                                   staging                  production
-      │                     │                                       │                          │
-      │  PR + merge         │                                       │                          │
-      │────────────────────▶│                                       │                          │
-      │                     │  git tag vX.Y.Z + push                │                          │
-      │                     │── release-staging.yml (ff-merge) ────▶│── deploy-staging.yml ───▶ comprobify-staging
-      │                     │                                       │                          │
-      │                     │  publish GitHub Release from the tag  │                          │
-      │                     │── release-production.yml (ff-merge) ──┼─────────────────────────▶│── deploy-production.yml ──▶ comprobify-production
-      │                     │                                                                   │
-  hotfix/xyz                │                                                                   │
-      │  branch off `production`, PR into the hotfix branch,                                   │
-      │  tag vX.Y.Z+1 → same pipeline (or emergency workflow_dispatch to skip staging)         │
-      │  → cherry-pick the merged fix back into `main`                                         │
-      │─────────────────────────────────────────────────────────────────────────────────────▶ │
+  feature/xyz     chore/release            main                                   staging                  production
+      │                 │                   │                                       │                          │
+      │  PR + merge     │                   │                                       │                          │
+      │────────────────────────────────────▶│                                       │                          │
+      │                 │  npm version bump │                                       │                          │
+      │                 │  + PR + merge     │                                       │                          │
+      │                 │──────────────────▶│                                       │                          │
+      │                 │                   │  git tag vX.Y.Z + push (merge commit) │                          │
+      │                 │                   │── release-staging.yml (ff-merge) ────▶│── deploy-staging.yml ───▶ comprobify-staging
+      │                 │                   │                                       │                          │
+      │                 │                   │  publish GitHub Release from the tag  │                          │
+      │                 │                   │── release-production.yml (ff-merge) ──┼─────────────────────────▶│── deploy-production.yml ──▶ comprobify-production
+      │                 │                   │                                                                   │
+  hotfix/xyz            │                   │                                                                   │
+      │  branch off `production`, PR into the hotfix branch, bump version + PR there too,                      │
+      │  tag vX.Y.Z+1 → same pipeline (or emergency workflow_dispatch to skip staging)                         │
+      │  → cherry-pick the merged fix back into `main`                                                         │
+      │─────────────────────────────────────────────────────────────────────────────────────────────────────▶ │
 ```
 
 | Branch | Environment | Promoted by |
@@ -63,16 +66,31 @@ git branch -d feature/my-feature
 
 ### Release to staging
 
-Tag the commit on `main` you want to promote — this is the only manual step; the workflow handles the rest.
+Every commit on `main` is a merged (often squashed) PR, so `npm version`'s built-in commit+tag step can't run directly on `main` — it would push straight to `main` with no review, and the tag would point at a commit review never saw. Bump the version through a normal PR first, then tag the result. Full rationale in the "Releasing" section of `../CLAUDE.md`.
 
 ```bash
+# 1. Branch off main and bump the version (package.json + package-lock.json only, no commit/tag)
 git checkout main
 git pull origin main
-git tag v1.4.0
-git push origin v1.4.0
+git checkout -b chore/release
+npm --no-git-tag-version version patch   # or minor / major
+
+# 2. In CHANGELOG.md, rename "## [Unreleased]" to "## [X.Y.Z] — <today's date>"
+#    and add a fresh empty "## [Unreleased]" above it
+
+# 3. Commit, push, open a PR, merge it like any other change
+git add package.json package-lock.json CHANGELOG.md
+git commit -m "chore: bump version to X.Y.Z"
+git push origin chore/release
+
+# 4. AFTER the PR merges, tag the resulting merge commit on main — not your branch commit
+git checkout main
+git pull origin main
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
-`release-staging.yml` fast-forwards `staging` to `v1.4.0` and pushes it, which triggers `deploy-staging.yml` automatically. Use semantic versioning (`vMAJOR.MINOR.PATCH`) so it's obvious at a glance whether a tag is a feature release (`v1.5.0`) or a hotfix (`v1.4.1`).
+`release-staging.yml` fast-forwards `staging` to `vX.Y.Z` and pushes it, which triggers `deploy-staging.yml` automatically. Use semantic versioning (`vMAJOR.MINOR.PATCH`) so it's obvious at a glance whether a tag is a feature release (`v1.5.0`) or a hotfix (`v1.4.1`). The tag is treated as an **immutable** "build this" snapshot — never push a follow-up commit to `main` that changes the version after a tag is created.
 
 ### Promote to production
 
@@ -99,11 +117,19 @@ git checkout -b hotfix/payment-bug production
 git checkout -b fix/payment-rounding hotfix/payment-bug
 # ...fix, commit, push, open PR: fix/payment-rounding → hotfix/payment-bug, review + merge...
 
-# 3. Tag the merged result — this feeds the same release pipeline
+# 3. Bump the version and update CHANGELOG.md on the hotfix branch (same reasoning as "Release to
+#    staging" above — the PR merge changes the commit SHA, so bump before tagging, not after)
 git checkout hotfix/payment-bug
 git pull origin hotfix/payment-bug
-git tag v1.4.1
-git push origin v1.4.1
+npm --no-git-tag-version version patch
+# rename CHANGELOG.md's "## [Unreleased]" to "## [X.Y.Z] — <today's date>", add a fresh one above it
+git add package.json package-lock.json CHANGELOG.md
+git commit -m "chore: bump version to X.Y.Z"
+git push origin hotfix/payment-bug
+
+# 4. Tag the result — this feeds the same release pipeline
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
 From here, either run it through the normal tag → staging → release → production pipeline (safer, still validated), or — for true emergencies — trigger `release-production.yml` manually via `workflow_dispatch` to skip straight to production (documented as the "break-glass" path; bypasses staging validation).
