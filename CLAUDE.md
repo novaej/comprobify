@@ -203,6 +203,22 @@ chore: update express to 4.22.1
 
 ---
 
+## Releasing
+
+Every commit on `main` is a merged PR (often squash-merged, so the SHA on `main` differs from any local commit you made on the branch). That means **`npm version`'s built-in commit+tag step cannot run directly on `main`** — it would push a version-bump commit straight to `main`, bypassing review, and the tag would point at a commit that PR review never saw. Release the same way every other change ships, then tag the result:
+
+1. Branch off `main`: `git checkout -b chore/release`
+2. Bump the version **without** letting npm create its own commit/tag: `npm --no-git-tag-version version <patch|minor|major>` (updates `package.json` + `package-lock.json` only)
+3. In the same branch, rename `CHANGELOG.md`'s `## [Unreleased]` header to `## [X.Y.Z] — <today's date>` (matching the version just written) and start a fresh empty `## [Unreleased]` above it
+4. Commit (`chore: bump version to X.Y.Z`), open a PR, merge it like any other change
+5. **After** that PR is merged, pull `main`, then tag the resulting merge commit directly — not the commit you made on the branch: `git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`
+
+The tag still tracks `package.json`'s version — there's just a merge step between bumping it and tagging it, because the squash-merge changes the commit SHA.
+
+Pushing the tag triggers `release-staging.yml`, which fast-forwards `staging` to it — the tag is treated as an **immutable** "build this" snapshot. Never push a follow-up commit to `main` that changes the version after a tag is created; that would leave the tagged commit's `package.json` permanently out of sync with its own tag name, and would race with `staging` already having been fast-forwarded to it. If `package.json`'s version and the latest git tag ever drift apart, fix it with a manual one-off sync commit (`chore:`), then resume this sequence for every release after that.
+
+---
+
 ## Common Mistakes to Avoid
 
 1. Calling a model directly from a controller — always go through the service.
