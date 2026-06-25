@@ -71,4 +71,33 @@ async function findAllByTenantId(tenantId) {
   return rows;
 }
 
-module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo, updateCertificate };
+async function update(issuerId, tenantId, { tradeName, branchAddress }) {
+  const { rows } = await db.query(
+    `UPDATE issuers
+     SET trade_name = COALESCE($1, trade_name),
+         branch_address = COALESCE($2, branch_address),
+         updated_at = NOW()
+     WHERE id = $3 AND tenant_id = $4 AND active = true
+     RETURNING *`,
+    [tradeName ?? null, branchAddress ?? null, issuerId, tenantId]
+  );
+  return rows[0] || null;
+}
+
+async function deactivate(issuerId, tenantId) {
+  const { rows } = await db.query(
+    'UPDATE issuers SET active = false, updated_at = NOW() WHERE id = $1 AND tenant_id = $2 AND active = true RETURNING id',
+    [issuerId, tenantId]
+  );
+  return rows[0] || null;
+}
+
+async function countActiveByTenantId(tenantId) {
+  const { rows } = await db.query(
+    'SELECT COUNT(*) AS count FROM issuers WHERE tenant_id = $1 AND active = true',
+    [tenantId]
+  );
+  return parseInt(rows[0].count, 10);
+}
+
+module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo, updateCertificate, update, deactivate, countActiveByTenantId };

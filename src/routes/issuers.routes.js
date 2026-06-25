@@ -47,6 +47,12 @@ const removeDocumentTypeValidator = [
     .withMessage(`code must be one of: ${SUPPORTED_TYPES.join(', ')}`),
 ];
 
+const sequentialDocumentTypeParam = [
+  param('documentType')
+    .isIn(SUPPORTED_TYPES)
+    .withMessage(`documentType must be one of: ${SUPPORTED_TYPES.join(', ')}`),
+];
+
 // Tenant-level: list all issuers, create a new branch (no issuer context required)
 router.get('/', readLimiter, asyncHandler(controller.list));
 router.post('/', writeLimiter, upload.single('cert'), v.createBranch, validateRequest, asyncHandler(controller.createBranch));
@@ -62,10 +68,14 @@ const handleLogoUpload = (req, res, next) => {
 
 // Single-issuer operations (issuer id in URL; ownership verified in controller)
 router.get('/:id', readLimiter, idParam, validateRequest, asyncHandler(controller.getById));
+router.patch('/:id', writeLimiter, idParam, v.updateIssuer, validateRequest, asyncHandler(controller.updateIssuer));
+router.delete('/:id', writeLimiter, idParam, validateRequest, asyncHandler(controller.removeIssuer));
 router.patch('/:id/logo', writeLimiter, idParam, validateRequest, handleLogoUpload, asyncHandler(controller.uploadLogo));
 router.patch('/:id/certificate', writeLimiter, upload.single('cert'), idParam, validateRequest, asyncHandler(controller.renewCertificate));
 router.get('/:id/document-types', readLimiter, idParam, validateRequest, asyncHandler(controller.listDocumentTypes));
 router.post('/:id/document-types', writeLimiter, idParam, addDocumentTypeValidator, validateRequest, asyncHandler(controller.addDocumentType));
 router.delete('/:id/document-types/:code', writeLimiter, idParam, removeDocumentTypeValidator, validateRequest, asyncHandler(controller.removeDocumentType));
+router.get('/:id/sequentials', readLimiter, idParam, validateRequest, asyncHandler(controller.getSequentials));
+router.patch('/:id/sequentials/:documentType', writeLimiter, idParam, sequentialDocumentTypeParam, v.setSequential, validateRequest, asyncHandler(controller.setSequential));
 
 module.exports = router;

@@ -78,6 +78,12 @@ const ErrorCodes = Object.freeze({
   INVALID_TENANT_STATUS: 'INVALID_TENANT_STATUS',
   /** Source issuer RUC does not match the supplied RUC */
   RUC_MISMATCH: 'RUC_MISMATCH',
+  /** Tenant has only one active issuer left — it cannot be removed */
+  LAST_ISSUER_CANNOT_BE_REMOVED: 'LAST_ISSUER_CANNOT_BE_REMOVED',
+  /** Issuer has issued documents and cannot be removed */
+  ISSUER_HAS_DOCUMENTS: 'ISSUER_HAS_DOCUMENTS',
+  /** Requested nextSequential is not greater than the current counter value */
+  SEQUENTIAL_CANNOT_DECREASE: 'SEQUENTIAL_CANNOT_DECREASE',
 
   // --- Webhook endpoints ---
   /** Tenant has reached the maximum number of webhook endpoints for their plan */

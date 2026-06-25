@@ -266,4 +266,12 @@ async function getStats(issuerId, sandbox = false) {
   }
 }
 
-module.exports = { create, findByAccessKey, findCreditNotesByOriginalDocument, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId, getStats };
+async function existsByIssuerId(issuerId) {
+  const [{ rows: production }, { rows: sandbox }] = await Promise.all([
+    db.queryAsIssuer(issuerId, 'SELECT 1 FROM documents WHERE issuer_id = $1 LIMIT 1', [issuerId], false),
+    db.queryAsIssuer(issuerId, 'SELECT 1 FROM documents WHERE issuer_id = $1 LIMIT 1', [issuerId], true),
+  ]);
+  return production.length > 0 || sandbox.length > 0;
+}
+
+module.exports = { create, findByAccessKey, findCreditNotesByOriginalDocument, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId, getStats, existsByIssuerId };

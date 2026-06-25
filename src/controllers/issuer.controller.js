@@ -120,4 +120,45 @@ const renewCertificate = async (req, res) => {
   res.json({ ok: true, certFingerprint, certExpiry });
 };
 
-module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType, uploadLogo, renewCertificate };
+const updateIssuer = async (req, res) => {
+  const issuer = await loadOwnedIssuer(req);
+  const updated = await issuerModel.update(issuer.id, req.tenant.id, {
+    tradeName: req.body.tradeName,
+    branchAddress: req.body.branchAddress,
+  });
+  if (!updated) throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
+  res.json({
+    ok: true,
+    issuer: {
+      id: updated.id,
+      ruc: updated.ruc,
+      businessName: updated.business_name,
+      tradeName: updated.trade_name || null,
+      branchCode: updated.branch_code,
+      issuePointCode: updated.issue_point_code,
+      branchAddress: updated.branch_address || null,
+      certFingerprint: updated.cert_fingerprint || null,
+      certExpiry: updated.cert_expiry || null,
+    },
+  });
+};
+
+const removeIssuer = async (req, res) => {
+  const issuer = await loadOwnedIssuer(req);
+  await issuerService.removeIssuer(issuer);
+  res.json({ ok: true });
+};
+
+const getSequentials = async (req, res) => {
+  const issuer = await loadOwnedIssuer(req);
+  const sequentials = await issuerService.getSequentials(issuer);
+  res.json({ ok: true, sequentials });
+};
+
+const setSequential = async (req, res) => {
+  const issuer = await loadOwnedIssuer(req);
+  await issuerService.setSequential(issuer, req.params.documentType, req.body.environment, req.body.nextSequential);
+  res.json({ ok: true });
+};
+
+module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType, uploadLogo, renewCertificate, updateIssuer, removeIssuer, getSequentials, setSequential };

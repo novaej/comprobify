@@ -1,5 +1,6 @@
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const issuerModel = require('../models/issuer.model');
+const documentModel = require('../models/document.model');
 const tenantModel = require('../models/tenant.model');
 const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
@@ -173,4 +174,43 @@ async function listIssuers(tenantId) {
   }));
 }
 
-module.exports = { createBranch, listDocumentTypes, addDocumentType, removeDocumentType, listIssuers, renewCertificate };
+async function removeIssuer(issuer) {
+  const activeCount = await issuerModel.countActiveByTenantId(issuer.tenant_id);
+  if (activeCount <= 1) {
+    throw new AppError(
+      "Cannot remove the tenant's last remaining issuer",
+      400,
+      ErrorCodes.LAST_ISSUER_CANNOT_BE_REMOVED
+    );
+  }
+
+  const hasDocuments = await documentModel.existsByIssuerId(issuer.id);
+  if (hasDocuments) {
+    throw new AppError(
+      'Cannot remove an issuer that has issued documents',
+      400,
+      ErrorCodes.ISSUER_HAS_DOCUMENTS
+    );
+  }
+
+  await issuerModel.deactivate(issuer.id, issuer.tenant_id);
+}
+
+async function getSequentials(issuer) {
+  const documentTypes = await issuerDocumentTypeModel.findActiveByIssuerId(issuer.id);
+  return sequentialService.getCounters(issuer.id, documentTypes);
+}
+
+async function setSequential(issuer, documentType, environment, nextSequential) {
+  const sandbox = environment === 'sandbox';
+  await sequentialService.setNext(
+    issuer.id,
+    issuer.branch_code,
+    issuer.issue_point_code,
+    documentType,
+    nextSequential,
+    sandbox
+  );
+}
+
+module.exports = { createBranch, listDocumentTypes, addDocumentType, removeDocumentType, listIssuers, renewCertificate, removeIssuer, getSequentials, setSequential };

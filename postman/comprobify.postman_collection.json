@@ -685,6 +685,111 @@
             },
             "description": "Disables a document type for the specified issuer. The last active type cannot be removed."
           }
+        },
+        {
+          "name": "Update Issuer",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "issuers",
+                "{{issuer_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tradeName\": \"ACME Express\",\n  \"branchAddress\": \"Av. Amazonas 456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Edits the trade name and/or branch address for an existing issuer. At least one field is required. businessName, mainAddress, and ruc cannot be edited here."
+          }
+        },
+        {
+          "name": "Remove Issuer",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "issuers",
+                "{{issuer_id}}"
+              ]
+            },
+            "description": "Soft-deletes an issuer (active = false). Rejected with LAST_ISSUER_CANNOT_BE_REMOVED if it's the tenant's only active issuer, or ISSUER_HAS_DOCUMENTS if it has ever issued a document."
+          }
+        },
+        {
+          "name": "Get Sequentials",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/sequentials",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "issuers",
+                "{{issuer_id}}",
+                "sequentials"
+              ]
+            },
+            "description": "Returns the current and next sequential number per active document type, broken out by sandbox/production environment."
+          }
+        },
+        {
+          "name": "Set Next Sequential",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/sequentials/01",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "issuers",
+                "{{issuer_id}}",
+                "sequentials",
+                "01"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"environment\": \"production\",\n  \"nextSequential\": 200\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Manually sets the next sequential number for one document type in one environment. Locks the counter row with SELECT ... FOR UPDATE so it cannot race a concurrent POST /v1/documents call. nextSequential must exceed the current counter value."
+          }
         }
       ]
     },
