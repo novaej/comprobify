@@ -790,6 +790,25 @@
             },
             "description": "Manually sets the next sequential number for one document type in one environment. Locks the counter row with SELECT ... FOR UPDATE so it cannot race a concurrent POST /v1/documents call. nextSequential must exceed the current counter value."
           }
+        },
+        {
+          "name": "Activate Issuer",
+          "request": {
+            "method": "PATCH",
+            "url": {
+              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/activate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "issuers",
+                "{{issuer_id}}",
+                "activate"
+              ]
+            },
+            "description": "Reactivates a soft-deleted issuer. Re-checks the tenant's plan branch/issue-point limits the same way Create Branch does, so deactivate-then-reactivate cannot be used to exceed plan caps."
+          }
         }
       ]
     },

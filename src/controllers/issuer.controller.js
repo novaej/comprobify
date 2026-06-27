@@ -21,6 +21,22 @@ async function loadOwnedIssuer(req) {
   return issuer;
 }
 
+/**
+ * Like loadOwnedIssuer, but does not filter on active — used by activateIssuer,
+ * the one action that must be able to load a deactivated issuer.
+ */
+async function loadOwnedIssuerAny(req) {
+  const id = parseInt(req.params.id, 10);
+  const issuer = await issuerModel.findByIdAny(id);
+  if (!issuer) {
+    throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
+  }
+  if (issuer.tenant_id !== req.tenant.id) {
+    throw new AppError('Issuer does not belong to this tenant', 403, ErrorCodes.ISSUER_FORBIDDEN);
+  }
+  return issuer;
+}
+
 const createBranch = async (req, res) => {
   if (req.tenant.status !== TenantStatus.ACTIVE) {
     throw new AppError(
@@ -161,4 +177,10 @@ const setSequential = async (req, res) => {
   res.json({ ok: true });
 };
 
-module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType, uploadLogo, renewCertificate, updateIssuer, removeIssuer, getSequentials, setSequential };
+const activateIssuer = async (req, res) => {
+  const issuer = await loadOwnedIssuerAny(req);
+  await issuerService.activateIssuer(issuer, req.tenant);
+  res.json({ ok: true });
+};
+
+module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType, uploadLogo, renewCertificate, updateIssuer, removeIssuer, getSequentials, setSequential, activateIssuer };

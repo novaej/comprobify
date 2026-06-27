@@ -1,6 +1,13 @@
 const { body } = require('express-validator');
 const { SUPPORTED_TYPES } = require('../builders');
 
+function arrayFromJsonString(value) {
+  if (typeof value === 'string') {
+    try { return JSON.parse(value); } catch { return value; }
+  }
+  return value;
+}
+
 const createBranch = [
   body('sourceIssuerId')
     .optional()
@@ -25,6 +32,7 @@ const createBranch = [
 
   body('documentTypes')
     .optional()
+    .customSanitizer(arrayFromJsonString)
     .isArray({ min: 1 })
     .withMessage('documentTypes must be a non-empty array'),
 
@@ -35,6 +43,7 @@ const createBranch = [
 
   body('initialSequentials')
     .optional()
+    .customSanitizer(arrayFromJsonString)
     .isArray({ min: 1 })
     .withMessage('initialSequentials must be a non-empty array'),
 

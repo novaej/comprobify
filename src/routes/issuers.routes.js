@@ -70,6 +70,7 @@ const handleLogoUpload = (req, res, next) => {
 router.get('/:id', readLimiter, idParam, validateRequest, asyncHandler(controller.getById));
 router.patch('/:id', writeLimiter, idParam, v.updateIssuer, validateRequest, asyncHandler(controller.updateIssuer));
 router.delete('/:id', writeLimiter, idParam, validateRequest, asyncHandler(controller.removeIssuer));
+router.patch('/:id/activate', writeLimiter, idParam, validateRequest, asyncHandler(controller.activateIssuer));
 router.patch('/:id/logo', writeLimiter, idParam, validateRequest, handleLogoUpload, asyncHandler(controller.uploadLogo));
 router.patch('/:id/certificate', writeLimiter, upload.single('cert'), idParam, validateRequest, asyncHandler(controller.renewCertificate));
 router.get('/:id/document-types', readLimiter, idParam, validateRequest, asyncHandler(controller.listDocumentTypes));

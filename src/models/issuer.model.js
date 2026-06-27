@@ -100,4 +100,17 @@ async function countActiveByTenantId(tenantId) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo, updateCertificate, update, deactivate, countActiveByTenantId };
+async function findByIdAny(id) {
+  const { rows } = await db.query('SELECT * FROM issuers WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
+async function activate(issuerId, tenantId) {
+  const { rows } = await db.query(
+    'UPDATE issuers SET active = true, updated_at = NOW() WHERE id = $1 AND tenant_id = $2 AND active = false RETURNING id',
+    [issuerId, tenantId]
+  );
+  return rows[0] || null;
+}
+
+module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo, updateCertificate, update, deactivate, countActiveByTenantId, findByIdAny, activate };
