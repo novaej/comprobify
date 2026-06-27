@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-06-27
+
 ### Added
 - **`PATCH /v1/issuers/:id/activate`** — reactivates a soft-deleted issuer. Re-runs the same branch/issue-point plan-limit checks as `POST /v1/issuers` (`BRANCH_LIMIT_REACHED` / `ISSUE_POINT_LIMIT_REACHED`, 402) so deactivate-then-reactivate can't be used to exceed a tenant's plan caps.
 - **`PATCH /v1/issuers/:id`** — edit `tradeName` and/or `branchAddress` for an existing issuer (at least one required). Does not accept `businessName`/`mainAddress`/`ruc` — those stay permanently tied to the RUC registration.
