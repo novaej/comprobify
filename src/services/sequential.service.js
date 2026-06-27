@@ -1,4 +1,6 @@
 const db = require('../config/database');
+const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 
 /**
  * Returns the next sequential number for a given issuer/branch/point/docType.
@@ -84,4 +86,83 @@ async function initialize(issuerId, branchCode, issuePointCode, documentType, st
   );
 }
 
-module.exports = { getNext, initialize };
+/**
+ * Returns the current sandbox and production counter value for each of the
+ * given document types, plus the `next` sequential each would produce.
+ *
+ * Reads sandbox and production independently (separate search_path per
+ * schema) since a single connection/transaction can only have one
+ * search_path active at a time.
+ */
+async function getCounters(issuerId, documentTypes) {
+  const [{ rows: productionRows }, { rows: sandboxRows }] = await Promise.all([
+    db.queryAsIssuer(issuerId, 'SELECT document_type, current_value FROM sequential_numbers WHERE issuer_id = $1', [issuerId], false),
+    db.queryAsIssuer(issuerId, 'SELECT document_type, current_value FROM sequential_numbers WHERE issuer_id = $1', [issuerId], true),
+  ]);
+
+  const productionMap = new Map(productionRows.map((r) => [r.document_type, r.current_value]));
+  const sandboxMap = new Map(sandboxRows.map((r) => [r.document_type, r.current_value]));
+
+  return documentTypes.map((documentType) => {
+    const productionCurrent = productionMap.get(documentType) ?? 0;
+    const sandboxCurrent = sandboxMap.get(documentType) ?? 0;
+    return {
+      documentType,
+      sandbox: { current: sandboxCurrent, next: sandboxCurrent + 1 },
+      production: { current: productionCurrent, next: productionCurrent + 1 },
+    };
+  });
+}
+
+/**
+ * Sets the counter so that the next call to getNext() returns exactly
+ * nextSequential. Locks the row with FOR UPDATE inside the same transaction
+ * that performs the write, so a concurrent getNext() (document creation) and
+ * this admin edit cannot race and produce a duplicate sequential.
+ */
+async function setNext(issuerId, branchCode, issuePointCode, documentType, nextSequential, sandbox) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await db.setIssuerContext(client, issuerId, sandbox);
+
+    const { rows } = await client.query(
+      `SELECT current_value FROM sequential_numbers
+       WHERE issuer_id = $1 AND branch_code = $2 AND issue_point_code = $3 AND document_type = $4
+       FOR UPDATE`,
+      [issuerId, branchCode, issuePointCode, documentType]
+    );
+
+    const current = rows[0]?.current_value ?? 0;
+    if (nextSequential <= current) {
+      throw new AppError(
+        `nextSequential must be greater than the current value (${current})`,
+        400,
+        ErrorCodes.SEQUENTIAL_CANNOT_DECREASE
+      );
+    }
+
+    if (rows.length > 0) {
+      await client.query(
+        `UPDATE sequential_numbers SET current_value = $1, updated_at = NOW()
+         WHERE issuer_id = $2 AND branch_code = $3 AND issue_point_code = $4 AND document_type = $5`,
+        [nextSequential - 1, issuerId, branchCode, issuePointCode, documentType]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO sequential_numbers (issuer_id, branch_code, issue_point_code, document_type, current_value)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [issuerId, branchCode, issuePointCode, documentType, nextSequential - 1]
+      );
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { getNext, initialize, getCounters, setNext };

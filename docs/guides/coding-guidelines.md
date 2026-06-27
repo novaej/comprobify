@@ -323,3 +323,4 @@ npm test                   # all tests
 10. **Reading `process.env` directly** — always import from `src/config/index.js`.
 11. **Omitting `documentType` from `POST /v1/documents`** — it is a required field with no default. Callers must always supply it (e.g. `"01"` for a factura).
 12. **Using `cert_path` / `cert_password_enc` from `req.issuer`** — these columns were removed in migration 028. Use `issuer.encrypted_private_key` and `issuer.certificate_pem` instead.
+13. **Adding `isArray()` validation on a multipart route without a JSON-parsing `customSanitizer` first** — multipart fields are always strings; a client sending a JSON-encoded array (the only way to send one over `multipart/form-data`) will always fail `isArray()` otherwise. See `arrayFromJsonString` in `src/validators/issuer.validator.js`.

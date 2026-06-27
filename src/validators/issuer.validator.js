@@ -1,6 +1,13 @@
 const { body } = require('express-validator');
 const { SUPPORTED_TYPES } = require('../builders');
 
+function arrayFromJsonString(value) {
+  if (typeof value === 'string') {
+    try { return JSON.parse(value); } catch { return value; }
+  }
+  return value;
+}
+
 const createBranch = [
   body('sourceIssuerId')
     .optional()
@@ -25,6 +32,7 @@ const createBranch = [
 
   body('documentTypes')
     .optional()
+    .customSanitizer(arrayFromJsonString)
     .isArray({ min: 1 })
     .withMessage('documentTypes must be a non-empty array'),
 
@@ -35,6 +43,7 @@ const createBranch = [
 
   body('initialSequentials')
     .optional()
+    .customSanitizer(arrayFromJsonString)
     .isArray({ min: 1 })
     .withMessage('initialSequentials must be a non-empty array'),
 
@@ -50,4 +59,35 @@ const createBranch = [
     .withMessage('each initialSequentials entry must have a sequential >= 1'),
 ];
 
-module.exports = { createBranch };
+const updateIssuer = [
+  body('tradeName')
+    .optional()
+    .isString()
+    .isLength({ max: 300 })
+    .withMessage('tradeName must be a string of max 300 characters'),
+
+  body('branchAddress')
+    .optional()
+    .isString()
+    .isLength({ max: 300 })
+    .withMessage('branchAddress must be a string of max 300 characters'),
+
+  body().custom((_value, { req }) => {
+    if (req.body.tradeName === undefined && req.body.branchAddress === undefined) {
+      throw new Error('At least one of tradeName or branchAddress must be provided');
+    }
+    return true;
+  }),
+];
+
+const setSequential = [
+  body('environment')
+    .isIn(['sandbox', 'production'])
+    .withMessage("environment must be 'sandbox' or 'production'"),
+
+  body('nextSequential')
+    .isInt({ min: 1 })
+    .withMessage('nextSequential must be an integer >= 1'),
+];
+
+module.exports = { createBranch, updateIssuer, setSequential };

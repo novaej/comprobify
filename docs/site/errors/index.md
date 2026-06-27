@@ -117,6 +117,9 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `DOCUMENT_NOT_AUTHORIZED` | Operation (RIDE, email) requires document status `AUTHORIZED` |
 | `SELF_REVOCATION_FORBIDDEN` | Cannot revoke the API key used to authenticate this request |
 | `INVALID_FILE_UPLOAD` | Uploaded file is missing, the wrong type, or exceeds the field's size limit (e.g. a logo over 500 KB) |
+| `LAST_ISSUER_CANNOT_BE_REMOVED` | Tenant has only one active issuer left — it cannot be removed |
+| `ISSUER_HAS_DOCUMENTS` | Issuer has issued documents (in either environment) and cannot be removed |
+| `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` is not greater than the counter's current value |
 | `BAD_REQUEST` | Other malformed request (fallback — read `detail`) |
 
 ### 401 Unauthorized

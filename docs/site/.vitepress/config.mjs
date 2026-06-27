@@ -47,9 +47,13 @@ export default defineConfig({
               { text: 'List Issuers', link: '/endpoints/list-issuers' },
               { text: 'Get Issuer', link: '/endpoints/get-issuer-me' },
               { text: 'Create Branch', link: '/endpoints/create-branch' },
+              { text: 'Update Issuer', link: '/endpoints/update-issuer' },
+              { text: 'Remove Issuer', link: '/endpoints/remove-issuer' },
+              { text: 'Activate Issuer', link: '/endpoints/activate-issuer' },
               { text: 'Upload Logo', link: '/endpoints/upload-issuer-logo' },
               { text: 'Renew Certificate', link: '/endpoints/renew-issuer-certificate' },
               { text: 'Document Types', link: '/endpoints/document-types' },
+              { text: 'Sequentials', link: '/endpoints/issuer-sequentials' },
             ],
           },
           {
