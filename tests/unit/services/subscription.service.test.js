@@ -147,5 +147,21 @@ describe('SubscriptionService', () => {
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'INVOICE_LINKED', { subscriptionId: 10, documentId: 999 });
       expect(result).toEqual({ id: 10, status: 'INVOICE_PROCESSING' });
     });
+
+    test('activates immediately when the document being linked is already AUTHORIZED', async () => {
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER' });
+      documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'AUTHORIZED' });
+      subscriptionModel.updateStatus
+        .mockResolvedValueOnce({ id: 10, status: 'INVOICE_PROCESSING' }) // the link itself
+        .mockResolvedValueOnce({ id: 10, status: 'ACTIVE' });           // inside activateIfLinked
+      subscriptionModel.findByInvoiceDocumentId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING',
+      });
+
+      const result = await subscriptionService.linkInvoice(10, accessKey);
+
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
+      expect(result).toEqual({ id: 10, status: 'ACTIVE' });
+    });
   });
 });

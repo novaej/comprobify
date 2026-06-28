@@ -94,11 +94,20 @@ async function linkInvoice(subscriptionId, accessKey) {
   const document = await documentModel.findByAccessKey(accessKey);
   if (!document) throw new NotFoundError('Document');
 
-  const updated = await subscriptionModel.updateStatus(subscriptionId, 'INVOICE_PROCESSING', {
+  let updated = await subscriptionModel.updateStatus(subscriptionId, 'INVOICE_PROCESSING', {
     invoice_document_id: document.id,
   });
 
   await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', { subscriptionId, documentId: document.id });
+
+  // The activation hook only fires on a *new* authorization event inside
+  // checkAuthorization() — it never runs for a document that was authorized
+  // before being linked. Check immediately so linking an already-authorized
+  // invoice doesn't leave the subscription stuck in INVOICE_PROCESSING.
+  if (document.status === 'AUTHORIZED') {
+    const activated = await activateIfLinked(document.id);
+    if (activated) updated = activated;
+  }
 
   return updated;
 }
