@@ -2,7 +2,7 @@ const db = require('../config/database');
 const TenantStatus = require('../constants/tenant-status');
 const EmailStatus = require('../constants/email-status');
 
-async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, documentQuota = 100, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es' }) {
+async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, documentQuota = 5, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es' }) {
   const { rows } = await db.query(
     `INSERT INTO tenants (email, subscription_tier, status, document_quota, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

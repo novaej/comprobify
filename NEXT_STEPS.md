@@ -2,8 +2,6 @@
 
 Remaining work ordered by value-to-effort ratio. Each item is independent and can be delivered as its own PR.
 
-See [STRATEGY.md](STRATEGY.md) for product context, pricing model, and phased roadmap.
-
 ---
 
 ## 1. Additional Document Types
@@ -160,3 +158,80 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 **Why defer:** there is no client today asking for a read-only key. Adding scopes preemptively means writing validation, tests, and docs for code paths nobody is using. Revisit when the first dashboard / read-only consumer appears, or when a security review demands principle-of-least-privilege.
 
 **Effort:** Low–Medium when the use case arrives — migration + one middleware factory + 4–8 route annotations + tests.
+
+---
+
+## 8. Shared Rate-Limit Store for Horizontal Scaling
+
+**Priority: Medium — blocks running more than one API instance correctly in production**
+
+`src/middleware/rate-limit.js` uses `express-rate-limit`'s default in-memory store. Each Render instance counts requests independently, so running N instances lets a tenant burst to roughly `limit × N` before any single instance throttles them — the counters aren't shared across instances.
+
+**What:**
+- Swap the store backing `writeLimiter`/`readLimiter` to a shared one (`rate-limit-redis`, backed by a small Redis instance — Render's own Redis add-on or Upstash) so all instances enforce one counter per `keyHash`
+- No change to the limiter logic or tier-based limits themselves — only the store option
+
+**Effort:** Low — one new dependency, one Redis connection, swap the store option in `rate-limit.js`. Must land before scaling the production API to more than one instance.
+
+---
+
+## 9. Subscription + Payment Pipeline (manual now, Kushki later)
+
+**Priority: Medium — the `subscriptions`/`payments` model is usable immediately for the manual SPI flow; the Kushki-specific pieces stay blocked until a legal entity exists (see below)**
+
+**Core design rule:** a subscription becomes `ACTIVE` only when its billing-period invoice is **SRI-authorized** — never merely on payment. Comprobify is an invoicing company; granting paid access against a payment with no valid legal invoice behind it is exactly the kind of gap this product exists to prevent for everyone else. If signing fails, the cert's expired, or SRI rejects the document, the subscription stays in an intermediate state until that's fixed — it never silently activates.
+
+**Why this is one item covering two phases:** the state machine and the `payments` table are useful *today*, manually, independent of Kushki — they replace "remember which clients paid" with an actual record. The Kushki-specific pieces (auto-charge, webhooks, card-on-file) bolt onto the same schema later without changing it.
+
+**Schema:**
+- **`subscriptions`** — `tenant_id`, `tier`, `pending_tier` (nullable, for deferred downgrades), `status`, `invoice_document_id` (nullable FK to `documents.id` — the self-billed invoice for this period), `current_period_start`, `current_period_end`, `kushki_subscription_id`/`kushki_customer_id` (nullable — populated only once Kushki exists), `created_at`, `canceled_at`.
+  - `status` enum: `PENDING_PAYMENT` → `PAYMENT_RECEIVED` → `INVOICE_PROCESSING` → `ACTIVE`, plus `EXPIRED`, `SUSPENDED`, `CANCELLED`. `INVOICE_PROCESSING` covers the whole window between "invoice document created" and "authorized" — the granular detail (signed/sent/returned/error) comes from the linked `documents.status` and its own `document_events`, not duplicated here.
+- **`payments`** — `subscription_id`, `status` (`PENDING`/`REPORTED`/`VERIFIED`/`REJECTED`/`REFUNDED`), `amount`, `method` (`SPI_TRANSFER` today, `KUSHKI_CARD` later), `kushki_charge_id` (nullable), `reported_at`, `verified_at`, `created_at`.
+- New `tenant_events` types: `SUBSCRIPTION_CREATED`, `PAYMENT_REPORTED`, `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `INVOICE_LINKED`, `SUBSCRIPTION_ACTIVATED`, `SUBSCRIPTION_EXPIRED`, `SUBSCRIPTION_SUSPENDED`, `SUBSCRIPTION_CANCELLED` (update `chk_tenant_events_event_type` in the same migration).
+
+**Manual flow (buildable now, no Kushki/company needed):**
+1. Tenant/admin selects a plan → `subscriptions` row created, `PENDING_PAYMENT`.
+2. Client transfers via SPI, reports it → `payments` row `REPORTED`.
+3. Admin checks the bank, marks it `VERIFIED` → subscription moves to `PAYMENT_RECEIVED`.
+4. Admin issues the self-billing invoice through Comprobify's own API (per the earlier manual-invoicing discussion) → `invoice_document_id` set, subscription moves to `INVOICE_PROCESSING`.
+5. Once that document's status reaches `AUTHORIZED` → subscription flips to `ACTIVE`, `tenants.subscription_tier`/`document_quota` updated.
+
+**Kushki flow (blocked — requires a registered legal entity; every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different gateway):**
+- Card collected at `POST /v1/tenants/promote`, not at registration — sandbox/Free stays card-free.
+- Kushki.js (hosted fields) tokenizes client-side; raw card data never reaches Comprobify's servers.
+- Kushki has native recurring subscriptions — it owns the charge schedule, no custom billing cron needed. Its webhook (mirrors `mailgun-webhook.controller.js`) creates/updates `payments` rows automatically (`REPORTED`→`VERIFIED` near-instantly) instead of an admin doing it by hand, then the same pipeline above takes over from step 4.
+- Failed recurring charge → `payments` row `REJECTED`, subscription → `SUSPENDED`, notify via `notificationService`, auto-downgrade to FREE after a grace period (propose 7 days) if unresolved. No immediate access suspension.
+- Mid-cycle tier change: upgrades apply immediately with a prorated charge; downgrades set `subscriptions.pending_tier` and apply only at next renewal — no credit/refund logic needed.
+- Config: `KUSHKI_PRIVATE_KEY` + webhook signing secret, independent per environment, same rule as `ADMIN_SECRET`/`ENCRYPTION_KEY`. Public key is frontend-only.
+
+**Interim path right now, zero code:** keep onboarding paying clients via `POST /v1/admin/tenants` + `POST /v1/admin/tenants/:id/promote` until the `subscriptions`/`payments` tables exist — those admin endpoints already work today without any of the above.
+
+---
+
+## 10. Overage Billing (Monthly Quota Reset + Per-Tenant Overage Toggle)
+
+**Priority: Low — depends on the Kushki integration (#9) landing first**
+
+Two things have to exist before `overagePerDocumentUsd` (`subscription-tiers.js`) means anything: a billing cycle for quota to reset against, and a gateway to actually charge through. Neither exists today. `tenants.document_count` never resets anywhere in the codebase — it's a lifetime counter, not a monthly one, despite every doc describing quotas as "documents/month." And exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`) — there is no path today that lets a tenant continue past quota and get billed the difference.
+
+**What:**
+1. **Monthly reset** — give quota an actual billing-period concept (e.g. a scheduled job, or a `tenants.quota_period_start` column checked at request time) that zeroes `document_count` at the start of each cycle, so "N documents/month" is true rather than aspirational
+2. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
+3. **Overage charging** — when `overage_enabled = true` and quota is exceeded, allow creation to continue, track the extra count for the cycle, and bill it as one line item (`overage_count × overagePerDocumentUsd`) through the payment gateway at cycle end — not a per-document charge; most gateways don't support micro-charging per invoice
+4. Expose the toggle (e.g. `PATCH /v1/tenants/overage`) and surface current-cycle overage usage somewhere the tenant can see it before the bill arrives, so it's never a surprise
+
+**Why defer:** pointless without a gateway to charge through, and the monthly reset is a prerequisite most of this depends on regardless of billing.
+
+**Effort:** Medium-High — migration for the reset/toggle/counter, a scheduled job for the reset, a new tenant-facing endpoint, and the actual charge integration once the gateway exists.
+
+---
+
+## 11. Audit Certificate Changes
+
+**Priority: Low — cheap gap, found while reviewing the billing audit-trail design**
+
+`issuer.service.js`'s `renewCertificate` updates `issuers.encrypted_private_key`/`certificate_pem`/etc. and returns — no event is logged anywhere. Given certificates are the thing that makes a signed invoice legally valid, "when was this cert replaced and by what" should be in the audit trail, not just inferable from `updated_at`.
+
+**What:** log a `tenant_events` row (or a new `issuer_events` table if issuer-level granularity matters more than tenant-level) on certificate upload (registration/branch creation) and renewal — fingerprint and expiry are already computed by `certificateService.parseCertificate`, just not persisted as an event.
+
+**Effort:** Low — one event write per existing call site, no new flow.

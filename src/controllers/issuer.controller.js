@@ -84,7 +84,7 @@ const listDocumentTypes = async (req, res) => {
 
 const addDocumentType = async (req, res) => {
   const issuer = await loadOwnedIssuer(req);
-  const documentTypes = await issuerService.addDocumentType(issuer.id, req.body.documentType);
+  const documentTypes = await issuerService.addDocumentType(issuer.id, req.body.documentType, req.tenant);
   res.json({ ok: true, documentTypes });
 };
 

@@ -174,7 +174,7 @@ To enable production once it's provisioned:
 4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
 5. In `deploy-production.yml`: uncomment the `push: branches: [production]` trigger and remove the `if: false` guard on the `deploy` job
 6. Add branch protection to `production` (restrict who can push to the automation only; no force pushes) — see GitHub repository setup below
-7. Set up a cron-job.org job (or equivalent external cron service) to `POST /v1/admin/jobs/notifications` on the production URL every 5 minutes with `Authorization: Bearer <ADMIN_SECRET>`
+7. Create a Render Cron Job in the same workspace to `POST /v1/admin/jobs/notifications` every 5 minutes with `Authorization: Bearer <ADMIN_SECRET>` — see "Render Cron Job setup (production)" under Scheduled jobs below
 
 ---
 
@@ -229,7 +229,7 @@ The endpoint always returns `200 OK` with `{ "ok": true }` for recognised events
 
 ## Scheduled jobs
 
-The API has one scheduled job that must be triggered by an **external cron service** — it is not self-scheduled. [cron-job.org](https://cron-job.org) is used for both environments.
+The API has one scheduled job that must be triggered externally — it is not self-scheduled. **Staging** uses [cron-job.org](https://cron-job.org) (external, free). **Production** uses a **Render Cron Job** instead, so the scheduler lives in the same account as the API and is billed per execution-second rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale.
 
 ### `POST /v1/admin/jobs/notifications`
 
@@ -240,16 +240,28 @@ Runs two tasks on every call:
 
 The job is **idempotent** — running it multiple times within the same minute is safe.
 
-### cron-job.org setup
+### cron-job.org setup (staging only)
 
 | Setting | Value |
 |---|---|
 | **Method** | `POST` |
-| **Staging URL** | `https://api-staging.comprobify.com/v1/admin/jobs/notifications` |
-| **Production URL** | `https://api.comprobify.com/v1/admin/jobs/notifications` *(once provisioned)* |
+| **URL** | `https://api-staging.comprobify.com/v1/admin/jobs/notifications` |
 | **Schedule** | Every 5 minutes |
 | **Header** | `Authorization: Bearer <ADMIN_SECRET>` |
 | **Expected response** | `200 OK` with JSON body |
+
+### Render Cron Job setup (production)
+
+In the Render dashboard: **New → Cron Job**, in the same workspace as `comprobify-production`.
+
+| Setting | Value |
+|---|---|
+| **Schedule** | `*/5 * * * *` (every 5 minutes) |
+| **Command** | `curl -sf -X POST https://api.comprobify.com/v1/admin/jobs/notifications -H "Authorization: Bearer $ADMIN_SECRET"` |
+| **Environment variable** | `ADMIN_SECRET` — same value as the `comprobify-production` web service, set as a Cron Job env var (not hardcoded in the command) |
+| **Runtime** | Minimal image (e.g. `curlimages/curl` or the same Docker image, since it just needs `curl`) |
+
+Additional scheduled jobs later are just additional Cron Job services — each is billed only for the seconds it actually runs, with no fixed monthly fee per job.
 
 > The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
 

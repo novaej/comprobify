@@ -56,7 +56,7 @@ async function createTenant(fields) {
     email: fields.email,
     subscriptionTier: tier,
     status: TenantStatus.ACTIVE,
-    documentQuota: TIERS[tier]?.documentQuota ?? 100,
+    documentQuota: TIERS[tier]?.documentQuota ?? TIERS.FREE.documentQuota,
   });
   return formatTenant(row);
 }

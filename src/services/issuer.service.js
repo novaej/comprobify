@@ -16,12 +16,20 @@ async function listDocumentTypes(issuerId) {
   return issuerDocumentTypeModel.findActiveByIssuerId(issuerId);
 }
 
-async function addDocumentType(issuerId, documentType) {
+async function addDocumentType(issuerId, documentType, tenant) {
   if (!SUPPORTED_TYPES.includes(documentType)) {
     throw new AppError(
       `Document type '${documentType}' is not supported. Supported types: ${SUPPORTED_TYPES.join(', ')}`,
       400,
       ErrorCodes.DOCUMENT_TYPE_NOT_SUPPORTED
+    );
+  }
+  const tierConfig = TIERS[tenant.subscriptionTier];
+  if (!tierConfig.allowedDocumentTypes.includes(documentType)) {
+    throw new AppError(
+      `Document type '${documentType}' is not available on the ${tenant.subscriptionTier} plan. Upgrade your plan to enable it.`,
+      402,
+      ErrorCodes.DOCUMENT_TYPE_NOT_IN_TIER
     );
   }
   await issuerDocumentTypeModel.activate(issuerId, documentType);
@@ -60,6 +68,18 @@ async function renewCertificate(issuer, p12Buffer, p12Password) {
 
 async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password) {
   const tierConfig = TIERS[tenant.subscriptionTier];
+
+  const documentTypes = Array.isArray(fields.documentTypes) && fields.documentTypes.length > 0
+    ? [...new Set(fields.documentTypes)]
+    : ['01'];
+  const disallowedTypes = documentTypes.filter((t) => !tierConfig.allowedDocumentTypes.includes(t));
+  if (disallowedTypes.length > 0) {
+    throw new AppError(
+      `Document type(s) ${disallowedTypes.join(', ')} are not available on the ${tenant.subscriptionTier} plan. Upgrade your plan to enable them.`,
+      402,
+      ErrorCodes.DOCUMENT_TYPE_NOT_IN_TIER
+    );
+  }
 
   const issuePointCount = await tenantModel.countIssuePointsByBranch(tenant.id, fields.branchCode);
   if (issuePointCount === 0) {
@@ -123,9 +143,6 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
     throw err;
   }
 
-  const documentTypes = Array.isArray(fields.documentTypes) && fields.documentTypes.length > 0
-    ? [...new Set(fields.documentTypes)]
-    : ['01'];
   await issuerDocumentTypeModel.bulkCreate(newIssuer.id, documentTypes);
 
   const sequentialMap = {};
