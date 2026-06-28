@@ -2,7 +2,6 @@ const db = require('../config/database');
 
 const MUTABLE_EXTRA_COLUMNS = new Set([
   'invoice_document_id',
-  'pending_tier',
   'current_period_start',
   'current_period_end',
   'canceled_at',
