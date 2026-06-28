@@ -43,7 +43,7 @@ Response:
     "email": "your@email.com",
     "subscriptionTier": "FREE",
     "status": "PENDING_VERIFICATION",
-    "documentQuota": 100
+    "documentQuota": 5
   },
   "issuer": { "id": 1, "ruc": "...", "sandbox": true },
   "apiKey": "<your-sandbox-api-key>"
@@ -52,7 +52,7 @@ Response:
 
 **Store the `apiKey` — it is shown only once.**
 
-The account starts on the **FREE** tier (100 documents, 1 branch, 1 issuing point). All documents are sent to the SRI test environment until you promote to production.
+The account starts on the **FREE** tier (5 documents, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
 
 **Registration errors:**
 
@@ -294,16 +294,16 @@ Distribute each token to the integration that previously used the sandbox key wi
 
 ## Subscription tiers
 
-| Tier | Document quota | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
-|---|---|---|---|---|---|
-| Free | 100 | 1 | 1 | 1 | 10 req/min |
-| Starter | 1,000 | 3 | 2 | 2 | 60 req/min |
-| Growth | 5,000 | 10 | 5 | 5 | 120 req/min |
-| Business | 20,000 | Unlimited | Unlimited | 10 | 300 req/min |
+| Tier | Document quota | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
+|---|---|---|---|---|---|---|
+| Free | 5 | Factura (`01`) | 1 | 1 | 1 | 10 req/min |
+| Starter | 1,000 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
+| Growth | 5,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
+| Business | 20,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 300 req/min |
 
-The document quota is shared across all branches and document types. When you reach it, `POST /v1/documents` returns `402 QUOTA_EXCEEDED`. Contact support to upgrade your plan.
+The document quota is shared across all branches and document types, and counts **production documents only** — sandbox/test documents never consume it. When you reach it, `POST /v1/documents` returns `402 QUOTA_EXCEEDED`. Contact support to upgrade your plan.
 
-Attempting to create a branch beyond the tier limit returns `402 PAYMENT_REQUIRED`.
+Attempting to create a branch beyond the tier limit returns `402 BRANCH_LIMIT_REACHED` / `ISSUE_POINT_LIMIT_REACHED`. Attempting to enable a document type your plan doesn't include (e.g. credit notes on Free/Starter) returns `402 DOCUMENT_TYPE_NOT_IN_TIER` — see [Issuer Document Types](endpoints/document-types.md).
 
 ---
 

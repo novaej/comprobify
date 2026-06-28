@@ -62,15 +62,18 @@ async function create(body, idempotencyKey = null, issuer) {
     await client.query('BEGIN');
     await db.setIssuerContext(client, issuer.id, issuer.sandbox);
 
-    // Atomically increment invoice count — rolls back with the transaction if anything fails
-    const quotaResult = await client.query(
-      `UPDATE tenants SET document_count = document_count + 1, updated_at = NOW()
-       WHERE id = $1 AND document_count < document_quota
-       RETURNING id`,
-      [issuer.tenant_id]
-    );
-    if (quotaResult.rows.length === 0) {
-      throw new QuotaExceededError();
+    // Atomically increment invoice count — rolls back with the transaction if anything fails.
+    // Sandbox documents don't consume quota — only production usage counts against it.
+    if (!issuer.sandbox) {
+      const quotaResult = await client.query(
+        `UPDATE tenants SET document_count = document_count + 1, updated_at = NOW()
+         WHERE id = $1 AND document_count < document_quota
+         RETURNING id`,
+        [issuer.tenant_id]
+      );
+      if (quotaResult.rows.length === 0) {
+        throw new QuotaExceededError();
+      }
     }
 
     // Get next sequential within this transaction (FOR UPDATE, not yet committed)

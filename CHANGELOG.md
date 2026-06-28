@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Document type tier gating** — `POST /v1/issuers/:id/document-types` and the `documentTypes` field on `POST /v1/issuers` now reject activating a type not included in the tenant's plan (402 `DOCUMENT_TYPE_NOT_IN_TIER`). Free/Starter are limited to facturas (`01`); Growth/Business also get credit notes (`04`). Downgrading is grandfathered — already-active types on existing issuers keep working; only activating *new* gated types is blocked.
+
+### Changed
+- **FREE tier document quota reduced from 100 to 5 documents/month** — the prior limit let a real freelancer or small business run indefinitely without ever needing to upgrade.
+- **Document quota no longer counts sandbox documents** — `tenants.document_count` only increments for production document creation, so testing against SRI pruebas never consumes a tenant's plan quota.
+
 ## [0.6.0] — 2026-06-27
 
 ### Added

@@ -349,24 +349,30 @@ a legal problem with SRI and an accounting problem with the buyer.
 
 | Tier | Price/month | Invoices included | Overage | Issuers | Write rate limit | Webhooks |
 |---|---|---|---|---|---|---|
-| Free | $0 | 100 | — | 1 | 10 req/min | No |
+| Free | $0 | 5 | — | 1 | 10 req/min | No |
 | Starter | $29 | 1,000 | $0.04/invoice | 2 | 60 req/min | No |
 | Growth | $79 | 5,000 | $0.025/invoice | 5 | 120 req/min | Yes |
 | Business | $199 | 20,000 | $0.015/invoice | unlimited | 300 req/min | Yes |
 | Enterprise | custom | unlimited | negotiated | unlimited | custom | Yes + SLA |
 
 **Features as tier gates:**
-- Free / Starter: facturas (`01`) only
+- Free / Starter: facturas (`01`) only — enforced via `allowedDocumentTypes` in `src/constants/subscription-tiers.js`; downgrading is grandfathered (already-active types on existing issuers keep working, only *activating new* gated types is blocked)
 - Growth+: credit notes (`04`), retenciones (`07`), other document types
 - Growth+: webhooks (polling is free; push is paid)
 - Business+: reporting endpoints, CSV export
 - Enterprise: dedicated instance option, DPA with SLA, custom rate limits
 
-**Infrastructure cost sanity check:**
-- Railway/Render: ~$14-30/month baseline
-- At 10 Starter clients: $290/month → covers infrastructure
+**Quota counts production usage only** — sandbox/test documents never increment `document_count`, so a Free or Starter tenant can integrate and test against SRI pruebas indefinitely without burning the 5 (or 1,000) invoices their plan grants for real production documents.
+
+**Infrastructure cost sanity check** (real production pricing — see [docs/infrastructure-costs.md](docs/infrastructure-costs.md) for the full breakdown):
+- Production floor (Render + Neon + Mailgun + Sentry + Vercel + Redis, +15% ISD): ~$150-160/month
+- Production ceiling under heavy load (mainly Neon compute scaling + Sentry overage, Vercel overage uncapped): ~$650/month+
+- 6 Starter clients ($174/mo) or 2 Growth clients ($158/mo) already covers the floor
+- At 10 Starter clients: $290/month → comfortably covers the floor with margin
 - At 100 clients at $60 average ARPU: $6,000 MRR → viable product
 - At 500 clients at $70 average ARPU: $35,000 MRR → fundable or acquirable
+- The ceiling case is largely self-funding: the same heavy invoice volume that drives Neon's compute cost up also generates per-invoice overage revenue under the tier model below
+- **No sticker-price change indicated** — the existing tiers below clear the real floor cost with a small handful of paying customers
 
 ---
 

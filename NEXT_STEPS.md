@@ -160,3 +160,17 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 **Why defer:** there is no client today asking for a read-only key. Adding scopes preemptively means writing validation, tests, and docs for code paths nobody is using. Revisit when the first dashboard / read-only consumer appears, or when a security review demands principle-of-least-privilege.
 
 **Effort:** Low–Medium when the use case arrives — migration + one middleware factory + 4–8 route annotations + tests.
+
+---
+
+## 8. Shared Rate-Limit Store for Horizontal Scaling
+
+**Priority: Medium — blocks running more than one API instance correctly in production**
+
+`src/middleware/rate-limit.js` uses `express-rate-limit`'s default in-memory store. Each Render instance counts requests independently, so running N instances lets a tenant burst to roughly `limit × N` before any single instance throttles them — the counters aren't shared across instances.
+
+**What:**
+- Swap the store backing `writeLimiter`/`readLimiter` to a shared one (`rate-limit-redis`, backed by a small Redis instance — Render's own Redis add-on or Upstash) so all instances enforce one counter per `keyHash`
+- No change to the limiter logic or tier-based limits themselves — only the store option
+
+**Effort:** Low — one new dependency, one Redis connection, swap the store option in `rate-limit.js`. Must land before scaling the production API to more than one instance.

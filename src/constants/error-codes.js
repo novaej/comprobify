@@ -72,6 +72,8 @@ const ErrorCodes = Object.freeze({
   BRANCH_LIMIT_REACHED: 'BRANCH_LIMIT_REACHED',
   /** Branch has reached the maximum number of issue points for this plan */
   ISSUE_POINT_LIMIT_REACHED: 'ISSUE_POINT_LIMIT_REACHED',
+  /** Document type is not included in the tenant's current subscription tier */
+  DOCUMENT_TYPE_NOT_IN_TIER: 'DOCUMENT_TYPE_NOT_IN_TIER',
   /** Supplied subscription tier is not recognised */
   INVALID_TIER: 'INVALID_TIER',
   /** Supplied tenant status value is not recognised */

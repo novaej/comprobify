@@ -92,6 +92,8 @@ const builders = {
 
 **6. RIDE + email labels.** `helpers/ride-builder.js` and `src/locales/{es,en}.js`'s `email.invoiceAuthorized` block resolve a label by document type code rather than hardcoding "Factura"/"Invoice" — add the new type's label in both places.
 
+**7. Add it to the right tiers' `allowedDocumentTypes`** in `src/constants/subscription-tiers.js`. `SUPPORTED_TYPES` (from the builder registry) picks up the new code automatically, but tier eligibility doesn't — without this step the new type exists in the system yet stays unreachable on every plan (`addDocumentType` and `createBranch` both reject it with `402 DOCUMENT_TYPE_NOT_IN_TIER`).
+
 ---
 
 ## Models

@@ -23,7 +23,7 @@ Write limiter — tier-dependent (10–300 req/min per API key).
 | `branchCode` | string | Yes | 3-digit SRI branch code, e.g. `002` |
 | `issuePointCode` | string | Yes | 3-digit SRI issue point code, e.g. `001` |
 | `branchAddress` | string | No | Branch address (max 300 chars) |
-| `documentTypes` | array | No | Document type codes to enable (default: `["01"]`) |
+| `documentTypes` | array | No | Document type codes to enable (default: `["01"]`) — gated by your plan, same as [Add a document type](document-types.md#document-type-tier-limits) |
 | `initialSequentials` | array | No | Starting sequential numbers: `[{ "documentType": "01", "sequential": 1 }]` |
 | `sourceIssuerId` | integer | No | Numeric id of the issuer to inherit cert/profile from. Defaults to the tenant's first existing issuer. Ignored if a `cert` file is uploaded. |
 | `cert` | file | No | P12 certificate file — only needed if this branch uses a different certificate |
@@ -77,7 +77,8 @@ The returned `id` is what you pass as `X-Issuer-Id` on document requests targeti
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | Missing or invalid fields, or the tenant has no existing issuer to inherit from and no P12 was uploaded |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `402` | `PAYMENT_REQUIRED` | Branch or issue point limit reached for this tier |
+| `402` | `BRANCH_LIMIT_REACHED` / `ISSUE_POINT_LIMIT_REACHED` | Branch or issue point limit reached for this tier |
+| `402` | `DOCUMENT_TYPE_NOT_IN_TIER` | A requested `documentTypes` code isn't included in your plan |
 | `403` | `FORBIDDEN` | Tenant email not yet verified |
 | `404` | `NOT_FOUND` | `sourceIssuerId` does not exist or belongs to a different tenant |
 | `409` | `CONFLICT` | A branch with this `branchCode` + `issuePointCode` combination already exists |

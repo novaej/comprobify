@@ -77,6 +77,7 @@ Returns the full updated list of active document types.
 | Status | Code | When |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `documentType` is missing or not a supported type |
+| `402` | `DOCUMENT_TYPE_NOT_IN_TIER` | The type is implemented but not included in your subscription tier — see tier limits below |
 | `403` | `FORBIDDEN` | Issuer belongs to a different tenant |
 | `404` | `NOT_FOUND` | Issuer id does not exist |
 
@@ -125,3 +126,14 @@ Returns the full updated list of active document types.
 |---|---|
 | `01` | Factura (Invoice) |
 | `04` | Nota de Crédito (Credit Note) — see [Create Credit Note](create-credit-note.md) for the request body, which differs from an invoice's |
+
+## Document type tier limits
+
+| Tier | Allowed types |
+|---|---|
+| Free | Factura (`01`) |
+| Starter | Factura (`01`) |
+| Growth | Factura, Nota de Crédito (`01`, `04`) |
+| Business | Factura, Nota de Crédito (`01`, `04`) |
+
+This only gates **enabling a new type** — it never revokes one already active. If you downgrade plans, document types already enabled on your issuers keep working; you just can't enable further gated types until you upgrade again.

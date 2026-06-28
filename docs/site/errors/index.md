@@ -137,6 +137,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `BRANCH_LIMIT_REACHED` | Tenant has reached the maximum number of branches for their plan |
 | `ISSUE_POINT_LIMIT_REACHED` | Branch has reached the maximum number of issue points for this plan |
 | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Tenant has reached the maximum number of webhook endpoints for their plan |
+| `DOCUMENT_TYPE_NOT_IN_TIER` | Document type isn't included in the tenant's current plan — upgrade to enable it |
 
 ### 403 Forbidden
 
