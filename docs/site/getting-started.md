@@ -297,9 +297,9 @@ Distribute each token to the integration that previously used the sandbox key wi
 | Tier | Document quota | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
 |---|---|---|---|---|---|---|
 | Free | 5 | Factura (`01`) | 1 | 1 | 1 | 10 req/min |
-| Starter | 1,000 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
-| Growth | 5,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
-| Business | 20,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 300 req/min |
+| Starter | 200 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
+| Growth | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
+| Business | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 300 req/min |
 
 The document quota is shared across all branches and document types, and counts **production documents only** — sandbox/test documents never consume it. When you reach it, `POST /v1/documents` returns `402 QUOTA_EXCEEDED`. Contact support to upgrade your plan.
 

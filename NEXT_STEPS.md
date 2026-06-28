@@ -2,8 +2,6 @@
 
 Remaining work ordered by value-to-effort ratio. Each item is independent and can be delivered as its own PR.
 
-See [STRATEGY.md](STRATEGY.md) for product context, pricing model, and phased roadmap.
-
 ---
 
 ## 1. Additional Document Types
@@ -174,3 +172,38 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 - No change to the limiter logic or tier-based limits themselves — only the store option
 
 **Effort:** Low — one new dependency, one Redis connection, swap the store option in `rate-limit.js`. Must land before scaling the production API to more than one instance.
+
+---
+
+## 9. Require a Card on File for FREE Tier Signup
+
+**Priority: Low — depends on payment gateway integration landing first**
+
+The FREE tier (5 documents/month, see `src/constants/subscription-tiers.js`) currently requires nothing but an email at `POST /v1/register`. Worth solving before payments launch: a card on file (charged $0 at signup) filters out throwaway/abusive signups far more effectively than IP rate limiting alone, and makes the eventual upgrade to a paid tier frictionless since the payment method is already verified.
+
+**What:**
+- `POST /v1/register` collects and tokenizes a card via the chosen payment gateway without charging it. **Stripe does not support Ecuador-registered merchant accounts** — Kushki (Ecuador-founded, API-first, supports cards + SPI) is the recommended fit; PayPhone and PlacetoPay are the other local alternatives
+- Store only the gateway's customer/card token on the tenant row — never raw card data (PCI scope stays with the gateway)
+- Registration fails with a clear error if card tokenization fails, before the tenant/issuer/API key are created
+
+**Why defer:** there is no payment gateway integration yet (this depends on whatever ships for Starter+ billing). Building card collection for the free tier before the paid-tier billing flow exists would mean building the integration twice.
+
+---
+
+## 10. Overage Billing (Monthly Quota Reset + Per-Tenant Overage Toggle)
+
+**Priority: Low — depends on the payment gateway integration (#9's dependency, the Starter+ billing flow) landing first**
+
+Two things have to exist before `overagePerDocumentUsd` (`subscription-tiers.js`) means anything: a billing cycle for quota to reset against, and a gateway to actually charge through. Neither exists today. `tenants.document_count` never resets anywhere in the codebase — it's a lifetime counter, not a monthly one, despite every doc describing quotas as "documents/month." And exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`) — there is no path today that lets a tenant continue past quota and get billed the difference.
+
+**What:**
+1. **Monthly reset** — give quota an actual billing-period concept (e.g. a scheduled job, or a `tenants.quota_period_start` column checked at request time) that zeroes `document_count` at the start of each cycle, so "N documents/month" is true rather than aspirational
+2. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
+3. **Overage charging** — when `overage_enabled = true` and quota is exceeded, allow creation to continue, track the extra count for the cycle, and bill it as one line item (`overage_count × overagePerDocumentUsd`) through the payment gateway at cycle end — not a per-document charge; most gateways don't support micro-charging per invoice
+4. Expose the toggle (e.g. `PATCH /v1/tenants/overage`) and surface current-cycle overage usage somewhere the tenant can see it before the bill arrives, so it's never a surprise
+
+**Why defer:** pointless without a gateway to charge through, and the monthly reset is a prerequisite most of this depends on regardless of billing.
+
+**Effort:** Medium-High — migration for the reset/toggle/counter, a scheduled job for the reset, a new tenant-facing endpoint, and the actual charge integration once the gateway exists.
+
+**Effort:** Low once the gateway integration exists — mostly reusing whatever tokenization flow billing already needs, plus one new required field/step in `registration.service.js`.

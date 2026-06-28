@@ -15,6 +15,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 - **FREE tier document quota reduced from 100 to 5 documents/month** — the prior limit let a real freelancer or small business run indefinitely without ever needing to upgrade.
 - **Document quota no longer counts sandbox documents** — `tenants.document_count` only increments for production document creation, so testing against SRI pruebas never consumes a tenant's plan quota.
+- **Starter/Growth/Business document quotas cut to 200/1,000/4,000 (from 1,000/5,000/20,000)** — the old figures granted far more volume than any published competitor tier in the Ecuadorian/regional market (Datil's cheapest tier caps at 12/month; NubeFact's flagship plan caps at 500/month). Overage rates raised in tandem (Starter $0.04→$0.30, Growth $0.025→$0.15, Business $0.015→$0.08/invoice).
+- **`priceMonthlyUsd` / `overagePerDocumentUsd` added to `src/constants/subscription-tiers.js`** — pricing now has one source of truth alongside the limits it's priced against, instead of living only in a planning doc. Not billed or enforced anywhere yet — no payment gateway is wired up (see `NEXT_STEPS.md` #9).
+- **Removed `STRATEGY.md`** — its pricing model is superseded by the constants above; its competitive analysis, payments-in-Ecuador findings, and roadmap had served their purpose for the planning phase now that the project is moving into execution.
 
 ## [0.6.0] — 2026-06-27
 

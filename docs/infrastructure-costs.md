@@ -1,6 +1,6 @@
 # Infrastructure Costs — Production
 
-Production platform decisions and the real cost baseline behind the subscription tier pricing in [STRATEGY.md](../STRATEGY.md). Staging's stack is documented separately in `architecture-staging.drawio`; this file is production-only.
+Production platform decisions and the real cost baseline behind the subscription tier pricing in `src/constants/subscription-tiers.js`. Staging's stack is documented separately in `architecture-staging.drawio`; this file is production-only.
 
 ---
 
@@ -72,4 +72,4 @@ Neon bills usage (CU-hours + storage) at the account level, not a flat fee per d
 
 ## Why the ceiling isn't as scary as it looks
 
-The dominant driver of the ceiling is Neon's backend compute scaling under heavy document volume — and heavy document volume is exactly what the per-invoice overage pricing in `STRATEGY.md`'s pricing model charges for. The same usage spike that pushes Neon's cost up also generates the overage revenue that funds it.
+The dominant driver of the ceiling is Neon's backend compute scaling under heavy document volume — and heavy document volume is exactly what the per-invoice `overagePerDocumentUsd` rate in `src/constants/subscription-tiers.js` charges for. The same usage spike that pushes Neon's cost up also generates the overage revenue that funds it.
