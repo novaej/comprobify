@@ -10,6 +10,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Manual subscription + payment pipeline (admin-only)** — new `subscriptions`/`payments` tables track a tenant's paid-tier billing while no payment gateway exists. A subscription only reaches `ACTIVE` once its linked invoice document is SRI-`AUTHORIZED`, never merely on payment. New admin endpoints: `POST /v1/admin/tenants/:id/subscriptions`, `GET /v1/admin/tenants/:id/subscriptions`, `PATCH /v1/admin/payments/:id/report`/`verify`/`reject`, `PATCH /v1/admin/subscriptions/:id/link-invoice`/`cancel`. `document-transmission.service.js` fires `subscriptionService.activateIfLinked()` fire-and-forget on every document authorization (no-op unless that document is a subscription's linked invoice). See `NEXT_STEPS.md` #9 for the Kushki-specific pieces this schema is designed to support later.
 - **Document type tier gating** — `POST /v1/issuers/:id/document-types` and the `documentTypes` field on `POST /v1/issuers` now reject activating a type not included in the tenant's plan (402 `DOCUMENT_TYPE_NOT_IN_TIER`). Free/Starter are limited to facturas (`01`); Growth/Business also get credit notes (`04`). Downgrading is grandfathered — already-active types on existing issuers keep working; only activating *new* gated types is blocked.
 
 ### Changed

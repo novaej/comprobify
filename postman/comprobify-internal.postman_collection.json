@@ -48,6 +48,18 @@
       "type": "string"
     },
     {
+      "key": "subscription_id",
+      "value": "",
+      "description": "Subscription ID \u2014 copy from Create Subscription response",
+      "type": "string"
+    },
+    {
+      "key": "payment_id",
+      "value": "",
+      "description": "Payment ID \u2014 copy from Create Subscription response",
+      "type": "string"
+    },
+    {
       "key": "notification_id",
       "value": "",
       "description": "Notification ID \u2014 copy from List Notifications response (used for Mark as Read)",
@@ -2040,6 +2052,181 @@
               ]
             },
             "description": "Runs all periodic notification jobs across every non-suspended tenant:\n\n1. **Certificate expiry checks** \u2014 inspects `cert_expiry` for every active issuer and upserts `CERT_EXPIRING` / `CERT_EXPIRED` alerts. Auto-dismisses alerts when a cert has been renewed (> 30 days remaining).\n\n2. **Webhook retry queue** \u2014 retries all `RETRYING` webhook deliveries past their scheduled `next_retry_at` time.\n\nThis endpoint is designed to be called by an external scheduler (cron, infrastructure job) on a regular interval \u2014 every 5 minutes is a reasonable default. The job is **idempotent**: running it multiple times is safe.\n\nResponse includes `tenantsChecked` and a `retries` breakdown (`attempted`, `succeeded`, `failed`, `exhausted`)."
+          }
+        },
+        {
+          "name": "Create Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/subscriptions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants",
+                "{{tenant_id}}",
+                "subscriptions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"STARTER\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Starts the manual subscription/payment pipeline for a tenant. `tier` must be STARTER, GROWTH, or BUSINESS (FREE never needs a subscription). Creates a `subscriptions` row (PENDING_PAYMENT) and a `payments` row (PENDING, amount taken from `priceMonthlyUsd` in `subscription-tiers.js`).\n\nFails with 409 SUBSCRIPTION_ALREADY_IN_FLIGHT if the tenant already has one in progress.\n\nCopy the returned `subscription.id` and `payment.id` into the `subscription_id` / `payment_id` collection variables."
+          }
+        },
+        {
+          "name": "List Subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/subscriptions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants",
+                "{{tenant_id}}",
+                "subscriptions"
+              ]
+            },
+            "description": "Lists every subscription a tenant has ever had, newest first."
+          }
+        },
+        {
+          "name": "Report Payment",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/payments/{{payment_id}}/report",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "payments",
+                "{{payment_id}}",
+                "report"
+              ]
+            },
+            "description": "Marks a payment REPORTED \u2014 the client says they transferred. Optional step: Verify Payment does not require this to have run first."
+          }
+        },
+        {
+          "name": "Verify Payment",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/payments/{{payment_id}}/verify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "payments",
+                "{{payment_id}}",
+                "verify"
+              ]
+            },
+            "description": "Marks a payment VERIFIED after confirming the SPI bank transfer, and moves the linked subscription to PAYMENT_RECEIVED."
+          }
+        },
+        {
+          "name": "Reject Payment",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/payments/{{payment_id}}/reject",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "payments",
+                "{{payment_id}}",
+                "reject"
+              ]
+            },
+            "description": "Marks a payment REJECTED. The subscription stays PENDING_PAYMENT."
+          }
+        },
+        {
+          "name": "Link Invoice to Subscription",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/subscriptions/{{subscription_id}}/link-invoice",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "subscriptions",
+                "{{subscription_id}}",
+                "link-invoice"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accessKey\": \"{{access_key}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Attaches the self-billed invoice (created the normal way via Create Invoice, using Comprobify's own issuer) to a subscription, by `accessKey` \u2014 the 49-digit SRI key, the same identifier every document response already exposes. `documents.id` is never returned anywhere, public or admin, so this couldn't take a numeric id. Moves the subscription to INVOICE_PROCESSING.\n\nOnce that invoice reaches AUTHORIZED (via the normal Send to SRI / Check Authorization flow), the subscription activates automatically \u2014 no further admin action needed."
+          }
+        },
+        {
+          "name": "Cancel Subscription",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/subscriptions/{{subscription_id}}/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "subscriptions",
+                "{{subscription_id}}",
+                "cancel"
+              ]
+            },
+            "description": "Cancels a subscription at any point. Does not auto-downgrade the tenant's tier \u2014 no renewal/expiry logic exists yet."
           }
         }
       ]

@@ -4,6 +4,7 @@ const sriService = require('./sri.service');
 const sriResponseModel = require('../models/sri-response.model');
 const emailService = require('./email.service');
 const notificationService = require('./notification.service');
+const subscriptionService = require('./subscription.service');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
 const EmailStatus = require('../constants/email-status');
@@ -113,6 +114,12 @@ async function checkAuthorization(accessKey, issuer) {
       // Fire-and-forget: create a DOCUMENT_AUTHORIZED notification for the tenant.
       notificationService.createDocumentAuthorized(updated, issuer)
         .catch(err => console.warn('Notification creation failed:', err.message));
+
+      // Fire-and-forget: activate a subscription if this document is its linked
+      // self-billed invoice. No-op for the vast majority of documents, which
+      // aren't linked to any subscription.
+      subscriptionService.activateIfLinked(updated.id)
+        .catch(err => console.warn('Subscription activation check failed:', err.message));
 
       emailService.sendInvoiceAuthorized(updated)
         .then(({ sent, messageId }) => {

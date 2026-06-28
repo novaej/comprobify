@@ -175,26 +175,27 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 9. Subscription + Payment Pipeline (manual now, Kushki later)
+## 9. Subscription + Payment Pipeline (manual flow ✅ implemented; Kushki blocked)
 
-**Priority: Medium — the `subscriptions`/`payments` model is usable immediately for the manual SPI flow; the Kushki-specific pieces stay blocked until a legal entity exists (see below)**
+**Priority: Low — remaining scope is Kushki-only, and that stays blocked until a legal entity exists (see below)**
 
-**Core design rule:** a subscription becomes `ACTIVE` only when its billing-period invoice is **SRI-authorized** — never merely on payment. Comprobify is an invoicing company; granting paid access against a payment with no valid legal invoice behind it is exactly the kind of gap this product exists to prevent for everyone else. If signing fails, the cert's expired, or SRI rejects the document, the subscription stays in an intermediate state until that's fixed — it never silently activates.
+**Status: the manual, admin-only flow is implemented** (migration `052_subscriptions_and_payments.sql`, `src/models/subscription.model.js` + `payment.model.js`, `src/services/subscription.service.js`, admin routes under `/v1/admin/tenants/:id/subscriptions` and `/v1/admin/payments/:id/...`). Everything below describing the manual flow is built; only the Kushki section remains pending.
 
-**Why this is one item covering two phases:** the state machine and the `payments` table are useful *today*, manually, independent of Kushki — they replace "remember which clients paid" with an actual record. The Kushki-specific pieces (auto-charge, webhooks, card-on-file) bolt onto the same schema later without changing it.
+**Core design rule (implemented):** a subscription becomes `ACTIVE` only when its billing-period invoice is **SRI-authorized** — never merely on payment. `document-transmission.service.js`'s `checkAuthorization()` fires `subscriptionService.activateIfLinked(documentId)` fire-and-forget on every authorization (no-op for documents not linked to a subscription).
 
-**Schema:**
-- **`subscriptions`** — `tenant_id`, `tier`, `pending_tier` (nullable, for deferred downgrades), `status`, `invoice_document_id` (nullable FK to `documents.id` — the self-billed invoice for this period), `current_period_start`, `current_period_end`, `kushki_subscription_id`/`kushki_customer_id` (nullable — populated only once Kushki exists), `created_at`, `canceled_at`.
-  - `status` enum: `PENDING_PAYMENT` → `PAYMENT_RECEIVED` → `INVOICE_PROCESSING` → `ACTIVE`, plus `EXPIRED`, `SUSPENDED`, `CANCELLED`. `INVOICE_PROCESSING` covers the whole window between "invoice document created" and "authorized" — the granular detail (signed/sent/returned/error) comes from the linked `documents.status` and its own `document_events`, not duplicated here.
-- **`payments`** — `subscription_id`, `status` (`PENDING`/`REPORTED`/`VERIFIED`/`REJECTED`/`REFUNDED`), `amount`, `method` (`SPI_TRANSFER` today, `KUSHKI_CARD` later), `kushki_charge_id` (nullable), `reported_at`, `verified_at`, `created_at`.
-- New `tenant_events` types: `SUBSCRIPTION_CREATED`, `PAYMENT_REPORTED`, `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `INVOICE_LINKED`, `SUBSCRIPTION_ACTIVATED`, `SUBSCRIPTION_EXPIRED`, `SUBSCRIPTION_SUSPENDED`, `SUBSCRIPTION_CANCELLED` (update `chk_tenant_events_event_type` in the same migration).
+**Schema (as built):**
+- **`subscriptions`** — `tenant_id`, `tier` (`STARTER`/`GROWTH`/`BUSINESS` only — `FREE` never needs one), `pending_tier` (nullable, for deferred downgrades — unused until Kushki proration), `status`, `invoice_document_id` (nullable FK to `documents.id`), `current_period_start`/`current_period_end` (set at activation, informational only — nothing reads them yet), `kushki_subscription_id`/`kushki_customer_id` (nullable, unused until Kushki), `created_at`, `updated_at` (+ trigger), `canceled_at`.
+  - `status`: `PENDING_PAYMENT` → `PAYMENT_RECEIVED` → `INVOICE_PROCESSING` → `ACTIVE`, plus `EXPIRED`/`SUSPENDED`/`CANCELLED` in the CHECK constraint for forward-compatibility — nothing drives `EXPIRED`/`SUSPENDED` yet (no renewal job exists; that's #10). `cancelSubscription` is the only thing that sets `CANCELLED` today.
+- **`payments`** — `subscription_id`, `status` (`PENDING`/`REPORTED`/`VERIFIED`/`REJECTED`/`REFUNDED` — `REFUNDED` unused so far), `amount` (computed server-side from `TIERS[tier].priceMonthlyUsd`, never client-supplied), `method` (`SPI_TRANSFER` today, `KUSHKI_CARD` reserved), `kushki_charge_id` (nullable), `reported_at`, `verified_at`, `created_at`, `updated_at` (+ trigger).
+- `tenant_events` gained: `SUBSCRIPTION_CREATED`, `PAYMENT_REPORTED`, `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `INVOICE_LINKED`, `SUBSCRIPTION_ACTIVATED`, `SUBSCRIPTION_CANCELLED`. (`SUBSCRIPTION_EXPIRED`/`SUSPENDED` deliberately *not* added yet — add them alongside whatever in #10 actually triggers those transitions, rather than speculatively now.)
 
-**Manual flow (buildable now, no Kushki/company needed):**
-1. Tenant/admin selects a plan → `subscriptions` row created, `PENDING_PAYMENT`.
-2. Client transfers via SPI, reports it → `payments` row `REPORTED`.
-3. Admin checks the bank, marks it `VERIFIED` → subscription moves to `PAYMENT_RECEIVED`.
-4. Admin issues the self-billing invoice through Comprobify's own API (per the earlier manual-invoicing discussion) → `invoice_document_id` set, subscription moves to `INVOICE_PROCESSING`.
-5. Once that document's status reaches `AUTHORIZED` → subscription flips to `ACTIVE`, `tenants.subscription_tier`/`document_quota` updated.
+**Manual flow (implemented, admin-only — no tenant-facing self-service exists, no frontend for this yet):**
+1. `POST /v1/admin/tenants/:id/subscriptions` (`{ tier }`) → `subscriptions` row `PENDING_PAYMENT` + `payments` row `PENDING` priced from the tier.
+2. `PATCH /v1/admin/payments/:id/report` → `REPORTED` (optional step; `verify` doesn't require it first — the manual reality is the admin sometimes does both at once).
+3. `PATCH /v1/admin/payments/:id/verify` → payment `VERIFIED`, subscription → `PAYMENT_RECEIVED`. (`/reject` → `REJECTED`, subscription stays `PENDING_PAYMENT`.)
+4. Admin issues the self-billing invoice through Comprobify's own API (own RUC/issuer), then `PATCH /v1/admin/subscriptions/:id/link-invoice` (`{ accessKey }` — the 49-digit access key, looked up via `documentModel.findByAccessKey()` with no issuer scoping; `documents.id` itself is never exposed in any response, public or admin, so the lookup couldn't use that) → `invoice_document_id` set, subscription → `INVOICE_PROCESSING`.
+5. Once that document reaches `AUTHORIZED` (normal `send`/`authorize` flow) → the fire-and-forget hook flips the subscription to `ACTIVE`, sets `current_period_start`/`end`, and calls `tenantModel.updateTier()` to actually grant the tier/quota.
+6. `PATCH /v1/admin/subscriptions/:id/cancel` → `CANCELLED` at any point (does not auto-downgrade the tenant — no renewal/expiry logic exists yet).
 
 **Kushki flow (blocked — requires a registered legal entity; every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different gateway):**
 - Card collected at `POST /v1/tenants/promote`, not at registration — sandbox/Free stays card-free.
@@ -204,7 +205,7 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 - Mid-cycle tier change: upgrades apply immediately with a prorated charge; downgrades set `subscriptions.pending_tier` and apply only at next renewal — no credit/refund logic needed.
 - Config: `KUSHKI_PRIVATE_KEY` + webhook signing secret, independent per environment, same rule as `ADMIN_SECRET`/`ENCRYPTION_KEY`. Public key is frontend-only.
 
-**Interim path right now, zero code:** keep onboarding paying clients via `POST /v1/admin/tenants` + `POST /v1/admin/tenants/:id/promote` until the `subscriptions`/`payments` tables exist — those admin endpoints already work today without any of the above.
+**Remaining scope is Kushki-only.** The manual flow above already replaces the earlier zero-code interim path (`POST /v1/admin/tenants` + `POST /v1/admin/tenants/:id/promote` alone, with no payment tracking) — that path still works, but the subscription/payment endpoints now give it a real record instead of memory.
 
 ---
 

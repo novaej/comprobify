@@ -168,7 +168,41 @@ const revokeApiKey = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
+// Subscriptions & payments
+const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
+
+const createSubscription = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+
+  body('tier')
+    .isIn(PAID_TIERS)
+    .withMessage(`tier must be one of: ${PAID_TIERS.join(', ')}`),
+];
+
+const listSubscriptions = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
+const linkInvoice = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+
+  body('accessKey')
+    .isLength({ min: 49, max: 49 })
+    .withMessage('accessKey must be exactly 49 digits')
+    .isNumeric()
+    .withMessage('accessKey must contain only digits'),
+];
+
+const cancelSubscription = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
+const paymentAction = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
+  createSubscription, listSubscriptions, linkInvoice, cancelSubscription, paymentAction,
 };
