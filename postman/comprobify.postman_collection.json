@@ -422,6 +422,38 @@
       "name": "Subscriptions",
       "item": [
         {
+          "name": "Create Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/subscriptions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "subscriptions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"STARTER\",\n  \"billingInterval\": \"MONTHLY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Tenant-authenticated (your own API key). Starts a paid subscription on your own, independent of promotion — works while still in sandbox (no need to promote to production first) or any time after. Requires a verified email, same gate POST /v1/tenants/promote uses.\n\nSame manual proof/review pipeline as the rest of the subscription system: upload proof via Submit Payment Proof, the provider reviews it and links the self-billed invoice, and the tier/quota lands once that invoice is SRI-authorized.\n\nIf this subscription is already ACTIVE by the time you call Promote to Production, that call detects it automatically and skips tier selection — any tier/billingInterval you pass there is ignored, and its response surfaces this subscription instead of starting a new one.\n\nFails with 409 SUBSCRIPTION_ALREADY_IN_FLIGHT if you already have one in progress, or 403 EMAIL_VERIFICATION_REQUIRED if your email isn't verified yet."
+          }
+        },
+        {
           "name": "Get My Subscriptions",
           "request": {
             "method": "GET",

@@ -49,6 +49,7 @@ export default defineConfig({
             text: 'Subscriptions',
             collapsed: false,
             items: [
+              { text: 'Create Subscription', link: '/endpoints/create-subscription' },
               { text: 'Get My Subscriptions', link: '/endpoints/get-my-subscriptions' },
               { text: 'Change Tier (Upgrade/Downgrade)', link: '/endpoints/change-tier' },
             ],

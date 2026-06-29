@@ -28,6 +28,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
+| `POST` | `/v1/subscriptions` | Start a paid subscription for the authenticated tenant — works while still in sandbox or after promotion, requires a verified email |
 | `GET` | `/v1/subscriptions/me` | Full subscription/payment history, newest first, with `rejection_reason` when applicable — no notification exists, this is how a tenant checks status |
 | `POST` | `/v1/subscriptions/change-tier` | Upgrade (immediate, prorated payment) or downgrade (scheduled, no payment) an existing `ACTIVE` subscription's tier |
 

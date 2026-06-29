@@ -77,6 +77,35 @@ describe('SubscriptionService', () => {
     });
   });
 
+  describe('createSubscriptionForTenant', () => {
+    test('rejects when the tenant does not exist', async () => {
+      tenantModel.findById.mockResolvedValue(null);
+
+      await expect(subscriptionService.createSubscriptionForTenant(1, 'STARTER'))
+        .rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    test('rejects when the tenant has not verified their email', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1, status: 'PENDING_VERIFICATION' });
+
+      await expect(subscriptionService.createSubscriptionForTenant(1, 'STARTER'))
+        .rejects.toMatchObject({ statusCode: 403, code: 'EMAIL_VERIFICATION_REQUIRED' });
+      expect(subscriptionModel.create).not.toHaveBeenCalled();
+    });
+
+    test('creates the subscription when the tenant is ACTIVE, regardless of sandbox status', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: true });
+      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
+      subscriptionModel.create.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER' });
+      paymentModel.create.mockResolvedValue({ id: 20, subscription_id: 10, amount: 19 });
+
+      const result = await subscriptionService.createSubscriptionForTenant(1, 'STARTER');
+
+      expect(subscriptionModel.create).toHaveBeenCalledWith({ tenantId: 1, tier: 'STARTER', billingInterval: 'MONTHLY' });
+      expect(result.subscription).toEqual({ id: 10, tenant_id: 1, tier: 'STARTER' });
+    });
+  });
+
   describe('requestTierChange', () => {
     beforeEach(() => {
       paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);

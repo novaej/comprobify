@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const tenantModel = require('../models/tenant.model');
+const subscriptionModel = require('../models/subscription.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
@@ -57,11 +58,18 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
 
   await tenantModel.promote(tenantId);
 
+  // A subscription started while still in sandbox (POST /v1/subscriptions, see
+  // subscriptionService.createSubscriptionForTenant) may already be ACTIVE by the
+  // time promotion happens — nothing left to select, just surface what's running.
+  const activeSubscription = await subscriptionModel.findActiveByTenantId(tenantId);
+
   // Promotion itself never waits on payment — production access is granted on FREE
   // immediately. Requesting a paid tier here only kicks off the subscription pipeline
   // in the background; the tier/quota upgrade only lands once it's paid and authorized.
   let billing = null;
-  if (tier && tier !== 'FREE') {
+  if (activeSubscription) {
+    billing = { subscription: activeSubscription };
+  } else if (tier && tier !== 'FREE') {
     billing = await subscriptionService.createSubscription(tenantId, tier, billingInterval);
   }
 

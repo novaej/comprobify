@@ -384,7 +384,7 @@
                 }
               }
             },
-            "description": "Promotes the entire tenant (all branches) from sandbox to production. This is **one-way** — cannot be reversed.\n\nAll active sandbox API keys are revoked automatically. The response includes one new production key per revoked sandbox key (same label). **Store all tokens immediately — they are shown only once.**\n\n`initialSequentials` is optional. If omitted, all active document types on all issuers start at sequential 1. Pass `issuerId` + `documentType` + `sequential` for each combination you want to pre-seed.\n\nRequires the tenant's email to be verified (status ACTIVE).\n\n**`tier` and `billingInterval` are optional.** Omit them (or pass `tier` as absent) to stay on FREE in production — promotion never waits on payment. If a paid tier is requested, this also kicks off the subscription pipeline (same as Admin's Create Subscription) and the response includes `subscription`, `payment`, and `bankTransfer` alongside `apiKeys`. The tier/quota upgrade itself only lands once that subscription is paid and its self-billed invoice is SRI-authorized — see Submit Payment Proof and Admin > Review Payment."
+            "description": "Promotes the entire tenant (all branches) from sandbox to production. This is **one-way** — cannot be reversed.\n\nAll active sandbox API keys are revoked automatically. The response includes one new production key per revoked sandbox key (same label). **Store all tokens immediately — they are shown only once.**\n\n`initialSequentials` is optional. If omitted, all active document types on all issuers start at sequential 1. Pass `issuerId` + `documentType` + `sequential` for each combination you want to pre-seed.\n\nRequires the tenant's email to be verified (status ACTIVE).\n\n**`tier` and `billingInterval` are optional.** Omit them (or pass `tier` as absent) to stay on FREE in production — promotion never waits on payment. If a paid tier is requested, this also kicks off the subscription pipeline (same as Admin's Create Subscription) and the response includes `subscription`, `payment`, and `bankTransfer` alongside `apiKeys`. The tier/quota upgrade itself only lands once that subscription is paid and its self-billed invoice is SRI-authorized — see Submit Payment Proof and Admin > Review Payment.\n\n**If you already started a subscription pre-promotion** via the tenant-facing Create Subscription request (works in sandbox) and it's already ACTIVE, `tier`/`billingInterval` here are ignored entirely — the response surfaces that existing subscription instead of starting a new one."
           }
         }
       ]
@@ -427,6 +427,38 @@
     {
       "name": "Subscriptions",
       "item": [
+        {
+          "name": "Create Subscription",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/subscriptions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "subscriptions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"STARTER\",\n  \"billingInterval\": \"MONTHLY\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Tenant-authenticated (your own API key). Starts a paid subscription on your own, independent of promotion — works while still in sandbox (no need to promote to production first) or any time after. Requires a verified email, same gate POST /v1/tenants/promote uses.\n\nSame manual proof/review pipeline as the rest of the subscription system: upload proof via Submit Payment Proof, the provider reviews it and links the self-billed invoice, and the tier/quota lands once that invoice is SRI-authorized.\n\nIf this subscription is already ACTIVE by the time you call Promote to Production, that call detects it automatically and skips tier selection — any tier/billingInterval you pass there is ignored, and its response surfaces this subscription instead of starting a new one.\n\nFails with 409 SUBSCRIPTION_ALREADY_IN_FLIGHT if you already have one in progress, or 403 EMAIL_VERIFICATION_REQUIRED if your email isn't verified yet."
+          }
+        },
         {
           "name": "Get My Subscriptions",
           "request": {
