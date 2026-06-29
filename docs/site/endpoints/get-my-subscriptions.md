@@ -12,7 +12,7 @@ GET /v1/subscriptions/me
 
 ## When to call this
 
-There's no notification when a payment review or a subscription activation completes. After [requesting a paid tier](promote-tenant.md) and [submitting payment proof](submit-payment-proof.md), poll this endpoint (or [`GET /v1/tenants/me`](tenant-me.md) for just the resulting tier/quota) to see what's happening in between — including why a payment was rejected, if it was.
+A payment review (verified/rejected) and the renewal reminder/expiry both fire a [notification](notifications.md) and email — you don't strictly need to poll. But there's still no notification for the moment a subscription's invoice gets authorized and activates (only the payment decision that preceded it fired one) — after [requesting a paid tier](promote-tenant.md) and [submitting payment proof](submit-payment-proof.md), poll this endpoint (or [`GET /v1/tenants/me`](tenant-me.md) for just the resulting tier/quota) to see what's happening in between, including why a payment was rejected, if it was.
 
 ## Response
 

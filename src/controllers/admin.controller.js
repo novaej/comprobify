@@ -147,16 +147,23 @@ const runNotificationJobs = async (req, res) => {
  * POST /api/admin/jobs/subscriptions
  *
  * Applies every subscription downgrade scheduled via the tenant-facing
- * change-tier endpoint whose current_period_end has passed. Upgrades apply
- * immediately on invoice authorization and need no scheduled job — only
- * downgrades wait for the period to end.
+ * change-tier endpoint whose current_period_end has passed (and rolls that
+ * subscription's period forward so it re-enters the renewal cycle at its new
+ * tier). Upgrades apply immediately on invoice authorization and need no
+ * scheduled job — only downgrades wait for the period to end.
+ *
+ * Then opens a renewal payment + reminder for every subscription approaching
+ * current_period_end, and downgrades to FREE any subscription that ran past
+ * its renewal grace period with no verified renewal. Must run after the
+ * downgrade step above in the same tick — see processDueRenewals.
  *
  * Designed to be called by an external scheduler on a daily cadence (no need
  * for the minute-level frequency the notification job uses).
  */
 const runSubscriptionJobs = async (req, res) => {
-  const result = await subscriptionService.applyScheduledTierChanges();
-  res.json({ ok: true, ...result });
+  const tierChanges = await subscriptionService.applyScheduledTierChanges();
+  const renewals = await subscriptionService.processDueRenewals();
+  res.json({ ok: true, ...tierChanges, ...renewals });
 };
 
 module.exports = {

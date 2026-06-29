@@ -4,6 +4,10 @@ const rideService = require('./ride.service');
 const emailFactory = require('./email');
 const invoiceAuthorizedTemplate = require('./email/templates/invoice-authorized');
 const verifyEmailTemplate = require('./email/templates/verify-email');
+const paymentProofSubmittedTemplate = require('./email/templates/payment-proof-submitted');
+const paymentReviewedTemplate = require('./email/templates/payment-reviewed');
+const subscriptionRenewalDueTemplate = require('./email/templates/subscription-renewal-due');
+const subscriptionExpiredTemplate = require('./email/templates/subscription-expired');
 const config = require('../config');
 
 /**
@@ -63,4 +67,116 @@ async function sendVerificationEmail(email, token, redirectUrl = null, language 
   return { messageId };
 }
 
-module.exports = { sendInvoiceAuthorized, sendVerificationEmail };
+/**
+ * Notify the operator that a tenant uploaded payment proof needing review.
+ * Skipped entirely (no-op) if ADMIN_NOTIFICATION_EMAIL is unset — this is an
+ * operational convenience email, not something tenant-facing behavior depends on.
+ *
+ * @param {object} payment      - DB row from payments table
+ * @param {object} subscription - DB row from subscriptions table
+ * @param {object} tenant       - DB row from tenants table
+ * @returns {Promise<{ sent: boolean, reason?: string }>}
+ */
+async function sendPaymentProofSubmitted(payment, subscription, tenant) {
+  if (!config.adminNotificationEmail) {
+    return { sent: false, reason: 'no_admin_email' };
+  }
+
+  const { subject, text, html } = paymentProofSubmittedTemplate.render(payment, subscription, tenant);
+  const provider = emailFactory.getProvider();
+
+  await provider.send({
+    from: `Comprobify <${config.email.from}>`,
+    to: config.adminNotificationEmail,
+    subject,
+    text,
+    html,
+    attachments: [],
+  });
+
+  return { sent: true };
+}
+
+/**
+ * Tell the tenant their payment proof was verified or rejected.
+ *
+ * @param {object} payment      - DB row from payments table
+ * @param {object} subscription - DB row from subscriptions table
+ * @param {'VERIFIED'|'REJECTED'} decision
+ * @returns {Promise<{ sent: boolean }>}
+ */
+async function sendPaymentReviewed(payment, subscription, decision) {
+  const tenant = await tenantModel.findById(subscription.tenant_id);
+  const { subject, text, html } = paymentReviewedTemplate.render(payment, subscription, decision, tenant.preferred_language || 'es');
+  const provider = emailFactory.getProvider();
+
+  await provider.send({
+    from: `Comprobify <${config.email.from}>`,
+    to: tenant.email,
+    subject,
+    text,
+    html,
+    attachments: [],
+  });
+
+  return { sent: true };
+}
+
+/**
+ * Tell the tenant their subscription renews soon and a renewal payment is open.
+ *
+ * @param {object} subscription - DB row from subscriptions table
+ * @param {object} payment      - DB row from payments table (purpose RENEWAL)
+ * @returns {Promise<{ sent: boolean }>}
+ */
+async function sendSubscriptionRenewalDue(subscription, payment) {
+  const tenant = await tenantModel.findById(subscription.tenant_id);
+  const { subject, text, html } = subscriptionRenewalDueTemplate.render(
+    subscription, payment, config.bankTransfer, tenant.preferred_language || 'es'
+  );
+  const provider = emailFactory.getProvider();
+
+  await provider.send({
+    from: `Comprobify <${config.email.from}>`,
+    to: tenant.email,
+    subject,
+    text,
+    html,
+    attachments: [],
+  });
+
+  return { sent: true };
+}
+
+/**
+ * Tell the tenant their subscription expired (no verified renewal payment
+ * before the grace period elapsed) and they've been moved to FREE.
+ *
+ * @param {object} subscription - DB row from subscriptions table (tier = the tier just lost)
+ * @returns {Promise<{ sent: boolean }>}
+ */
+async function sendSubscriptionExpired(subscription) {
+  const tenant = await tenantModel.findById(subscription.tenant_id);
+  const { subject, text, html } = subscriptionExpiredTemplate.render(subscription, tenant.preferred_language || 'es');
+  const provider = emailFactory.getProvider();
+
+  await provider.send({
+    from: `Comprobify <${config.email.from}>`,
+    to: tenant.email,
+    subject,
+    text,
+    html,
+    attachments: [],
+  });
+
+  return { sent: true };
+}
+
+module.exports = {
+  sendInvoiceAuthorized,
+  sendVerificationEmail,
+  sendPaymentProofSubmitted,
+  sendPaymentReviewed,
+  sendSubscriptionRenewalDue,
+  sendSubscriptionExpired,
+};

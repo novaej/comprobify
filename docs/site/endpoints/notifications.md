@@ -116,6 +116,76 @@ Same conditions as `CERT_EXPIRING` but for a certificate whose `notAfter` date h
 
 ---
 
+### `PAYMENT_VERIFIED`
+
+Created automatically (fire-and-forget) when your provider verifies a payment proof you uploaded — covers an initial subscription, a tier-change upgrade, and a renewal uniformly; only the wording differs. A matching email is sent at the same time.
+
+**Severity:** `INFO`
+
+**Metadata:**
+
+```json
+{
+  "paymentId": 18,
+  "subscriptionId": 12,
+  "tier": "STARTER",
+  "purpose": "INITIAL",
+  "amount": "19.00",
+  "rejectionReason": null
+}
+```
+
+`purpose` is `INITIAL`, `TIER_CHANGE`, or `RENEWAL`.
+
+---
+
+### `PAYMENT_REJECTED`
+
+Same trigger as `PAYMENT_VERIFIED`, for a rejected decision instead.
+
+**Severity:** `WARNING`
+
+**Metadata:** same shape as `PAYMENT_VERIFIED`, with `rejectionReason` populated — re-submit proof for the same `paymentId` via [Submit Payment Proof](submit-payment-proof.md).
+
+---
+
+### `SUBSCRIPTION_RENEWAL_DUE`
+
+Created automatically by the provider's scheduled job about 7 days before your subscription's `current_period_end`. A new `RENEWAL` payment is already open by the time this fires — submit proof via [Submit Payment Proof](submit-payment-proof.md) using the `paymentId` in the metadata. A matching email includes the bank transfer instructions.
+
+**Severity:** `WARNING`
+
+**Metadata:**
+
+```json
+{
+  "subscriptionId": 12,
+  "paymentId": 25,
+  "tier": "STARTER",
+  "amount": "19.00",
+  "currentPeriodEnd": "2026-07-15T00:00:00.000Z"
+}
+```
+
+---
+
+### `SUBSCRIPTION_EXPIRED`
+
+Created automatically by the same scheduled job when a subscription runs about 7 days past `current_period_end` with no renewal ever verified. By the time this fires, the tenant has already been moved to the FREE tier. A matching email explains what happened — start a new subscription any time via [Create Subscription](create-subscription.md).
+
+**Severity:** `ERROR`
+
+**Metadata:**
+
+```json
+{
+  "subscriptionId": 12,
+  "previousTier": "STARTER"
+}
+```
+
+---
+
 ### Reserved types
 
 The following types are defined in the schema and accepted by the preferences endpoint, but not yet produced by the API. They are reserved for future implementation:
@@ -223,12 +293,16 @@ Returns the notification preference for every type. Types the tenant has never e
 ```json
 {
   "preferences": [
-    { "type": "DOCUMENT_AUTHORIZED",   "enabled": true  },
-    { "type": "CERT_EXPIRING",         "enabled": true  },
-    { "type": "CERT_EXPIRED",          "enabled": true  },
-    { "type": "SRI_SUBMISSION_FAILED", "enabled": true  },
-    { "type": "EMAIL_DELIVERY_FAILED", "enabled": true  },
-    { "type": "QUOTA_WARNING",         "enabled": true  }
+    { "type": "DOCUMENT_AUTHORIZED",      "enabled": true  },
+    { "type": "CERT_EXPIRING",            "enabled": true  },
+    { "type": "CERT_EXPIRED",             "enabled": true  },
+    { "type": "SRI_SUBMISSION_FAILED",    "enabled": true  },
+    { "type": "EMAIL_DELIVERY_FAILED",    "enabled": true  },
+    { "type": "QUOTA_WARNING",            "enabled": true  },
+    { "type": "PAYMENT_VERIFIED",         "enabled": true  },
+    { "type": "PAYMENT_REJECTED",         "enabled": true  },
+    { "type": "SUBSCRIPTION_RENEWAL_DUE", "enabled": true  },
+    { "type": "SUBSCRIPTION_EXPIRED",     "enabled": true  }
   ]
 }
 ```

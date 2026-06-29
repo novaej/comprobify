@@ -57,6 +57,23 @@ async function findPendingTierChangeBySubscriptionId(subscriptionId) {
   return rows[0] || null;
 }
 
+// Mirrors findPendingTierChangeBySubscriptionId, but for a renewal payment —
+// used both to avoid creating a second renewal payment for the same upcoming
+// period (processDueRenewals) and to find the payment linkInvoice should
+// attach the self-billed invoice to once VERIFIED.
+async function findPendingRenewalBySubscriptionId(subscriptionId) {
+  const { rows } = await db.query(
+    `SELECT * FROM payments
+     WHERE subscription_id = $1 AND purpose = 'RENEWAL'
+       AND invoice_document_id IS NULL
+       AND status IN ('PENDING', 'REPORTED', 'VERIFIED')
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [subscriptionId]
+  );
+  return rows[0] || null;
+}
+
 async function updateStatus(id, status, extraFields = {}) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
@@ -86,5 +103,6 @@ module.exports = {
   findBySubscriptionId,
   findByInvoiceDocumentId,
   findPendingTierChangeBySubscriptionId,
+  findPendingRenewalBySubscriptionId,
   updateStatus,
 };
