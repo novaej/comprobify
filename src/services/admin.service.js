@@ -3,6 +3,7 @@ const tenantModel = require('../models/tenant.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
+const tenantEventModel = require('../models/tenant-event.model');
 const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
@@ -70,8 +71,11 @@ async function updateTenantTier(id, tier) {
   if (!TIERS[tier]) {
     throw new AppError(`Unknown subscription tier: '${tier}'. Valid tiers: ${Object.keys(TIERS).join(', ')}`, 400, ErrorCodes.INVALID_TIER);
   }
+  const previous = await tenantModel.findById(id);
+  if (!previous) throw new NotFoundError('Tenant');
+
   const row = await tenantModel.updateTier(id, tier, TIERS[tier].documentQuota);
-  if (!row) throw new NotFoundError('Tenant');
+  await tenantEventModel.create(id, 'TIER_CHANGED', { from: previous.subscription_tier, to: tier });
   return formatTenant(row);
 }
 

@@ -294,14 +294,24 @@ Distribute each token to the integration that previously used the sandbox key wi
 
 ## Subscription tiers
 
-| Tier | Document quota | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
-|---|---|---|---|---|---|---|
-| Free | 5 | Factura (`01`) | 1 | 1 | 1 | 10 req/min |
-| Starter | 200 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
-| Growth | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
-| Business | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 300 req/min |
+| Tier | Price/mo | Price/yr | Document quota | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
+|---|---|---|---|---|---|---|---|---|
+| Free | $0 | $0 | 5 | Factura (`01`) | 1 | 1 | 1 | 10 req/min |
+| Starter | $19 | $190 | 200 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
+| Growth | $79 | $790 | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
+| Business | $199 | $1,990 | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 300 req/min |
 
-The document quota is shared across all branches and document types, and counts **production documents only** — sandbox/test documents never consume it. When you reach it, `POST /v1/documents` returns `402 QUOTA_EXCEEDED`. Contact support to upgrade your plan.
+Yearly pricing is 2 months free vs. paying monthly. See [Get Tiers](endpoints/get-tiers.md) for this same catalog as a public API response.
+
+The document quota is shared across all branches and document types, and counts **production documents only** — sandbox/test documents never consume it. When you reach it, `POST /v1/documents` returns `402 QUOTA_EXCEEDED`. See "Upgrading to a paid plan" below.
+
+### Upgrading to a paid plan
+
+1. **Request a tier at promotion.** Call [`POST /v1/tenants/promote`](endpoints/promote-tenant.md) with `{ "tier": "STARTER" }` (or `GROWTH`/`BUSINESS`, optionally `"billingInterval": "YEARLY"`). Promotion to production happens immediately either way — you're never blocked waiting on payment. The response includes `payment` and `bankTransfer` (bank name, account number, account holder) for the SPI transfer amount.
+2. **Send the transfer**, then **upload proof of it**: [`PATCH /v1/payments/:id/proof`](endpoints/submit-payment-proof.md) (multipart — a screenshot or PDF of the receipt), using the `payment.id` from step 1.
+3. **Wait for review.** Your provider checks the proof against the bank and verifies or rejects it, then self-bills and authorizes the invoice for that period. There's no notification for this yet — poll [`GET /v1/subscriptions/me`](endpoints/get-my-subscriptions.md) to see the in-between state, or [`GET /v1/tenants/me`](endpoints/tenant-me.md) for just the end result; `subscriptionTier`/`documentQuota` update automatically the moment it completes.
+4. **If it's rejected**, `GET /v1/subscriptions/me` shows a `rejection_reason` (e.g. "transfer not reflected yet"). Fix whatever it flagged and repeat step 2 for the *same* `payment.id` — rejection isn't a dead end.
+5. Until verified and authorized, you're on FREE limits in production — nothing is blocked, you just don't have the higher quota yet.
 
 Attempting to create a branch beyond the tier limit returns `402 BRANCH_LIMIT_REACHED` / `ISSUE_POINT_LIMIT_REACHED`. Attempting to enable a document type your plan doesn't include (e.g. credit notes on Free/Starter) returns `402 DOCUMENT_TYPE_NOT_IN_TIER` — see [Issuer Document Types](endpoints/document-types.md).
 

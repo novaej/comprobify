@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Comprobify API",
-    "description": "Electronic invoice API for Ecuador's SRI. Set `base_url`, `api_key`, and `admin_secret` in the collection variables before running requests. After creating an invoice, copy the returned `accessKey` into the `access_key` variable to use it across subsequent requests.\n\nDocument endpoints require both `Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>`. Tenant and issuer management require only the Bearer token. Admin endpoints use the `admin_secret` as the Bearer token.",
+    "name": "Comprobify API — Public",
+    "description": "Electronic invoice API for Ecuador's SRI. Set `base_url` and `api_key` in the collection variables before running requests. After creating an invoice, copy the returned `accessKey` into the `access_key` variable to use it across subsequent requests.\n\nDocument endpoints require both `Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>`. Tenant and issuer management require only the Bearer token. For admin-only endpoints, import the separate internal collection instead.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -20,41 +20,76 @@
     {
       "key": "access_key",
       "value": "",
-      "description": "49-digit SRI access key \u2014 copy from Create Invoice response",
+      "description": "49-digit SRI access key — copy from Create Invoice response",
       "type": "string"
     },
     {
       "key": "issuer_id",
       "value": "",
-      "description": "Issuer ID \u2014 copy from List Issuers or Create Branch response. Used as X-Issuer-Id header on document requests.",
+      "description": "Issuer ID — copy from List Issuers or Create Branch response. Used as X-Issuer-Id header on document requests.",
       "type": "string"
     },
     {
       "key": "api_key_id",
       "value": "",
-      "description": "API key ID \u2014 copy from List Keys response (used for revocation)",
+      "description": "API key ID — copy from List Keys response (used for revocation)",
       "type": "string"
     },
     {
       "key": "tenant_id",
       "value": "",
-      "description": "Tenant ID \u2014 copy from Create Tenant (admin) response",
+      "description": "Tenant ID — copy from Create Tenant (admin) response",
       "type": "string"
     },
     {
       "key": "notification_id",
       "value": "",
-      "description": "Notification ID \u2014 copy from List Notifications response (used for Mark as Read)",
+      "description": "Notification ID — copy from List Notifications response (used for Mark as Read)",
       "type": "string"
     },
     {
       "key": "webhook_id",
       "value": "",
-      "description": "Webhook endpoint ID \u2014 copy from Register Webhook response",
+      "description": "Webhook endpoint ID — copy from Register Webhook response",
+      "type": "string"
+    },
+    {
+      "key": "subscription_id",
+      "value": "",
+      "description": "Subscription ID — copy from Promote to Production response (if a paid tier was requested)",
+      "type": "string"
+    },
+    {
+      "key": "payment_id",
+      "value": "",
+      "description": "Payment ID — copy from Promote to Production response (if a paid tier was requested)",
       "type": "string"
     }
   ],
   "item": [
+    {
+      "name": "Tiers",
+      "item": [
+        {
+          "name": "Get Tiers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tiers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tiers"
+              ]
+            },
+            "description": "Public, no authentication required. Returns the full tier catalog (FREE/STARTER/GROWTH/BUSINESS) — quota, monthly and yearly price, overage rate, document types, branch/webhook limits, and rate limits — for a pricing page to render without hardcoding the same numbers a second time."
+          }
+        }
+      ]
+    },
     {
       "name": "Registration",
       "description": "Public registration and email verification endpoints. No authentication required.",
@@ -186,7 +221,7 @@
                 }
               ]
             },
-            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` \u2014 it is shown only once. Copy it into the `api_key` collection variable.\n\nIf the email already exists and is not suspended, the endpoint revokes the current sandbox key and returns a new one (200 with `recovered: true`).\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
+            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nIf the email already exists and is not suspended, the endpoint revokes the current sandbox key and returns a new one (200 with `recovered: true`).\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
           }
         },
         {
@@ -242,7 +277,7 @@
                 }
               }
             },
-            "description": "Resends the verification email. Generates a fresh token (invalidating the previous one) and resets the expiry.\n\nTwo rate limits apply:\n- IP-based: shared with POST /v1/register \u2014 5 requests per hour per IP.\n- Per-account cooldown: 60 seconds between resends for the same email. Returns 429 if not elapsed.\n\nReturns the same generic message whether or not the email exists (no enumeration)."
+            "description": "Resends the verification email. Generates a fresh token (invalidating the previous one) and resets the expiry.\n\nTwo rate limits apply:\n- IP-based: shared with POST /v1/register — 5 requests per hour per IP.\n- Per-account cooldown: 60 seconds between resends for the same email. Returns 429 if not elapsed.\n\nReturns the same generic message whether or not the email exists (no enumeration)."
           }
         }
       ]
@@ -336,14 +371,73 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"initialSequentials\": [\n    { \"issuerId\": 1, \"documentType\": \"01\", \"sequential\": 1 }\n  ]\n}",
+              "raw": "{\n  \"initialSequentials\": [\n    { \"issuerId\": 1, \"documentType\": \"01\", \"sequential\": 1 }\n  ],\n  \"tier\": \"STARTER\",\n  \"billingInterval\": \"MONTHLY\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Promotes the entire tenant (all branches) from sandbox to production. This is **one-way** \u2014 cannot be reversed.\n\nAll active sandbox API keys are revoked automatically. The response includes one new production key per revoked sandbox key (same label). **Store all tokens immediately \u2014 they are shown only once.**\n\n`initialSequentials` is optional. If omitted, all active document types on all issuers start at sequential 1. Pass `issuerId` + `documentType` + `sequential` for each combination you want to pre-seed.\n\nRequires the tenant's email to be verified (status ACTIVE)."
+            "description": "Promotes the entire tenant (all branches) from sandbox to production. This is **one-way** — cannot be reversed.\n\nAll active sandbox API keys are revoked automatically. The response includes one new production key per revoked sandbox key (same label). **Store all tokens immediately — they are shown only once.**\n\n`initialSequentials` is optional. If omitted, all active document types on all issuers start at sequential 1. Pass `issuerId` + `documentType` + `sequential` for each combination you want to pre-seed.\n\nRequires the tenant's email to be verified (status ACTIVE).\n\n**`tier` and `billingInterval` are optional.** Omit them (or pass `tier` as absent) to stay on FREE in production — promotion never waits on payment. If a paid tier is requested, this also kicks off the subscription pipeline (same as Admin's Create Subscription) and the response includes `subscription`, `payment`, and `bankTransfer` alongside `apiKeys`. The tier/quota upgrade itself only lands once that subscription is paid and its self-billed invoice is SRI-authorized — see Submit Payment Proof and Admin > Review Payment."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Submit Payment Proof",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/payments/{{payment_id}}/proof",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "{{payment_id}}",
+                "proof"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "proof",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "description": "Tenant-authenticated (your own API key, not admin_secret). Upload proof of the SPI bank transfer (PNG/JPEG/GIF/PDF, max 2 MB) for a payment you created via promotion or Admin's Create Subscription. Moves the payment to REPORTED. Fails if the payment isn't yours, or has already been VERIFIED/REJECTED.\n\nAfter this, the operator reviews the proof (Admin > Review Payment) and verifies or rejects it."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscriptions",
+      "item": [
+        {
+          "name": "Get My Subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/subscriptions/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "subscriptions",
+                "me"
+              ]
+            },
+            "description": "Tenant-authenticated (your own API key). Returns your full subscription history, newest first, each with its payments nested (status, amount, rejection_reason if rejected). The proof file itself is never included — only filename/mime type.\n\nThis is how you find out a paid-tier upgrade landed — there's no notification; `subscriptionTier`/`documentQuota` on `GET /v1/tenants/me` update automatically once it does, but this endpoint shows the in-between states (and the `rejection_reason` if a proof was rejected, so you know what to fix before re-uploading via Submit Payment Proof)."
           }
         }
       ]
@@ -376,7 +470,7 @@
                 "keys"
               ]
             },
-            "description": "Returns every active key for the tenant. The plaintext token is **never** returned \u2014 only labels, environments, ids, and creation dates.\n\nCopy a key's `id` into the `api_key_id` variable to use it with Revoke Key."
+            "description": "Returns every active key for the tenant. The plaintext token is **never** returned — only labels, environments, ids, and creation dates.\n\nCopy a key's `id` into the `api_key_id` variable to use it with Revoke Key."
           }
         },
         {
@@ -408,7 +502,7 @@
                 }
               }
             },
-            "description": "Creates a new tenant-scoped API key. The plaintext token is shown **once** in the response \u2014 store it immediately.\n\n`label` (optional, max 100 chars) \u2014 a human-readable name for the integration, e.g. `frontend-prod`, `erp`, `mobile-app`.\n\n`environment` \u2014 `\"sandbox\"` (default) or `\"production\"`. Production keys can only be minted after the tenant has been promoted to production.\n\nWhen used on a document request, the key's environment must match the targeted issuer's environment \u2014 otherwise the request is rejected with 401."
+            "description": "Creates a new tenant-scoped API key. The plaintext token is shown **once** in the response — store it immediately.\n\n`label` (optional, max 100 chars) — a human-readable name for the integration, e.g. `frontend-prod`, `erp`, `mobile-app`.\n\n`environment` — `\"sandbox\"` (default) or `\"production\"`. Production keys can only be minted after the tenant has been promoted to production.\n\nWhen used on a document request, the key's environment must match the targeted issuer's environment — otherwise the request is rejected with 401."
           }
         },
         {
@@ -426,7 +520,7 @@
                 "{{api_key_id}}"
               ]
             },
-            "description": "Marks the key as inactive. The key stops working immediately and cannot be used to authenticate any future request.\n\nYou cannot revoke the key you are currently using to make this request \u2014 use a different key, or contact admin support."
+            "description": "Marks the key as inactive. The key stops working immediately and cannot be used to authenticate any future request.\n\nYou cannot revoke the key you are currently using to make this request — use a different key, or contact admin support."
           }
         }
       ]
@@ -545,7 +639,7 @@
                 "certificate"
               ]
             },
-            "description": "Replaces the P12 certificate (private key + X.509 cert) for an issuer \u2014 e.g. when it has expired. Does not affect already-signed documents, since each signed invoice embeds its own copy of the certificate inside the XML signature; only future signing operations use the new certificate."
+            "description": "Replaces the P12 certificate (private key + X.509 cert) for an issuer — e.g. when it has expired. Does not affect already-signed documents, since each signed invoice embeds its own copy of the certificate inside the XML signature; only future signing operations use the new certificate."
           }
         },
         {
@@ -600,7 +694,7 @@
                   "type": "file",
                   "src": "",
                   "disabled": true,
-                  "description": "Optional \u2014 leave blank to reuse the calling issuer certificate"
+                  "description": "Optional — leave blank to reuse the calling issuer certificate"
                 },
                 {
                   "key": "certPassword",
@@ -610,7 +704,7 @@
                 }
               ]
             },
-            "description": "Creates a new branch or issue point for the tenant. Inherits RUC, business name, and certificate from an existing issuer of the tenant.\n\n**No new API key is minted** \u2014 your existing tenant key already covers every branch via the `X-Issuer-Id` header. New branches inherit the tenant's current environment (sandbox or production).\n\nThe cert file and certPassword fields are optional \u2014 only provide them if the new branch needs a different certificate.\n\nTier limits apply: FREE allows 1 branch / 1 issue point, STARTER 3 / 2, GROWTH 10 / 5, BUSINESS unlimited."
+            "description": "Creates a new branch or issue point for the tenant. Inherits RUC, business name, and certificate from an existing issuer of the tenant.\n\n**No new API key is minted** — your existing tenant key already covers every branch via the `X-Issuer-Id` header. New branches inherit the tenant's current environment (sandbox or production).\n\nThe cert file and certPassword fields are optional — only provide them if the new branch needs a different certificate.\n\nTier limits apply: FREE allows 1 branch / 1 issue point, STARTER 3 / 2, GROWTH 10 / 5, BUSINESS unlimited."
           }
         },
         {
@@ -843,7 +937,7 @@
               {
                 "key": "Idempotency-Key",
                 "value": "{{$guid}}",
-                "description": "Optional \u2014 unique per intended invoice. Reuse on retries to avoid duplicates."
+                "description": "Optional — unique per intended invoice. Reuse on retries to avoid duplicates."
               }
             ],
             "url": {
@@ -865,7 +959,7 @@
                 }
               }
             },
-            "description": "Creates, XSD-validates, and signs a new electronic invoice. Returns the document with status `SIGNED`.\n\nAfter a successful response, copy the `accessKey` value into the `access_key` collection variable.\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use. Get the id from `GET /v1/issuers`.\n\nThe `Idempotency-Key` header makes creation idempotent \u2014 generate it once per intended invoice and reuse on retries."
+            "description": "Creates, XSD-validates, and signs a new electronic invoice. Returns the document with status `SIGNED`.\n\nAfter a successful response, copy the `accessKey` value into the `access_key` collection variable.\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use. Get the id from `GET /v1/issuers`.\n\nThe `Idempotency-Key` header makes creation idempotent — generate it once per intended invoice and reuse on retries."
           }
         },
         {
@@ -885,7 +979,7 @@
               {
                 "key": "Idempotency-Key",
                 "value": "{{$guid}}",
-                "description": "Optional \u2014 unique per intended credit note. Reuse on retries to avoid duplicates."
+                "description": "Optional — unique per intended credit note. Reuse on retries to avoid duplicates."
               }
             ],
             "url": {
@@ -907,7 +1001,7 @@
                 }
               }
             },
-            "description": "Creates, XSD-validates, and signs a new credit note referencing a previously authorized invoice. Returns the document with status `SIGNED`.\n\nUnlike Create Invoice, this body has no `payments` block and instead requires `originalDocument` (the invoice being credited \u2014 its document type, number, and issue date) plus a `motivo` (reason for the credit note).\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use \u2014 the issuer must have document type `04` enabled first (see Add Document Type).\n\nThe `Idempotency-Key` header makes creation idempotent \u2014 generate it once per intended credit note and reuse on retries."
+            "description": "Creates, XSD-validates, and signs a new credit note referencing a previously authorized invoice. Returns the document with status `SIGNED`.\n\nUnlike Create Invoice, this body has no `payments` block and instead requires `originalDocument` (the invoice being credited — its document type, number, and issue date) plus a `motivo` (reason for the credit note).\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use — the issuer must have document type `04` enabled first (see Add Document Type).\n\nThe `Idempotency-Key` header makes creation idempotent — generate it once per intended credit note and reuse on retries."
           }
         },
         {
@@ -1043,7 +1137,7 @@
                 "{{access_key}}"
               ]
             },
-            "description": "Retrieves document metadata by access key. Does not call the SRI \u2014 use Check Authorization for status updates."
+            "description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates."
           }
         },
         {
@@ -1212,7 +1306,7 @@
                 "events"
               ]
             },
-            "description": "Returns the full audit trail for the document \u2014 every lifecycle transition, SRI call, and email event."
+            "description": "Returns the full audit trail for the document — every lifecycle transition, SRI call, and email event."
           }
         },
         {
@@ -1238,7 +1332,7 @@
                 "credit-notes"
               ]
             },
-            "description": "Returns the sum of all AUTHORIZED credit notes already issued against this document (use the original invoice's access key, not a credit note's own key), plus the remaining balance. Only AUTHORIZED credit notes count \u2014 pending or rejected ones are excluded."
+            "description": "Returns the sum of all AUTHORIZED credit notes already issued against this document (use the original invoice's access key, not a credit note's own key), plus the remaining balance. Only AUTHORIZED credit notes count — pending or rejected ones are excluded."
           }
         },
         {
@@ -1331,7 +1425,7 @@
                 "id-types"
               ]
             },
-            "description": "Returns buyer identification types (e.g. 04 = RUC, 05 = C\u00e9dula, 06 = Pasaporte). Use the `code` as `buyer.idType` on invoice creation."
+            "description": "Returns buyer identification types (e.g. 04 = RUC, 05 = Cédula, 06 = Pasaporte). Use the `code` as `buyer.idType` on invoice creation."
           }
         },
         {
@@ -1410,7 +1504,7 @@
     },
     {
       "name": "Notifications",
-      "description": "Tenant-level alerts. Both read and unread are returned; use `readAt` to decide what to show. Use `?sinceId=<id>` for efficient catch-up polling \u2014 pass the highest id seen on the last request to receive only new notifications.\n\nAll requests require a Bearer API key.",
+      "description": "Tenant-level alerts. Both read and unread are returned; use `readAt` to decide what to show. Use `?sinceId=<id>` for efficient catch-up polling — pass the highest id seen on the last request to receive only new notifications.\n\nAll requests require a Bearer API key.",
       "auth": {
         "type": "bearer",
         "bearer": [
@@ -1430,7 +1524,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Optional \u2014 filter to a specific issuer's notifications plus tenant-level ones. Omit for all-tenant view.",
+                "description": "Optional — filter to a specific issuer's notifications plus tenant-level ones. Omit for all-tenant view.",
                 "disabled": true
               }
             ],
@@ -1447,12 +1541,12 @@
                 {
                   "key": "sinceId",
                   "value": "0",
-                  "description": "Optional \u2014 return only notifications with id > sinceId. Store the highest id seen and pass it on the next poll to catch up efficiently.",
+                  "description": "Optional — return only notifications with id > sinceId. Store the highest id seen and pass it on the next poll to catch up efficiently.",
                   "disabled": true
                 }
               ]
             },
-            "description": "Returns active (unexpired) notifications for the tenant, newest first. Both read and unread are included.\n\n**Polling pattern:** call on a schedule (e.g. every 60 s). Use `?sinceId=<id>` to retrieve only notifications created after your last poll \u2014 store the highest `id` you've seen and pass it on the next request.\n\nOptional `X-Issuer-Id` header restricts results to a specific issuer's notifications plus tenant-level ones (`issuerId: null`). Omit it for an all-tenant view."
+            "description": "Returns active (unexpired) notifications for the tenant, newest first. Both read and unread are included.\n\n**Polling pattern:** call on a schedule (e.g. every 60 s). Use `?sinceId=<id>` to retrieve only notifications created after your last poll — store the highest `id` you've seen and pass it on the next request.\n\nOptional `X-Issuer-Id` header restricts results to a specific issuer's notifications plus tenant-level ones (`issuerId: null`). Omit it for an all-tenant view."
           }
         },
         {
@@ -1491,7 +1585,7 @@
                 "preferences"
               ]
             },
-            "description": "Returns the full notification preference list for the tenant \u2014 one entry per notification type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model)."
+            "description": "Returns the full notification preference list for the tenant — one entry per notification type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model)."
           }
         },
         {
@@ -1524,14 +1618,14 @@
                 }
               }
             },
-            "description": "Bulk-upsert notification preferences for the tenant. Send only the types you want to change \u2014 unmentioned types are unchanged.\n\nWhen `enabled` is `false` for a type, no new notifications of that type are created. Existing unread notifications remain and can still be marked as read.\n\nValid types: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`."
+            "description": "Bulk-upsert notification preferences for the tenant. Send only the types you want to change — unmentioned types are unchanged.\n\nWhen `enabled` is `false` for a type, no new notifications of that type are created. Existing unread notifications remain and can still be marked as read.\n\nValid types: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`."
           }
         }
       ]
     },
     {
       "name": "Webhooks",
-      "description": "Register HTTPS callback URLs to receive event notifications in near-real time. When a notification is created or updated, the API immediately POSTs a signed payload to every subscribed active endpoint.\n\n**Secret handling:** the signing secret is returned only at registration. Store it immediately \u2014 it cannot be retrieved later. If lost, deregister and re-register the endpoint.\n\n**Tier limits:** FREE: 1 endpoint, STARTER: 2, GROWTH: 5, BUSINESS: 10.\n\nAll requests require a Bearer API key.",
+      "description": "Register HTTPS callback URLs to receive event notifications in near-real time. When a notification is created or updated, the API immediately POSTs a signed payload to every subscribed active endpoint.\n\n**Secret handling:** the signing secret is returned only at registration. Store it immediately — it cannot be retrieved later. If lost, deregister and re-register the endpoint.\n\n**Tier limits:** FREE: 1 endpoint, STARTER: 2, GROWTH: 5, BUSINESS: 10.\n\nAll requests require a Bearer API key.",
       "auth": {
         "type": "bearer",
         "bearer": [
@@ -1572,7 +1666,7 @@
                 }
               }
             },
-            "description": "Registers a new webhook endpoint and returns the signing `secret` \u2014 **shown only once**. Store it immediately; it is used to verify `X-Comprobify-Signature` on incoming webhook requests.\n\n`url` must be a valid HTTPS URL.\n\n`eventTypes` is optional. Omit it or pass `[]` to subscribe to **all** event types. Valid values: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`.\n\nCopy the returned `id` into the `webhook_id` collection variable."
+            "description": "Registers a new webhook endpoint and returns the signing `secret` — **shown only once**. Store it immediately; it is used to verify `X-Comprobify-Signature` on incoming webhook requests.\n\n`url` must be a valid HTTPS URL.\n\n`eventTypes` is optional. Omit it or pass `[]` to subscribe to **all** event types. Valid values: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`.\n\nCopy the returned `id` into the `webhook_id` collection variable."
           }
         },
         {
@@ -1623,7 +1717,7 @@
                 }
               }
             },
-            "description": "Updates a webhook endpoint's URL, event subscriptions, or active flag. All fields are optional \u2014 send only what you want to change.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
+            "description": "Updates a webhook endpoint's URL, event subscriptions, or active flag. All fields are optional — send only what you want to change.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
           }
         },
         {

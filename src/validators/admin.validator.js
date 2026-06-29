@@ -168,7 +168,66 @@ const revokeApiKey = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
+// Subscriptions & payments
+const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
+
+const createSubscription = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+
+  body('tier')
+    .isIn(PAID_TIERS)
+    .withMessage(`tier must be one of: ${PAID_TIERS.join(', ')}`),
+
+  body('billingInterval')
+    .optional()
+    .isIn(['MONTHLY', 'YEARLY'])
+    .withMessage(`billingInterval must be one of: MONTHLY, YEARLY`),
+];
+
+const listSubscriptions = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
+const linkInvoice = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+
+  body('accessKey')
+    .isLength({ min: 49, max: 49 })
+    .withMessage('accessKey must be exactly 49 digits')
+    .isNumeric()
+    .withMessage('accessKey must contain only digits'),
+];
+
+const cancelSubscription = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
+const reviewPayment = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+
+  body('decision')
+    .isIn(['VERIFIED', 'REJECTED'])
+    .withMessage('decision must be one of: VERIFIED, REJECTED'),
+
+  body('rejectionReason')
+    .if(body('decision').equals('REJECTED'))
+    .notEmpty()
+    .withMessage('rejectionReason is required when decision is REJECTED — the tenant needs to know what to fix before re-uploading'),
+
+  body('rejectionReason')
+    .optional()
+    .isString()
+    .isLength({ max: 500 })
+    .withMessage('rejectionReason must be a string of max 500 characters'),
+];
+
+const getPaymentProof = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
+  createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
+  reviewPayment, getPaymentProof,
 };

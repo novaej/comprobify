@@ -23,7 +23,9 @@ All fields are optional. An empty body `{}` is valid.
   "initialSequentials": [
     { "issuerId": 1, "documentType": "01", "sequential": 1 },
     { "issuerId": 2, "documentType": "01", "sequential": 1 }
-  ]
+  ],
+  "tier": "STARTER",
+  "billingInterval": "MONTHLY"
 }
 ```
 
@@ -33,6 +35,10 @@ All fields are optional. An empty body `{}` is valid.
 | `initialSequentials[].issuerId` | integer | Yes (per entry) | Numeric issuer id (from `GET /v1/issuers`) |
 | `initialSequentials[].documentType` | string | Yes (per entry) | Document type code, e.g. `"01"` |
 | `initialSequentials[].sequential` | integer | Yes (per entry) | Next sequential number to issue (≥ 1) |
+| `tier` | string | No | `STARTER`, `GROWTH`, or `BUSINESS` — see [Get Tiers](get-tiers.md). Omit to stay on FREE in production; promotion never waits on payment either way. |
+| `billingInterval` | string | No | `MONTHLY` (default) or `YEARLY` (2 months free). Ignored if `tier` is omitted. |
+
+Requesting a `tier` here starts the subscription/payment pipeline (same as the admin-driven path) — see [Submit Payment Proof](submit-payment-proof.md) for what happens next. The tier/quota upgrade itself only lands once that subscription is paid and its self-billed invoice is SRI-authorized; it does not happen as part of this call.
 
 ## Response
 
@@ -44,11 +50,16 @@ All fields are optional. An empty body `{}` is valid.
   "apiKeys": [
     { "label": "Initial sandbox key", "apiKey": "a3f8c2bd..." },
     { "label": "erp-integration",     "apiKey": "d94e17ac..." }
-  ]
+  ],
+  "subscription": { "id": 12, "tier": "STARTER", "status": "PENDING_PAYMENT", "billing_interval": "MONTHLY" },
+  "payment": { "id": 18, "status": "PENDING", "amount": "19.00" },
+  "bankTransfer": { "bankName": "...", "accountType": "...", "accountNumber": "...", "accountHolder": "...", "identification": "..." }
 }
 ```
 
 `apiKeys` contains one entry per sandbox key that was active at the time of promotion. **Store all tokens immediately — they are shown only once.** Distribute each token to the integration that previously used the sandbox key with the same label.
+
+`subscription`, `payment`, and `bankTransfer` are only present if `tier` was supplied. Use `bankTransfer` to show the tenant where to send the SPI transfer, then submit proof of it — see [Submit Payment Proof](submit-payment-proof.md).
 
 Sandbox keys are revoked automatically during promotion. If you had no sandbox keys, `apiKeys` will be an empty array — mint production keys via [`POST /v1/keys`](api-keys.md#mint-a-key).
 
@@ -56,6 +67,8 @@ Sandbox keys are revoked automatically during promotion. If you had no sandbox k
 
 | Status | Code | When |
 |---|---|---|
+| `400` | `VALIDATION_FAILED` | `tier` or `billingInterval` is not a recognised value |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `FORBIDDEN` | Tenant email not yet verified |
 | `409` | `CONFLICT` | Tenant is already in production |
+| `409` | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | A `tier` was requested but the tenant already has a subscription in progress |

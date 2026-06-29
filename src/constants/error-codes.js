@@ -86,6 +86,12 @@ const ErrorCodes = Object.freeze({
   ISSUER_HAS_DOCUMENTS: 'ISSUER_HAS_DOCUMENTS',
   /** Requested nextSequential is not greater than the current counter value */
   SEQUENTIAL_CANNOT_DECREASE: 'SEQUENTIAL_CANNOT_DECREASE',
+  /** Subscription not found */
+  SUBSCRIPTION_NOT_FOUND: 'SUBSCRIPTION_NOT_FOUND',
+  /** Payment not found */
+  PAYMENT_NOT_FOUND: 'PAYMENT_NOT_FOUND',
+  /** Tenant already has a subscription in flight (not ACTIVE/CANCELLED/EXPIRED) */
+  SUBSCRIPTION_ALREADY_IN_FLIGHT: 'SUBSCRIPTION_ALREADY_IN_FLIGHT',
 
   // --- Webhook endpoints ---
   /** Tenant has reached the maximum number of webhook endpoints for their plan */

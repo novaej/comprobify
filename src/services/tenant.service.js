@@ -4,6 +4,7 @@ const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const sequentialService = require('./sequential.service');
+const subscriptionService = require('./subscription.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
@@ -18,7 +19,7 @@ async function updateLanguage(tenantId, language) {
   await tenantModel.updatePreferredLanguage(tenantId, language);
 }
 
-async function promote(tenantId, initialSequentials = []) {
+async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY') {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
   if (tenant.status !== TenantStatus.ACTIVE) {
@@ -55,7 +56,16 @@ async function promote(tenantId, initialSequentials = []) {
   }
 
   await tenantModel.promote(tenantId);
-  return { apiKeys };
+
+  // Promotion itself never waits on payment — production access is granted on FREE
+  // immediately. Requesting a paid tier here only kicks off the subscription pipeline
+  // in the background; the tier/quota upgrade only lands once it's paid and authorized.
+  let billing = null;
+  if (tier && tier !== 'FREE') {
+    billing = await subscriptionService.createSubscription(tenantId, tier, billingInterval);
+  }
+
+  return { apiKeys, ...billing };
 }
 
 module.exports = { updateLanguage, promote };

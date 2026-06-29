@@ -12,6 +12,24 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `GET` | `/v1/verify-email` | Verify email with token from registration email |
 | `POST` | `/v1/resend-verification` | Resend verification email (regenerates token) |
 
+## Tiers (public)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/tiers` | Full subscription tier catalog — quota, monthly/yearly price, overage rate, document types, limits |
+
+## Payments (authenticated)
+
+| Method | Path | Description |
+|---|---|---|
+| `PATCH` | `/v1/payments/:id/proof` | Upload proof of an SPI bank transfer for a pending subscription payment. A `REJECTED` payment can be re-submitted; only `VERIFIED` blocks further uploads. |
+
+## Subscriptions (authenticated)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/subscriptions/me` | Full subscription/payment history, newest first, with `rejection_reason` when applicable — no notification exists, this is how a tenant checks status |
+
 ## Tenants (authenticated)
 
 | Method | Path | Description |

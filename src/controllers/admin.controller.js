@@ -1,5 +1,6 @@
 const adminService = require('../services/admin.service');
 const notificationSchedulerService = require('../services/notification-scheduler.service');
+const subscriptionService = require('../services/subscription.service');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 
@@ -82,6 +83,47 @@ const revokeApiKey = async (req, res) => {
   res.json({ ok: true });
 };
 
+// Subscriptions & payments
+const createSubscription = async (req, res) => {
+  const result = await subscriptionService.createSubscription(
+    parseInt(req.params.id, 10),
+    req.body.tier,
+    req.body.billingInterval,
+  );
+  res.status(201).json({ ok: true, ...result });
+};
+
+const listSubscriptions = async (req, res) => {
+  const subscriptions = await subscriptionService.listByTenant(parseInt(req.params.id, 10));
+  res.json({ ok: true, subscriptions });
+};
+
+const linkInvoice = async (req, res) => {
+  const subscription = await subscriptionService.linkInvoice(parseInt(req.params.id, 10), req.body.accessKey);
+  res.json({ ok: true, subscription });
+};
+
+const cancelSubscription = async (req, res) => {
+  const subscription = await subscriptionService.cancelSubscription(parseInt(req.params.id, 10));
+  res.json({ ok: true, subscription });
+};
+
+const reviewPayment = async (req, res) => {
+  const result = await subscriptionService.reviewPayment(
+    parseInt(req.params.id, 10),
+    req.body.decision,
+    req.body.rejectionReason,
+  );
+  res.json({ ok: true, ...result });
+};
+
+const getPaymentProof = async (req, res) => {
+  const { buffer, filename, mimeType } = await subscriptionService.getPaymentProof(parseInt(req.params.id, 10));
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
+};
+
 // Jobs
 
 /**
@@ -104,4 +146,6 @@ const runNotificationJobs = async (req, res) => {
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
+  createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
+  reviewPayment, getPaymentProof,
 };

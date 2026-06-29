@@ -156,6 +156,8 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `ISSUER_NOT_FOUND` | Issuer ID in `X-Issuer-Id` or URL parameter does not exist |
 | `SOURCE_ISSUER_NOT_FOUND` | `sourceIssuerId` not found or belongs to a different tenant |
 | `WEBHOOK_ENDPOINT_NOT_FOUND` | Webhook endpoint not found or belongs to a different tenant |
+| `SUBSCRIPTION_NOT_FOUND` | Subscription not found |
+| `PAYMENT_NOT_FOUND` | Payment not found, or belongs to a different tenant |
 | `NOT_FOUND` | Other resource not found (document, API key — read `detail`) |
 
 ### 409 Conflict
@@ -163,7 +165,8 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | Code | When |
 |---|---|
 | `ALREADY_VERIFIED` | Attempting to resend verification to an already-verified account |
-| `CONFLICT` | Idempotency key reused with a different payload, or other conflict |
+| `SUBSCRIPTION_ALREADY_IN_FLIGHT` | Tenant already has a subscription in progress (promotion with `tier`, or Admin's Create Subscription) |
+| `CONFLICT` | Idempotency key reused with a different payload, payment already decided, or other conflict |
 
 ### 429 Too Many Requests
 

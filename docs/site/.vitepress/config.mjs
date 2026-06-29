@@ -32,6 +32,27 @@ export default defineConfig({
             ],
           },
           {
+            text: 'Tiers',
+            collapsed: false,
+            items: [
+              { text: 'Get Tiers', link: '/endpoints/get-tiers' },
+            ],
+          },
+          {
+            text: 'Payments',
+            collapsed: false,
+            items: [
+              { text: 'Submit Payment Proof', link: '/endpoints/submit-payment-proof' },
+            ],
+          },
+          {
+            text: 'Subscriptions',
+            collapsed: false,
+            items: [
+              { text: 'Get My Subscriptions', link: '/endpoints/get-my-subscriptions' },
+            ],
+          },
+          {
             text: 'Tenants',
             collapsed: false,
             items: [

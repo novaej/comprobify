@@ -50,3 +50,4 @@ GET /v1/tenants/me
 - No `X-Issuer-Id` header is required — this endpoint resolves the tenant, not an issuer.
 - The response reflects exactly what the `authenticate` middleware already resolved from the API key — there is no separate database lookup, so any active key (sandbox or production) returns its tenant's current state.
 - This does not return the list of issuers (branches) — use `GET /v1/issuers` for that.
+- **This is also how you find out a paid-tier upgrade completed.** After requesting a tier at [promotion](promote-tenant.md) and [submitting payment proof](submit-payment-proof.md), there's no notification when your provider finishes reviewing and authorizing it — poll this endpoint periodically; `subscriptionTier` and `documentQuota` update the moment the subscription activates. For the in-between states (pending, rejected, why) see [`GET /v1/subscriptions/me`](get-my-subscriptions.md) instead — this endpoint only shows the end result.

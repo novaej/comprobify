@@ -175,36 +175,18 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 9. Subscription + Payment Pipeline (manual now, Kushki later)
+## 9. Kushki Payment Integration
 
-**Priority: Medium — the `subscriptions`/`payments` model is usable immediately for the manual SPI flow; the Kushki-specific pieces stay blocked until a legal entity exists (see below)**
+**Priority: Low — blocked, requires a registered legal entity. Every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different gateway.**
 
-**Core design rule:** a subscription becomes `ACTIVE` only when its billing-period invoice is **SRI-authorized** — never merely on payment. Comprobify is an invoicing company; granting paid access against a payment with no valid legal invoice behind it is exactly the kind of gap this product exists to prevent for everyone else. If signing fails, the cert's expired, or SRI rejects the document, the subscription stays in an intermediate state until that's fixed — it never silently activates.
+The manual subscription/payment pipeline this depends on (`subscriptions`/`payments` tables, promotion-time tier selection, tenant-facing proof upload, admin review with required rejection reasons, self-billed invoice linking, `GET /v1/subscriptions/me` status, public `/v1/tiers` catalog) is fully built — see CLAUDE.md's "Subscription + payment pipeline" entry and ADR-017 for the design. This item is now scoped to only the Kushki-specific automation that bolts onto it once the company exists:
 
-**Why this is one item covering two phases:** the state machine and the `payments` table are useful *today*, manually, independent of Kushki — they replace "remember which clients paid" with an actual record. The Kushki-specific pieces (auto-charge, webhooks, card-on-file) bolt onto the same schema later without changing it.
-
-**Schema:**
-- **`subscriptions`** — `tenant_id`, `tier`, `pending_tier` (nullable, for deferred downgrades), `status`, `invoice_document_id` (nullable FK to `documents.id` — the self-billed invoice for this period), `current_period_start`, `current_period_end`, `kushki_subscription_id`/`kushki_customer_id` (nullable — populated only once Kushki exists), `created_at`, `canceled_at`.
-  - `status` enum: `PENDING_PAYMENT` → `PAYMENT_RECEIVED` → `INVOICE_PROCESSING` → `ACTIVE`, plus `EXPIRED`, `SUSPENDED`, `CANCELLED`. `INVOICE_PROCESSING` covers the whole window between "invoice document created" and "authorized" — the granular detail (signed/sent/returned/error) comes from the linked `documents.status` and its own `document_events`, not duplicated here.
-- **`payments`** — `subscription_id`, `status` (`PENDING`/`REPORTED`/`VERIFIED`/`REJECTED`/`REFUNDED`), `amount`, `method` (`SPI_TRANSFER` today, `KUSHKI_CARD` later), `kushki_charge_id` (nullable), `reported_at`, `verified_at`, `created_at`.
-- New `tenant_events` types: `SUBSCRIPTION_CREATED`, `PAYMENT_REPORTED`, `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `INVOICE_LINKED`, `SUBSCRIPTION_ACTIVATED`, `SUBSCRIPTION_EXPIRED`, `SUBSCRIPTION_SUSPENDED`, `SUBSCRIPTION_CANCELLED` (update `chk_tenant_events_event_type` in the same migration).
-
-**Manual flow (buildable now, no Kushki/company needed):**
-1. Tenant/admin selects a plan → `subscriptions` row created, `PENDING_PAYMENT`.
-2. Client transfers via SPI, reports it → `payments` row `REPORTED`.
-3. Admin checks the bank, marks it `VERIFIED` → subscription moves to `PAYMENT_RECEIVED`.
-4. Admin issues the self-billing invoice through Comprobify's own API (per the earlier manual-invoicing discussion) → `invoice_document_id` set, subscription moves to `INVOICE_PROCESSING`.
-5. Once that document's status reaches `AUTHORIZED` → subscription flips to `ACTIVE`, `tenants.subscription_tier`/`document_quota` updated.
-
-**Kushki flow (blocked — requires a registered legal entity; every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different gateway):**
-- Card collected at `POST /v1/tenants/promote`, not at registration — sandbox/Free stays card-free.
+- Card collected at `POST /v1/tenants/promote` (same place tier selection already happens) — sandbox/Free stays card-free.
 - Kushki.js (hosted fields) tokenizes client-side; raw card data never reaches Comprobify's servers.
-- Kushki has native recurring subscriptions — it owns the charge schedule, no custom billing cron needed. Its webhook (mirrors `mailgun-webhook.controller.js`) creates/updates `payments` rows automatically (`REPORTED`→`VERIFIED` near-instantly) instead of an admin doing it by hand, then the same pipeline above takes over from step 4.
-- Failed recurring charge → `payments` row `REJECTED`, subscription → `SUSPENDED`, notify via `notificationService`, auto-downgrade to FREE after a grace period (propose 7 days) if unresolved. No immediate access suspension.
-- Mid-cycle tier change: upgrades apply immediately with a prorated charge; downgrades set `subscriptions.pending_tier` and apply only at next renewal — no credit/refund logic needed.
+- Kushki has native recurring subscriptions — it owns the charge schedule, no custom billing cron needed. Its webhook (mirrors `mailgun-webhook.controller.js`) creates/updates `payments` rows automatically (`REPORTED`→`VERIFIED` near-instantly, no tenant upload or operator review needed), then the existing pipeline takes over from invoice-linking onward. Its own migration adds whatever Kushki-specific columns (subscription/customer/charge ids) turn out to be needed — `subscriptions`/`payments` don't have them yet.
+- Failed recurring charge → `payments` row `REJECTED` (with a system-generated `rejection_reason`), subscription → `SUSPENDED`, notify via `notificationService`, auto-downgrade to FREE after a grace period (propose 7 days) if unresolved. No immediate access suspension.
+- Mid-cycle tier change: upgrades apply immediately with a prorated charge; downgrades apply only at next renewal — no credit/refund logic needed. (Will need its own `pending_tier`-style column added at that point — not present today.)
 - Config: `KUSHKI_PRIVATE_KEY` + webhook signing secret, independent per environment, same rule as `ADMIN_SECRET`/`ENCRYPTION_KEY`. Public key is frontend-only.
-
-**Interim path right now, zero code:** keep onboarding paying clients via `POST /v1/admin/tenants` + `POST /v1/admin/tenants/:id/promote` until the `subscriptions`/`payments` tables exist — those admin endpoints already work today without any of the above.
 
 ---
 
