@@ -4,10 +4,12 @@
 // these lists (not just the commented full distribution below) as each new builder
 // in NEXT_STEPS.md #1 ships, or new types will be silently unreachable on Growth/Business.
 //
-// priceMonthlyUsd / overagePerDocumentUsd are not enforced or billed anywhere yet —
-// no payment gateway is wired up (NEXT_STEPS.md #9 depends on one landing first).
-// They live here, not only in marketing copy, so quota and price stay one source of
-// truth instead of drifting between this file and the frontend's pricing page.
+// priceMonthlyUsd / priceYearlyUsd / overagePerDocumentUsd are not enforced or
+// billed anywhere yet — no payment gateway is wired up (NEXT_STEPS.md #9 depends
+// on one landing first). They live here, not only in marketing copy, so quota
+// and price stay one source of truth instead of drifting between this file and
+// the frontend's pricing page. priceYearlyUsd is priceMonthlyUsd × 10 (2 months
+// free) — the standard SaaS yearly-discount convention.
 const TIERS = {
   FREE: {
     documentQuota:           5,
@@ -18,6 +20,7 @@ const TIERS = {
     readRateLimit:           60,
     allowedDocumentTypes:    ['01'],
     priceMonthlyUsd:         0,
+    priceYearlyUsd:          0,
     overagePerDocumentUsd:   null,
   },
   STARTER: {
@@ -29,6 +32,7 @@ const TIERS = {
     readRateLimit:           300,
     allowedDocumentTypes:    ['01'],
     priceMonthlyUsd:         19,
+    priceYearlyUsd:          190,
     overagePerDocumentUsd:   0.30,
   },
   GROWTH: {
@@ -40,6 +44,7 @@ const TIERS = {
     readRateLimit:           600,
     allowedDocumentTypes:    ['01', '04'],
     priceMonthlyUsd:         79,
+    priceYearlyUsd:          790,
     overagePerDocumentUsd:   0.15,
   },
   BUSINESS: {
@@ -51,6 +56,7 @@ const TIERS = {
     readRateLimit:           1500,
     allowedDocumentTypes:    ['01', '04'],
     priceMonthlyUsd:         199,
+    priceYearlyUsd:          1990,
     overagePerDocumentUsd:   0.08,
   },
 };

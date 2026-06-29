@@ -32,6 +32,15 @@ const config = {
   sentry: {
     dsn: process.env.SENTRY_DSN || '',
   },
+  // Returned in createSubscription's response so a tenant knows where to send
+  // the SPI transfer — display text only, not a secret.
+  bankTransfer: {
+    bankName:       process.env.BANK_TRANSFER_BANK_NAME       || '',
+    accountType:    process.env.BANK_TRANSFER_ACCOUNT_TYPE    || '',
+    accountNumber:  process.env.BANK_TRANSFER_ACCOUNT_NUMBER  || '',
+    accountHolder:  process.env.BANK_TRANSFER_ACCOUNT_HOLDER  || '',
+    identification: process.env.BANK_TRANSFER_IDENTIFICATION  || '',
+  },
 };
 
 module.exports = config;

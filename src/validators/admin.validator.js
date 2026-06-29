@@ -177,6 +177,11 @@ const createSubscription = [
   body('tier')
     .isIn(PAID_TIERS)
     .withMessage(`tier must be one of: ${PAID_TIERS.join(', ')}`),
+
+  body('billingInterval')
+    .optional()
+    .isIn(['MONTHLY', 'YEARLY'])
+    .withMessage(`billingInterval must be one of: MONTHLY, YEARLY`),
 ];
 
 const listSubscriptions = [
@@ -197,12 +202,21 @@ const cancelSubscription = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
-const paymentAction = [
+const reviewPayment = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+
+  body('decision')
+    .isIn(['VERIFIED', 'REJECTED'])
+    .withMessage('decision must be one of: VERIFIED, REJECTED'),
+];
+
+const getPaymentProof = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
-  createSubscription, listSubscriptions, linkInvoice, cancelSubscription, paymentAction,
+  createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
+  reviewPayment, getPaymentProof,
 };

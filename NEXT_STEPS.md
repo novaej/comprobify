@@ -179,33 +179,35 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 **Priority: Low — remaining scope is Kushki-only, and that stays blocked until a legal entity exists (see below)**
 
-**Status: the manual, admin-only flow is implemented** (migration `052_subscriptions_and_payments.sql`, `src/models/subscription.model.js` + `payment.model.js`, `src/services/subscription.service.js`, admin routes under `/v1/admin/tenants/:id/subscriptions` and `/v1/admin/payments/:id/...`). Everything below describing the manual flow is built; only the Kushki section remains pending.
+**Status: implemented** (migrations `052_subscriptions_and_payments.sql` + `053_payment_proof_and_yearly_billing.sql`, `src/models/subscription.model.js` + `payment.model.js`, `src/services/subscription.service.js`, admin routes under `/v1/admin/...`, tenant-facing proof upload at `/v1/payments/:id/proof`, public catalog at `/v1/tiers`). Only the Kushki section below remains pending.
 
-**Core design rule (implemented):** a subscription becomes `ACTIVE` only when its billing-period invoice is **SRI-authorized** — never merely on payment. `document-transmission.service.js`'s `checkAuthorization()` fires `subscriptionService.activateIfLinked(documentId)` fire-and-forget on every authorization (no-op for documents not linked to a subscription).
+**Core design rule:** a subscription becomes `ACTIVE` only when its billing-period invoice is **SRI-authorized** — never merely on payment. `document-transmission.service.js`'s `checkAuthorization()` fires `subscriptionService.activateIfLinked(documentId)` fire-and-forget on every authorization (no-op for documents not linked to a subscription).
+
+**Tier selection happens at promotion, not registration.** `POST /v1/tenants/promote` (tenant-facing, existing endpoint) gained optional `tier`/`billingInterval` fields. Promotion itself (sandbox flip, key rotation) always proceeds immediately regardless of whether a tier was requested — production access on FREE is never gated on payment. Requesting a paid tier just also kicks off the same `subscriptionService.createSubscription()` used by the admin-driven path.
 
 **Schema (as built — deliberately has no payment-gateway-specific columns; nothing Kushki-shaped exists until a gateway is actually decided and built, then it gets its own dedicated migration):**
-- **`subscriptions`** — `tenant_id`, `tier` (`STARTER`/`GROWTH`/`BUSINESS` only — `FREE` never needs one), `status`, `invoice_document_id` (nullable FK to `documents.id`), `current_period_start`/`current_period_end` (set at activation, informational only — nothing reads them yet), `created_at`, `updated_at` (+ trigger), `canceled_at`.
+- **`subscriptions`** — `tenant_id`, `tier` (`STARTER`/`GROWTH`/`BUSINESS` only — `FREE` never needs one), `billing_interval` (`MONTHLY`/`YEARLY`, default `MONTHLY`), `status`, `invoice_document_id` (nullable FK to `documents.id`), `current_period_start`/`current_period_end` (set at activation, length depends on `billing_interval`), `created_at`, `updated_at` (+ trigger), `canceled_at`.
   - `status`: `PENDING_PAYMENT` → `PAYMENT_RECEIVED` → `INVOICE_PROCESSING` → `ACTIVE`, plus `EXPIRED`/`SUSPENDED`/`CANCELLED` in the CHECK constraint for forward-compatibility — nothing drives `EXPIRED`/`SUSPENDED` yet (no renewal job exists; that's #10). `cancelSubscription` is the only thing that sets `CANCELLED` today.
-- **`payments`** — `subscription_id`, `status` (`PENDING`/`REPORTED`/`VERIFIED`/`REJECTED`/`REFUNDED` — `REFUNDED` unused so far), `amount` (computed server-side from `TIERS[tier].priceMonthlyUsd`, never client-supplied), `method` (CHECK constraint only allows `SPI_TRANSFER` today — add the next value's own migration when a second method actually exists), `reported_at`, `verified_at`, `created_at`, `updated_at` (+ trigger).
-- `tenant_events` gained: `SUBSCRIPTION_CREATED`, `PAYMENT_REPORTED`, `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `INVOICE_LINKED`, `SUBSCRIPTION_ACTIVATED`, `SUBSCRIPTION_CANCELLED`. (`SUBSCRIPTION_EXPIRED`/`SUSPENDED` deliberately *not* added yet — add them alongside whatever in #10 actually triggers those transitions, rather than speculatively now.)
+- **`payments`** — `subscription_id`, `status` (`PENDING`/`REPORTED`/`VERIFIED`/`REJECTED`/`REFUNDED` — `REFUNDED` unused so far), `amount` (computed server-side from `TIERS[tier].priceMonthlyUsd`/`priceYearlyUsd`, never client-supplied), `method` (CHECK constraint only allows `SPI_TRANSFER` today), `proof_file`/`proof_filename`/`proof_mime_type` (BYTEA, same pattern as `issuers.logo`), `period_start`/`period_end` (stamped by `activateIfLinked` onto the specific payment that funded that cycle — `subscriptions.current_period_start/end` gets overwritten every renewal, so this is what makes per-cycle history reconstructable once renewals exist), `reported_at`, `verified_at`, `created_at`, `updated_at` (+ trigger).
+- `tenant_events` gained: `SUBSCRIPTION_CREATED`, `PAYMENT_REPORTED`, `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `INVOICE_LINKED`, `SUBSCRIPTION_ACTIVATED`, `SUBSCRIPTION_CANCELLED`, `TIER_CHANGED` (logged by `admin.service.js`'s `updateTenantTier` — the direct admin override now has an audit trail too). (`SUBSCRIPTION_EXPIRED`/`SUSPENDED` deliberately *not* added yet — add them alongside whatever in #10 actually triggers those transitions.)
 
-**Manual flow (implemented, admin-only — no tenant-facing self-service exists, no frontend for this yet):**
-1. `POST /v1/admin/tenants/:id/subscriptions` (`{ tier }`) → `subscriptions` row `PENDING_PAYMENT` + `payments` row `PENDING` priced from the tier.
-2. `PATCH /v1/admin/payments/:id/report` → `REPORTED` (optional step; `verify` doesn't require it first — the manual reality is the admin sometimes does both at once).
-3. `PATCH /v1/admin/payments/:id/verify` → payment `VERIFIED`, subscription → `PAYMENT_RECEIVED`. (`/reject` → `REJECTED`, subscription stays `PENDING_PAYMENT`.)
-4. Admin issues the self-billing invoice through Comprobify's own API (own RUC/issuer), then `PATCH /v1/admin/subscriptions/:id/link-invoice` (`{ accessKey }` — the 49-digit access key, looked up via `documentModel.findByAccessKey()` with no issuer scoping; `documents.id` itself is never exposed in any response, public or admin, so the lookup couldn't use that) → `invoice_document_id` set, subscription → `INVOICE_PROCESSING`. If the document being linked is *already* `AUTHORIZED` (e.g. it was authorized before anyone remembered to link it), `linkInvoice` activates it immediately instead of waiting on step 5's hook, which only fires on a *new* authorization transition.
-5. Once that document reaches `AUTHORIZED` (normal `send`/`authorize` flow) → the fire-and-forget hook in `document-transmission.service.js` flips the subscription to `ACTIVE`, sets `current_period_start`/`end`, and calls `tenantModel.updateTier()` to actually grant the tier/quota.
+**Pricing:** `TIERS[tier].priceYearlyUsd` = `priceMonthlyUsd × 10` (2 months free) for STARTER/GROWTH/BUSINESS. Public `GET /v1/tiers` (no auth, no rate limiter — static catalog data) exposes the full catalog for a pricing page.
+
+**Flow (implemented):**
+1. Tier requested at promotion (`POST /v1/tenants/promote`, `{ tier, billingInterval }`) or by an operator via `POST /v1/admin/tenants/:id/subscriptions` → `subscriptions` row `PENDING_PAYMENT` + `payments` row `PENDING` priced from the tier/interval. Response includes `bankTransfer` instructions (`config.bankTransfer`, `src/config/index.js` — bank name/account/holder from env vars, display text only).
+2. **Tenant** uploads proof of the SPI transfer — `PATCH /v1/payments/:id/proof` (multipart, their own API key, `src/routes/payments.routes.js`; ownership-checked: payment → subscription → `tenant_id` must match). Moves the payment to `REPORTED`. Rejects if the payment was already `VERIFIED`/`REJECTED`.
+3. **Operator** reviews it — `GET /v1/admin/payments/:id/proof` streams the file back (mirrors the RIDE PDF `res.send(buffer)` pattern), then `PATCH /v1/admin/payments/:id/review` (`{ decision: "VERIFIED" | "REJECTED" }` — **one** endpoint, not separate verify/reject routes, since it's one decision with two outcomes). `VERIFIED` moves the subscription to `PAYMENT_RECEIVED`.
+4. Operator issues the self-billing invoice through Comprobify's own API (own RUC/issuer), then `PATCH /v1/admin/subscriptions/:id/link-invoice` (`{ accessKey }` — `documents.id` is never exposed in any response, so the 49-digit access key is the only identifier this could use) → `invoice_document_id` set, subscription → `INVOICE_PROCESSING`. If the document being linked is *already* `AUTHORIZED`, `linkInvoice` activates it immediately instead of waiting on step 5's hook, which only fires on a *new* authorization transition.
+5. Once that document reaches `AUTHORIZED` → the fire-and-forget hook in `document-transmission.service.js` flips the subscription to `ACTIVE`, stamps the period on both the subscription and the funding payment, and calls `tenantModel.updateTier()` to actually grant the tier/quota.
 6. `PATCH /v1/admin/subscriptions/:id/cancel` → `CANCELLED` at any point (does not auto-downgrade the tenant — no renewal/expiry logic exists yet).
 
 **Kushki flow (blocked — requires a registered legal entity; every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different gateway; nothing below is built and no schema for it exists yet):**
-- Card collected at `POST /v1/tenants/promote`, not at registration — sandbox/Free stays card-free.
+- Card collected at `POST /v1/tenants/promote` (same place tier selection already happens) — sandbox/Free stays card-free.
 - Kushki.js (hosted fields) tokenizes client-side; raw card data never reaches Comprobify's servers.
-- Kushki has native recurring subscriptions — it owns the charge schedule, no custom billing cron needed. Its webhook (mirrors `mailgun-webhook.controller.js`) creates/updates `payments` rows automatically (`REPORTED`→`VERIFIED` near-instantly) instead of an admin doing it by hand, then the same pipeline above takes over from step 4. Its own migration adds whatever Kushki-specific columns (subscription/customer/charge ids) turn out to be needed — `subscriptions`/`payments` don't have them yet.
+- Kushki has native recurring subscriptions — it owns the charge schedule, no custom billing cron needed. Its webhook (mirrors `mailgun-webhook.controller.js`) creates/updates `payments` rows automatically (`REPORTED`→`VERIFIED` near-instantly, no tenant upload or operator review needed) instead of steps 2-3 above, then the same pipeline takes over from step 4. Its own migration adds whatever Kushki-specific columns (subscription/customer/charge ids) turn out to be needed — `subscriptions`/`payments` don't have them yet.
 - Failed recurring charge → `payments` row `REJECTED`, subscription → `SUSPENDED`, notify via `notificationService`, auto-downgrade to FREE after a grace period (propose 7 days) if unresolved. No immediate access suspension.
 - Mid-cycle tier change: upgrades apply immediately with a prorated charge; downgrades apply only at next renewal — no credit/refund logic needed. (Will need its own `pending_tier`-style column added at that point — not present today.)
 - Config: `KUSHKI_PRIVATE_KEY` + webhook signing secret, independent per environment, same rule as `ADMIN_SECRET`/`ENCRYPTION_KEY`. Public key is frontend-only.
-
-**Remaining scope is Kushki-only.** The manual flow above already replaces the earlier zero-code interim path (`POST /v1/admin/tenants` + `POST /v1/admin/tenants/:id/promote` alone, with no payment tracking) — that path still works, but the subscription/payment endpoints now give it a real record instead of memory.
 
 ---
 
@@ -236,3 +238,17 @@ Two things have to exist before `overagePerDocumentUsd` (`subscription-tiers.js`
 **What:** log a `tenant_events` row (or a new `issuer_events` table if issuer-level granularity matters more than tenant-level) on certificate upload (registration/branch creation) and renewal — fingerprint and expiry are already computed by `certificateService.parseCertificate`, just not persisted as an event.
 
 **Effort:** Low — one event write per existing call site, no new flow.
+
+---
+
+## 12. Tenant-Facing Subscription/Payment Status Endpoint
+
+**Priority: Low — quality-of-life gap, deliberately deferred while building #9**
+
+There is currently no way for a tenant to see their own subscription/payment record (status, amount, whether proof was reviewed yet). After [submitting payment proof](docs/site/endpoints/submit-payment-proof.md), the only signal a tenant has is polling `GET /v1/tenants/me` and watching `subscriptionTier`/`documentQuota` change — which only shows the *result*, not the in-between state (`PENDING_PAYMENT`/`PAYMENT_RECEIVED`/`INVOICE_PROCESSING`, or whether a payment was rejected and why).
+
+**What:** a read-only `GET /v1/subscriptions/me` (or similar), tenant-authenticated, returning their current/most recent `subscriptions` row plus its `payments`. Mirrors the existing ownership-check pattern already used by `payment.controller.js`'s proof upload.
+
+**Why defer:** nothing breaks without it — the polling workaround on `tenant-me.md` is honest but mediocre UX. Worth building once there's a frontend that would actually render this state, rather than speculatively now.
+
+**Effort:** Low — one new model query (already have `subscriptionModel.findByTenantId`/`paymentModel.findBySubscriptionId`), one controller, one route.

@@ -85,7 +85,11 @@ const revokeApiKey = async (req, res) => {
 
 // Subscriptions & payments
 const createSubscription = async (req, res) => {
-  const result = await subscriptionService.createSubscription(parseInt(req.params.id, 10), req.body.tier);
+  const result = await subscriptionService.createSubscription(
+    parseInt(req.params.id, 10),
+    req.body.tier,
+    req.body.billingInterval,
+  );
   res.status(201).json({ ok: true, ...result });
 };
 
@@ -104,19 +108,16 @@ const cancelSubscription = async (req, res) => {
   res.json({ ok: true, subscription });
 };
 
-const reportPayment = async (req, res) => {
-  const payment = await subscriptionService.reportPayment(parseInt(req.params.id, 10));
-  res.json({ ok: true, payment });
-};
-
-const verifyPayment = async (req, res) => {
-  const result = await subscriptionService.verifyPayment(parseInt(req.params.id, 10));
+const reviewPayment = async (req, res) => {
+  const result = await subscriptionService.reviewPayment(parseInt(req.params.id, 10), req.body.decision);
   res.json({ ok: true, ...result });
 };
 
-const rejectPayment = async (req, res) => {
-  const payment = await subscriptionService.rejectPayment(parseInt(req.params.id, 10));
-  res.json({ ok: true, payment });
+const getPaymentProof = async (req, res) => {
+  const { buffer, filename, mimeType } = await subscriptionService.getPaymentProof(parseInt(req.params.id, 10));
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(buffer);
 };
 
 // Jobs
@@ -142,5 +143,5 @@ module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reportPayment, verifyPayment, rejectPayment,
+  reviewPayment, getPaymentProof,
 };

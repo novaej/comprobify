@@ -8,6 +8,9 @@ const requireMatchingEnvironment = require('../middleware/require-matching-envir
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_LANGUAGES } = require('../locales');
 const { SUPPORTED_TYPES } = require('../builders');
+const TIERS = require('../constants/subscription-tiers');
+
+const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 
 const router = Router();
 
@@ -36,6 +39,14 @@ const promoteValidator = [
     .optional()
     .isInt({ min: 1 })
     .withMessage('each initialSequentials entry must have a sequential >= 1'),
+  body('tier')
+    .optional()
+    .isIn(PAID_TIERS)
+    .withMessage(`tier must be one of: ${PAID_TIERS.join(', ')}`),
+  body('billingInterval')
+    .optional()
+    .isIn(['MONTHLY', 'YEARLY'])
+    .withMessage('billingInterval must be one of: MONTHLY, YEARLY'),
 ];
 
 router.get('/me', readLimiter, requireMatchingEnvironment, asyncHandler(controller.getMe));

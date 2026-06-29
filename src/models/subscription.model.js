@@ -7,12 +7,12 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'canceled_at',
 ]);
 
-async function create({ tenantId, tier }) {
+async function create({ tenantId, tier, billingInterval = 'MONTHLY' }) {
   const { rows } = await db.query(
-    `INSERT INTO subscriptions (tenant_id, tier)
-     VALUES ($1, $2)
+    `INSERT INTO subscriptions (tenant_id, tier, billing_interval)
+     VALUES ($1, $2, $3)
      RETURNING *`,
-    [tenantId, tier]
+    [tenantId, tier, billingInterval]
   );
   return rows[0];
 }

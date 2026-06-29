@@ -32,6 +32,20 @@ export default defineConfig({
             ],
           },
           {
+            text: 'Tiers',
+            collapsed: false,
+            items: [
+              { text: 'Get Tiers', link: '/endpoints/get-tiers' },
+            ],
+          },
+          {
+            text: 'Payments',
+            collapsed: false,
+            items: [
+              { text: 'Submit Payment Proof', link: '/endpoints/submit-payment-proof' },
+            ],
+          },
+          {
             text: 'Tenants',
             collapsed: false,
             items: [

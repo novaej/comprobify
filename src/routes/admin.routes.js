@@ -35,9 +35,8 @@ router.post('/tenants/:id/subscriptions',       v.createSubscription, validateRe
 router.get('/tenants/:id/subscriptions',        v.listSubscriptions,  validateRequest, asyncHandler(controller.listSubscriptions));
 router.patch('/subscriptions/:id/link-invoice', v.linkInvoice,        validateRequest, asyncHandler(controller.linkInvoice));
 router.patch('/subscriptions/:id/cancel',       v.cancelSubscription, validateRequest, asyncHandler(controller.cancelSubscription));
-router.patch('/payments/:id/report',            v.paymentAction,      validateRequest, asyncHandler(controller.reportPayment));
-router.patch('/payments/:id/verify',            v.paymentAction,      validateRequest, asyncHandler(controller.verifyPayment));
-router.patch('/payments/:id/reject',            v.paymentAction,      validateRequest, asyncHandler(controller.rejectPayment));
+router.patch('/payments/:id/review',            v.reviewPayment,      validateRequest, asyncHandler(controller.reviewPayment));
+router.get('/payments/:id/proof',               v.getPaymentProof,    validateRequest, asyncHandler(controller.getPaymentProof));
 
 // Jobs
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));
