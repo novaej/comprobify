@@ -120,6 +120,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `LAST_ISSUER_CANNOT_BE_REMOVED` | Tenant has only one active issuer left — it cannot be removed |
 | `ISSUER_HAS_DOCUMENTS` | Issuer has issued documents (in either environment) and cannot be removed |
 | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` is not greater than the counter's current value |
+| `TIER_CHANGE_NO_OP` | Requested tier on Change Tier matches the subscription's current tier |
 | `BAD_REQUEST` | Other malformed request (fallback — read `detail`) |
 
 ### 401 Unauthorized
@@ -166,6 +167,8 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 |---|---|
 | `ALREADY_VERIFIED` | Attempting to resend verification to an already-verified account |
 | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | Tenant already has a subscription in progress (promotion with `tier`, or Admin's Create Subscription) |
+| `NO_ACTIVE_SUBSCRIPTION` | Change Tier requested but the tenant has no `ACTIVE` subscription |
+| `TIER_CHANGE_ALREADY_PENDING` | A downgrade is already scheduled, or an upgrade payment is already in flight, for this subscription |
 | `CONFLICT` | Idempotency key reused with a different payload, payment already decided, or other conflict |
 
 ### 429 Too Many Requests

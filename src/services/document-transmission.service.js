@@ -121,6 +121,12 @@ async function checkAuthorization(accessKey, issuer) {
       subscriptionService.activateIfLinked(updated.id)
         .catch(err => console.warn('Subscription activation check failed:', err.message));
 
+      // Fire-and-forget: apply a pending tier-change upgrade if this document
+      // is its linked self-billed invoice. No-op for the vast majority of
+      // documents, which aren't linked to any tier-change payment.
+      subscriptionService.applyTierChangeIfLinked(updated.id)
+        .catch(err => console.warn('Tier change check failed:', err.message));
+
       emailService.sendInvoiceAuthorized(updated)
         .then(({ sent, messageId }) => {
           const emailFields = sent

@@ -92,6 +92,12 @@ const ErrorCodes = Object.freeze({
   PAYMENT_NOT_FOUND: 'PAYMENT_NOT_FOUND',
   /** Tenant already has a subscription in flight (not ACTIVE/CANCELLED/EXPIRED) */
   SUBSCRIPTION_ALREADY_IN_FLIGHT: 'SUBSCRIPTION_ALREADY_IN_FLIGHT',
+  /** Tier change requested but the tenant has no ACTIVE subscription */
+  NO_ACTIVE_SUBSCRIPTION: 'NO_ACTIVE_SUBSCRIPTION',
+  /** Requested tier is the same as the subscription's current tier */
+  TIER_CHANGE_NO_OP: 'TIER_CHANGE_NO_OP',
+  /** A tier change (upgrade payment or scheduled downgrade) is already in flight for this subscription */
+  TIER_CHANGE_ALREADY_PENDING: 'TIER_CHANGE_ALREADY_PENDING',
 
   // --- Webhook endpoints ---
   /** Tenant has reached the maximum number of webhook endpoints for their plan */

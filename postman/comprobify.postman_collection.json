@@ -439,6 +439,39 @@
             },
             "description": "Tenant-authenticated (your own API key). Returns your full subscription history, newest first, each with its payments nested (status, amount, rejection_reason if rejected). The proof file itself is never included — only filename/mime type.\n\nThis is how you find out a paid-tier upgrade landed — there's no notification; `subscriptionTier`/`documentQuota` on `GET /v1/tenants/me` update automatically once it does, but this endpoint shows the in-between states (and the `rejection_reason` if a proof was rejected, so you know what to fix before re-uploading via Submit Payment Proof)."
           }
+        },
+        {
+          "name": "Change Tier (Upgrade/Downgrade)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/subscriptions/change-tier",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "subscriptions",
+                "change-tier"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"GROWTH\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Tenant-authenticated (your own API key). Changes the tier on your existing ACTIVE subscription — requires having already promoted with a paid tier (see Promote to Production / Admin > Create Subscription). No payment gateway exists, so this rides the same manual proof/review pipeline as the initial subscription rather than charging anything automatically.\n\n**Upgrade** (target tier's price higher than your current one): takes effect immediately once paid. The response includes a prorated `payment` (the price difference scaled by the remaining time in your current billing period) and `bankTransfer` instructions — upload proof via the same Submit Payment Proof endpoint used for your initial subscription. If the prorated amount rounds to $0 (almost no time left in the period), it's applied immediately with no payment step at all.\n\n**Downgrade** (target tier's price lower): scheduled, not immediate, and needs no payment — you already paid for the current period at the higher tier. Your tier/quota stay exactly as they are until `current_period_end`, at which point it's applied automatically by the provider's scheduled job.\n\nFails with 409 `NO_ACTIVE_SUBSCRIPTION` if you have no ACTIVE subscription, 400 `TIER_CHANGE_NO_OP` if `tier` matches your current one, or 409 `TIER_CHANGE_ALREADY_PENDING` if a change is already in flight (only one at a time).\n\nPoll `GET /v1/subscriptions/me` to see status, and `GET /v1/tenants/me` once it lands."
+          }
         }
       ]
     },

@@ -40,5 +40,6 @@ router.get('/payments/:id/proof',               v.getPaymentProof,    validateRe
 
 // Jobs
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));
+router.post('/jobs/subscriptions', asyncHandler(controller.runSubscriptionJobs));
 
 module.exports = router;

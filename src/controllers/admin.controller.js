@@ -143,9 +143,26 @@ const runNotificationJobs = async (req, res) => {
   res.json({ ok: true, ...result });
 };
 
+/**
+ * POST /api/admin/jobs/subscriptions
+ *
+ * Applies every subscription downgrade scheduled via the tenant-facing
+ * change-tier endpoint whose current_period_end has passed. Upgrades apply
+ * immediately on invoice authorization and need no scheduled job — only
+ * downgrades wait for the period to end.
+ *
+ * Designed to be called by an external scheduler on a daily cadence (no need
+ * for the minute-level frequency the notification job uses).
+ */
+const runSubscriptionJobs = async (req, res) => {
+  const result = await subscriptionService.applyScheduledTierChanges();
+  res.json({ ok: true, ...result });
+};
+
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
+  runSubscriptionJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof,
 };
