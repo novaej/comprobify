@@ -307,7 +307,11 @@ The document quota is shared across all branches and document types, and counts 
 
 ### Upgrading to a paid plan
 
-1. **Request a tier at promotion.** Call [`POST /v1/tenants/promote`](endpoints/promote-tenant.md) with `{ "tier": "STARTER" }` (or `GROWTH`/`BUSINESS`, optionally `"billingInterval": "YEARLY"`). Promotion to production happens immediately either way — you're never blocked waiting on payment. The response includes `payment` and `bankTransfer` (bank name, account number, account holder) for the SPI transfer amount.
+1. **Request a tier.** Two ways to do this:
+   - [`POST /v1/subscriptions`](endpoints/create-subscription.md) with `{ "tier": "STARTER" }` (or `GROWTH`/`BUSINESS`, optionally `"billingInterval": "YEARLY"`) — works even while still in sandbox, so you can start paying before you ever promote.
+   - Or call [`POST /v1/tenants/promote`](endpoints/promote-tenant.md) with the same body, to request a tier in the same call as promoting. Promotion to production happens immediately either way — you're never blocked waiting on payment.
+
+   Either way, the response includes `payment` and `bankTransfer` (bank name, account number, account holder) for the SPI transfer amount. If you already started a subscription via `POST /v1/subscriptions` and it's already `ACTIVE` by the time you promote, `promote`'s `tier`/`billingInterval` fields are ignored — it just surfaces that existing subscription instead.
 2. **Send the transfer**, then **upload proof of it**: [`PATCH /v1/payments/:id/proof`](endpoints/submit-payment-proof.md) (multipart — a screenshot or PDF of the receipt), using the `payment.id` from step 1.
 3. **Wait for review.** Your provider checks the proof against the bank and verifies or rejects it, then self-bills and authorizes the invoice for that period. There's no notification for this yet — poll [`GET /v1/subscriptions/me`](endpoints/get-my-subscriptions.md) to see the in-between state, or [`GET /v1/tenants/me`](endpoints/tenant-me.md) for just the end result; `subscriptionTier`/`documentQuota` update automatically the moment it completes.
 4. **If it's rejected**, `GET /v1/subscriptions/me` shows a `rejection_reason` (e.g. "transfer not reflected yet"). Fix whatever it flagged and repeat step 2 for the *same* `payment.id` — rejection isn't a dead end.

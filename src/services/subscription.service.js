@@ -4,6 +4,7 @@ const documentModel = require('../models/document.model');
 const tenantModel = require('../models/tenant.model');
 const tenantEventModel = require('../models/tenant-event.model');
 const TIERS = require('../constants/subscription-tiers');
+const TenantStatus = require('../constants/tenant-status');
 const config = require('../config');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
@@ -55,6 +56,24 @@ async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
   await tenantEventModel.create(tenant.id, 'SUBSCRIPTION_CREATED', { subscriptionId: subscription.id, tier, billingInterval });
 
   return { subscription, payment, bankTransfer: config.bankTransfer };
+}
+
+// Tenant-facing entry point for starting a subscription on its own, independent of
+// `tenant.service.js`'s promote() — usable while still in sandbox (so promotion later
+// has nothing left to ask) or any time after. Mirrors the same email-verified gate
+// promote() already enforces, since paying requires a verified address on file.
+async function createSubscriptionForTenant(tenantId, tier, billingInterval = 'MONTHLY') {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+  if (tenant.status !== TenantStatus.ACTIVE) {
+    throw new AppError(
+      'Email verification is required before starting a subscription. Check your inbox.',
+      403,
+      ErrorCodes.EMAIL_VERIFICATION_REQUIRED
+    );
+  }
+
+  return createSubscription(tenantId, tier, billingInterval);
 }
 
 // Tenant-initiated tier change on an already-ACTIVE subscription. Upgrades take
@@ -391,6 +410,7 @@ async function getStatusForTenant(tenantId) {
 
 module.exports = {
   createSubscription,
+  createSubscriptionForTenant,
   requestTierChange,
   submitPaymentProof,
   getPaymentProof,
