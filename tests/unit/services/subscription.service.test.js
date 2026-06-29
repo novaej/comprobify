@@ -3,16 +3,30 @@ jest.mock('../../../src/models/payment.model');
 jest.mock('../../../src/models/document.model');
 jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/tenant-event.model');
+jest.mock('../../../src/services/notification.service');
+jest.mock('../../../src/services/email.service');
 
 const subscriptionModel = require('../../../src/models/subscription.model');
 const paymentModel = require('../../../src/models/payment.model');
 const documentModel = require('../../../src/models/document.model');
 const tenantModel = require('../../../src/models/tenant.model');
 const tenantEventModel = require('../../../src/models/tenant-event.model');
+const notificationService = require('../../../src/services/notification.service');
+const emailService = require('../../../src/services/email.service');
 const config = require('../../../src/config');
 const subscriptionService = require('../../../src/services/subscription.service');
 
 describe('SubscriptionService', () => {
+  beforeEach(() => {
+    notificationService.createPaymentReviewed.mockResolvedValue(null);
+    notificationService.createSubscriptionRenewalDue.mockResolvedValue(null);
+    notificationService.createSubscriptionExpired.mockResolvedValue(null);
+    emailService.sendPaymentProofSubmitted.mockResolvedValue({ sent: false });
+    emailService.sendPaymentReviewed.mockResolvedValue({ sent: true });
+    emailService.sendSubscriptionRenewalDue.mockResolvedValue({ sent: true });
+    emailService.sendSubscriptionExpired.mockResolvedValue({ sent: true });
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -282,10 +296,12 @@ describe('SubscriptionService', () => {
   });
 
   describe('applyScheduledTierChanges', () => {
-    test('applies every due downgrade and reports the count', async () => {
+    test('applies every due downgrade, rolls the period forward, and reports the count', async () => {
+      const periodEnd1 = new Date('2026-06-15T00:00:00Z');
+      const periodEnd2 = new Date('2026-06-20T00:00:00Z');
       subscriptionModel.findDuePendingDowngrades.mockResolvedValue([
-        { id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: 'STARTER' },
-        { id: 11, tenant_id: 2, tier: 'BUSINESS', pending_tier: 'GROWTH' },
+        { id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd1 },
+        { id: 11, tenant_id: 2, tier: 'BUSINESS', pending_tier: 'GROWTH', billing_interval: 'YEARLY', current_period_end: periodEnd2 },
       ]);
 
       const result = await subscriptionService.applyScheduledTierChanges();
@@ -297,6 +313,19 @@ describe('SubscriptionService', () => {
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
         subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER',
       });
+
+      // Rolled forward from the OLD current_period_end, not "now" — +1 month for
+      // subscription 10 (MONTHLY), +1 year for subscription 11 (YEARLY).
+      const call10 = subscriptionModel.updateStatus.mock.calls.find((c) => c[0] === 10);
+      expect(call10[1]).toBe('ACTIVE');
+      expect(call10[2].current_period_start).toEqual(periodEnd1);
+      expect(call10[2].current_period_end.getMonth()).toBe((periodEnd1.getMonth() + 1) % 12);
+
+      const call11 = subscriptionModel.updateStatus.mock.calls.find((c) => c[0] === 11);
+      expect(call11[1]).toBe('ACTIVE');
+      expect(call11[2].current_period_start).toEqual(periodEnd2);
+      expect(call11[2].current_period_end.getFullYear()).toBe(periodEnd2.getFullYear() + 1);
+
       expect(result).toEqual({ applied: 2 });
     });
 
@@ -307,6 +336,129 @@ describe('SubscriptionService', () => {
 
       expect(result).toEqual({ applied: 0 });
       expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('processDueRenewals', () => {
+    beforeEach(() => {
+      subscriptionModel.findDueForRenewalReminder.mockResolvedValue([]);
+      subscriptionModel.findExpiredPastGrace.mockResolvedValue([]);
+    });
+
+    test('opens a renewal payment, logs RENEWAL_DUE, and notifies the tenant', async () => {
+      const periodEnd = new Date('2026-07-06T00:00:00Z');
+      subscriptionModel.findDueForRenewalReminder.mockResolvedValue([
+        { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
+      ]);
+      paymentModel.create.mockResolvedValue({ id: 40, subscription_id: 10, amount: 19, purpose: 'RENEWAL' });
+
+      const result = await subscriptionService.processDueRenewals();
+
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 19, purpose: 'RENEWAL' });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'RENEWAL_DUE', {
+        subscriptionId: 10, paymentId: 40, tier: 'STARTER', currentPeriodEnd: periodEnd,
+      });
+      expect(notificationService.createSubscriptionRenewalDue).toHaveBeenCalledWith(
+        { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
+        { id: 40, subscription_id: 10, amount: 19, purpose: 'RENEWAL' },
+      );
+      expect(emailService.sendSubscriptionRenewalDue).toHaveBeenCalledWith(
+        { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
+        { id: 40, subscription_id: 10, amount: 19, purpose: 'RENEWAL' },
+      );
+      expect(result).toEqual({ remindersSent: 1, expired: 0 });
+    });
+
+    test('prices the renewal from priceYearlyUsd when billing_interval is YEARLY', async () => {
+      subscriptionModel.findDueForRenewalReminder.mockResolvedValue([
+        { id: 10, tenant_id: 1, tier: 'GROWTH', billing_interval: 'YEARLY', current_period_end: new Date() },
+      ]);
+      paymentModel.create.mockResolvedValue({ id: 40 });
+
+      await subscriptionService.processDueRenewals();
+
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 790, purpose: 'RENEWAL' });
+    });
+
+    test('downgrades an expired subscription to FREE, logs SUBSCRIPTION_EXPIRED, and notifies the tenant', async () => {
+      subscriptionModel.findExpiredPastGrace.mockResolvedValue([
+        { id: 10, tenant_id: 1, tier: 'GROWTH' },
+      ]);
+      subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'EXPIRED' });
+
+      const result = await subscriptionService.processDueRenewals();
+
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'FREE', 5);
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(10, 'EXPIRED');
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'SUBSCRIPTION_EXPIRED', {
+        subscriptionId: 10, previousTier: 'GROWTH',
+      });
+      expect(notificationService.createSubscriptionExpired).toHaveBeenCalledWith({ id: 10, tenant_id: 1, tier: 'GROWTH' });
+      expect(emailService.sendSubscriptionExpired).toHaveBeenCalledWith({ id: 10, tenant_id: 1, tier: 'GROWTH' });
+      expect(result).toEqual({ remindersSent: 0, expired: 1 });
+    });
+
+    test('reports zero/zero when nothing is due either way', async () => {
+      const result = await subscriptionService.processDueRenewals();
+
+      expect(result).toEqual({ remindersSent: 0, expired: 0 });
+      expect(paymentModel.create).not.toHaveBeenCalled();
+      expect(tenantModel.updateTier).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('applyRenewalIfLinked', () => {
+    test('is a no-op when no payment is linked to the document', async () => {
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue(null);
+
+      const result = await subscriptionService.applyRenewalIfLinked(999);
+
+      expect(result).toBeNull();
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    test('is a no-op for a non-RENEWAL payment', async () => {
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({ id: 40, purpose: 'TIER_CHANGE', status: 'VERIFIED' });
+
+      const result = await subscriptionService.applyRenewalIfLinked(999);
+
+      expect(result).toBeNull();
+    });
+
+    test('is a no-op when the payment is not yet VERIFIED', async () => {
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({ id: 40, purpose: 'RENEWAL', status: 'REPORTED' });
+
+      const result = await subscriptionService.applyRenewalIfLinked(999);
+
+      expect(result).toBeNull();
+    });
+
+    test('extends the period from the OLD current_period_end, stamps the payment, and logs SUBSCRIPTION_RENEWED', async () => {
+      const oldPeriodEnd = new Date('2026-07-01T00:00:00Z');
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
+        id: 40, subscription_id: 10, purpose: 'RENEWAL', status: 'VERIFIED',
+      });
+      subscriptionModel.findById.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: oldPeriodEnd,
+      });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'ACTIVE' });
+
+      const result = await subscriptionService.applyRenewalIfLinked(999);
+
+      const [, , extra] = subscriptionModel.updateStatus.mock.calls[0];
+      expect(extra.current_period_start).toEqual(oldPeriodEnd);
+      const monthsApart = (extra.current_period_end.getFullYear() - extra.current_period_start.getFullYear()) * 12
+        + (extra.current_period_end.getMonth() - extra.current_period_start.getMonth());
+      expect(monthsApart).toBe(1);
+
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(40, 'VERIFIED', {
+        period_start: extra.current_period_start,
+        period_end: extra.current_period_end,
+      });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'SUBSCRIPTION_RENEWED', {
+        subscriptionId: 10, tier: 'STARTER', periodStart: extra.current_period_start, periodEnd: extra.current_period_end,
+      });
+      expect(result).toEqual({ id: 10, status: 'ACTIVE' });
     });
   });
 
@@ -369,6 +521,21 @@ describe('SubscriptionService', () => {
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REPORTED', { paymentId: 20 });
       expect(result).toEqual({ id: 20, status: 'REPORTED' });
     });
+
+    test('notifies the operator (fire-and-forget) with the tenant that owns the payment', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
+      tenantModel.findById.mockResolvedValue({ id: 1, email: 'tenant@example.com' });
+
+      await subscriptionService.submitPaymentProof(20, 1, proof);
+
+      expect(emailService.sendPaymentProofSubmitted).toHaveBeenCalledWith(
+        { id: 20, status: 'REPORTED' },
+        { id: 10, tenant_id: 1 },
+        { id: 1, email: 'tenant@example.com' },
+      );
+    });
   });
 
   describe('getPaymentProof', () => {
@@ -407,6 +574,12 @@ describe('SubscriptionService', () => {
       expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(10, 'PAYMENT_RECEIVED');
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_VERIFIED', { paymentId: 20 });
       expect(result.subscription).toEqual({ id: 10, status: 'PAYMENT_RECEIVED' });
+      expect(notificationService.createPaymentReviewed).toHaveBeenCalledWith(
+        { id: 20, status: 'VERIFIED' }, { id: 10, status: 'PAYMENT_RECEIVED' }, 'VERIFIED',
+      );
+      expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(
+        { id: 20, status: 'VERIFIED' }, { id: 10, status: 'PAYMENT_RECEIVED' }, 'VERIFIED',
+      );
     });
 
     test('REJECTED leaves the subscription untouched and stores the rejection reason', async () => {
@@ -422,6 +595,12 @@ describe('SubscriptionService', () => {
       expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REJECTED', { paymentId: 20 });
       expect(result.subscription).toEqual({ id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' });
+      expect(notificationService.createPaymentReviewed).toHaveBeenCalledWith(
+        { id: 20, status: 'REJECTED' }, { id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' }, 'REJECTED',
+      );
+      expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(
+        { id: 20, status: 'REJECTED' }, { id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' }, 'REJECTED',
+      );
     });
 
     test('rejects when the payment does not exist', async () => {
@@ -587,6 +766,44 @@ describe('SubscriptionService', () => {
 
       expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
       expect(result).toEqual({ id: 10, tier: 'GROWTH' });
+    });
+
+    test('links a VERIFIED RENEWAL payment to its own invoice_document_id, leaving the subscription untouched', async () => {
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER' });
+      documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'RECEIVED' });
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
+      paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue({
+        id: 40, subscription_id: 10, status: 'VERIFIED',
+      });
+
+      const result = await subscriptionService.linkInvoice(10, accessKey);
+
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(40, 'VERIFIED', { invoice_document_id: 999 });
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'INVOICE_LINKED', { subscriptionId: 10, paymentId: 40, documentId: 999 });
+      expect(result).toEqual({ id: 10, tenant_id: 1, tier: 'STARTER' });
+    });
+
+    test('extends the period immediately when the linked RENEWAL invoice is already AUTHORIZED', async () => {
+      const oldPeriodEnd = new Date('2026-07-01T00:00:00Z');
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: oldPeriodEnd });
+      documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'AUTHORIZED' });
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
+      paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue({
+        id: 40, subscription_id: 10, status: 'VERIFIED',
+      });
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
+        id: 40, subscription_id: 10, purpose: 'RENEWAL', status: 'VERIFIED',
+      });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'ACTIVE' });
+
+      const result = await subscriptionService.linkInvoice(10, accessKey);
+
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(10, 'ACTIVE', {
+        current_period_start: oldPeriodEnd,
+        current_period_end: expect.any(Date),
+      });
+      expect(result).toEqual({ id: 10, status: 'ACTIVE' });
     });
   });
 

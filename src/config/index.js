@@ -41,6 +41,11 @@ const config = {
     accountHolder:  process.env.BANK_TRANSFER_ACCOUNT_HOLDER  || '',
     identification: process.env.BANK_TRANSFER_IDENTIFICATION  || '',
   },
+  // Where the operator gets notified that a tenant uploaded payment proof and
+  // needs review. Optional — unset means that notification email is skipped
+  // (mirrors the SENTRY_DSN optional pattern), since it's an operational
+  // convenience, not something tenant-facing behavior depends on.
+  adminNotificationEmail: process.env.ADMIN_NOTIFICATION_EMAIL || '',
 };
 
 module.exports = config;

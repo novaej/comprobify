@@ -92,7 +92,7 @@ Only one tier change can be outstanding at a time — request another before the
 
 ## What happens next
 
-There's no notification when the upgrade's payment review/invoice authorization completes, or when a downgrade's scheduled job runs. Poll [`GET /v1/subscriptions/me`](get-my-subscriptions.md) for status, or [`GET /v1/tenants/me`](tenant-me.md) for just the resulting tier/quota once it lands.
+You'll get a `PAYMENT_VERIFIED`/`PAYMENT_REJECTED` notification and email when the upgrade's payment review completes (see [Notifications](notifications.md)) — there's still no notification for a downgrade's scheduled tier flip, since nothing was paid or rejected for that to fire on. Poll [`GET /v1/subscriptions/me`](get-my-subscriptions.md) for status, or [`GET /v1/tenants/me`](tenant-me.md) for just the resulting tier/quota once it lands.
 
 ## Errors
 

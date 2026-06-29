@@ -3,6 +3,8 @@ const paymentModel = require('../models/payment.model');
 const documentModel = require('../models/document.model');
 const tenantModel = require('../models/tenant.model');
 const tenantEventModel = require('../models/tenant-event.model');
+const notificationService = require('./notification.service');
+const emailService = require('./email.service');
 const TIERS = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const config = require('../config');
@@ -15,12 +17,39 @@ const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 const BILLING_INTERVALS = ['MONTHLY', 'YEARLY'];
 const DECISIONS = ['VERIFIED', 'REJECTED'];
 
+// How far ahead of current_period_end a renewal payment is opened and the
+// tenant is reminded. How long past current_period_end a subscription can go
+// with no verified renewal before it's downgraded to FREE. See processDueRenewals.
+const RENEWAL_REMINDER_DAYS = 7;
+const RENEWAL_GRACE_DAYS = 7;
+
 // Never echo the raw file bytes back in a JSON response — the caller just sent it
 // (submitPaymentProof) or doesn't need it (reviewPayment). GET .../proof streams it.
 function omitProofFile(payment) {
   if (!payment) return payment;
   const { proof_file, ...rest } = payment;
   return rest;
+}
+
+// Shared period math for activation, renewal, and the free period-rollover a
+// downgrade gets. Always advances from a fixed anchor date (never "now") so
+// repeated calls can't drift the billing date earlier or later than intended.
+function addBillingPeriod(fromDate, billingInterval) {
+  const next = new Date(fromDate);
+  if (billingInterval === 'YEARLY') {
+    next.setFullYear(next.getFullYear() + 1);
+  } else {
+    next.setMonth(next.getMonth() + 1);
+  }
+  return next;
+}
+
+// Fire-and-forget side effect, swallowed and logged — mirrors the pattern
+// already used for notification/email side effects in
+// document-transmission.service.js. Never lets an email/notification failure
+// surface as an error to the caller.
+function fireAndForget(promise, label) {
+  promise.catch((err) => console.warn(`[subscription] ${label} failed:`, err.message));
 }
 
 async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
@@ -202,6 +231,11 @@ async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeT
 
   await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REPORTED', { paymentId });
 
+  // Fire-and-forget: let the operator know there's a proof to review. No-op
+  // (resolves { sent: false }) if ADMIN_NOTIFICATION_EMAIL isn't configured.
+  const tenant = await tenantModel.findById(tenantId);
+  fireAndForget(emailService.sendPaymentProofSubmitted(updated, subscription, tenant), 'Payment proof submitted email');
+
   return omitProofFile(updated);
 }
 
@@ -234,6 +268,12 @@ async function reviewPayment(paymentId, decision, rejectionReason = null) {
 
   await tenantEventModel.create(subscription.tenant_id, decision === 'VERIFIED' ? 'PAYMENT_VERIFIED' : 'PAYMENT_REJECTED', { paymentId });
 
+  // Fire-and-forget: tell the tenant the outcome — there's no other notification
+  // for this, see GET /v1/subscriptions/me docs. Covers every payment purpose
+  // (INITIAL, TIER_CHANGE, RENEWAL) uniformly; only the wording adapts.
+  fireAndForget(notificationService.createPaymentReviewed(updatedPayment, updatedSubscription, decision), 'Payment reviewed notification');
+  fireAndForget(emailService.sendPaymentReviewed(updatedPayment, updatedSubscription, decision), 'Payment reviewed email');
+
   return { payment: omitProofFile(updatedPayment), subscription: updatedSubscription };
 }
 
@@ -265,6 +305,24 @@ async function linkInvoice(subscriptionId, accessKey) {
     return subscription;
   }
 
+  // Same idea, but for a renewal payment opened by processDueRenewals ahead of
+  // current_period_end — link to the payment, not the subscription's own
+  // invoice_document_id (already spent on initial activation).
+  const pendingRenewal = await paymentModel.findPendingRenewalBySubscriptionId(subscriptionId);
+  if (pendingRenewal && pendingRenewal.status === 'VERIFIED') {
+    await paymentModel.updateStatus(pendingRenewal.id, 'VERIFIED', { invoice_document_id: document.id });
+    await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
+      subscriptionId, paymentId: pendingRenewal.id, documentId: document.id,
+    });
+
+    if (document.status === 'AUTHORIZED') {
+      const applied = await applyRenewalIfLinked(document.id);
+      if (applied) return applied;
+    }
+
+    return subscription;
+  }
+
   let updated = await subscriptionModel.updateStatus(subscriptionId, 'INVOICE_PROCESSING', {
     invoice_document_id: document.id,
   });
@@ -290,12 +348,7 @@ async function activateIfLinked(documentId) {
   }
 
   const periodStart = new Date();
-  const periodEnd = new Date(periodStart);
-  if (subscription.billing_interval === 'YEARLY') {
-    periodEnd.setFullYear(periodEnd.getFullYear() + 1);
-  } else {
-    periodEnd.setMonth(periodEnd.getMonth() + 1);
-  }
+  const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
 
   const updated = await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
     current_period_start: periodStart,
@@ -359,15 +412,64 @@ async function applyTierChangeIfLinked(documentId) {
   return updated;
 }
 
+// Mirrors activateIfLinked, but extends the existing period instead of opening
+// a first one. Anchored to the OLD current_period_end (not "now") so an early
+// or late admin review can't drift the billing date — back-to-back periods,
+// no gap and no overlap.
+async function applyRenewalIfLinked(documentId) {
+  const payment = await paymentModel.findByInvoiceDocumentId(documentId);
+  if (!payment || payment.purpose !== 'RENEWAL' || payment.status !== 'VERIFIED') {
+    return null;
+  }
+
+  const subscription = await subscriptionModel.findById(payment.subscription_id);
+  if (!subscription) return null;
+
+  const periodStart = new Date(subscription.current_period_end);
+  const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+
+  const updated = await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
+    current_period_start: periodStart,
+    current_period_end: periodEnd,
+  });
+
+  await paymentModel.updateStatus(payment.id, payment.status, {
+    period_start: periodStart,
+    period_end: periodEnd,
+  });
+
+  await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_RENEWED', {
+    subscriptionId: subscription.id,
+    tier: subscription.tier,
+    periodStart,
+    periodEnd,
+  });
+
+  return updated;
+}
+
 // Applies every downgrade scheduled via requestTierChange whose
 // current_period_end has passed. Called by the admin job (POST
 // /v1/admin/jobs/subscriptions), same pattern as
 // notification-scheduler.service.js's runAll().
+//
+// Also rolls the period forward (anchored to the OLD current_period_end, same
+// as applyRenewalIfLinked) so the subscription re-enters the renewal cycle at
+// its new, lower tier instead of sitting on a current_period_end already in
+// the past — a downgrade owes no payment, but it still needs a fresh period or
+// processDueRenewals would immediately treat it as expired.
 async function applyScheduledTierChanges() {
   const due = await subscriptionModel.findDuePendingDowngrades();
 
   for (const subscription of due) {
+    const periodStart = new Date(subscription.current_period_end);
+    const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+
     await subscriptionModel.applyTierChange(subscription.id, subscription.pending_tier);
+    await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
+      current_period_start: periodStart,
+      current_period_end: periodEnd,
+    });
     await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier, TIERS[subscription.pending_tier].documentQuota);
     await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
       subscriptionId: subscription.id,
@@ -377,6 +479,61 @@ async function applyScheduledTierChanges() {
   }
 
   return { applied: due.length };
+}
+
+// Opens a renewal payment + notifies the tenant ahead of current_period_end,
+// and downgrades to FREE any subscription that ran past its grace period with
+// no verified renewal. Called by the same admin job as applyScheduledTierChanges
+// (POST /v1/admin/jobs/subscriptions) — that one must run first in the same
+// tick so a just-rolled-forward downgrade isn't mistaken for an expired renewal.
+async function processDueRenewals() {
+  const dueForReminder = await subscriptionModel.findDueForRenewalReminder(RENEWAL_REMINDER_DAYS);
+  for (const subscription of dueForReminder) {
+    await createRenewalReminder(subscription);
+  }
+
+  const dueForExpiry = await subscriptionModel.findExpiredPastGrace(RENEWAL_GRACE_DAYS);
+  for (const subscription of dueForExpiry) {
+    await expireSubscription(subscription);
+  }
+
+  return { remindersSent: dueForReminder.length, expired: dueForExpiry.length };
+}
+
+async function createRenewalReminder(subscription) {
+  const priceField = subscription.billing_interval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
+  const amount = TIERS[subscription.tier][priceField];
+
+  const payment = await paymentModel.create({
+    subscriptionId: subscription.id,
+    amount,
+    purpose: 'RENEWAL',
+  });
+
+  await tenantEventModel.create(subscription.tenant_id, 'RENEWAL_DUE', {
+    subscriptionId: subscription.id,
+    paymentId: payment.id,
+    tier: subscription.tier,
+    currentPeriodEnd: subscription.current_period_end,
+  });
+
+  fireAndForget(notificationService.createSubscriptionRenewalDue(subscription, payment), 'Renewal due notification');
+  fireAndForget(emailService.sendSubscriptionRenewalDue(subscription, payment), 'Renewal due email');
+}
+
+async function expireSubscription(subscription) {
+  await tenantModel.updateTier(subscription.tenant_id, 'FREE', TIERS.FREE.documentQuota);
+  const updated = await subscriptionModel.updateStatus(subscription.id, 'EXPIRED');
+
+  await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_EXPIRED', {
+    subscriptionId: subscription.id,
+    previousTier: subscription.tier,
+  });
+
+  fireAndForget(notificationService.createSubscriptionExpired(subscription), 'Subscription expired notification');
+  fireAndForget(emailService.sendSubscriptionExpired(subscription), 'Subscription expired email');
+
+  return updated;
 }
 
 async function cancelSubscription(subscriptionId) {
@@ -418,7 +575,9 @@ module.exports = {
   linkInvoice,
   activateIfLinked,
   applyTierChangeIfLinked,
+  applyRenewalIfLinked,
   applyScheduledTierChanges,
+  processDueRenewals,
   cancelSubscription,
   listByTenant,
   getStatusForTenant,

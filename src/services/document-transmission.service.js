@@ -127,6 +127,12 @@ async function checkAuthorization(accessKey, issuer) {
       subscriptionService.applyTierChangeIfLinked(updated.id)
         .catch(err => console.warn('Tier change check failed:', err.message));
 
+      // Fire-and-forget: extend the billing period if this document is the
+      // linked self-billed invoice for a renewal payment. No-op for the vast
+      // majority of documents, which aren't linked to any renewal payment.
+      subscriptionService.applyRenewalIfLinked(updated.id)
+        .catch(err => console.warn('Subscription renewal check failed:', err.message));
+
       emailService.sendInvoiceAuthorized(updated)
         .then(({ sent, messageId }) => {
           const emailFields = sent

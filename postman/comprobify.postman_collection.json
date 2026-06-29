@@ -413,7 +413,7 @@
                 }
               ]
             },
-            "description": "Tenant-authenticated (your own API key, not admin_secret). Upload proof of the SPI bank transfer (PNG/JPEG/GIF/PDF, max 2 MB) for a payment you created via promotion or Admin's Create Subscription. Moves the payment to REPORTED. Fails if the payment isn't yours, or has already been VERIFIED/REJECTED.\n\nAfter this, the operator reviews the proof (Admin > Review Payment) and verifies or rejects it."
+            "description": "Tenant-authenticated (your own API key, not admin_secret). Upload proof of the SPI bank transfer (PNG/JPEG/GIF/PDF, max 2 MB) for a payment you created via promotion, Create Subscription, Change Tier, or a renewal reminder. Moves the payment to REPORTED. Fails if the payment isn't yours, or has already been VERIFIED/REJECTED.\n\nEmails the operator (if ADMIN_NOTIFICATION_EMAIL is configured) that a proof is waiting. After this, the operator reviews the proof (Admin > Review Payment) and verifies or rejects it — you'll get an email either way."
           }
         }
       ]

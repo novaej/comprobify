@@ -419,7 +419,7 @@
                 }
               ]
             },
-            "description": "Tenant-authenticated (your own API key, not admin_secret). Upload proof of the SPI bank transfer (PNG/JPEG/GIF/PDF, max 2 MB) for a payment you created via promotion or Admin's Create Subscription. Moves the payment to REPORTED. Fails if the payment isn't yours, or has already been VERIFIED/REJECTED.\n\nAfter this, the operator reviews the proof (Admin > Review Payment) and verifies or rejects it."
+            "description": "Tenant-authenticated (your own API key, not admin_secret). Upload proof of the SPI bank transfer (PNG/JPEG/GIF/PDF, max 2 MB) for a payment you created via promotion, Create Subscription, Change Tier, or a renewal reminder. Moves the payment to REPORTED. Fails if the payment isn't yours, or has already been VERIFIED/REJECTED.\n\nEmails the operator (if ADMIN_NOTIFICATION_EMAIL is configured) that a proof is waiting. After this, the operator reviews the proof (Admin > Review Payment) and verifies or rejects it — you'll get an email either way."
           }
         }
       ]
@@ -2218,7 +2218,7 @@
                 "subscriptions"
               ]
             },
-            "description": "Applies every subscription downgrade scheduled via the tenant-facing Change Tier endpoint whose `current_period_end` has passed — flips `tier` to the scheduled `pending_tier`, clears `pending_tier`, and grants the new (lower) quota.\n\nUpgrades apply immediately on invoice authorization and need no scheduled job — only downgrades wait for the period to end.\n\nDesigned to be called by an external scheduler on a daily cadence (no need for the minute-level frequency the notification job uses). Idempotent — running it multiple times is safe; a subscription with no due downgrade is simply skipped.\n\nResponse includes `applied` (count of downgrades applied this run)."
+            "description": "Runs two things, in this order (order matters — see below):\n\n1. **Scheduled downgrades** — every subscription with a `pending_tier` whose `current_period_end` has passed: flips `tier` to the scheduled `pending_tier`, clears `pending_tier`, grants the new (lower) quota, and rolls `current_period_start`/`current_period_end` forward by one billing interval so it re-enters the renewal cycle below at its new tier (a downgrade owes no payment, but it still needs a fresh period).\n2. **Renewals** — opens a `RENEWAL` payment + reminder (notification + email) for every ACTIVE subscription within 7 days of `current_period_end` that doesn't already have one open, then downgrades to FREE (with its own notification + email) any subscription more than 7 days past `current_period_end` with no renewal ever verified. This step must run after step 1 in the same call — a downgrade that just rolled its period forward would otherwise look identical to an expired renewal.\n\nUpgrades apply immediately on invoice authorization and need no scheduled job — only downgrades and renewals wait for a date to pass.\n\nDesigned to be called by an external scheduler on a daily cadence (no need for the minute-level frequency the notification job uses). Idempotent — running it multiple times is safe; nothing due is simply skipped.\n\nResponse includes `applied` (downgrades), `remindersSent`, and `expired` (counts from this run)."
           }
         },
         {
@@ -2309,7 +2309,7 @@
                 }
               }
             },
-            "description": "Records your decision after checking the proof the tenant uploaded (Submit Payment Proof) against the bank. `decision` must be `VERIFIED` or `REJECTED`.\n\n`rejectionReason` is **required when `decision` is `REJECTED`** — the tenant sees it via `GET /v1/subscriptions/me` and needs to know what to fix before re-uploading. Not used for `VERIFIED`.\n\n`VERIFIED` moves the subscription to PAYMENT_RECEIVED — your next step is self-billing the invoice and Link Invoice to Subscription. `REJECTED` leaves the subscription at PENDING_PAYMENT; the tenant can submit a new proof for the *same* payment (Submit Payment Proof works again once REJECTED — it only refuses once a payment is VERIFIED).\n\nView the actual uploaded file first with Get Payment Proof."
+            "description": "Records your decision after checking the proof the tenant uploaded (Submit Payment Proof) against the bank. `decision` must be `VERIFIED` or `REJECTED`.\n\n`rejectionReason` is **required when `decision` is `REJECTED`** — the tenant sees it via `GET /v1/subscriptions/me` and needs to know what to fix before re-uploading. Not used for `VERIFIED`.\n\n`VERIFIED` moves the subscription to PAYMENT_RECEIVED — your next step is self-billing the invoice and Link Invoice to Subscription. `REJECTED` leaves the subscription at PENDING_PAYMENT; the tenant can submit a new proof for the *same* payment (Submit Payment Proof works again once REJECTED — it only refuses once a payment is VERIFIED).\n\nEither decision fires a notification + email to the tenant automatically (PAYMENT_VERIFIED/PAYMENT_REJECTED) — covers initial subscriptions, tier changes, and renewals uniformly, so there's nothing extra to do here.\n\nView the actual uploaded file first with Get Payment Proof."
           }
         },
         {

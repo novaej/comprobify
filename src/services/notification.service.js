@@ -2,7 +2,8 @@
  * Notification service.
  *
  * Responsible for:
- *  - Creating notifications for event-driven conditions (DOCUMENT_AUTHORIZED).
+ *  - Creating notifications for event-driven conditions (DOCUMENT_AUTHORIZED,
+ *    PAYMENT_VERIFIED/REJECTED, SUBSCRIPTION_RENEWAL_DUE, SUBSCRIPTION_EXPIRED).
  *  - Running per-tenant certificate expiry checks (called by the scheduler service).
  *  - Reading and marking notifications for the tenant.
  *  - Managing per-tenant notification preferences (opt-out per type).
@@ -33,11 +34,14 @@
  *   runCertChecksForTenant() for every non-suspended tenant. No sync endpoint
  *   is exposed to tenants — scheduling is API-owned.
  */
+const moment = require('moment');
 const notificationModel = require('../models/notification.model');
 const notificationPreferenceModel = require('../models/notification-preference.model');
 const issuerModel = require('../models/issuer.model');
 const NotificationTypes = require('../constants/notification-types');
 const NotificationSeverity = require('../constants/notification-severity');
+
+const PAYMENT_PURPOSE_LABELS = { INITIAL: 'subscription', TIER_CHANGE: 'tier change', RENEWAL: 'renewal' };
 
 /** All defined notification types — used to populate the full preferences list. */
 const ALL_TYPES = Object.values(NotificationTypes);
@@ -142,6 +146,109 @@ async function createDocumentAuthorized(document, issuer) {
   }
 
   if (notification) fireWebhookFanOut(notification);
+}
+
+// ---------------------------------------------------------------------------
+// Subscription / payment lifecycle
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a PAYMENT_VERIFIED or PAYMENT_REJECTED notification (fire-and-forget
+ * from the caller's perspective — called awaited here, but never throws).
+ *
+ * Called from subscriptionService.reviewPayment after the admin's decision is
+ * recorded. Covers every payment purpose (INITIAL, TIER_CHANGE, RENEWAL) —
+ * the wording adapts via `payment.purpose`, the event itself doesn't differ.
+ *
+ * @param {object} payment      - DB row from payments table (post-decision)
+ * @param {object} subscription - DB row from subscriptions table
+ * @param {'VERIFIED'|'REJECTED'} decision
+ */
+async function createPaymentReviewed(payment, subscription, decision) {
+  const type = decision === 'VERIFIED' ? NotificationTypes.PAYMENT_VERIFIED : NotificationTypes.PAYMENT_REJECTED;
+  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, type);
+  if (!enabled) return null;
+
+  const purposeLabel = PAYMENT_PURPOSE_LABELS[payment.purpose] || PAYMENT_PURPOSE_LABELS.INITIAL;
+
+  const notification = await notificationModel.create({
+    tenantId: subscription.tenant_id,
+    type,
+    severity: decision === 'VERIFIED' ? NotificationSeverity.INFO : NotificationSeverity.WARNING,
+    title: decision === 'VERIFIED' ? 'Payment verified' : 'Payment rejected',
+    message: decision === 'VERIFIED'
+      ? `Your ${purposeLabel} payment for the ${subscription.tier} plan was verified.`
+      : `Your ${purposeLabel} payment for the ${subscription.tier} plan was rejected: ${payment.rejection_reason || 'see proof for details'}.`,
+    metadata: {
+      paymentId: payment.id,
+      subscriptionId: subscription.id,
+      tier: subscription.tier,
+      purpose: payment.purpose,
+      amount: payment.amount,
+      rejectionReason: payment.rejection_reason || null,
+    },
+  });
+
+  if (notification) fireWebhookFanOut(notification);
+  return notification;
+}
+
+/**
+ * Create a SUBSCRIPTION_RENEWAL_DUE notification when a renewal payment is opened.
+ *
+ * Called from subscriptionService.processDueRenewals, ahead of current_period_end.
+ *
+ * @param {object} subscription - DB row from subscriptions table
+ * @param {object} payment      - DB row from payments table (purpose RENEWAL)
+ */
+async function createSubscriptionRenewalDue(subscription, payment) {
+  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, NotificationTypes.SUBSCRIPTION_RENEWAL_DUE);
+  if (!enabled) return null;
+
+  const dueDate = moment(subscription.current_period_end).format('DD/MM/YYYY');
+
+  const notification = await notificationModel.create({
+    tenantId: subscription.tenant_id,
+    type: NotificationTypes.SUBSCRIPTION_RENEWAL_DUE,
+    severity: NotificationSeverity.WARNING,
+    title: 'Subscription renewal due',
+    message: `Your ${subscription.tier} subscription renews on ${dueDate}. Submit payment proof to keep your plan active.`,
+    metadata: {
+      subscriptionId: subscription.id,
+      paymentId: payment.id,
+      tier: subscription.tier,
+      amount: payment.amount,
+      currentPeriodEnd: subscription.current_period_end,
+    },
+  });
+
+  if (notification) fireWebhookFanOut(notification);
+  return notification;
+}
+
+/**
+ * Create a SUBSCRIPTION_EXPIRED notification when the renewal grace period
+ * elapses with no verified renewal payment and the tenant is downgraded to FREE.
+ *
+ * Called from subscriptionService.processDueRenewals.
+ *
+ * @param {object} subscription - DB row from subscriptions table (tier = the tier just lost)
+ */
+async function createSubscriptionExpired(subscription) {
+  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, NotificationTypes.SUBSCRIPTION_EXPIRED);
+  if (!enabled) return null;
+
+  const notification = await notificationModel.create({
+    tenantId: subscription.tenant_id,
+    type: NotificationTypes.SUBSCRIPTION_EXPIRED,
+    severity: NotificationSeverity.ERROR,
+    title: 'Subscription expired',
+    message: `Your ${subscription.tier} subscription expired without a renewal payment. You've been moved to the FREE plan.`,
+    metadata: { subscriptionId: subscription.id, previousTier: subscription.tier },
+  });
+
+  if (notification) fireWebhookFanOut(notification);
+  return notification;
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +387,9 @@ async function updatePreferences(tenantId, updates) {
 
 module.exports = {
   createDocumentAuthorized,
+  createPaymentReviewed,
+  createSubscriptionRenewalDue,
+  createSubscriptionExpired,
   runCertChecksForTenant,
   listForTenant,
   markRead,

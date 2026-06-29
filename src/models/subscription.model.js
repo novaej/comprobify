@@ -87,6 +87,43 @@ async function findDuePendingDowngrades() {
   return rows;
 }
 
+// ACTIVE subscriptions whose current_period_end falls within reminderDays from
+// now, with no scheduled downgrade (that period transition is handled for free
+// by findDuePendingDowngrades/applyScheduledTierChanges instead) and no renewal
+// payment already open for this period (avoids re-creating one on every job run).
+async function findDueForRenewalReminder(reminderDays) {
+  const { rows } = await db.query(
+    `SELECT * FROM subscriptions s
+     WHERE s.status = 'ACTIVE'
+       AND s.pending_tier IS NULL
+       AND s.current_period_end > NOW()
+       AND s.current_period_end <= NOW() + (INTERVAL '1 day' * $1)
+       AND NOT EXISTS (
+         SELECT 1 FROM payments p
+         WHERE p.subscription_id = s.id AND p.purpose = 'RENEWAL'
+           AND p.invoice_document_id IS NULL
+           AND p.status IN ('PENDING', 'REPORTED', 'VERIFIED')
+       )`,
+    [reminderDays]
+  );
+  return rows;
+}
+
+// ACTIVE subscriptions whose current_period_end passed more than graceDays ago
+// with no renewal ever completing — these get downgraded to FREE. A renewal that
+// completed in time always re-stamps current_period_end into the future (see
+// applyRenewalIfLinked), so a still-ACTIVE row this far past its old period_end
+// genuinely never renewed.
+async function findExpiredPastGrace(graceDays) {
+  const { rows } = await db.query(
+    `SELECT * FROM subscriptions
+     WHERE status = 'ACTIVE'
+       AND current_period_end <= NOW() - (INTERVAL '1 day' * $1)`,
+    [graceDays]
+  );
+  return rows;
+}
+
 async function updateStatus(id, status, extraFields = {}) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
@@ -120,5 +157,7 @@ module.exports = {
   scheduleDowngrade,
   applyTierChange,
   findDuePendingDowngrades,
+  findDueForRenewalReminder,
+  findExpiredPastGrace,
   updateStatus,
 };
