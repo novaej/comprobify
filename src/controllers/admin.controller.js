@@ -109,7 +109,11 @@ const cancelSubscription = async (req, res) => {
 };
 
 const reviewPayment = async (req, res) => {
-  const result = await subscriptionService.reviewPayment(parseInt(req.params.id, 10), req.body.decision);
+  const result = await subscriptionService.reviewPayment(
+    parseInt(req.params.id, 10),
+    req.body.decision,
+    req.body.rejectionReason,
+  );
   res.json({ ok: true, ...result });
 };
 

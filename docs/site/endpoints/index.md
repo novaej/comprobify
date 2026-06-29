@@ -22,7 +22,13 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `PATCH` | `/v1/payments/:id/proof` | Upload proof of an SPI bank transfer for a pending subscription payment |
+| `PATCH` | `/v1/payments/:id/proof` | Upload proof of an SPI bank transfer for a pending subscription payment. A `REJECTED` payment can be re-submitted; only `VERIFIED` blocks further uploads. |
+
+## Subscriptions (authenticated)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/subscriptions/me` | Full subscription/payment history, newest first, with `rejection_reason` when applicable — no notification exists, this is how a tenant checks status |
 
 ## Tenants (authenticated)
 

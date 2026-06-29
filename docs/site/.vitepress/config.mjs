@@ -46,6 +46,13 @@ export default defineConfig({
             ],
           },
           {
+            text: 'Subscriptions',
+            collapsed: false,
+            items: [
+              { text: 'Get My Subscriptions', link: '/endpoints/get-my-subscriptions' },
+            ],
+          },
+          {
             text: 'Tenants',
             collapsed: false,
             items: [

@@ -425,6 +425,30 @@
       ]
     },
     {
+      "name": "Subscriptions",
+      "item": [
+        {
+          "name": "Get My Subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/subscriptions/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "subscriptions",
+                "me"
+              ]
+            },
+            "description": "Tenant-authenticated (your own API key). Returns your full subscription history, newest first, each with its payments nested (status, amount, rejection_reason if rejected). The proof file itself is never included — only filename/mime type.\n\nThis is how you find out a paid-tier upgrade landed — there's no notification; `subscriptionTier`/`documentQuota` on `GET /v1/tenants/me` update automatically once it does, but this endpoint shows the in-between states (and the `rejection_reason` if a proof was rejected, so you know what to fix before re-uploading via Submit Payment Proof)."
+          }
+        }
+      ]
+    },
+    {
       "name": "API Keys",
       "description": "Tenant-facing API key management. Mint named keys for each integration, list them, and revoke leaked or unused ones. Require a Bearer API key.",
       "auth": {
@@ -2193,14 +2217,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"decision\": \"VERIFIED\"\n}",
+              "raw": "{\n  \"decision\": \"REJECTED\",\n  \"rejectionReason\": \"Transfer not reflected in our account yet — please check the amount and resend\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Records your decision after checking the proof the tenant uploaded (Submit Payment Proof) against the bank. `decision` must be `VERIFIED` or `REJECTED`.\n\n`VERIFIED` moves the subscription to PAYMENT_RECEIVED — your next step is self-billing the invoice and Link Invoice to Subscription. `REJECTED` leaves the subscription at PENDING_PAYMENT; the tenant needs to submit a new proof.\n\nView the actual uploaded file first with Get Payment Proof."
+            "description": "Records your decision after checking the proof the tenant uploaded (Submit Payment Proof) against the bank. `decision` must be `VERIFIED` or `REJECTED`.\n\n`rejectionReason` is **required when `decision` is `REJECTED`** — the tenant sees it via `GET /v1/subscriptions/me` and needs to know what to fix before re-uploading. Not used for `VERIFIED`.\n\n`VERIFIED` moves the subscription to PAYMENT_RECEIVED — your next step is self-billing the invoice and Link Invoice to Subscription. `REJECTED` leaves the subscription at PENDING_PAYMENT; the tenant can submit a new proof for the *same* payment (Submit Payment Proof works again once REJECTED — it only refuses once a payment is VERIFIED).\n\nView the actual uploaded file first with Get Payment Proof."
           }
         },
         {

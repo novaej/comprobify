@@ -8,6 +8,7 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'proof_mime_type',
   'period_start',
   'period_end',
+  'rejection_reason',
 ]);
 
 async function create({ subscriptionId, amount, method = 'SPI_TRANSFER' }) {

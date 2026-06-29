@@ -208,6 +208,17 @@ const reviewPayment = [
   body('decision')
     .isIn(['VERIFIED', 'REJECTED'])
     .withMessage('decision must be one of: VERIFIED, REJECTED'),
+
+  body('rejectionReason')
+    .if(body('decision').equals('REJECTED'))
+    .notEmpty()
+    .withMessage('rejectionReason is required when decision is REJECTED — the tenant needs to know what to fix before re-uploading'),
+
+  body('rejectionReason')
+    .optional()
+    .isString()
+    .isLength({ max: 500 })
+    .withMessage('rejectionReason must be a string of max 500 characters'),
 ];
 
 const getPaymentProof = [

@@ -95,12 +95,28 @@ describe('SubscriptionService', () => {
         .rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     });
 
-    test('rejects when the payment has already been decided', async () => {
+    test('rejects when the payment has already been VERIFIED', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'VERIFIED' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
 
       await expect(subscriptionService.submitPaymentProof(20, 1, proof))
         .rejects.toMatchObject({ statusCode: 409 });
+    });
+
+    test('allows re-submitting after REJECTED and clears the old rejection_reason', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'REJECTED', rejection_reason: 'Transfer not reflected yet' });
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
+
+      await subscriptionService.submitPaymentProof(20, 1, proof);
+
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REPORTED', {
+        reported_at: expect.any(Date),
+        proof_file: proof.buffer,
+        proof_filename: proof.filename,
+        proof_mime_type: proof.mimeType,
+        rejection_reason: null,
+      });
     });
 
     test('stores the proof and moves the payment to REPORTED', async () => {
@@ -115,6 +131,7 @@ describe('SubscriptionService', () => {
         proof_file: proof.buffer,
         proof_filename: proof.filename,
         proof_mime_type: proof.mimeType,
+        rejection_reason: null,
       });
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REPORTED', { paymentId: 20 });
       expect(result).toEqual({ id: 20, status: 'REPORTED' });
@@ -159,14 +176,16 @@ describe('SubscriptionService', () => {
       expect(result.subscription).toEqual({ id: 10, status: 'PAYMENT_RECEIVED' });
     });
 
-    test('REJECTED leaves the subscription untouched', async () => {
+    test('REJECTED leaves the subscription untouched and stores the rejection reason', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10 });
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REJECTED' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' });
 
-      const result = await subscriptionService.reviewPayment(20, 'REJECTED');
+      const result = await subscriptionService.reviewPayment(20, 'REJECTED', 'Transfer not reflected in our account yet');
 
-      expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REJECTED', {});
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REJECTED', {
+        rejection_reason: 'Transfer not reflected in our account yet',
+      });
       expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REJECTED', { paymentId: 20 });
       expect(result.subscription).toEqual({ id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' });
@@ -303,6 +322,41 @@ describe('SubscriptionService', () => {
 
       expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
       expect(result).toEqual({ id: 10, status: 'ACTIVE' });
+    });
+  });
+
+  describe('getStatusForTenant', () => {
+    test('returns each subscription with its payments nested, proof_file stripped', async () => {
+      subscriptionModel.findByTenantId.mockResolvedValue([
+        { id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING' },
+      ]);
+      paymentModel.findBySubscriptionId.mockResolvedValue([
+        { id: 20, status: 'REJECTED', rejection_reason: 'Transfer not reflected yet', proof_file: Buffer.from('x'), proof_filename: 'old.pdf' },
+        { id: 21, status: 'VERIFIED', proof_file: Buffer.from('y'), proof_filename: 'new.pdf' },
+      ]);
+
+      const result = await subscriptionService.getStatusForTenant(1);
+
+      expect(subscriptionModel.findByTenantId).toHaveBeenCalledWith(1);
+      expect(paymentModel.findBySubscriptionId).toHaveBeenCalledWith(10);
+      expect(result).toEqual([
+        {
+          id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING',
+          payments: [
+            { id: 20, status: 'REJECTED', rejection_reason: 'Transfer not reflected yet', proof_filename: 'old.pdf' },
+            { id: 21, status: 'VERIFIED', proof_filename: 'new.pdf' },
+          ],
+        },
+      ]);
+    });
+
+    test('returns an empty array for a tenant who never subscribed', async () => {
+      subscriptionModel.findByTenantId.mockResolvedValue([]);
+
+      const result = await subscriptionService.getStatusForTenant(1);
+
+      expect(result).toEqual([]);
+      expect(paymentModel.findBySubscriptionId).not.toHaveBeenCalled();
     });
   });
 });

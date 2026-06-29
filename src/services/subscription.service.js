@@ -66,15 +66,18 @@ async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeT
     throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
   }
 
-  if (['VERIFIED', 'REJECTED'].includes(payment.status)) {
-    throw new ConflictError(`Payment has already been ${payment.status.toLowerCase()} and can no longer accept new proof`);
+  if (payment.status === 'VERIFIED') {
+    throw new ConflictError('Payment has already been verified and can no longer accept new proof');
   }
 
+  // A REJECTED payment can be re-submitted (e.g. the transfer hadn't reflected in
+  // the bank yet) — clear the old rejection_reason since it's being re-addressed.
   const updated = await paymentModel.updateStatus(paymentId, 'REPORTED', {
     reported_at: new Date(),
     proof_file: buffer,
     proof_filename: filename,
     proof_mime_type: mimeType,
+    rejection_reason: null,
   });
 
   await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REPORTED', { paymentId });
@@ -88,7 +91,7 @@ async function getPaymentProof(paymentId) {
   return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
 }
 
-async function reviewPayment(paymentId, decision) {
+async function reviewPayment(paymentId, decision, rejectionReason = null) {
   if (!DECISIONS.includes(decision)) {
     throw new AppError(`Invalid decision '${decision}'. Valid values: ${DECISIONS.join(', ')}`, 400);
   }
@@ -96,7 +99,9 @@ async function reviewPayment(paymentId, decision) {
   const payment = await paymentModel.findById(paymentId);
   if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
 
-  const extraFields = decision === 'VERIFIED' ? { verified_at: new Date() } : {};
+  const extraFields = decision === 'VERIFIED'
+    ? { verified_at: new Date() }
+    : { rejection_reason: rejectionReason };
   const updatedPayment = await paymentModel.updateStatus(paymentId, decision, extraFields);
 
   const subscription = await subscriptionModel.findById(payment.subscription_id);
@@ -194,6 +199,21 @@ async function listByTenant(tenantId) {
   return subscriptionModel.findByTenantId(tenantId);
 }
 
+// Tenant-facing read: full subscription history with each one's payments nested,
+// newest first. No notification exists when a review/activation happens — this
+// (polled) is how a tenant finds out. proof_file is never included; the file
+// itself stays behind the dedicated proof-download flow (admin-only).
+async function getStatusForTenant(tenantId) {
+  const subscriptions = await subscriptionModel.findByTenantId(tenantId);
+  const withPayments = await Promise.all(
+    subscriptions.map(async (subscription) => ({
+      ...subscription,
+      payments: (await paymentModel.findBySubscriptionId(subscription.id)).map(omitProofFile),
+    }))
+  );
+  return withPayments;
+}
+
 module.exports = {
   createSubscription,
   submitPaymentProof,
@@ -203,4 +223,5 @@ module.exports = {
   activateIfLinked,
   cancelSubscription,
   listByTenant,
+  getStatusForTenant,
 };
