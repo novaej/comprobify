@@ -77,6 +77,210 @@ describe('SubscriptionService', () => {
     });
   });
 
+  describe('requestTierChange', () => {
+    beforeEach(() => {
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
+    });
+
+    test('rejects an invalid tier', async () => {
+      await expect(subscriptionService.requestTierChange(1, 'NOT_A_TIER'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_TIER' });
+      expect(tenantModel.findById).not.toHaveBeenCalled();
+    });
+
+    test('rejects when the tenant does not exist', async () => {
+      tenantModel.findById.mockResolvedValue(null);
+
+      await expect(subscriptionService.requestTierChange(1, 'GROWTH'))
+        .rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    test('rejects when the tenant has no ACTIVE subscription', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue(null);
+
+      await expect(subscriptionService.requestTierChange(1, 'GROWTH'))
+        .rejects.toMatchObject({ statusCode: 409, code: 'NO_ACTIVE_SUBSCRIPTION' });
+    });
+
+    test('rejects when the requested tier matches the current tier', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH' });
+
+      await expect(subscriptionService.requestTierChange(1, 'GROWTH'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'TIER_CHANGE_NO_OP' });
+    });
+
+    test('rejects when a downgrade is already scheduled', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH', pending_tier: 'STARTER' });
+
+      await expect(subscriptionService.requestTierChange(1, 'BUSINESS'))
+        .rejects.toMatchObject({ statusCode: 409, code: 'TIER_CHANGE_ALREADY_PENDING' });
+    });
+
+    test('rejects when an upgrade payment is already in flight', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH', pending_tier: null });
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({ id: 30, target_tier: 'BUSINESS' });
+
+      await expect(subscriptionService.requestTierChange(1, 'BUSINESS'))
+        .rejects.toMatchObject({ statusCode: 409, code: 'TIER_CHANGE_ALREADY_PENDING' });
+    });
+
+    test('downgrade: schedules pending_tier, creates no payment, logs TIER_CHANGE_SCHEDULED', async () => {
+      const periodEnd = new Date('2026-07-01T00:00:00Z');
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: null, current_period_end: periodEnd,
+      });
+      subscriptionModel.scheduleDowngrade.mockResolvedValue({ id: 10, tier: 'GROWTH', pending_tier: 'STARTER' });
+
+      const result = await subscriptionService.requestTierChange(1, 'STARTER');
+
+      expect(subscriptionModel.scheduleDowngrade).toHaveBeenCalledWith(10, 'STARTER');
+      expect(paymentModel.create).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGE_SCHEDULED', {
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER', effectiveAt: periodEnd,
+      });
+      expect(result).toEqual({
+        subscription: { id: 10, tier: 'GROWTH', pending_tier: 'STARTER' },
+        effectiveAt: periodEnd,
+      });
+    });
+
+    test('upgrade: prorates the price difference by remaining period time, creates a TIER_CHANGE payment', async () => {
+      const now = Date.now();
+      const periodStart = new Date(now - 15 * 24 * 60 * 60 * 1000); // 15 days ago
+      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000);   // 15 days from now (~50% remaining, 30-day period)
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'STARTER', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_start: periodStart, current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: 30, subscription_id: 10, amount: 30, purpose: 'TIER_CHANGE', target_tier: 'GROWTH' });
+
+      const result = await subscriptionService.requestTierChange(1, 'GROWTH');
+
+      // GROWTH (79) - STARTER (19) = 60, ~50% of the period remains -> ~30
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.subscriptionId).toBe(10);
+      expect(createArgs.purpose).toBe('TIER_CHANGE');
+      expect(createArgs.targetTier).toBe('GROWTH');
+      expect(createArgs.amount).toBeCloseTo(30, 0);
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGE_REQUESTED', expect.objectContaining({
+        subscriptionId: 10, fromTier: 'STARTER', toTier: 'GROWTH',
+      }));
+      expect(result).toEqual({
+        subscription: expect.objectContaining({ id: 10 }),
+        payment: { id: 30, subscription_id: 10, amount: 30, purpose: 'TIER_CHANGE', target_tier: 'GROWTH' },
+        bankTransfer: config.bankTransfer,
+      });
+    });
+
+    test('upgrade: applies immediately with no payment when the prorated amount rounds to $0', async () => {
+      const now = Date.now();
+      const periodEnd = new Date(now - 1000); // already ended -> 0% remaining
+      const periodStart = new Date(now - 30 * 24 * 60 * 60 * 1000);
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'STARTER', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_start: periodStart, current_period_end: periodEnd,
+      });
+      subscriptionModel.applyTierChange.mockResolvedValue({ id: 10, tier: 'GROWTH' });
+
+      const result = await subscriptionService.requestTierChange(1, 'GROWTH');
+
+      expect(paymentModel.create).not.toHaveBeenCalled();
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'GROWTH');
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
+        subscriptionId: 10, fromTier: 'STARTER', toTier: 'GROWTH', amount: 0,
+      });
+      expect(result).toEqual({ subscription: { id: 10, tier: 'GROWTH' }, payment: null, amount: 0 });
+    });
+  });
+
+  describe('applyTierChangeIfLinked', () => {
+    test('is a no-op when no payment is linked to the document', async () => {
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue(null);
+
+      const result = await subscriptionService.applyTierChangeIfLinked(999);
+
+      expect(result).toBeNull();
+      expect(tenantModel.updateTier).not.toHaveBeenCalled();
+    });
+
+    test('is a no-op for a non-TIER_CHANGE payment', async () => {
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({ id: 30, purpose: 'INITIAL', status: 'VERIFIED' });
+
+      const result = await subscriptionService.applyTierChangeIfLinked(999);
+
+      expect(result).toBeNull();
+    });
+
+    test('is a no-op when the payment is not yet VERIFIED', async () => {
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({ id: 30, purpose: 'TIER_CHANGE', status: 'REPORTED' });
+
+      const result = await subscriptionService.applyTierChangeIfLinked(999);
+
+      expect(result).toBeNull();
+    });
+
+    test('flips the tier, grants the new quota, stamps the payment period, and logs TIER_CHANGED', async () => {
+      const periodStart = new Date('2026-06-01T00:00:00Z');
+      const periodEnd = new Date('2026-07-01T00:00:00Z');
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
+        id: 30, subscription_id: 10, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH',
+      });
+      subscriptionModel.findById.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'STARTER', current_period_start: periodStart, current_period_end: periodEnd,
+      });
+      subscriptionModel.applyTierChange.mockResolvedValue({ id: 10, tier: 'GROWTH' });
+
+      const result = await subscriptionService.applyTierChangeIfLinked(999);
+
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'GROWTH');
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(30, 'VERIFIED', {
+        period_start: periodStart, period_end: periodEnd,
+      });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
+        subscriptionId: 10, fromTier: 'STARTER', toTier: 'GROWTH', paymentId: 30,
+      });
+      expect(result).toEqual({ id: 10, tier: 'GROWTH' });
+    });
+  });
+
+  describe('applyScheduledTierChanges', () => {
+    test('applies every due downgrade and reports the count', async () => {
+      subscriptionModel.findDuePendingDowngrades.mockResolvedValue([
+        { id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: 'STARTER' },
+        { id: 11, tenant_id: 2, tier: 'BUSINESS', pending_tier: 'GROWTH' },
+      ]);
+
+      const result = await subscriptionService.applyScheduledTierChanges();
+
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER');
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(11, 'GROWTH');
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(2, 'GROWTH', 1000);
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER',
+      });
+      expect(result).toEqual({ applied: 2 });
+    });
+
+    test('reports zero when nothing is due', async () => {
+      subscriptionModel.findDuePendingDowngrades.mockResolvedValue([]);
+
+      const result = await subscriptionService.applyScheduledTierChanges();
+
+      expect(result).toEqual({ applied: 0 });
+      expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+    });
+  });
+
   describe('submitPaymentProof', () => {
     const proof = { buffer: Buffer.from('test'), filename: 'receipt.pdf', mimeType: 'application/pdf' };
 
@@ -322,6 +526,38 @@ describe('SubscriptionService', () => {
 
       expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
       expect(result).toEqual({ id: 10, status: 'ACTIVE' });
+    });
+
+    test('links a VERIFIED TIER_CHANGE payment to its own invoice_document_id, leaving the subscription untouched', async () => {
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER' });
+      documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'RECEIVED' });
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({
+        id: 30, subscription_id: 10, status: 'VERIFIED', target_tier: 'GROWTH',
+      });
+
+      const result = await subscriptionService.linkInvoice(10, accessKey);
+
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(30, 'VERIFIED', { invoice_document_id: 999 });
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'INVOICE_LINKED', { subscriptionId: 10, paymentId: 30, documentId: 999 });
+      expect(result).toEqual({ id: 10, tenant_id: 1, tier: 'STARTER' });
+    });
+
+    test('applies the tier change immediately when the linked TIER_CHANGE invoice is already AUTHORIZED', async () => {
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER' });
+      documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'AUTHORIZED' });
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({
+        id: 30, subscription_id: 10, status: 'VERIFIED', target_tier: 'GROWTH',
+      });
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
+        id: 30, subscription_id: 10, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH',
+      });
+      subscriptionModel.applyTierChange.mockResolvedValue({ id: 10, tier: 'GROWTH' });
+
+      const result = await subscriptionService.linkInvoice(10, accessKey);
+
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
+      expect(result).toEqual({ id: 10, tier: 'GROWTH' });
     });
   });
 

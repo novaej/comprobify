@@ -9,14 +9,15 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'period_start',
   'period_end',
   'rejection_reason',
+  'invoice_document_id',
 ]);
 
-async function create({ subscriptionId, amount, method = 'SPI_TRANSFER' }) {
+async function create({ subscriptionId, amount, method = 'SPI_TRANSFER', purpose = 'INITIAL', targetTier = null }) {
   const { rows } = await db.query(
-    `INSERT INTO payments (subscription_id, amount, method)
-     VALUES ($1, $2, $3)
+    `INSERT INTO payments (subscription_id, amount, method, purpose, target_tier)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [subscriptionId, amount, method]
+    [subscriptionId, amount, method, purpose, targetTier]
   );
   return rows[0];
 }
@@ -32,6 +33,28 @@ async function findBySubscriptionId(subscriptionId) {
     [subscriptionId]
   );
   return rows;
+}
+
+async function findByInvoiceDocumentId(documentId) {
+  const { rows } = await db.query('SELECT * FROM payments WHERE invoice_document_id = $1', [documentId]);
+  return rows[0] || null;
+}
+
+// Finds an in-flight (not yet rejected/refunded) tier-change payment for a
+// subscription that hasn't had its invoice linked yet — used both to block a
+// second concurrent tier-change request and, once VERIFIED, to find the
+// payment linkInvoice should attach the self-billed invoice to.
+async function findPendingTierChangeBySubscriptionId(subscriptionId) {
+  const { rows } = await db.query(
+    `SELECT * FROM payments
+     WHERE subscription_id = $1 AND purpose = 'TIER_CHANGE'
+       AND invoice_document_id IS NULL
+       AND status IN ('PENDING', 'REPORTED', 'VERIFIED')
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [subscriptionId]
+  );
+  return rows[0] || null;
 }
 
 async function updateStatus(id, status, extraFields = {}) {
@@ -57,4 +80,11 @@ async function updateStatus(id, status, extraFields = {}) {
   return rows[0] || null;
 }
 
-module.exports = { create, findById, findBySubscriptionId, updateStatus };
+module.exports = {
+  create,
+  findById,
+  findBySubscriptionId,
+  findByInvoiceDocumentId,
+  findPendingTierChangeBySubscriptionId,
+  updateStatus,
+};

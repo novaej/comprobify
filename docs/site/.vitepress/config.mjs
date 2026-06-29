@@ -50,6 +50,7 @@ export default defineConfig({
             collapsed: false,
             items: [
               { text: 'Get My Subscriptions', link: '/endpoints/get-my-subscriptions' },
+              { text: 'Change Tier (Upgrade/Downgrade)', link: '/endpoints/change-tier' },
             ],
           },
           {

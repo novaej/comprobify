@@ -57,6 +57,107 @@ async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
   return { subscription, payment, bankTransfer: config.bankTransfer };
 }
 
+// Tenant-initiated tier change on an already-ACTIVE subscription. Upgrades take
+// effect immediately once a prorated payment is verified and its self-billed
+// invoice authorizes (see applyTierChangeIfLinked); downgrades are scheduled
+// and applied at current_period_end (see applyScheduledTierChanges) — no
+// payment is owed for a downgrade since the current period is already paid
+// for at the higher tier. No automated billing gateway exists yet
+// (NEXT_STEPS.md #9), so this rides the same manual proof/review pipeline as
+// createSubscription rather than charging anything automatically.
+async function requestTierChange(tenantId, tier) {
+  if (!PAID_TIERS.includes(tier)) {
+    throw new AppError(
+      `Invalid tier '${tier}'. Valid paid tiers: ${PAID_TIERS.join(', ')}`,
+      400,
+      ErrorCodes.INVALID_TIER
+    );
+  }
+
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  const subscription = await subscriptionModel.findActiveByTenantId(tenant.id);
+  if (!subscription) {
+    throw new AppError(
+      'Tenant has no ACTIVE subscription to change — use createSubscription/promote first',
+      409,
+      ErrorCodes.NO_ACTIVE_SUBSCRIPTION
+    );
+  }
+
+  if (tier === subscription.tier) {
+    throw new AppError(`Tenant is already on the '${tier}' tier`, 400, ErrorCodes.TIER_CHANGE_NO_OP);
+  }
+
+  if (subscription.pending_tier) {
+    throw new ConflictError(
+      `A downgrade to '${subscription.pending_tier}' is already scheduled for this subscription`,
+      ErrorCodes.TIER_CHANGE_ALREADY_PENDING
+    );
+  }
+  const pendingPayment = await paymentModel.findPendingTierChangeBySubscriptionId(subscription.id);
+  if (pendingPayment) {
+    throw new ConflictError(
+      `An upgrade to '${pendingPayment.target_tier}' is already in progress for this subscription`,
+      ErrorCodes.TIER_CHANGE_ALREADY_PENDING
+    );
+  }
+
+  const isUpgrade = TIERS[tier].priceMonthlyUsd > TIERS[subscription.tier].priceMonthlyUsd;
+
+  if (!isUpgrade) {
+    const updated = await subscriptionModel.scheduleDowngrade(subscription.id, tier);
+    await tenantEventModel.create(tenant.id, 'TIER_CHANGE_SCHEDULED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: tier,
+      effectiveAt: subscription.current_period_end,
+    });
+    return { subscription: updated, effectiveAt: subscription.current_period_end };
+  }
+
+  const priceField = subscription.billing_interval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
+  const periodStart = new Date(subscription.current_period_start).getTime();
+  const periodEnd = new Date(subscription.current_period_end).getTime();
+  const totalMs = periodEnd - periodStart;
+  const remainingMs = Math.min(Math.max(periodEnd - Date.now(), 0), totalMs);
+  const remainingFraction = totalMs > 0 ? remainingMs / totalMs : 0;
+  const amount = Math.round((TIERS[tier][priceField] - TIERS[subscription.tier][priceField]) * remainingFraction * 100) / 100;
+
+  // With ~no time left in the current period, the prorated amount can round
+  // to $0 — asking for proof of a $0 transfer isn't something a tenant can
+  // actually do. Apply the upgrade immediately instead of routing it through
+  // the payment/proof pipeline; there's nothing to collect.
+  if (amount <= 0) {
+    const updated = await subscriptionModel.applyTierChange(subscription.id, tier);
+    await tenantModel.updateTier(tenant.id, tier, TIERS[tier].documentQuota);
+    await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: tier,
+      amount: 0,
+    });
+    return { subscription: updated, payment: null, amount: 0 };
+  }
+
+  const payment = await paymentModel.create({
+    subscriptionId: subscription.id,
+    amount,
+    purpose: 'TIER_CHANGE',
+    targetTier: tier,
+  });
+
+  await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
+    subscriptionId: subscription.id,
+    fromTier: subscription.tier,
+    toTier: tier,
+    amount,
+  });
+
+  return { subscription, payment, bankTransfer: config.bankTransfer };
+}
+
 async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeType }) {
   const payment = await paymentModel.findById(paymentId);
   if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
@@ -126,6 +227,25 @@ async function linkInvoice(subscriptionId, accessKey) {
   const document = await documentModel.findByAccessKey(accessKey);
   if (!document) throw new NotFoundError('Document');
 
+  // A VERIFIED, unlinked TIER_CHANGE payment means this is an upgrade's
+  // self-billed invoice, not the subscription's original activation invoice —
+  // link it to the payment instead so the subscription's own
+  // invoice_document_id (already spent on activation) is left untouched.
+  const pendingTierChange = await paymentModel.findPendingTierChangeBySubscriptionId(subscriptionId);
+  if (pendingTierChange && pendingTierChange.status === 'VERIFIED') {
+    await paymentModel.updateStatus(pendingTierChange.id, 'VERIFIED', { invoice_document_id: document.id });
+    await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
+      subscriptionId, paymentId: pendingTierChange.id, documentId: document.id,
+    });
+
+    if (document.status === 'AUTHORIZED') {
+      const applied = await applyTierChangeIfLinked(document.id);
+      if (applied) return applied;
+    }
+
+    return subscription;
+  }
+
   let updated = await subscriptionModel.updateStatus(subscriptionId, 'INVOICE_PROCESSING', {
     invoice_document_id: document.id,
   });
@@ -185,6 +305,61 @@ async function activateIfLinked(documentId) {
   return updated;
 }
 
+// Mirrors activateIfLinked, but for an upgrade's TIER_CHANGE payment rather
+// than a subscription's initial activation. No-op for the vast majority of
+// authorized documents, which aren't linked to any tier-change payment.
+async function applyTierChangeIfLinked(documentId) {
+  const payment = await paymentModel.findByInvoiceDocumentId(documentId);
+  if (!payment || payment.purpose !== 'TIER_CHANGE' || payment.status !== 'VERIFIED') {
+    return null;
+  }
+
+  const subscription = await subscriptionModel.findById(payment.subscription_id);
+  if (!subscription) return null;
+
+  const updated = await subscriptionModel.applyTierChange(subscription.id, payment.target_tier);
+
+  await tenantModel.updateTier(subscription.tenant_id, payment.target_tier, TIERS[payment.target_tier].documentQuota);
+
+  // The upgrade takes over the remainder of the same billing cycle — the
+  // subscription's period dates don't change, only the tier does — so stamp
+  // those same dates onto the payment for per-cycle history, same as the
+  // funding-payment stamp in activateIfLinked.
+  await paymentModel.updateStatus(payment.id, payment.status, {
+    period_start: subscription.current_period_start,
+    period_end: subscription.current_period_end,
+  });
+
+  await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
+    subscriptionId: subscription.id,
+    fromTier: subscription.tier,
+    toTier: payment.target_tier,
+    paymentId: payment.id,
+  });
+
+  return updated;
+}
+
+// Applies every downgrade scheduled via requestTierChange whose
+// current_period_end has passed. Called by the admin job (POST
+// /v1/admin/jobs/subscriptions), same pattern as
+// notification-scheduler.service.js's runAll().
+async function applyScheduledTierChanges() {
+  const due = await subscriptionModel.findDuePendingDowngrades();
+
+  for (const subscription of due) {
+    await subscriptionModel.applyTierChange(subscription.id, subscription.pending_tier);
+    await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier, TIERS[subscription.pending_tier].documentQuota);
+    await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: subscription.pending_tier,
+    });
+  }
+
+  return { applied: due.length };
+}
+
 async function cancelSubscription(subscriptionId) {
   const subscription = await subscriptionModel.findById(subscriptionId);
   if (!subscription) throw new NotFoundError('Subscription', ErrorCodes.SUBSCRIPTION_NOT_FOUND);
@@ -216,11 +391,14 @@ async function getStatusForTenant(tenantId) {
 
 module.exports = {
   createSubscription,
+  requestTierChange,
   submitPaymentProof,
   getPaymentProof,
   reviewPayment,
   linkInvoice,
   activateIfLinked,
+  applyTierChangeIfLinked,
+  applyScheduledTierChanges,
   cancelSubscription,
   listByTenant,
   getStatusForTenant,
