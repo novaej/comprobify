@@ -1,6 +1,7 @@
 const adminService = require('../services/admin.service');
 const notificationSchedulerService = require('../services/notification-scheduler.service');
 const subscriptionService = require('../services/subscription.service');
+const legalDocumentService = require('../services/legal-document.service');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 
@@ -124,6 +125,29 @@ const getPaymentProof = async (req, res) => {
   res.send(buffer);
 };
 
+const listPayments = async (req, res) => {
+  const payments = await subscriptionService.listPendingPayments(req.query.status || 'REPORTED');
+  res.json({ ok: true, payments });
+};
+
+// Legal documents
+
+const publishLegalDocument = async (req, res) => {
+  if (!req.file) {
+    throw new AppError('A document file is required', 400, ErrorCodes.INVALID_FILE_UPLOAD);
+  }
+  const document = await legalDocumentService.publish(
+    req.body.documentType,
+    req.body.version,
+    req.file.buffer,
+    req.file.mimetype,
+  );
+  res.status(201).json({
+    ok: true,
+    document: { id: document.id, documentType: document.document_type, version: document.version, createdAt: document.created_at },
+  });
+};
+
 // Jobs
 
 /**
@@ -171,5 +195,5 @@ module.exports = {
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
   runSubscriptionJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof,
+  reviewPayment, getPaymentProof, listPayments, publishLegalDocument,
 };

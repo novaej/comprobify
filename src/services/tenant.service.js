@@ -6,6 +6,7 @@ const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const sequentialService = require('./sequential.service');
 const subscriptionService = require('./subscription.service');
+const legalDocumentService = require('./legal-document.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
@@ -18,6 +19,44 @@ function sha256Hex(value) {
 
 async function updateLanguage(tenantId, language) {
   await tenantModel.updatePreferredLanguage(tenantId, language);
+}
+
+async function getLegalStatus(tenantId) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  const { version: currentVersion } = await legalDocumentService.getCurrentSnapshot();
+  const acceptedVersion = tenant.legal_version || null;
+  const needsAcceptance = currentVersion !== null && currentVersion !== acceptedVersion;
+
+  const documents = await legalDocumentService.listCurrent();
+
+  return {
+    needsAcceptance,
+    currentVersion,
+    acceptedVersion,
+    documents: documents.map((d) => ({
+      documentType: d.document_type,
+      version: d.version,
+      url: `/v1/legal/documents/${d.document_type}`,
+    })),
+  };
+}
+
+// Re-acceptance always happens after a legal-status check already showed
+// needsAcceptance: true, which only fires once something has actually been
+// published — so currentVersion === null here is an unreachable-in-practice
+// defensive branch, not a normal flow.
+async function acceptLegal(tenantId, termsVersion) {
+  const { version: currentVersion, hash } = await legalDocumentService.getCurrentSnapshot();
+  if (currentVersion === null || termsVersion !== currentVersion) {
+    throw new AppError(
+      `termsVersion '${termsVersion}' does not match the currently published version`,
+      400,
+      ErrorCodes.LEGAL_VERSION_MISMATCH
+    );
+  }
+  await tenantModel.updateLegalAcceptance(tenantId, termsVersion, hash);
 }
 
 async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY') {
@@ -76,4 +115,4 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   return { apiKeys, ...billing };
 }
 
-module.exports = { updateLanguage, promote };
+module.exports = { updateLanguage, promote, getLegalStatus, acceptLegal };

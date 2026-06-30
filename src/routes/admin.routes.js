@@ -6,9 +6,23 @@ const validateRequest = require('../middleware/validate-request');
 const authenticateAdmin = require('../middleware/authenticate-admin');
 const { adminLimiter } = require('../middleware/rate-limit');
 const v = require('../validators/admin.validator');
+const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+const LEGAL_DOCUMENT_MIME_TYPES = new Set(['application/pdf']);
+const uploadLegalDocument = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!LEGAL_DOCUMENT_MIME_TYPES.has(file.mimetype)) {
+      return cb(new AppError('Legal document must be a PDF file', 400, ErrorCodes.INVALID_FILE_UPLOAD));
+    }
+    cb(null, true);
+  },
+});
 
 router.use(adminLimiter);
 router.use(authenticateAdmin);
@@ -35,8 +49,20 @@ router.post('/tenants/:id/subscriptions',       v.createSubscription, validateRe
 router.get('/tenants/:id/subscriptions',        v.listSubscriptions,  validateRequest, asyncHandler(controller.listSubscriptions));
 router.patch('/subscriptions/:id/link-invoice', v.linkInvoice,        validateRequest, asyncHandler(controller.linkInvoice));
 router.patch('/subscriptions/:id/cancel',       v.cancelSubscription, validateRequest, asyncHandler(controller.cancelSubscription));
+router.get('/payments',                         v.listPayments,       validateRequest, asyncHandler(controller.listPayments));
 router.patch('/payments/:id/review',            v.reviewPayment,      validateRequest, asyncHandler(controller.reviewPayment));
 router.get('/payments/:id/proof',               v.getPaymentProof,    validateRequest, asyncHandler(controller.getPaymentProof));
+
+// Legal documents
+const handleLegalDocumentUpload = (req, res, next) => {
+  uploadLegalDocument.single('document')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      return next(new AppError(err.message, 400, ErrorCodes.INVALID_FILE_UPLOAD));
+    }
+    next(err);
+  });
+};
+router.post('/legal-documents', handleLegalDocumentUpload, v.publishLegalDocument, validateRequest, asyncHandler(controller.publishLegalDocument));
 
 // Jobs
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));

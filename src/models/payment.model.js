@@ -40,6 +40,22 @@ async function findByInvoiceDocumentId(documentId) {
   return rows[0] || null;
 }
 
+// Cross-tenant queue of payments awaiting manual review — backs the admin
+// payments list (GET /admin/payments). Joins subscriptions for tenant_id since
+// payments don't carry it directly. Defaults to REPORTED (proof submitted,
+// not yet decided) but accepts any status for the same endpoint to reuse.
+async function findAllByStatus(status = 'REPORTED') {
+  const { rows } = await db.query(
+    `SELECT p.*, s.tenant_id, s.tier, s.billing_interval
+     FROM payments p
+     JOIN subscriptions s ON s.id = p.subscription_id
+     WHERE p.status = $1
+     ORDER BY p.reported_at ASC NULLS LAST, p.created_at ASC`,
+    [status]
+  );
+  return rows;
+}
+
 // Finds an in-flight (not yet rejected/refunded) tier-change payment for a
 // subscription that hasn't had its invoice linked yet — used both to block a
 // second concurrent tier-change request and, once VERIFIED, to find the
@@ -102,6 +118,7 @@ module.exports = {
   findById,
   findBySubscriptionId,
   findByInvoiceDocumentId,
+  findAllByStatus,
   findPendingTierChangeBySubscriptionId,
   findPendingRenewalBySubscriptionId,
   updateStatus,
