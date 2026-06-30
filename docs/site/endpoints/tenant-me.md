@@ -22,7 +22,9 @@ GET /v1/tenants/me
     "status": "ACTIVE",
     "documentCount": 128,
     "documentQuota": 1000,
-    "sandbox": false
+    "sandbox": false,
+    "legalAcceptedAt": "2026-06-28T12:00:00.000Z",
+    "legalVersion": "2026-06-28"
   }
 }
 ```
@@ -36,6 +38,8 @@ GET /v1/tenants/me
 | `documentCount` | Documents issued in the current billing period. |
 | `documentQuota` | Document limit for the current `subscriptionTier`. |
 | `sandbox` | `true` if the tenant is in the SRI test environment, `false` if promoted to production. |
+| `legalAcceptedAt` | Timestamp of the most recent legal acceptance event, or `null` for admin-created tenants. Compare against `GET /v1/tenants/legal-status` to detect drift. |
+| `legalVersion` | The TERMS document version the tenant last accepted, or `null` for admin-created tenants. |
 
 ## Errors
 
