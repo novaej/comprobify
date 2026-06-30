@@ -2,12 +2,12 @@ const db = require('../config/database');
 const TenantStatus = require('../constants/tenant-status');
 const EmailStatus = require('../constants/email-status');
 
-async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, documentQuota = 5, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es', legalVersion = null, legalSnapshotHash = null }) {
+async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, documentQuota = 5, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es', legalVersion = null }) {
   const { rows } = await db.query(
-    `INSERT INTO tenants (email, subscription_tier, status, document_quota, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language, legal_accepted_at, legal_version, legal_snapshot_hash)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $9::TEXT IS NULL THEN NULL ELSE NOW() END, $9, $10)
+    `INSERT INTO tenants (email, subscription_tier, status, document_quota, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language, legal_accepted_at, legal_version)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $9::TEXT IS NULL THEN NULL ELSE NOW() END, $9)
      RETURNING *`,
-    [email, subscriptionTier, status, documentQuota, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage, legalVersion, legalSnapshotHash]
+    [email, subscriptionTier, status, documentQuota, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage, legalVersion]
   );
   return rows[0];
 }
@@ -125,10 +125,10 @@ async function updatePreferredLanguage(id, language) {
   return rows[0] || null;
 }
 
-async function updateLegalAcceptance(id, version, snapshotHash) {
+async function updateLegalAcceptance(id, version) {
   const { rows } = await db.query(
-    `UPDATE tenants SET legal_accepted_at = NOW(), legal_version = $1, legal_snapshot_hash = $2, updated_at = NOW() WHERE id = $3 RETURNING *`,
-    [version, snapshotHash, id]
+    `UPDATE tenants SET legal_accepted_at = NOW(), legal_version = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [version, id]
   );
   return rows[0] || null;
 }

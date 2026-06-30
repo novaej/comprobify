@@ -242,6 +242,11 @@ const publishLegalDocument = [
     .notEmpty()
     .isLength({ max: 50 })
     .withMessage('version is required and must be max 50 characters'),
+
+  body('contentMarkdown')
+    .notEmpty()
+    .isString()
+    .withMessage('contentMarkdown is required and must be a non-empty string'),
 ];
 
 module.exports = {

@@ -8,7 +8,7 @@ const certificateService = require('./certificate.service');
 const emailService = require('./email.service');
 const tenantEventModel = require('../models/tenant-event.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
-const legalDocumentService = require('./legal-document.service');
+const legalAcceptanceService = require('./legal-acceptance.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const TIERS = require('../constants/subscription-tiers');
@@ -34,7 +34,7 @@ function formatTenant(row) {
   };
 }
 
-async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
+async function register(fields, p12Buffer, p12Password, logoBuffer = null, acceptanceContext = {}) {
   const existing = await tenantModel.findByEmail(fields.email);
   if (existing) {
     if (existing.status === TenantStatus.SUSPENDED) {
@@ -74,18 +74,12 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
     throw new ConflictError(`RUC ${fields.ruc} is already registered`);
   }
 
-  // Validate against the published bundle, but only once something has actually
-  // been published — pre-launch, before any PDFs exist via the admin endpoint,
-  // there's nothing authoritative to check against, so termsVersion is trusted
-  // as-is (matches the original "API just records it" behavior for that case).
-  const { version: currentLegalVersion, hash: legalSnapshotHash } = await legalDocumentService.getCurrentSnapshot();
-  if (currentLegalVersion !== null && fields.termsVersion !== currentLegalVersion) {
-    throw new AppError(
-      `termsVersion '${fields.termsVersion}' does not match the currently published version`,
-      400,
-      ErrorCodes.LEGAL_VERSION_MISMATCH
-    );
-  }
+  // Validate against the published TERMS document, but only once something has
+  // actually been published — pre-launch, before any documents exist via the
+  // admin endpoint, there's nothing authoritative to check against, so
+  // termsVersion is trusted as-is (matches the original "API just records it"
+  // behavior for that case).
+  await legalAcceptanceService.validateTermsVersion(fields.termsVersion);
 
   const parsed = certificateService.parseCertificate(p12Buffer, p12Password || '');
   const encryptedPrivateKey = cryptoService.encrypt(parsed.privateKeyPem);
@@ -107,8 +101,9 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
       verificationRedirectUrl: fields.verificationRedirectUrl || null,
       preferredLanguage: fields.language || 'es',
       legalVersion: fields.termsVersion,
-      legalSnapshotHash: currentLegalVersion !== null ? legalSnapshotHash : null,
     });
+
+    await legalAcceptanceService.recordAcceptance(tenant.id, acceptanceContext);
 
     issuer = await issuerModel.create({
       tenantId: tenant.id,

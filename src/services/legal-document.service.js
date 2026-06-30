@@ -1,12 +1,20 @@
 const crypto = require('crypto');
+const MarkdownIt = require('markdown-it');
 const legalDocumentModel = require('../models/legal-document.model');
 const NotFoundError = require('../errors/not-found-error');
 const ErrorCodes = require('../constants/error-codes');
 
+const markdownRenderer = new MarkdownIt();
+
 const DOCUMENT_TYPES = ['TERMS', 'PRIVACY', 'DPA'];
 
-async function publish(documentType, version, buffer, contentType) {
-  return legalDocumentModel.create({ documentType, version, content: buffer, contentType });
+function sha256Hex(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+async function publish(documentType, version, contentMarkdown) {
+  const contentHash = sha256Hex(contentMarkdown);
+  return legalDocumentModel.create({ documentType, version, contentMarkdown, contentHash });
 }
 
 async function getCurrent(documentType) {
@@ -19,23 +27,27 @@ async function listCurrent() {
   return legalDocumentModel.findAllCurrent();
 }
 
-// The "bundle version" a Client must accept is whichever of TERMS/PRIVACY/DPA was
-// published most recently — not just TERMS — so that publishing an updated DPA
-// alone (without touching ToS/Privacy text) still forces re-acceptance instead of
-// going unnoticed ("DPA silencioso"). hash is a tamper-evident fingerprint of
-// exactly which published row of each type was current at this moment, kept
-// alongside the version string as a stronger audit trail than the string alone.
-async function getCurrentSnapshot() {
-  const documents = await listCurrent();
-  if (documents.length === 0) return { version: null, hash: null };
-
-  const newest = documents.reduce((a, b) => (new Date(b.created_at) > new Date(a.created_at) ? b : a));
-  const fingerprint = documents
-    .map((d) => ({ documentType: d.document_type, id: d.id, version: d.version }))
-    .sort((a, b) => a.documentType.localeCompare(b.documentType));
-  const hash = crypto.createHash('sha256').update(JSON.stringify(fingerprint)).digest('hex');
-
-  return { version: newest.version, hash };
+// Replaces {{token}} placeholders (e.g. {{cliente.razonSocial}}) with values
+// from a flat or nested object before rendering. Unmatched tokens are left
+// as-is rather than blanked out, so a missing value is visibly obvious
+// instead of silently disappearing from a legal document.
+function substitutePlaceholders(markdown, values = {}) {
+  return markdown.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, path) => {
+    const value = path.split('.').reduce((obj, key) => (obj == null ? undefined : obj[key]), values);
+    return value === undefined ? match : String(value);
+  });
 }
 
-module.exports = { DOCUMENT_TYPES, publish, getCurrent, listCurrent, getCurrentSnapshot };
+// Markdown is the only thing ever stored — HTML is always rendered on
+// demand, here, via the open-source `markdown-it` parser. Never persisted,
+// so there's nothing to keep in sync when the renderer or template changes.
+function renderHtml(contentMarkdown, values = {}) {
+  return markdownRenderer.render(substitutePlaceholders(contentMarkdown, values));
+}
+
+async function getCurrentHtml(documentType, values = {}) {
+  const doc = await getCurrent(documentType);
+  return { html: renderHtml(doc.content_markdown, values), version: doc.version };
+}
+
+module.exports = { DOCUMENT_TYPES, publish, getCurrent, listCurrent, renderHtml, getCurrentHtml, substitutePlaceholders };

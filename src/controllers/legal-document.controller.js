@@ -13,10 +13,9 @@ const list = async (req, res) => {
 };
 
 const getByType = async (req, res) => {
-  const doc = await legalDocumentService.getCurrent(req.params.type);
-  res.setHeader('Content-Type', doc.content_type);
-  res.setHeader('Content-Disposition', `inline; filename="${doc.document_type.toLowerCase()}-${doc.version}.pdf"`);
-  res.send(doc.content);
+  const { html } = await legalDocumentService.getCurrentHtml(req.params.type);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 };
 
 module.exports = { list, getByType };

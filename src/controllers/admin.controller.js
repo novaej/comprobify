@@ -133,14 +133,10 @@ const listPayments = async (req, res) => {
 // Legal documents
 
 const publishLegalDocument = async (req, res) => {
-  if (!req.file) {
-    throw new AppError('A document file is required', 400, ErrorCodes.INVALID_FILE_UPLOAD);
-  }
   const document = await legalDocumentService.publish(
     req.body.documentType,
     req.body.version,
-    req.file.buffer,
-    req.file.mimetype,
+    req.body.contentMarkdown,
   );
   res.status(201).json({
     ok: true,

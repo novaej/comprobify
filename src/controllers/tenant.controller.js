@@ -25,7 +25,10 @@ const getLegalStatus = async (req, res) => {
 };
 
 const acceptLegal = async (req, res) => {
-  await tenantService.acceptLegal(req.tenant.id, req.body.termsVersion);
+  await tenantService.acceptLegal(req.tenant.id, req.body.termsVersion, {
+    ip: req.ip,
+    userAgent: req.headers['user-agent'] || null,
+  });
   res.json({ ok: true });
 };
 
