@@ -692,7 +692,12 @@
           "name": "Submit Payment Proof",
           "request": {
             "method": "PATCH",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/v1/payments/{{payment_id}}/proof",
               "host": [
@@ -729,6 +734,10 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -759,7 +768,12 @@
           "name": "Get My Subscriptions",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/v1/subscriptions/me",
               "host": [
@@ -779,6 +793,10 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
