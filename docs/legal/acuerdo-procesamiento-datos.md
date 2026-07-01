@@ -53,7 +53,11 @@ El Encargado notificará al Responsable con razonable antelación antes de incor
 
 ## 7. Retención y eliminación al término del contrato
 
-Los comprobantes electrónicos y su historial podrán conservarse durante el tiempo que resulte necesario para la prestación del Servicio y el cumplimiento de obligaciones legales, fiscales, de auditoría o seguridad. Mientras el Servicio no disponga de una funcionalidad de eliminación definitiva, el Encargado podrá conservar dicha información cuando ello resulte necesario para las finalidades descritas en esta sección, aplicando las medidas de seguridad previstas en la sección 4.
+El Servicio almacena exclusivamente datos relacionados con comprobantes electrónicos (facturas, notas de crédito y documentos similares) autorizados por el Servicio de Rentas Internas ("SRI"), así como los metadatos de su firma, transmisión y autorización. No almacena datos de los compradores del Responsable fuera de este contexto.
+
+Los datos contenidos en comprobantes electrónicos autorizados por el SRI están sujetos al período de conservación obligatorio establecido por la normativa tributaria ecuatoriana — en particular el Código Tributario y el Reglamento de Comprobantes de Venta, Retención y Documentos Complementarios. **Durante dicho período, que no es inferior a siete (7) años desde la fecha de emisión del comprobante conforme a la normativa vigente, el Encargado no eliminará estos datos, incluso ante una solicitud del Responsable.** Esta limitación se fundamenta en la obligación legal del Encargado de conservar documentos tributarios durante el período de prescripción de las obligaciones tributarias (Art. 15 LOPDP — limitación del derecho de supresión por obligación legal).
+
+Para los datos del Responsable que no formen parte de comprobantes electrónicos autorizados (datos de cuenta, metadatos de registro), el Encargado atenderá solicitudes de supresión conforme a la obligación establecida en la sección 4(7), una vez que no existan obligaciones legales que requieran su conservación.
 
 ## 8. Auditoría
 

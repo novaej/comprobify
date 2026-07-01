@@ -26,6 +26,8 @@ Toda cuenta inicia en ambiente de pruebas del SRI y debe ser activada explícita
 
 El Cliente es responsable de la custodia de sus credenciales. Comprobify almacena la clave privada del certificado de firma cifrada, pero no puede recuperar credenciales perdidas fuera de los mecanismos de recuperación de cuenta disponibles en el Servicio.
 
+Los comprobantes electrónicos emitidos a través del Servicio y sus metadatos de autorización están sujetos a los plazos de conservación establecidos por la normativa tributaria ecuatoriana. Conforme al Código Tributario, dichos datos no serán eliminados durante el período de prescripción de las obligaciones tributarias, que no es inferior a siete (7) años desde la fecha de emisión. Ver la Política de Privacidad para más detalle.
+
 ## 4. Planes, cuotas y facturación
 
 El Servicio se ofrece bajo planes de suscripción con diferentes límites de uso y funcionalidades, según lo publicado en la documentación oficial.
