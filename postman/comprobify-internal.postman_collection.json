@@ -566,6 +566,98 @@
             },
             "description": "Record re-acceptance of all currently published documents. Use when legal-status returns needsAcceptance: true."
           }
+        },
+        {
+          "name": "List Tenant Legal Documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.ok) {",
+                  "  const pending = r.documents.filter(d => d.status === 'PENDING');",
+                  "  if (pending.length) console.log('PENDING documents:', pending.map(d => d.documentType).join(', '));",
+                  "  const accepted = r.documents.filter(d => d.status === 'ACCEPTED');",
+                  "  console.log('ACCEPTED:', accepted.map(d => d.documentType + ' v' + d.templateVersion).join(', '));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/legal-documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "legal-documents"
+              ]
+            },
+            "description": "Lists all personalized document instances for this tenant across all versions. status: PENDING (not yet accepted) or ACCEPTED."
+          }
+        },
+        {
+          "name": "View Legal Document (TERMS)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/legal-documents/TERMS",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "legal-documents",
+                "TERMS"
+              ]
+            },
+            "description": "Returns the tenant's personalized Terms of Service as HTML — their businessName and RUC substituted in, with the disclaimer notice prepended. Also try /PRIVACY and /DPA. Check response headers: X-Document-Status, X-Template-Version, X-Accepted-At."
+          }
+        },
+        {
+          "name": "View Legal Document (DPA)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/legal-documents/DPA",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "legal-documents",
+                "DPA"
+              ]
+            },
+            "description": "DPA with the tenant's own businessName and RUC in the intro paragraph. Verify the substitution is correct before accepting."
+          }
         }
       ]
     },
@@ -2499,6 +2591,49 @@
               ]
             },
             "description": "List payments awaiting manual review. Default status=REPORTED (proof submitted, decision pending). Captures payment_id of the first result."
+          }
+        },
+        {
+          "name": "Generate Legal Documents for Tenant (Backfill)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.ok) console.log('Generated', r.generated, 'document instances for tenant {{tenant_id}}');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/legal-documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants",
+                "{{tenant_id}}",
+                "legal-documents"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Generates personalized PENDING document instances for a tenant who registered before legal documents were published, or to regenerate after a template update. Reads current published templates + the tenant's primary issuer data. Idempotent — skips types already generated for the current template version."
           }
         },
         {
