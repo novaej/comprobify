@@ -19,4 +19,17 @@ const promote = async (req, res) => {
   res.json({ ok: true, ...result });
 };
 
-module.exports = { getMe, updateLanguage, promote };
+const getLegalStatus = async (req, res) => {
+  const legal = await tenantService.getLegalStatus(req.tenant.id);
+  res.json({ ok: true, legal });
+};
+
+const acceptLegal = async (req, res) => {
+  await tenantService.acceptLegal(req.tenant.id, req.body.termsVersion, {
+    ip: req.ip,
+    userAgent: req.headers['user-agent'] || null,
+  });
+  res.json({ ok: true });
+};
+
+module.exports = { getMe, updateLanguage, promote, getLegalStatus, acceptLegal };

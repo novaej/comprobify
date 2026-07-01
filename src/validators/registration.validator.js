@@ -80,6 +80,11 @@ const register = [
     .isIn(SUPPORTED_LANGUAGES)
     .withMessage(`language must be one of: ${SUPPORTED_LANGUAGES.join(', ')}`),
 
+  body('termsVersion')
+    .notEmpty()
+    .isLength({ max: 50 })
+    .withMessage('termsVersion is required and must be max 50 characters'),
+
   body('verificationRedirectUrl')
     .optional()
     .isURL({

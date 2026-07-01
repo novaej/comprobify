@@ -6,6 +6,7 @@ const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const sequentialService = require('./sequential.service');
 const subscriptionService = require('./subscription.service');
+const legalAcceptanceService = require('./legal-acceptance.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
@@ -18,6 +19,22 @@ function sha256Hex(value) {
 
 async function updateLanguage(tenantId, language) {
   await tenantModel.updatePreferredLanguage(tenantId, language);
+}
+
+async function getLegalStatus(tenantId) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  return legalAcceptanceService.getStatus(tenantId);
+}
+
+// Accepts the whole currently-published bundle in one call (matches the
+// single-checkbox UX) — termsVersion is just the optimistic-concurrency check
+// confirming the frontend's TERMS copy is still current before recording.
+async function acceptLegal(tenantId, termsVersion, { ip, userAgent } = {}) {
+  await legalAcceptanceService.validateTermsVersion(termsVersion);
+  await legalAcceptanceService.recordAcceptance(tenantId, { ip, userAgent });
+  await tenantModel.updateLegalAcceptance(tenantId, termsVersion);
 }
 
 async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY') {
@@ -76,4 +93,4 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   return { apiKeys, ...billing };
 }
 
-module.exports = { updateLanguage, promote };
+module.exports = { updateLanguage, promote, getLegalStatus, acceptLegal };

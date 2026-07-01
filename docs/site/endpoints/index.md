@@ -12,6 +12,13 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `GET` | `/v1/verify-email` | Verify email with token from registration email |
 | `POST` | `/v1/resend-verification` | Resend verification email (regenerates token) |
 
+## Legal documents (public)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/v1/legal/documents` | List current published version of each document type (TERMS, PRIVACY, DPA) — read `version` from here and pass it as `termsVersion` on signup |
+| `GET` | `/v1/legal/documents/:type` | Fetch the current document rendered as HTML — embed in a modal or page in your registration UI |
+
 ## Tiers (public)
 
 | Method | Path | Description |
@@ -36,9 +43,11 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/v1/tenants/me` | Resolve the tenant (id, email, tier, status, quota, environment) for the authenticated API key |
+| `GET` | `/v1/tenants/me` | Resolve the tenant (id, email, tier, status, quota, environment, legal acceptance) for the authenticated API key |
 | `PATCH` | `/v1/tenants/language` | Update the preferred language for outgoing emails |
 | `POST` | `/v1/tenants/promote` | Promote the tenant to production — revokes all sandbox keys and creates matching production keys |
+| `GET` | `/v1/tenants/legal-status` | Check whether any legal documents have been updated since the tenant's last acceptance — returns which specific types are outdated |
+| `POST` | `/v1/tenants/accept-legal` | Record a new legal acceptance for all currently published documents — call this after showing the updated documents and getting user confirmation |
 
 ## Issuers (authenticated)
 

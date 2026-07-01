@@ -40,6 +40,8 @@ const authenticate = async (req, _res, next) => {
     documentCount: row.tenant_document_count,
     documentQuota: row.tenant_document_quota,
     sandbox: row.tenant_sandbox,
+    legalAcceptedAt: row.tenant_legal_accepted_at,
+    legalVersion: row.tenant_legal_version,
   };
 
   next();

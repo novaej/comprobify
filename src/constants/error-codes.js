@@ -105,6 +105,12 @@ const ErrorCodes = Object.freeze({
   /** Webhook endpoint not found or belongs to a different tenant */
   WEBHOOK_ENDPOINT_NOT_FOUND: 'WEBHOOK_ENDPOINT_NOT_FOUND',
 
+  // --- Legal documents ---
+  /** No published version exists yet for the requested document type */
+  LEGAL_DOCUMENT_NOT_FOUND: 'LEGAL_DOCUMENT_NOT_FOUND',
+  /** Submitted termsVersion does not match the currently published version */
+  LEGAL_VERSION_MISMATCH: 'LEGAL_VERSION_MISMATCH',
+
   // --- File upload ---
   /** Multipart file upload is malformed or contains an unexpected field */
   INVALID_FILE_UPLOAD: 'INVALID_FILE_UPLOAD',

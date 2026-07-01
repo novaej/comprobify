@@ -35,8 +35,12 @@ router.post('/tenants/:id/subscriptions',       v.createSubscription, validateRe
 router.get('/tenants/:id/subscriptions',        v.listSubscriptions,  validateRequest, asyncHandler(controller.listSubscriptions));
 router.patch('/subscriptions/:id/link-invoice', v.linkInvoice,        validateRequest, asyncHandler(controller.linkInvoice));
 router.patch('/subscriptions/:id/cancel',       v.cancelSubscription, validateRequest, asyncHandler(controller.cancelSubscription));
+router.get('/payments',                         v.listPayments,       validateRequest, asyncHandler(controller.listPayments));
 router.patch('/payments/:id/review',            v.reviewPayment,      validateRequest, asyncHandler(controller.reviewPayment));
 router.get('/payments/:id/proof',               v.getPaymentProof,    validateRequest, asyncHandler(controller.getPaymentProof));
+
+// Legal documents — markdown text in the JSON body, not a file upload
+router.post('/legal-documents', v.publishLegalDocument, validateRequest, asyncHandler(controller.publishLegalDocument));
 
 // Jobs
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));

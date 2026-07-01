@@ -1,7 +1,8 @@
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const TIERS = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const { SUPPORTED_TYPES } = require('../builders');
+const legalDocumentService = require('../services/legal-document.service');
 
 // Tenants
 const createTenant = [
@@ -225,9 +226,32 @@ const getPaymentProof = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
+const listPayments = [
+  query('status')
+    .optional()
+    .isIn(['PENDING', 'REPORTED', 'VERIFIED', 'REJECTED'])
+    .withMessage('status must be one of: PENDING, REPORTED, VERIFIED, REJECTED'),
+];
+
+const publishLegalDocument = [
+  body('documentType')
+    .isIn(legalDocumentService.DOCUMENT_TYPES)
+    .withMessage(`documentType must be one of: ${legalDocumentService.DOCUMENT_TYPES.join(', ')}`),
+
+  body('version')
+    .notEmpty()
+    .isLength({ max: 50 })
+    .withMessage('version is required and must be max 50 characters'),
+
+  body('contentMarkdown')
+    .notEmpty()
+    .isString()
+    .withMessage('contentMarkdown is required and must be a non-empty string'),
+];
+
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof,
+  reviewPayment, getPaymentProof, listPayments, publishLegalDocument,
 };

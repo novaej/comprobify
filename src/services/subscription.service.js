@@ -550,6 +550,26 @@ async function listByTenant(tenantId) {
   return subscriptionModel.findByTenantId(tenantId);
 }
 
+// Cross-tenant review queue for the admin panel — every payment in the given
+// status (default REPORTED: proof submitted, awaiting a decision), with the
+// tenant's business identity attached so the admin doesn't need a second
+// lookup per row. proof_file is never included; GET /admin/payments/:id/proof
+// streams it separately (same omitProofFile pattern as everywhere else here).
+async function listPendingPayments(status = 'REPORTED') {
+  const payments = await paymentModel.findAllByStatus(status);
+  const tenantIds = [...new Set(payments.map((p) => p.tenant_id))];
+  const tenants = await Promise.all(tenantIds.map((id) => tenantModel.findById(id)));
+  const tenantsById = new Map(tenants.filter(Boolean).map((t) => [t.id, t]));
+
+  return payments.map((payment) => {
+    const tenant = tenantsById.get(payment.tenant_id);
+    return {
+      ...omitProofFile(payment),
+      tenant: tenant ? { id: tenant.id, email: tenant.email } : null,
+    };
+  });
+}
+
 // Tenant-facing read: full subscription history with each one's payments nested,
 // newest first. No notification exists when a review/activation happens — this
 // (polled) is how a tenant finds out. proof_file is never included; the file
@@ -580,5 +600,6 @@ module.exports = {
   processDueRenewals,
   cancelSubscription,
   listByTenant,
+  listPendingPayments,
   getStatusForTenant,
 };
