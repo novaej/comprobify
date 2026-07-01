@@ -762,7 +762,24 @@
               }
             },
             "description": "Tenant-authenticated (your own API key). Starts a paid subscription on your own, independent of promotion — works while still in sandbox (no need to promote to production first) or any time after. Requires a verified email, same gate POST /v1/tenants/promote uses.\n\nSame manual proof/review pipeline as the rest of the subscription system: upload proof via Submit Payment Proof, the provider reviews it and links the self-billed invoice, and the tier/quota lands once that invoice is SRI-authorized.\n\nIf this subscription is already ACTIVE by the time you call Promote to Production, that call detects it automatically and skips tier selection — any tier/billingInterval you pass there is ignored, and its response surfaces this subscription instead of starting a new one.\n\nFails with 409 SUBSCRIPTION_ALREADY_IN_FLIGHT if you already have one in progress, or 403 EMAIL_VERIFICATION_REQUIRED if your email isn't verified yet."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.ok) {",
+                  "  if (r.subscription?.id) { pm.collectionVariables.set('subscription_id', String(r.subscription.id)); console.log('subscription_id:', r.subscription.id); }",
+                  "  if (r.payment?.id) { pm.collectionVariables.set('payment_id', String(r.payment.id)); console.log('payment_id:', r.payment.id); }",
+                  "  if (r.bankTransfer) console.log('Bank transfer info:', JSON.stringify(r.bankTransfer));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Get My Subscriptions",
@@ -2886,7 +2903,24 @@
               }
             },
             "description": "Starts the manual subscription/payment pipeline for a tenant. `tier` must be STARTER, GROWTH, or BUSINESS (FREE never needs a subscription). `billingInterval` is optional (MONTHLY default, or YEARLY for the 2-months-free discounted price). Creates a `subscriptions` row (PENDING_PAYMENT) and a `payments` row (PENDING, amount taken from `priceMonthlyUsd`/`priceYearlyUsd` in `subscription-tiers.js`). Response includes `bankTransfer` info for the SPI transfer.\n\nFails with 409 SUBSCRIPTION_ALREADY_IN_FLIGHT if the tenant already has one in progress.\n\nCopy the returned `subscription.id` and `payment.id` into the `subscription_id` / `payment_id` collection variables."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.ok) {",
+                  "  if (r.subscription?.id) { pm.collectionVariables.set('subscription_id', String(r.subscription.id)); console.log('subscription_id:', r.subscription.id); }",
+                  "  if (r.payment?.id) { pm.collectionVariables.set('payment_id', String(r.payment.id)); console.log('payment_id:', r.payment.id); }",
+                  "  if (r.bankTransfer) console.log('Bank transfer info:', JSON.stringify(r.bankTransfer));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "List Subscriptions",
