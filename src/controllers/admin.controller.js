@@ -1,8 +1,8 @@
 const adminService = require('../services/admin.service');
 const notificationSchedulerService = require('../services/notification-scheduler.service');
 const subscriptionService = require('../services/subscription.service');
-const legalDocumentService = require('../services/legal-document.service');
-const tenantLegalDocumentService = require('../services/tenant-legal-document.service');
+const agreementService = require('../services/agreement.service');
+const tenantAgreementService = require('../services/tenant-agreement.service');
 const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
@@ -134,17 +134,17 @@ const listPayments = async (req, res) => {
 
 // Legal documents
 
-const generateTenantLegalDocuments = async (req, res) => {
+const generateTenantAgreements = async (req, res) => {
   const tenantId = parseInt(req.params.id, 10);
   const issuer = await issuerModel.findByTenantId(tenantId);
-  const created = await tenantLegalDocumentService.generateForTenant(tenantId, issuer);
+  const created = await tenantAgreementService.generateForTenant(tenantId, issuer);
   res.status(201).json({ ok: true, generated: created.length, documents: created.map((d) => ({
     id: d.id, documentType: d.document_type, templateVersion: d.template_version, status: d.status,
   }))});
 };
 
-const publishLegalDocument = async (req, res) => {
-  const document = await legalDocumentService.publish(
+const publishAgreement = async (req, res) => {
+  const document = await agreementService.publish(
     req.body.documentType,
     req.body.version,
   );
@@ -154,13 +154,13 @@ const publishLegalDocument = async (req, res) => {
   });
 };
 
-const activateLegalDocument = async (req, res) => {
-  const document = await legalDocumentService.activateVersion(parseInt(req.params.id, 10));
+const activateAgreement = async (req, res) => {
+  const document = await agreementService.activateVersion(parseInt(req.params.id, 10));
   res.json({ ok: true, document: { id: document.id, documentType: document.document_type, version: document.version, isCurrent: document.is_current } });
 };
 
-const listLegalDocumentVersions = async (req, res) => {
-  const versions = await legalDocumentService.listVersionsByType(req.params.type);
+const listAgreementVersions = async (req, res) => {
+  const versions = await agreementService.listVersionsByType(req.params.type);
   res.json({ ok: true, versions });
 };
 
@@ -212,5 +212,5 @@ module.exports = {
   runSubscriptionJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPayments,
-  publishLegalDocument, activateLegalDocument, listLegalDocumentVersions, generateTenantLegalDocuments,
+  publishAgreement, activateAgreement, listAgreementVersions, generateTenantAgreements,
 };

@@ -1,5 +1,5 @@
 const tenantService = require('../services/tenant.service');
-const tenantLegalDocumentService = require('../services/tenant-legal-document.service');
+const tenantAgreementService = require('../services/tenant-agreement.service');
 
 const getMe = async (req, res) => {
   res.json({ ok: true, tenant: req.tenant });
@@ -20,21 +20,21 @@ const promote = async (req, res) => {
   res.json({ ok: true, ...result });
 };
 
-const getLegalStatus = async (req, res) => {
-  const legal = await tenantService.getLegalStatus(req.tenant.id);
+const getAgreementStatus = async (req, res) => {
+  const legal = await tenantService.getAgreementStatus(req.tenant.id);
   res.json({ ok: true, legal });
 };
 
-const acceptLegal = async (req, res) => {
-  await tenantService.acceptLegal(req.tenant.id, req.body.termsVersion, {
+const acceptAgreements = async (req, res) => {
+  await tenantService.acceptAgreements(req.tenant.id, req.body.termsVersion, {
     ip: req.ip,
     userAgent: req.headers['user-agent'] || null,
   });
   res.json({ ok: true });
 };
 
-const listLegalDocuments = async (req, res) => {
-  const documents = await tenantLegalDocumentService.listForTenant(req.tenant.id);
+const listTenantAgreements = async (req, res) => {
+  const documents = await tenantAgreementService.listForTenant(req.tenant.id);
   res.json({
     ok: true,
     documents: documents.map((d) => ({
@@ -48,9 +48,9 @@ const listLegalDocuments = async (req, res) => {
   });
 };
 
-const getLegalDocument = async (req, res) => {
+const getTenantAgreement = async (req, res) => {
   const { html, status, templateVersion, acceptedAt } =
-    await tenantLegalDocumentService.renderForTenant(req.tenant.id, req.params.type);
+    await tenantAgreementService.renderForTenant(req.tenant.id, req.params.type);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('X-Document-Status', status);
   res.setHeader('X-Template-Version', templateVersion);
@@ -58,4 +58,4 @@ const getLegalDocument = async (req, res) => {
   res.send(html);
 };
 
-module.exports = { getMe, updateLanguage, promote, getLegalStatus, acceptLegal, listLegalDocuments, getLegalDocument };
+module.exports = { getMe, updateLanguage, promote, getAgreementStatus, acceptAgreements, listTenantAgreements, getTenantAgreement };

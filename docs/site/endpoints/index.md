@@ -16,8 +16,8 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/v1/legal/documents` | List current published version of each document type (TERMS, PRIVACY, DPA) — read `version` from here and pass it as `termsVersion` on signup |
-| `GET` | `/v1/legal/documents/:type` | Fetch the current document rendered as HTML — embed in a modal or page in your registration UI |
+| `GET` | `/v1/agreements` | List current published version of each document type (TERMS, PRIVACY, DPA) — read `version` from here and pass it as `termsVersion` on signup |
+| `GET` | `/v1/agreements/:type` | Fetch the current document rendered as HTML — embed in a modal or page in your registration UI |
 
 ## Tiers (public)
 
@@ -46,10 +46,10 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `GET` | `/v1/tenants/me` | Resolve the tenant (id, email, tier, status, quota, environment, legal acceptance) for the authenticated API key |
 | `PATCH` | `/v1/tenants/language` | Update the preferred language for outgoing emails |
 | `POST` | `/v1/tenants/promote` | Promote the tenant to production — revokes all sandbox keys and creates matching production keys |
-| `GET` | `/v1/tenants/legal-acceptance` | Check whether any legal documents need acceptance — returns which types are outdated. Lazily generates PENDING instances for any new template versions; third-party integrators should poll this periodically |
-| `POST` | `/v1/tenants/legal-acceptance` | Accept all PENDING legal documents — required before promoting to production |
-| `GET` | `/v1/tenants/legal-documents` | List all personalized legal document instances for the tenant, with status and acceptance timestamps |
-| `GET` | `/v1/tenants/legal-documents/:type` | Render the tenant's personalized document as HTML — includes their business name/RUC and the dates as of when the account was created |
+| `GET` | `/v1/tenants/agreements` | Check whether any agreements need acceptance — returns which types are outdated. Lazily generates PENDING instances for any new template versions; third-party integrators should poll this periodically |
+| `POST` | `/v1/tenants/agreements` | Accept all PENDING agreements — required before promoting to production |
+| `GET` | `/v1/tenants/agreements/history` | List all personalized agreement instances for the tenant, with status and acceptance timestamps |
+| `GET` | `/v1/tenants/agreements/:type` | Render the tenant's personalized document as HTML — includes their business name/RUC and the dates as of when the account was created |
 
 ## Issuers (authenticated)
 

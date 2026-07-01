@@ -68,7 +68,7 @@
     {
       "key": "legal_version",
       "value": "",
-      "description": "Version string of the currently published TERMS document — captured from GET /v1/legal/documents",
+      "description": "Version string of the currently published TERMS document — captured from GET /v1/agreements",
       "type": "string"
     },
     {
@@ -110,7 +110,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/legal/documents",
+              "raw": "{{base_url}}/v1/agreements",
               "host": [
                 "{{base_url}}"
               ],
@@ -129,7 +129,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/legal/documents/TERMS",
+              "raw": "{{base_url}}/v1/agreements/TERMS",
               "host": [
                 "{{base_url}}"
               ],
@@ -149,7 +149,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/legal/documents/PRIVACY",
+              "raw": "{{base_url}}/v1/agreements/PRIVACY",
               "host": [
                 "{{base_url}}"
               ],
@@ -168,7 +168,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/legal/documents/DPA",
+              "raw": "{{base_url}}/v1/agreements/DPA",
               "host": [
                 "{{base_url}}"
               ],
@@ -454,7 +454,7 @@
                   "const r = pm.response.json();",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
-                  "if (r.tenant?.legalVersion) console.log('Last accepted legal version:', r.tenant.legalVersion);"
+                  "if (r.tenant?.agreementVersion) console.log('Last accepted legal version:', r.tenant.agreementVersion);"
                 ],
                 "type": "text/javascript"
               }
@@ -573,14 +573,14 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/legal-acceptance",
+              "raw": "{{base_url}}/v1/tenants/agreements",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
                 "tenants",
-                "legal-acceptance"
+                "agreements"
               ]
             },
             "description": "Check if any document was republished since the tenant last accepted. Use outdated[].url to show updated content."
@@ -614,14 +614,14 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/legal-acceptance",
+              "raw": "{{base_url}}/v1/tenants/agreements",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
                 "tenants",
-                "legal-acceptance"
+                "agreements"
               ]
             },
             "body": {
@@ -660,14 +660,14 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/legal-documents",
+              "raw": "{{base_url}}/v1/tenants/agreements/history",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
                 "tenants",
-                "legal-documents"
+                "agreements"
               ]
             },
             "description": "Lists all personalized document instances for this tenant across all versions. status: PENDING (not yet accepted) or ACCEPTED."
@@ -684,14 +684,14 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/legal-documents/TERMS",
+              "raw": "{{base_url}}/v1/tenants/agreements/TERMS",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
                 "tenants",
-                "legal-documents",
+                "agreements",
                 "TERMS"
               ]
             },
@@ -709,14 +709,14 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/legal-documents/DPA",
+              "raw": "{{base_url}}/v1/tenants/agreements/DPA",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
                 "tenants",
-                "legal-documents",
+                "agreements",
                 "DPA"
               ]
             },

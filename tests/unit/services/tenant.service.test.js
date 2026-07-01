@@ -5,7 +5,7 @@ jest.mock('../../../src/models/api-key.model');
 jest.mock('../../../src/models/issuer-document-type.model');
 jest.mock('../../../src/services/sequential.service');
 jest.mock('../../../src/services/subscription.service');
-jest.mock('../../../src/services/tenant-legal-document.service', () => ({
+jest.mock('../../../src/services/tenant-agreement.service', () => ({
   hasAllAccepted: jest.fn().mockResolvedValue(true),
   getStatus: jest.fn().mockResolvedValue({ needsAcceptance: false, outdated: [] }),
   validateTermsVersion: jest.fn().mockResolvedValue(undefined),

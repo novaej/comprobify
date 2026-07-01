@@ -6,7 +6,7 @@ const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const sequentialService = require('./sequential.service');
 const subscriptionService = require('./subscription.service');
-const tenantLegalDocumentService = require('./tenant-legal-document.service');
+const tenantAgreementService = require('./tenant-agreement.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
@@ -21,18 +21,18 @@ async function updateLanguage(tenantId, language) {
   await tenantModel.updatePreferredLanguage(tenantId, language);
 }
 
-async function getLegalStatus(tenantId) {
+async function getAgreementStatus(tenantId) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
-  return tenantLegalDocumentService.getStatus(tenantId);
+  return tenantAgreementService.getStatus(tenantId);
 }
 
 // Accepts all PENDING tenant legal document instances in one call — matches
 // the single-checkbox UX. termsVersion confirms the frontend was current.
-async function acceptLegal(tenantId, termsVersion, { ip, userAgent } = {}) {
-  await tenantLegalDocumentService.validateTermsVersion(termsVersion);
-  await tenantLegalDocumentService.acceptAll(tenantId, { ip, userAgent });
-  await tenantModel.updateLegalAcceptance(tenantId, termsVersion);
+async function acceptAgreements(tenantId, termsVersion, { ip, userAgent } = {}) {
+  await tenantAgreementService.validateTermsVersion(termsVersion);
+  await tenantAgreementService.acceptAll(tenantId, { ip, userAgent });
+  await tenantModel.updateAgreementAcceptance(tenantId, termsVersion);
 }
 
 async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY') {
@@ -47,12 +47,12 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   }
   if (!tenant.sandbox) throw new ConflictError('Tenant is already in production');
 
-  const allAccepted = await tenantLegalDocumentService.hasAllAccepted(tenantId);
+  const allAccepted = await tenantAgreementService.hasAllAccepted(tenantId);
   if (!allAccepted) {
     throw new AppError(
       'All legal documents must be accepted before promoting to production. Review GET /v1/tenants/legal-documents.',
       403,
-      ErrorCodes.LEGAL_ACCEPTANCE_REQUIRED
+      ErrorCodes.AGREEMENT_ACCEPTANCE_REQUIRED
     );
   }
 
@@ -100,4 +100,4 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   return { apiKeys, ...billing };
 }
 
-module.exports = { updateLanguage, promote, getLegalStatus, acceptLegal };
+module.exports = { updateLanguage, promote, getAgreementStatus, acceptAgreements };

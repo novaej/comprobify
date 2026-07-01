@@ -3,7 +3,7 @@ const { getClient } = db;
 
 async function create({ documentType, version, contentMarkdown, contentHash }) {
   const { rows } = await db.query(
-    `INSERT INTO legal_documents (document_type, version, content_markdown, content_hash)
+    `INSERT INTO agreements (document_type, version, content_markdown, content_hash)
      VALUES ($1, $2, $3, $4)
      RETURNING id, document_type, version, content_markdown, content_hash, created_at, is_current`,
     [documentType, version, contentMarkdown, contentHash]
@@ -20,16 +20,16 @@ async function activate(id) {
   try {
     await client.query('BEGIN');
     const { rows: [target] } = await client.query(
-      'SELECT * FROM legal_documents WHERE id = $1', [id]
+      'SELECT * FROM agreements WHERE id = $1', [id]
     );
     if (!target) { await client.query('ROLLBACK'); return null; }
     await client.query(
-      `UPDATE legal_documents SET is_current = false
+      `UPDATE agreements SET is_current = false
        WHERE document_type = $1 AND is_current = true`,
       [target.document_type]
     );
     const { rows: [updated] } = await client.query(
-      `UPDATE legal_documents SET is_current = true WHERE id = $1 RETURNING *`,
+      `UPDATE agreements SET is_current = true WHERE id = $1 RETURNING *`,
       [id]
     );
     await client.query('COMMIT');
@@ -44,7 +44,7 @@ async function activate(id) {
 
 async function findCurrentByType(documentType) {
   const { rows } = await db.query(
-    `SELECT * FROM legal_documents WHERE document_type = $1 AND is_current = true`,
+    `SELECT * FROM agreements WHERE document_type = $1 AND is_current = true`,
     [documentType]
   );
   return rows[0] || null;
@@ -53,7 +53,7 @@ async function findCurrentByType(documentType) {
 async function findAllCurrent() {
   const { rows } = await db.query(
     `SELECT id, document_type, version, content_hash, created_at
-     FROM legal_documents
+     FROM agreements
      WHERE is_current = true
      ORDER BY document_type`
   );
@@ -61,14 +61,14 @@ async function findAllCurrent() {
 }
 
 async function findById(id) {
-  const { rows } = await db.query('SELECT * FROM legal_documents WHERE id = $1', [id]);
+  const { rows } = await db.query('SELECT * FROM agreements WHERE id = $1', [id]);
   return rows[0] || null;
 }
 
 async function findAllByType(documentType) {
   const { rows } = await db.query(
     `SELECT id, document_type, version, is_current, created_at
-     FROM legal_documents WHERE document_type = $1 ORDER BY created_at DESC`,
+     FROM agreements WHERE document_type = $1 ORDER BY created_at DESC`,
     [documentType]
   );
   return rows;

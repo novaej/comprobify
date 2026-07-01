@@ -2,18 +2,18 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const MarkdownIt = require('markdown-it');
-const legalDocumentModel = require('../models/legal-document.model');
+const agreementModel = require('../models/agreement.model');
 const NotFoundError = require('../errors/not-found-error');
 const ErrorCodes = require('../constants/error-codes');
 const config = require('../config');
 
 const markdownRenderer = new MarkdownIt();
 
-const DOCUMENT_TYPES = ['TERMS', 'PRIVACY', 'DPA'];
+const AGREEMENT_TYPES = ['TERMS', 'PRIVACY', 'DPA'];
 
 // Maps each document type to its canonical source file in docs/legal/.
 // POST /v1/admin/legal-documents reads from here — no content in the body.
-const DOCUMENT_FILE_MAP = {
+const AGREEMENT_FILE_MAP = {
   TERMS:   path.join(process.cwd(), 'docs/legal/terms-of-service.md'),
   PRIVACY: path.join(process.cwd(), 'docs/legal/privacy-policy.md'),
   DPA:     path.join(process.cwd(), 'docs/legal/data-processing-agreement.md'),
@@ -51,7 +51,7 @@ async function publish(documentType, version) {
     );
   }
 
-  const filePath = DOCUMENT_FILE_MAP[documentType];
+  const filePath = AGREEMENT_FILE_MAP[documentType];
   const raw = fs.readFileSync(filePath, 'utf8');
   const stripped = stripDraftHeader(raw);
   // Operator identity is the same across all tenants — substitute it at
@@ -61,33 +61,33 @@ async function publish(documentType, version) {
   const domicilio = config.operator.domicilio || 'Domicilio disponible previa solicitud razonable';
   const contentMarkdown = substitutePlaceholders(stripped, { operador: { nombre, ruc, email, domicilio } });
   const contentHash = sha256Hex(contentMarkdown);
-  const doc = await legalDocumentModel.create({ documentType, version, contentMarkdown, contentHash });
+  const doc = await agreementModel.create({ documentType, version, contentMarkdown, contentHash });
   // Auto-activate: new version becomes current immediately, same UX as before
   // but now reversible via activateVersion().
-  await legalDocumentModel.activate(doc.id);
+  await agreementModel.activate(doc.id);
   return doc;
 }
 
 // Activates a previously published version as the current one for its type.
 // Used to roll back to a prior version without republishing.
 async function activateVersion(id) {
-  const doc = await legalDocumentModel.activate(id);
-  if (!doc) throw new NotFoundError('Legal document', ErrorCodes.LEGAL_DOCUMENT_NOT_FOUND);
+  const doc = await agreementModel.activate(id);
+  if (!doc) throw new NotFoundError('Legal document', ErrorCodes.AGREEMENT_NOT_FOUND);
   return doc;
 }
 
 async function listVersionsByType(documentType) {
-  return legalDocumentModel.findAllByType(documentType);
+  return agreementModel.findAllByType(documentType);
 }
 
 async function getCurrent(documentType) {
-  const doc = await legalDocumentModel.findCurrentByType(documentType);
-  if (!doc) throw new NotFoundError('Legal document', ErrorCodes.LEGAL_DOCUMENT_NOT_FOUND);
+  const doc = await agreementModel.findCurrentByType(documentType);
+  if (!doc) throw new NotFoundError('Legal document', ErrorCodes.AGREEMENT_NOT_FOUND);
   return doc;
 }
 
 async function listCurrent() {
-  return legalDocumentModel.findAllCurrent();
+  return agreementModel.findAllCurrent();
 }
 
 // Replaces {{token}} placeholders with values from a flat or nested object.
@@ -129,8 +129,8 @@ function buildDisclaimer(version) {
 }
 
 module.exports = {
-  DOCUMENT_TYPES,
-  DOCUMENT_FILE_MAP,
+  AGREEMENT_TYPES,
+  AGREEMENT_FILE_MAP,
   publish,
   activateVersion,
   listVersionsByType,

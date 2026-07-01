@@ -38,7 +38,7 @@ Shared with `POST /v1/resend-verification` — 5 requests per hour per IP.
 | `initialSequentials` | array | No | Starting sequential numbers per document type. Any type not listed defaults to `1`. See structure below. |
 | `language` | string | No | Language for outgoing emails. Supported: `es` (default), `en`. Stored on the tenant and used for all subsequent emails including resends. |
 | `verificationRedirectUrl` | string | No | Frontend URL where the verification link in the email will point. The token is appended as `?token=<token>`. If omitted, the link goes directly to the API's verify endpoint. |
-| `termsVersion` | string | Yes | The `version` string of the currently published TERMS document (from `GET /v1/legal/documents`). The server validates this before accepting the registration. If no documents have been published yet, any non-empty string is accepted as-is (pre-launch fallback). |
+| `termsVersion` | string | Yes | The `version` string of the currently published TERMS document (from `GET /v1/agreements`). The server validates this before accepting the registration. If no documents have been published yet, any non-empty string is accepted as-is (pre-launch fallback). |
 
 ### `initialSequentials` structure
 
@@ -90,8 +90,8 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
     "documentQuota": 100,
     "documentCount": 0,
     "createdAt": "2026-04-30T00:00:00.000Z",
-    "legalAcceptedAt": "2026-06-28T12:00:00.000Z",
-    "legalVersion": "2026-06-28"
+    "agreementAcceptedAt": "2026-06-28T12:00:00.000Z",
+    "agreementVersion": "2026-06-28"
   },
   "issuer": {
     "id": 1,
@@ -116,7 +116,7 @@ If the email is already registered and not suspended, the current sandbox key is
 | Status | Code | When |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | Missing or invalid fields, or missing P12 file or `termsVersion` |
-| `400` | `LEGAL_VERSION_MISMATCH` | `termsVersion` does not match the currently published TERMS version — re-fetch `GET /v1/legal/documents` and show the current version |
+| `400` | `VERSION_MISMATCH` | `termsVersion` does not match the currently published TERMS version — re-fetch `GET /v1/agreements` and show the current version |
 | `400` | `BAD_REQUEST` | P12 file is corrupt or the certificate password is wrong |
 | `400` | `INVALID_FILE_UPLOAD` | Logo file exceeds 500 KB |
 | `403` | `FORBIDDEN` | The account is suspended |
@@ -129,5 +129,5 @@ If the email is already registered and not suspended, the current sandbox key is
 - Unverified tenants can use sandbox but cannot promote to production.
 - The verification token expires after the configured TTL (default 24 hours). Use `POST /v1/resend-verification` to issue a fresh one.
 - The endpoint is idempotent on the email address — safe to retry if the API key was lost.
-- Fetch the current `termsVersion` from `GET /v1/legal/documents` immediately before showing the acceptance checkbox, not at page load — the server validates the submitted version and rejects stale ones.
-- Returning tenants whose acceptance version has drifted (e.g. after the DPA is updated) should use `GET /v1/tenants/legal-acceptance` to discover which documents need re-accepting, and `POST /v1/tenants/legal-acceptance` to record the new acceptance. See [Legal Acceptance](legal-acceptance.md).
+- Fetch the current `termsVersion` from `GET /v1/agreements` immediately before showing the acceptance checkbox, not at page load — the server validates the submitted version and rejects stale ones.
+- Returning tenants whose acceptance version has drifted (e.g. after the DPA is updated) should use `GET /v1/tenants/agreements` to discover which documents need re-accepting, and `POST /v1/tenants/agreements` to record the new acceptance. See [Legal Acceptance](agreement-acceptance.md).

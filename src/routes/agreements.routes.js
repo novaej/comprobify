@@ -2,7 +2,7 @@ const { Router } = require('express');
 const controller = require('../controllers/legal-document.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
-const v = require('../validators/legal-document.validator');
+const v = require('../validators/agreement.validator');
 
 const router = Router();
 

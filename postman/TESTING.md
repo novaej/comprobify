@@ -35,7 +35,7 @@ Everything else (`api_key`, `issuer_id`, `access_key`, etc.) is auto-captured by
 
 ## Flow A — Developer (Tenant)
 
-### Pre-flight: publish legal documents (admin only, one time per version)
+### Pre-flight: publish agreements (admin only, one time per version)
 
 > Run these before any tenant registers for the first time, or whenever the legal text
 > changes and you want existing tenants to re-accept. If documents are already published,
@@ -43,36 +43,36 @@ Everything else (`api_key`, `issuer_id`, `access_key`, etc.) is auto-captured by
 
 Run from the **Admin** folder of the **internal** collection:
 
-1. **Publish Legal Document (TERMS)** — `POST /v1/admin/legal-documents` body: `{ "documentType": "TERMS", "version": "2026-07-01" }`
-2. **Publish Legal Document (PRIVACY)** — same, `"documentType": "PRIVACY"`
-3. **Publish Legal Document (DPA)** — same, `"documentType": "DPA"`
+1. **Publish Agreement (TERMS)** — `POST /v1/admin/agreements` body: `{ "documentType": "TERMS", "version": "2026-07-01" }`
+2. **Publish Agreement (PRIVACY)** — same, `"documentType": "PRIVACY"`
+3. **Publish Agreement (DPA)** — same, `"documentType": "DPA"`
 
 **No markdown content in the body.** The server reads directly from `docs/legal/terms-of-service.md`, `docs/legal/privacy-policy.md`, and `docs/legal/data-processing-agreement.md` on the filesystem. Make sure those files are present and correct before publishing.
 
 Use the same `version` string for all three types published together — this is the "bundle version" tenants must accept.
 
-✓ Postman test script captures `legal_version` from the TERMS publish response.
+✓ Postman test script captures `agreement_version` from the TERMS publish response.
 
 ---
 
-### Step 1 — Discover current legal documents
+### Step 1 — Discover current agreements
 
-**`GET /v1/legal/documents`** *(Legal Documents folder)*
+**`GET /v1/agreements`** *(Agreements folder)*
 
-✓ Test script captures `legal_version` from the `TERMS` entry.
+✓ Test script captures `agreement_version` from the `TERMS` entry.
 
 You should see a response like:
 ```json
 {
   "documents": [
-    { "documentType": "TERMS", "version": "2026-07-01", "url": "/v1/legal/documents/TERMS" },
-    { "documentType": "PRIVACY", "version": "2026-07-01", "url": "/v1/legal/documents/PRIVACY" },
-    { "documentType": "DPA", "version": "2026-07-01", "url": "/v1/legal/documents/DPA" }
+    { "documentType": "TERMS", "version": "2026-07-01", "url": "/v1/agreements/TERMS" },
+    { "documentType": "PRIVACY", "version": "2026-07-01", "url": "/v1/agreements/PRIVACY" },
+    { "documentType": "DPA", "version": "2026-07-01", "url": "/v1/agreements/DPA" }
   ]
 }
 ```
 
-Optionally fetch **`GET /v1/legal/documents/TERMS`** to preview the rendered HTML that would appear in a signup modal.
+Optionally fetch **`GET /v1/agreements/TERMS`** to preview the rendered HTML that would appear in a signup modal.
 
 ---
 
@@ -101,7 +101,7 @@ Fill in the form-data fields before sending:
 | `issuePointCode` | `001` |
 | `emissionType` | `1` |
 | `requiredAccounting` | `false` |
-| `termsVersion` | Auto-filled from `{{legal_version}}` captured in Step 1 |
+| `termsVersion` | Auto-filled from `{{agreement_version}}` captured in Step 1 |
 
 ✓ Test script captures: `api_key`, `tenant_id`, `issuer_id`.
 
@@ -130,36 +130,36 @@ This activates the tenant. Without verification you can use sandbox but cannot p
 
 **`GET /v1/tenants/me`** *(Tenants folder)*
 
-✓ Test script re-captures `tenant_id` and logs `legalVersion`.
+✓ Test script re-captures `tenant_id` and logs `agreementVersion`.
 
-Expected: `status: ACTIVE`, `sandbox: true`, `subscriptionTier: FREE`, `legalAcceptedAt` set.
+Expected: `status: ACTIVE`, `sandbox: true`, `subscriptionTier: FREE`, `agreementAcceptedAt` set.
 
 ---
 
-### Step 5a — View your personalized legal documents
+### Step 5a — View your personalized agreements
 
 After registration the server fires-and-forget generates three personalized document instances (TERMS, PRIVACY, DPA) with your business name and RUC substituted in.
 
-**`GET /v1/tenants/legal-documents`** *(Tenants folder)*
+**`GET /v1/tenants/agreements/history`** *(Tenants folder)*
 
 Expected: three rows, all `status: PENDING` (registration generates but does not automatically accept).
 
-**`GET /v1/tenants/legal-documents/TERMS`** *(Tenants folder)*
+**`GET /v1/tenants/agreements/history/TERMS`** *(Tenants folder)*
 
 Returns your personalized Terms of Service as HTML — a yellow disclaimer notice is prepended. The DPA will show your actual `businessName` and `ruc` substituted in.
 
-**`GET /v1/tenants/legal-documents/DPA`**
+**`GET /v1/tenants/agreements/history/DPA`**
 
 Confirm your business name and RUC appear correctly in the intro paragraph.
 
 ---
 
-### Step 5b — Accept all legal documents
+### Step 5b — Accept all agreements
 
-**`POST /v1/tenants/legal-acceptance`** *(Tenants folder)*
+**`POST /v1/tenants/agreements`** *(Tenants folder)*
 
 ```json
-{ "termsVersion": "{{legal_version}}" }
+{ "termsVersion": "{{agreement_version}}" }
 ```
 
 Accepts all PENDING instances at once (TERMS, PRIVACY, DPA), recording IP address and user agent.
@@ -170,13 +170,13 @@ Expected: `{ "ok": true }` — all three rows flip to `status: ACCEPTED`.
 
 ### Step 6 — Verify legal acceptance status
 
-**`GET /v1/tenants/legal-acceptance`** *(Tenants folder)*
+**`GET /v1/tenants/agreements`** *(Tenants folder)*
 
 Expected: `needsAcceptance: false`, `outdated: []` — all documents accepted.
 
-> **If `needsAcceptance: true`:** The `outdated` array lists which types need acceptance and includes a `url` for each. Fetch `GET /v1/tenants/legal-documents/:type` to show the document, then call `POST /v1/tenants/legal-acceptance` again.
+> **If `needsAcceptance: true`:** The `outdated` array lists which types need acceptance and includes a `url` for each. Fetch `GET /v1/tenants/agreements/:type` to show the document, then call `POST /v1/tenants/agreements` again.
 
-> **Third-party integrators** should poll `GET /v1/tenants/legal-acceptance` periodically. When the admin publishes a new template version, calling this endpoint automatically generates new PENDING instances, which surfaces as `needsAcceptance: true` until the tenant re-accepts.
+> **Third-party integrators** should poll `GET /v1/tenants/agreements` periodically. When the admin publishes a new template version, calling this endpoint automatically generates new PENDING instances, which surfaces as `needsAcceptance: true` until the tenant re-accepts.
 
 ---
 
@@ -253,7 +253,7 @@ Attach a screenshot or PDF of the bank transfer confirmation as the `proof` file
 
 > **Prerequisites before calling promote:**
 > 1. Email must be verified (status ACTIVE — see Step 4)
-> 2. All legal documents must be ACCEPTED (see Step 5b) — promotion returns `403 LEGAL_ACCEPTANCE_REQUIRED` if not
+> 2. All agreements must be ACCEPTED (see Step 5b) — promotion returns `403 AGREEMENT_ACCEPTANCE_REQUIRED` if not
 > 3. Complete the subscription payment cycle (Steps 12–13 + admin review in Flow B) OR promote on FREE tier and subscribe afterward
 
 **`POST /v1/tenants/promote`** *(Tenants folder)*
@@ -300,13 +300,13 @@ Use `comprobify-internal.postman_collection.json`. Set `base_url` and `admin_sec
 
 ---
 
-### Step 1 — Publish legal documents (first time or on update)
+### Step 1 — Publish agreements (first time or on update)
 
-**`POST /v1/admin/legal-documents`** — run three times, once per document type.
+**`POST /v1/admin/agreements`** — run three times, once per document type.
 
-The Admin folder has three separate requests already named **Publish Legal Document (TERMS)**, **(PRIVACY)**, **(DPA)** with placeholder markdown bodies. Replace the `contentMarkdown` with the real text from `docs/legal/` before going to production.
+The Admin folder has three separate requests already named **Publish Agreement (TERMS)**, **(PRIVACY)**, **(DPA)** with placeholder markdown bodies. Replace the `contentMarkdown` with the real text from `docs/legal/` before going to production.
 
-✓ Test script captures `legal_version` from the TERMS publish response.
+✓ Test script captures `agreement_version` from the TERMS publish response.
 
 All three must use the same `version` string so a single registration checkbox covers the full bundle.
 
@@ -348,17 +348,17 @@ Attach the tenant's `.p12` file and fill in `tenantId` (uses `{{tenant_id}}`), R
 
 ---
 
-### Step 4a — Generate legal documents for the tenant (admin-created tenants)
+### Step 4a — Generate agreements for the tenant (admin-created tenants)
 
-Admin-created tenants skip `termsVersion` validation at creation, so no legal document instances are auto-generated for them. Generate them now:
+Admin-created tenants skip `termsVersion` validation at creation, so no agreement instances are auto-generated for them. Generate them now:
 
-**`POST /v1/admin/tenants/{{tenant_id}}/legal-documents`** *(Admin folder)*
+**`POST /v1/admin/tenants/{{tenant_id}}/agreements`** *(Admin folder)*
 
 Creates PENDING instances (TERMS, PRIVACY, DPA) using the current published templates with the tenant's business name and RUC substituted in. The tenant can then view and accept them via their own API key.
 
 Expected: `{ "ok": true, "generated": 3, "documents": [...] }`
 
-> **Also use this** to backfill any existing tenant who registered before legal documents were first published, or after a template update when you want to regenerate their personalized copy immediately rather than waiting for lazy generation.
+> **Also use this** to backfill any existing tenant who registered before agreements were first published, or after a template update when you want to regenerate their personalized copy immediately rather than waiting for lazy generation.
 
 ---
 
@@ -466,7 +466,7 @@ All variables are set at the **collection** level (not environment). Change them
 | `base_url` | You (manual) | Every request |
 | `admin_secret` | You (manual) | All `X-Admin-Secret` headers |
 | `api_key` | ✓ Register / Promote / Mint Key | `Authorization: Bearer {{api_key}}` |
-| `legal_version` | ✓ List Documents / Publish TERMS | `termsVersion` in Register + Accept Legal |
+| `agreement_version` | ✓ List Documents / Publish TERMS | `termsVersion` in Register + Accept Legal |
 | `verification_token` | You (from email) | Verify Email |
 | `issuer_id` | ✓ Register / List Issuers | `X-Issuer-Id` on all document requests |
 | `tenant_id` | ✓ Register / Create Tenant (admin) | Admin tenant routes |

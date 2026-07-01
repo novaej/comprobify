@@ -1,13 +1,13 @@
-# Tenant Legal Documents
+# Tenant Agreements
 
-View and accept the personalized legal document instances generated for the authenticated tenant. Each document (Terms of Service, Privacy Policy, DPA) is generated with the tenant's own business name and RUC substituted in at registration time — the stored content is an immutable snapshot of what was in effect when the account was created.
+View and accept the personalized agreement instances generated for the authenticated tenant. Each document (Terms of Service, Privacy Policy, DPA) is generated with the tenant's own business name and RUC substituted in at registration time — the stored content is an immutable snapshot of what was in effect when the account was created.
 
-Use [Legal Acceptance](legal-acceptance.md) to check whether any document needs re-acceptance. Use `POST /v1/tenants/legal-acceptance` (on that same page) to record acceptance.
+Use [Legal Acceptance](agreement-acceptance.md) to check whether any document needs re-acceptance. Use `POST /v1/tenants/agreements` (on that same page) to record acceptance.
 
 ## List documents
 
 ```
-GET /v1/tenants/legal-documents
+GET /v1/tenants/agreements/history
 ```
 
 **Authentication:** `Authorization: Bearer <api-key>`
@@ -46,12 +46,12 @@ GET /v1/tenants/legal-documents
 }
 ```
 
-Returns all instances across all versions, newest first per type. Status is `PENDING` (generated, not yet accepted) or `ACCEPTED`. When a new template version is published, a new `PENDING` instance appears here after the first call to `GET /v1/tenants/legal-acceptance` or this endpoint.
+Returns all instances across all versions, newest first per type. Status is `PENDING` (generated, not yet accepted) or `ACCEPTED`. When a new template version is published, a new `PENDING` instance appears here after the first call to `GET /v1/tenants/agreements` or this endpoint.
 
 ## Get a document (rendered HTML)
 
 ```
-GET /v1/tenants/legal-documents/:type
+GET /v1/tenants/agreements/:type
 ```
 
 **Authentication:** `Authorization: Bearer <api-key>`
@@ -72,12 +72,12 @@ Response headers include:
 | `400` | `VALIDATION_FAILED` | `:type` is not a valid document type |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `FORBIDDEN` | Account is suspended |
-| `404` | `LEGAL_DOCUMENT_NOT_FOUND` | No template has been published yet for this type |
+| `404` | `AGREEMENT_NOT_FOUND` | No template has been published yet for this type |
 | `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
 
 ## Notes
 
-- Documents are generated at registration and lazily for any new template version when this endpoint or `GET /v1/tenants/legal-acceptance` is called — no separate step is needed to "request" a document.
-- Viewing the document does not change its status. Call `POST /v1/tenants/legal-acceptance` separately.
-- All historical instances are preserved — accepting a new version never overwrites the old accepted record. `GET /v1/tenants/legal-documents` returns the full history per type ordered newest first.
-- For admin backfill of pre-existing tenants, see `POST /v1/admin/tenants/:id/legal-documents`.
+- Documents are generated at registration and lazily for any new template version when this endpoint or `GET /v1/tenants/agreements` is called — no separate step is needed to "request" a document.
+- Viewing the document does not change its status. Call `POST /v1/tenants/agreements` separately.
+- All historical instances are preserved — accepting a new version never overwrites the old accepted record. `GET /v1/tenants/agreements/history` returns the full history per type ordered newest first.
+- For admin backfill of pre-existing tenants, see `POST /v1/admin/tenants/:id/agreements`.

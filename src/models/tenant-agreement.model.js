@@ -2,7 +2,7 @@ const db = require('../config/database');
 
 async function create({ tenantId, documentType, templateVersion, contentMarkdown, contentHash }) {
   const { rows } = await db.query(
-    `INSERT INTO tenant_legal_documents
+    `INSERT INTO tenant_agreements
        (tenant_id, document_type, template_version, content_markdown, content_hash)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (tenant_id, document_type, template_version) DO NOTHING
@@ -15,7 +15,7 @@ async function create({ tenantId, documentType, templateVersion, contentMarkdown
 // Latest document per type for this tenant (across all template versions).
 async function findLatestByTenantAndType(tenantId, documentType) {
   const { rows } = await db.query(
-    `SELECT * FROM tenant_legal_documents
+    `SELECT * FROM tenant_agreements
      WHERE tenant_id = $1 AND document_type = $2
      ORDER BY generated_at DESC LIMIT 1`,
     [tenantId, documentType]
@@ -26,7 +26,7 @@ async function findLatestByTenantAndType(tenantId, documentType) {
 // All documents for this tenant, ordered newest first — for history view.
 async function findAllByTenant(tenantId) {
   const { rows } = await db.query(
-    `SELECT * FROM tenant_legal_documents
+    `SELECT * FROM tenant_agreements
      WHERE tenant_id = $1
      ORDER BY document_type, generated_at DESC`,
     [tenantId]
@@ -36,7 +36,7 @@ async function findAllByTenant(tenantId) {
 
 async function accept(id, { ip, userAgent }) {
   const { rows } = await db.query(
-    `UPDATE tenant_legal_documents
+    `UPDATE tenant_agreements
      SET status = 'ACCEPTED', accepted_at = NOW(), ip = $2, user_agent = $3
      WHERE id = $1 AND status = 'PENDING'
      RETURNING *`,
@@ -47,7 +47,7 @@ async function accept(id, { ip, userAgent }) {
 
 async function acceptAllPendingByTenant(tenantId, { ip, userAgent }) {
   const { rows } = await db.query(
-    `UPDATE tenant_legal_documents
+    `UPDATE tenant_agreements
      SET status = 'ACCEPTED', accepted_at = NOW(), ip = $2, user_agent = $3
      WHERE tenant_id = $1 AND status = 'PENDING'
      RETURNING *`,

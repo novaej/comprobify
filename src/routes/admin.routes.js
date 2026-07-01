@@ -39,11 +39,11 @@ router.get('/payments',                         v.listPayments,       validateRe
 router.patch('/payments/:id/review',            v.reviewPayment,      validateRequest, asyncHandler(controller.reviewPayment));
 router.get('/payments/:id/proof',               v.getPaymentProof,    validateRequest, asyncHandler(controller.getPaymentProof));
 
-// Legal documents
-router.post('/legal-documents', v.publishLegalDocument, validateRequest, asyncHandler(controller.publishLegalDocument));
-router.get('/legal-documents/:type/versions', v.listLegalDocumentVersions, validateRequest, asyncHandler(controller.listLegalDocumentVersions));
-router.patch('/legal-documents/:id/activate', v.activateLegalDocument, validateRequest, asyncHandler(controller.activateLegalDocument));
-router.post('/tenants/:id/legal-documents', v.verifyTenant, validateRequest, asyncHandler(controller.generateTenantLegalDocuments));
+// Agreements
+router.post('/agreements', v.publishAgreement, validateRequest, asyncHandler(controller.publishAgreement));
+router.get('/agreements/:type/versions', v.listAgreementVersions, validateRequest, asyncHandler(controller.listAgreementVersions));
+router.patch('/agreements/:id/activate', v.activateAgreement, validateRequest, asyncHandler(controller.activateAgreement));
+router.post('/tenants/:id/agreements', v.verifyTenant, validateRequest, asyncHandler(controller.generateTenantAgreements));
 
 // Jobs
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));

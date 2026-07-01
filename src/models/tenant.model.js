@@ -4,7 +4,7 @@ const EmailStatus = require('../constants/email-status');
 
 async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, documentQuota = 5, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es', legalVersion = null }) {
   const { rows } = await db.query(
-    `INSERT INTO tenants (email, subscription_tier, status, document_quota, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language, legal_accepted_at, legal_version)
+    `INSERT INTO tenants (email, subscription_tier, status, document_quota, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language, agreement_accepted_at, agreement_version)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $9::TEXT IS NULL THEN NULL ELSE NOW() END, $9)
      RETURNING *`,
     [email, subscriptionTier, status, documentQuota, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage, legalVersion]
@@ -125,9 +125,9 @@ async function updatePreferredLanguage(id, language) {
   return rows[0] || null;
 }
 
-async function updateLegalAcceptance(id, version) {
+async function updateAgreementAcceptance(id, version) {
   const { rows } = await db.query(
-    `UPDATE tenants SET legal_accepted_at = NOW(), legal_version = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    `UPDATE tenants SET agreement_accepted_at = NOW(), agreement_version = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
     [version, id]
   );
   return rows[0] || null;
@@ -157,4 +157,4 @@ async function countIssuePointsByBranch(tenantId, branchCode) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, findAllActive, activate, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, updateLegalAcceptance, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, findAllActive, activate, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, updateAgreementAcceptance, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };

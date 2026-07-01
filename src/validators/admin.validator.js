@@ -2,7 +2,7 @@ const { body, param, query } = require('express-validator');
 const TIERS = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const { SUPPORTED_TYPES } = require('../builders');
-const legalDocumentService = require('../services/legal-document.service');
+const agreementService = require('../services/agreement.service');
 
 // Tenants
 const createTenant = [
@@ -233,10 +233,10 @@ const listPayments = [
     .withMessage('status must be one of: PENDING, REPORTED, VERIFIED, REJECTED'),
 ];
 
-const publishLegalDocument = [
+const publishAgreement = [
   body('documentType')
-    .isIn(legalDocumentService.DOCUMENT_TYPES)
-    .withMessage(`documentType must be one of: ${legalDocumentService.DOCUMENT_TYPES.join(', ')}`),
+    .isIn(agreementService.AGREEMENT_TYPES)
+    .withMessage(`documentType must be one of: ${agreementService.AGREEMENT_TYPES.join(', ')}`),
 
   body('version')
     .notEmpty()
@@ -248,7 +248,7 @@ module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof, listPayments, publishLegalDocument,
-  activateLegalDocument: [param('id').isInt({ min: 1 }).withMessage('id must be a positive integer')],
-  listLegalDocumentVersions: [param('type').isIn(legalDocumentService.DOCUMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],
+  reviewPayment, getPaymentProof, listPayments, publishAgreement,
+  activateAgreement: [param('id').isInt({ min: 1 }).withMessage('id must be a positive integer')],
+  listAgreementVersions: [param('type').isIn(agreementService.AGREEMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],
 };
