@@ -41,8 +41,16 @@ async function findByAccessKey(accessKey, issuerId = null, sandbox = false) {
     );
     return rows[0] || null;
   }
-  // Bypass mode: webhook or other non-issuer-scoped lookups
-  const { rows } = await db.query('SELECT * FROM documents WHERE access_key = $1', [accessKey]);
+  // Bypass mode (admin link-invoice, webhook, etc.) — mirrors findByEmailMessageId:
+  // search both schemas so a sandbox invoice can be linked during testing without
+  // requiring the operator to have a production environment set up.
+  const { rows } = await db.query(
+    `SELECT *, false AS sandbox FROM public.documents   WHERE access_key = $1
+     UNION ALL
+     SELECT *, true  AS sandbox FROM sandbox.documents WHERE access_key = $1
+     LIMIT 1`,
+    [accessKey]
+  );
   return rows[0] || null;
 }
 
