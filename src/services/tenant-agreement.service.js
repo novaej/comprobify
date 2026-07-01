@@ -11,10 +11,13 @@ const ErrorCodes = require('../constants/error-codes');
 // ON CONFLICT DO NOTHING makes this idempotent — safe to call multiple times.
 async function generateForTenant(tenantId, issuer = null) {
   const resolvedIssuer = issuer ?? await issuerModel.findByTenantId(tenantId);
-  const templates = await agreementService.listCurrent();
+  // listCurrent() returns lightweight rows without content_markdown — use
+  // getCurrent() per type to fetch the full content needed for substitution.
+  const lightweight = await agreementService.listCurrent();
   const created = [];
 
-  for (const template of templates) {
+  for (const { document_type } of lightweight) {
+    const template = await agreementService.getCurrent(document_type);
     const values = buildValues(template, resolvedIssuer);
     const rendered = agreementService.substitutePlaceholders(
       template.content_markdown,
