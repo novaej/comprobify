@@ -20,7 +20,7 @@ Import both collections into Postman. Set these **collection variables** before 
 | Variable | Where to get it |
 |---|---|
 | `base_url` | Your API URL — e.g. `https://your-api.onrender.com` or `http://localhost:8080` |
-| `admin_secret` | `ADMIN_SECRET` env var value (needed for the pre-flight admin legal doc publish step) |
+| `admin_secret` | `ADMIN_SECRET` env var value (needed for the pre-flight admin agreement publish step) |
 
 Everything else (`api_key`, `issuer_id`, `access_key`, etc.) is auto-captured by test scripts.
 
@@ -144,11 +144,11 @@ After registration the server fires-and-forget generates three personalized docu
 
 Expected: three rows, all `status: PENDING` (registration generates but does not automatically accept).
 
-**`GET /v1/tenants/agreements/history/TERMS`** *(Tenants folder)*
+**`GET /v1/tenants/agreements/TERMS`** *(Tenants folder)*
 
 Returns your personalized Terms of Service as HTML — a yellow disclaimer notice is prepended. The DPA will show your actual `businessName` and `ruc` substituted in.
 
-**`GET /v1/tenants/agreements/history/DPA`**
+**`GET /v1/tenants/agreements/DPA`**
 
 Confirm your business name and RUC appear correctly in the intro paragraph.
 
@@ -168,7 +168,7 @@ Expected: `{ "ok": true }` — all three rows flip to `status: ACCEPTED`.
 
 ---
 
-### Step 6 — Verify legal acceptance status
+### Step 6 — Verify agreement acceptance status
 
 **`GET /v1/tenants/agreements`** *(Tenants folder)*
 
@@ -304,7 +304,7 @@ Use `comprobify-internal.postman_collection.json`. Set `base_url` and `admin_sec
 
 **`POST /v1/admin/agreements`** — run three times, once per document type.
 
-The Admin folder has three separate requests already named **Publish Agreement (TERMS)**, **(PRIVACY)**, **(DPA)** with placeholder markdown bodies. Replace the `contentMarkdown` with the real text from `docs/legal/` before going to production.
+The Admin folder has three separate requests already named **Publish Agreement (TERMS)**, **(PRIVACY)**, **(DPA)**. The server reads the agreement text directly from `docs/legal/` on the filesystem — no markdown in the body. Make sure the files are up to date before publishing.
 
 ✓ Test script captures `agreement_version` from the TERMS publish response.
 
@@ -466,7 +466,7 @@ All variables are set at the **collection** level (not environment). Change them
 | `base_url` | You (manual) | Every request |
 | `admin_secret` | You (manual) | All `X-Admin-Secret` headers |
 | `api_key` | ✓ Register / Promote / Mint Key | `Authorization: Bearer {{api_key}}` |
-| `agreement_version` | ✓ List Documents / Publish TERMS | `termsVersion` in Register + Accept Legal |
+| `agreement_version` | ✓ List Documents / Publish TERMS | `termsVersion` in Register + Accept Agreements |
 | `verification_token` | You (from email) | Verify Email |
 | `issuer_id` | ✓ Register / List Issuers | `X-Issuer-Id` on all document requests |
 | `tenant_id` | ✓ Register / Create Tenant (admin) | Admin tenant routes |
