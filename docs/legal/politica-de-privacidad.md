@@ -7,7 +7,7 @@
 
 **Última actualización:** `[fecha]`
 
-Esta Política de Privacidad describe cómo **[Tu nombre completo]**, persona natural con RUC **[RUC]**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP"). _(Cuando se constituya una compañía, basta con actualizar este dato.)_
+Esta Política de Privacidad describe cómo **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP"). _(Cuando se constituya una compañía, basta con actualizar este dato.)_
 
 ## 1. Roles: quién es responsable de qué
 
@@ -82,4 +82,4 @@ Publicaremos cualquier cambio material en esta página con una nueva fecha de ve
 
 ## 11. Contacto
 
-`[Tu nombre completo]` — RUC `[RUC]` — Domicilio disponible previa solicitud razonable del interesado — `[email de contacto]`
+`Jonathan Andrés Pillajo Coka` — RUC `1715824775001` — Domicilio disponible previa solicitud razonable del interesado — `[email de contacto]`
