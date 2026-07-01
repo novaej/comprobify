@@ -12,7 +12,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `GET` | `/v1/verify-email` | Verify email with token from registration email |
 | `POST` | `/v1/resend-verification` | Resend verification email (regenerates token) |
 
-## Legal documents (public)
+## Agreements (public)
 
 | Method | Path | Description |
 |---|---|---|
@@ -43,7 +43,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/v1/tenants/me` | Resolve the tenant (id, email, tier, status, quota, environment, legal acceptance) for the authenticated API key |
+| `GET` | `/v1/tenants/me` | Resolve the tenant (id, email, tier, status, quota, environment, agreement acceptance) for the authenticated API key |
 | `PATCH` | `/v1/tenants/language` | Update the preferred language for outgoing emails |
 | `POST` | `/v1/tenants/promote` | Promote the tenant to production — revokes all sandbox keys and creates matching production keys |
 | `GET` | `/v1/tenants/agreements` | Check whether any agreements need acceptance — returns which types are outdated. Lazily generates PENDING instances for any new template versions; third-party integrators should poll this periodically |

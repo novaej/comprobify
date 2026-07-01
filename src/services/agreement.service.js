@@ -12,7 +12,7 @@ const markdownRenderer = new MarkdownIt();
 const AGREEMENT_TYPES = ['TERMS', 'PRIVACY', 'DPA'];
 
 // Maps each document type to its canonical source file in docs/legal/.
-// POST /v1/admin/legal-documents reads from here — no content in the body.
+// POST /v1/admin/agreements reads from here — no content in the body.
 const AGREEMENT_FILE_MAP = {
   TERMS:   path.join(process.cwd(), 'docs/legal/terms-of-service.md'),
   PRIVACY: path.join(process.cwd(), 'docs/legal/privacy-policy.md'),

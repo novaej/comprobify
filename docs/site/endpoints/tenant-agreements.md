@@ -2,7 +2,7 @@
 
 View and accept the personalized agreement instances generated for the authenticated tenant. Each document (Terms of Service, Privacy Policy, DPA) is generated with the tenant's own business name and RUC substituted in at registration time — the stored content is an immutable snapshot of what was in effect when the account was created.
 
-Use [Legal Acceptance](agreement-acceptance.md) to check whether any document needs re-acceptance. Use `POST /v1/tenants/agreements` (on that same page) to record acceptance.
+Use [Agreement Acceptance](agreement-acceptance.md) to check whether any document needs re-acceptance. Use `POST /v1/tenants/agreements` (on that same page) to record acceptance.
 
 ## List documents
 

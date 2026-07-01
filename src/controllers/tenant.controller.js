@@ -21,8 +21,8 @@ const promote = async (req, res) => {
 };
 
 const getAgreementStatus = async (req, res) => {
-  const legal = await tenantService.getAgreementStatus(req.tenant.id);
-  res.json({ ok: true, legal });
+  const agreements = await tenantService.getAgreementStatus(req.tenant.id);
+  res.json({ ok: true, agreements });
 };
 
 const acceptAgreements = async (req, res) => {

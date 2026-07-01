@@ -49,7 +49,7 @@ const config = {
 
   // Operator identity — substituted into legal document templates at publish
   // time ({{operador.nombre}}, {{operador.ruc}}, {{operador.email}}).
-  // Required before calling POST /v1/admin/legal-documents; not needed for
+  // Required before calling POST /v1/admin/agreements; not needed for
   // any other API path so not validated at startup.
   operator: {
     nombre:   process.env.OPERATOR_NAME    || '',

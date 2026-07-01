@@ -131,7 +131,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null, accep
   // Generate per-tenant legal document instances (PENDING) after the issuer
   // exists so we can substitute {{cliente.razonSocial}} etc. into the DPA.
   // Fire-and-forget pattern: failure does not block registration, and the
-  // admin can backfill via POST /v1/admin/tenants/:id/legal-documents.
+  // admin can backfill via POST /v1/admin/tenants/:id/agreements.
   tenantAgreementService.generateForTenant(tenant.id, issuer)
     .catch((err) => console.warn('[registration] generateForTenant failed:', err.message));
 

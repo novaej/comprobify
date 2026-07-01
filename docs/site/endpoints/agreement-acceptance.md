@@ -1,4 +1,4 @@
-# Legal Acceptance Status
+# Agreement Acceptance
 
 Check whether the authenticated tenant needs to re-accept any agreements, and record a new acceptance when they do.
 
@@ -19,7 +19,7 @@ GET /v1/tenants/agreements
 ```json
 {
   "ok": true,
-  "legal": {
+  "agreements": {
     "needsAcceptance": false,
     "outdated": []
   }
@@ -31,14 +31,15 @@ GET /v1/tenants/agreements
 ```json
 {
   "ok": true,
-  "legal": {
+  "agreements": {
     "needsAcceptance": true,
     "outdated": [
       {
         "documentType": "DPA",
         "currentVersion": "2026-07-01",
         "acceptedVersion": "2026-06-28",
-        "url": "/v1/agreements/DPA"
+        "url": "/v1/tenants/agreements/DPA",
+        "acceptUrl": "/v1/tenants/agreements"
       }
     ]
   }

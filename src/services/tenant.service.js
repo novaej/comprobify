@@ -50,7 +50,7 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   const allAccepted = await tenantAgreementService.hasAllAccepted(tenantId);
   if (!allAccepted) {
     throw new AppError(
-      'All legal documents must be accepted before promoting to production. Review GET /v1/tenants/legal-documents.',
+      'All legal documents must be accepted before promoting to production. Review GET /v1/tenants/agreements.',
       403,
       ErrorCodes.AGREEMENT_ACCEPTANCE_REQUIRED
     );
