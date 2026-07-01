@@ -110,6 +110,8 @@ const ErrorCodes = Object.freeze({
   LEGAL_DOCUMENT_NOT_FOUND: 'LEGAL_DOCUMENT_NOT_FOUND',
   /** Submitted termsVersion does not match the currently published version */
   LEGAL_VERSION_MISMATCH: 'LEGAL_VERSION_MISMATCH',
+  /** All legal documents must be ACCEPTED before promoting to production */
+  LEGAL_ACCEPTANCE_REQUIRED: 'LEGAL_ACCEPTANCE_REQUIRED',
 
   // --- File upload ---
   /** Multipart file upload is malformed or contains an unexpected field */

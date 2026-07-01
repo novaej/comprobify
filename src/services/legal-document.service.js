@@ -22,6 +22,8 @@ function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
+const computeHash = sha256Hex;
+
 // Formats a date as "1 de julio de 2026" (Spanish, used for {{fecha}}).
 function formatDate(date) {
   return new Date(date).toLocaleDateString('es-EC', {
@@ -90,6 +92,7 @@ module.exports = {
   renderHtml,
   getCurrentHtml,
   substitutePlaceholders,
+  computeHash,
   formatDate,
   stripDraftHeader,
 };

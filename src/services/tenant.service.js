@@ -6,7 +6,7 @@ const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const sequentialService = require('./sequential.service');
 const subscriptionService = require('./subscription.service');
-const legalAcceptanceService = require('./legal-acceptance.service');
+const tenantLegalDocumentService = require('./tenant-legal-document.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
@@ -24,16 +24,14 @@ async function updateLanguage(tenantId, language) {
 async function getLegalStatus(tenantId) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
-
-  return legalAcceptanceService.getStatus(tenantId);
+  return tenantLegalDocumentService.getStatus(tenantId);
 }
 
-// Accepts the whole currently-published bundle in one call (matches the
-// single-checkbox UX) — termsVersion is just the optimistic-concurrency check
-// confirming the frontend's TERMS copy is still current before recording.
+// Accepts all PENDING tenant legal document instances in one call — matches
+// the single-checkbox UX. termsVersion confirms the frontend was current.
 async function acceptLegal(tenantId, termsVersion, { ip, userAgent } = {}) {
-  await legalAcceptanceService.validateTermsVersion(termsVersion);
-  await legalAcceptanceService.recordAcceptance(tenantId, { ip, userAgent });
+  await tenantLegalDocumentService.validateTermsVersion(termsVersion);
+  await tenantLegalDocumentService.acceptAll(tenantId, { ip, userAgent });
   await tenantModel.updateLegalAcceptance(tenantId, termsVersion);
 }
 
@@ -48,6 +46,15 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
     );
   }
   if (!tenant.sandbox) throw new ConflictError('Tenant is already in production');
+
+  const allAccepted = await tenantLegalDocumentService.hasAllAccepted(tenantId);
+  if (!allAccepted) {
+    throw new AppError(
+      'All legal documents must be accepted before promoting to production. Review GET /v1/tenants/legal-documents.',
+      403,
+      ErrorCodes.LEGAL_ACCEPTANCE_REQUIRED
+    );
+  }
 
   const seqMap = {};
   for (const entry of initialSequentials) {

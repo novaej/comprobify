@@ -41,6 +41,7 @@ router.get('/payments/:id/proof',               v.getPaymentProof,    validateRe
 
 // Legal documents — markdown text in the JSON body, not a file upload
 router.post('/legal-documents', v.publishLegalDocument, validateRequest, asyncHandler(controller.publishLegalDocument));
+router.post('/tenants/:id/legal-documents', v.verifyTenant, validateRequest, asyncHandler(controller.generateTenantLegalDocuments));
 
 // Jobs
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));

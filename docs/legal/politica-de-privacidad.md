@@ -1,13 +1,8 @@
-> **BORRADOR PARA REVISIÓN — no constituye asesoría legal.**
-> Redactado a partir del funcionamiento real de la API (ver `CLAUDE.md`), no de una plantilla genérica. Requiere revisión legal antes de publicarse, especialmente en lo referente a derechos del titular bajo la LOPDP y plazos de respuesta. Reemplazar los campos entre `[corchetes]`.
->
-> **Versión:** `[2026-06-28]` _(debe coincidir con el `termsVersion` enviado al registrarse y con el publicado vía `POST /v1/admin/legal-documents`)_
-
 # Política de Privacidad — Comprobify
 
-**Última actualización:** `{{fecha}}`
+**Última actualización:** {{fechaVersion}}
 
-Esta Política de Privacidad describe cómo **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP"). _(Cuando se constituya una compañía, basta con actualizar este dato.)_
+Esta Política de Privacidad describe cómo **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP").
 
 ## 1. Roles: quién es responsable de qué
 

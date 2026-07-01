@@ -61,5 +61,7 @@ router.patch('/language', updateLanguageValidator, validateRequest, asyncHandler
 router.post('/promote', writeLimiter, promoteValidator, validateRequest, asyncHandler(controller.promote));
 router.get('/legal-status', readLimiter, asyncHandler(controller.getLegalStatus));
 router.post('/accept-legal', writeLimiter, acceptLegalValidator, validateRequest, asyncHandler(controller.acceptLegal));
+router.get('/legal-documents', readLimiter, asyncHandler(controller.listLegalDocuments));
+router.get('/legal-documents/:type', readLimiter, asyncHandler(controller.getLegalDocument));
 
 module.exports = router;

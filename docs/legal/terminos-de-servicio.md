@@ -1,19 +1,12 @@
-> **BORRADOR PARA REVISIÓN — no constituye asesoría legal.**
-> Este texto fue redactado a partir del funcionamiento real de la API (ver `CLAUDE.md`), no de una plantilla genérica. Antes de publicarlo como versión vinculante, debe ser revisado por un abogado en Ecuador, en particular las secciones de limitación de responsabilidad, cancelación/reembolsos y ley aplicable. Reemplazar todos los campos entre `[corchetes]` con la información legal real.
->
-> Deliberadamente no menciona rutas de la API, nombres de algoritmos concretos, ni proveedores de infraestructura por nombre — esos detalles cambian con mucha más frecuencia que un documento legal, y describirlos aquí obligaría a republicar los Términos cada vez que cambien. Esos detalles viven en la documentación técnica y en la Política de Privacidad.
->
-> **Versión:** `[2026-06-28]` _(este string es el que se envía como `termsVersion` al registrarse — debe coincidir exactamente con el publicado vía el endpoint administrativo de publicación de documentos legales)_
-
 # Términos de Servicio — Comprobify
 
-**Última actualización:** `{{fecha}}`
+**Última actualización:** {{fechaVersion}}
 
 ## 1. Quiénes somos
 
-Comprobify es operado por **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, domiciliado en **Diego de Salazar E15-189 y Antonia Salinas**, Ecuador (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
+Comprobify es operado por **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, domiciliado en Ecuador (domicilio disponible previa solicitud razonable) (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
 
-Al crear una cuenta o utilizar el Servicio, usted declara haber leído, entendido y aceptado estos Términos y nuestra [Política de Privacidad](./politica-de-privacidad.md). Cuando resulte aplicable, el Cliente acepta además el [Acuerdo de Procesamiento de Datos](./acuerdo-procesamiento-datos.md) ("DPA"), el cual forma parte integrante de estos Términos.
+Al crear una cuenta o utilizar el Servicio, usted declara haber leído, entendido y aceptado estos Términos, la **Política de Privacidad** y, cuando resulte aplicable, el **Acuerdo de Procesamiento de Datos** ("DPA"), todos los cuales forman parte integrante de la relación contractual entre el Cliente y Comprobify.
 
 ## 2. Descripción del Servicio
 

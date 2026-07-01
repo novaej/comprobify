@@ -1,15 +1,6 @@
-> **BORRADOR PARA REVISIÓN — no constituye asesoría legal.**
-> Plantilla para uso manual/descarga, no para flujo de aceptación en la aplicación (ver `CLAUDE.md`, sección "Deferred"). Requiere revisión legal antes de entregarse a un cliente B2B. Reemplazar los campos entre `[corchetes]`; los espacios `[Cliente: ...]` se completan por cada cliente que lo solicite.
->
-> **Nota:** mientras Comprobify opere como persona natural (sin compañía constituida), el Encargado se identifica como tal — ver cláusula de partes abajo. Cuando se constituya una compañía, basta con actualizar ese dato; el resto del documento no cambia.
->
-> **Versión:** `[2026-06-28]`
-
 # Acuerdo de Procesamiento de Datos (DPA) — Comprobify
 
-**Última actualización:** `{{fecha}}`
-
-Este Acuerdo de Procesamiento de Datos ("DPA") complementa los Términos de Servicio y se celebra entre **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, titular de la plataforma Comprobify (en adelante, "Comprobify" o "el Encargado"), y **[Cliente: Razón Social]**, RUC **[Cliente: RUC]** ("el Responsable"), y se aplica al tratamiento de datos personales de terceros (compradores) que el Responsable instruye al Encargado a procesar a través del Servicio.
+Este Acuerdo de Procesamiento de Datos ("DPA") complementa los Términos de Servicio y se celebra el **{{fechaDocumento}}** entre **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, titular de la plataforma Comprobify (en adelante, "Comprobify" o "el Encargado"), y **{{cliente.razonSocial}}**, RUC **{{cliente.ruc}}** ("el Responsable"), y se aplica al tratamiento de datos personales de terceros (compradores) que el Responsable instruye al Encargado a procesar a través del Servicio.
 
 ## 1. Definiciones
 
@@ -32,7 +23,7 @@ El Encargado se compromete a:
 
 1. Tratar los datos únicamente conforme a las instrucciones documentadas del Responsable (incluyendo las transmitidas mediante el uso normal del Servicio).
 2. Garantizar la confidencialidad del personal con acceso a los datos.
-3. Implementar medidas técnicas y organizativas apropiadas para proteger los datos personales tratados. Estas medidas se describen de manera general, a título informativo, en la [Política de Privacidad](./politica-de-privacidad.md), sección 5.
+3. Implementar medidas técnicas y organizativas apropiadas para proteger los datos personales tratados. Estas medidas se describen de manera general, a título informativo, en la Política de Privacidad de Comprobify, sección 5.
 4. Notificar al Responsable sin demora indebida ante cualquier vulneración de seguridad que afecte los datos personales tratados por su cuenta, tan pronto como tenga conocimiento de ella.
 5. Realizar transferencias internacionales de datos únicamente cuando sean necesarias para la prestación del Servicio y mediante los subencargados identificados en la sección 6.
 6. Asistir al Responsable, en la medida de lo razonable, para que este pueda atender solicitudes de los interesados respecto de sus derechos bajo la LOPDP.
