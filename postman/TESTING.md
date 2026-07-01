@@ -378,6 +378,8 @@ The agreement instances were generated in Step 4a. The tenant must accept them b
 
 **`GET /v1/tenants/agreements/TERMS`** — view the personalized Terms of Service HTML.
 
+**`GET /v1/tenants/agreements/PRIVACY`** — view the personalized Privacy Policy HTML.
+
 **`GET /v1/tenants/agreements/DPA`** — verify the tenant's `businessName` and `ruc` appear in the DPA intro paragraph.
 
 **`POST /v1/tenants/agreements`** *(Tenants folder)*
