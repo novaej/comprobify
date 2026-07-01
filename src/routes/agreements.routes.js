@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const controller = require('../controllers/legal-document.controller');
+const controller = require('../controllers/agreement.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const v = require('../validators/agreement.validator');
