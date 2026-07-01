@@ -5,6 +5,7 @@ const MarkdownIt = require('markdown-it');
 const legalDocumentModel = require('../models/legal-document.model');
 const NotFoundError = require('../errors/not-found-error');
 const ErrorCodes = require('../constants/error-codes');
+const config = require('../config');
 
 const markdownRenderer = new MarkdownIt();
 
@@ -38,13 +39,26 @@ function stripDraftHeader(markdown) {
   return markdown.replace(/^(?:>.*\n|\n)+/, '').trim();
 }
 
-// Reads the source file for documentType, strips the draft header, and
-// publishes the clean Markdown to the database. version is set by the caller
-// (the admin) so they control the canonical version string.
+// Reads the source file for documentType, strips the draft header, substitutes
+// operator identity tokens from config, and publishes to the database.
+// Throws if any OPERATOR_* env var is missing — empty identity in a legal
+// document is always wrong so we catch it early rather than publishing silently.
 async function publish(documentType, version) {
+  const { nombre, ruc, email } = config.operator;
+  if (!nombre || !ruc || !email) {
+    throw new Error(
+      'OPERATOR_NAME, OPERATOR_RUC, and OPERATOR_EMAIL must all be set before publishing legal documents'
+    );
+  }
+
   const filePath = DOCUMENT_FILE_MAP[documentType];
   const raw = fs.readFileSync(filePath, 'utf8');
-  const contentMarkdown = stripDraftHeader(raw);
+  const stripped = stripDraftHeader(raw);
+  // Operator identity is the same across all tenants — substitute it at
+  // publish time so it's baked into the stored template. Tenant-specific
+  // tokens ({{cliente.*}}, {{fechaDocumento}}) are resolved later in
+  // tenant-legal-document.service.js when generating per-tenant instances.
+  const contentMarkdown = substitutePlaceholders(stripped, { operador: { nombre, ruc, email } });
   const contentHash = sha256Hex(contentMarkdown);
   return legalDocumentModel.create({ documentType, version, contentMarkdown, contentHash });
 }
@@ -87,8 +101,12 @@ async function getCurrentHtml(documentType, values = {}) {
 // Professional, transparent without undermining confidence — no mention of
 // "not reviewed by a lawyer" which reads as a warning rather than context.
 function buildDisclaimer(version) {
+  const email = config.operator?.email || '';
+  const contact = email
+    ? `puede contactarnos en <a href="mailto:${email}" style="color:#495057">${email}</a>`
+    : 'puede contactarnos a través de los canales indicados en los documentos';
   return `<div style="background:#f8f9fa;border-left:4px solid #6c757d;padding:12px 16px;margin-bottom:24px;font-size:0.9em;color:#495057">
-<strong>Aviso:</strong> Estos documentos han sido elaborados para establecer las condiciones de uso del Servicio y el tratamiento de datos personales. Pueden actualizarse para reflejar cambios en la legislación o en el funcionamiento del Servicio. Si tiene preguntas sobre su contenido, puede contactarnos en <a href="mailto:japc.93@outlook.com" style="color:#495057">japc.93@outlook.com</a> antes de aceptarlos.<br><small style="color:#6c757d">Versión: ${version}</small>
+<strong>Aviso:</strong> Estos documentos han sido elaborados para establecer las condiciones de uso del Servicio y el tratamiento de datos personales. Pueden actualizarse para reflejar cambios en la legislación o en el funcionamiento del Servicio. Si tiene preguntas sobre su contenido, ${contact} antes de aceptarlos.<br><small style="color:#6c757d">Versión: ${version}</small>
 </div>
 `;
 }

@@ -1,6 +1,6 @@
 # Acuerdo de Procesamiento de Datos (DPA) — Comprobify
 
-Este Acuerdo de Procesamiento de Datos ("DPA") complementa los Términos de Servicio y se celebra el **{{fechaDocumento}}** entre **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, titular de la plataforma Comprobify (en adelante, "Comprobify" o "el Encargado"), y **{{cliente.razonSocial}}**, RUC **{{cliente.ruc}}** ("el Responsable"), y se aplica al tratamiento de datos personales de terceros (compradores) que el Responsable instruye al Encargado a procesar a través del Servicio.
+Este Acuerdo de Procesamiento de Datos ("DPA") complementa los Términos de Servicio y se celebra el **{{fechaDocumento}}** entre **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, titular de la plataforma Comprobify (en adelante, "Comprobify" o "el Encargado"), y **{{cliente.razonSocial}}**, RUC **{{cliente.ruc}}** ("el Responsable"), y se aplica al tratamiento de datos personales de terceros (compradores) que el Responsable instruye al Encargado a procesar a través del Servicio.
 
 ## 1. Definiciones
 

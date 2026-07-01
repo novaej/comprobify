@@ -4,7 +4,7 @@
 
 ## 1. Quiénes somos
 
-Comprobify es operado por **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, domiciliado en Ecuador (domicilio disponible previa solicitud razonable) (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
+Comprobify es operado por **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, domiciliado en Ecuador (domicilio disponible previa solicitud razonable) (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
 
 Al crear una cuenta o utilizar el Servicio, usted declara haber leído, entendido y aceptado estos Términos, la **Política de Privacidad** y, cuando resulte aplicable, el **Acuerdo de Procesamiento de Datos** ("DPA"), todos los cuales forman parte integrante de la relación contractual entre el Cliente y Comprobify.
 
@@ -89,7 +89,7 @@ Ninguna parte será responsable por incumplimientos causados por eventos fuera d
 
 Comprobify puede suspender o terminar cuentas en caso de incumplimiento de estos Términos, uso fraudulento, abuso del sistema, impago reiterado o actividades ilícitas.
 
-El Cliente puede solicitar la terminación de su cuenta en cualquier momento mediante comunicación a `japc.93@outlook.com`.
+El Cliente puede solicitar la terminación de su cuenta en cualquier momento mediante comunicación a `{{operador.email}}`.
 
 La terminación no elimina obligaciones de pago ni afecta el historial de comprobantes ya emitidos.
 
@@ -103,4 +103,4 @@ Estos Términos se rigen por las leyes de la República del Ecuador. Cualquier c
 
 ## 13. Contacto
 
-Para consultas: `japc.93@outlook.com`.
+Para consultas: `{{operador.email}}`.

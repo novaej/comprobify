@@ -2,7 +2,7 @@
 
 **Última actualización:** {{fechaVersion}}
 
-Esta Política de Privacidad describe cómo **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP").
+Esta Política de Privacidad describe cómo **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP").
 
 ## 1. Roles: quién es responsable de qué
 
@@ -75,7 +75,7 @@ Actualmente el sistema no implementa un mecanismo de eliminación definitiva de 
 
 Bajo la LOPDP, los compradores cuyos datos constan en un comprobante pueden ejercer sus derechos de acceso, rectificación, actualización, eliminación (cuando proceda), oposición y portabilidad (si aplica), **directamente ante el Cliente** (Responsable del Tratamiento), quien decidió incluir esos datos. Comprobify, como Encargado, colaborará con el Cliente para atender dichas solicitudes en la medida técnicamente posible. **El derecho de eliminación no aplica a los datos contenidos en comprobantes electrónicos autorizados por el SRI durante el período de conservación obligatorio establecido por la normativa tributaria ecuatoriana (ver sección 8).**
 
-El Cliente, respecto de los datos de su propia cuenta (correo, certificado, historial de pagos), puede ejercer los mismos derechos señalados anteriormente directamente ante Comprobify, escribiendo a `japc.93@outlook.com`.
+El Cliente, respecto de los datos de su propia cuenta (correo, certificado, historial de pagos), puede ejercer los mismos derechos señalados anteriormente directamente ante Comprobify, escribiendo a `{{operador.email}}`.
 
 ## 10. Cambios a esta política
 
@@ -83,4 +83,4 @@ Publicaremos cualquier cambio material en esta página con una nueva fecha de ve
 
 ## 11. Contacto
 
-`Jonathan Andrés Pillajo Coka` — RUC `1715824775001` — Domicilio disponible previa solicitud razonable del interesado — `japc.93@outlook.com`
+`{{operador.nombre}}` — RUC `{{operador.ruc}}` — Domicilio disponible previa solicitud razonable del interesado — `{{operador.email}}`
