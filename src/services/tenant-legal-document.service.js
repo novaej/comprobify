@@ -4,13 +4,6 @@ const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 
-// Prepended to every rendered document at response time — never stored in
-// the DB content, so updating the wording doesn't require republishing all
-// tenant document snapshots.
-const DISCLAIMER_HTML = `<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:12px 16px;margin-bottom:24px;font-size:0.9em">
-<strong>Aviso:</strong> Este documento ha sido generado automáticamente y no ha sido revisado formalmente por un asesor legal. Se proporciona de buena fe como referencia de los términos que rigen el uso del Servicio. Para consultas legales, escriba a <a href="mailto:japc.93@outlook.com">japc.93@outlook.com</a>.
-</div>
-`;
 
 // Generates personalized document instances for a tenant using the current
 // published template versions. If issuer is not provided, fetches the
@@ -144,7 +137,7 @@ async function renderForTenant(tenantId, documentType) {
     );
   }
 
-  const html = DISCLAIMER_HTML + legalDocumentService.renderHtml(doc.content_markdown, {});
+  const html = legalDocumentService.buildDisclaimer(doc.template_version) + legalDocumentService.renderHtml(doc.content_markdown, {});
   return { html, status: doc.status, templateVersion: doc.template_version, acceptedAt: doc.accepted_at };
 }
 

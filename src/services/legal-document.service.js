@@ -83,6 +83,16 @@ async function getCurrentHtml(documentType, values = {}) {
   return { html: renderHtml(doc.content_markdown, { fecha, ...values }), version: doc.version };
 }
 
+// Returns the notice block prepended to every rendered legal document.
+// Professional, transparent without undermining confidence — no mention of
+// "not reviewed by a lawyer" which reads as a warning rather than context.
+function buildDisclaimer(version) {
+  return `<div style="background:#f8f9fa;border-left:4px solid #6c757d;padding:12px 16px;margin-bottom:24px;font-size:0.9em;color:#495057">
+<strong>Aviso:</strong> Estos documentos han sido elaborados para establecer las condiciones de uso del Servicio y el tratamiento de datos personales. Pueden actualizarse para reflejar cambios en la legislación o en el funcionamiento del Servicio. Si tiene preguntas sobre su contenido, puede contactarnos en <a href="mailto:japc.93@outlook.com" style="color:#495057">japc.93@outlook.com</a> antes de aceptarlos.<br><small style="color:#6c757d">Versión: ${version}</small>
+</div>
+`;
+}
+
 module.exports = {
   DOCUMENT_TYPES,
   DOCUMENT_FILE_MAP,
@@ -95,4 +105,5 @@ module.exports = {
   computeHash,
   formatDate,
   stripDraftHeader,
+  buildDisclaimer,
 };
