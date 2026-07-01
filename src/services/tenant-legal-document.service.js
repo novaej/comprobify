@@ -101,6 +101,7 @@ async function getStatus(tenantId) {
         acceptedVersion: latest?.status === 'ACCEPTED' ? latest.template_version : null,
         status: latest ? latest.status : 'NOT_GENERATED',
         url: `/v1/tenants/legal-documents/${template.document_type}`,
+        acceptUrl: '/v1/tenants/legal-acceptance',
       });
     }
   }

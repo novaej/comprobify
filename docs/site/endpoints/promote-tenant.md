@@ -72,6 +72,6 @@ Sandbox keys are revoked automatically during promotion. If you had no sandbox k
 | `400` | `VALIDATION_FAILED` | `tier` or `billingInterval` is not a recognised value |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `FORBIDDEN` | Tenant email not yet verified (status `PENDING_VERIFICATION`) |
-| `403` | `LEGAL_ACCEPTANCE_REQUIRED` | One or more legal documents have not been accepted — call `GET /v1/tenants/legal-status` to see which ones, view them at `GET /v1/tenants/legal-documents/:type`, then accept via `POST /v1/tenants/accept-legal` |
+| `403` | `LEGAL_ACCEPTANCE_REQUIRED` | One or more legal documents have not been accepted — call `GET /v1/tenants/legal-acceptance` to see which ones, view them at `GET /v1/tenants/legal-documents/:type`, then accept via `POST /v1/tenants/legal-acceptance` |
 | `409` | `CONFLICT` | Tenant is already in production |
 | `409` | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | A `tier` was requested but the tenant already has a subscription in progress |

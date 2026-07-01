@@ -46,8 +46,8 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `GET` | `/v1/tenants/me` | Resolve the tenant (id, email, tier, status, quota, environment, legal acceptance) for the authenticated API key |
 | `PATCH` | `/v1/tenants/language` | Update the preferred language for outgoing emails |
 | `POST` | `/v1/tenants/promote` | Promote the tenant to production — revokes all sandbox keys and creates matching production keys |
-| `GET` | `/v1/tenants/legal-status` | Check whether any legal documents need acceptance — returns which types are outdated. Lazily generates PENDING instances for any new template versions; third-party integrators should poll this periodically |
-| `POST` | `/v1/tenants/accept-legal` | Accept all PENDING legal documents — required before promoting to production |
+| `GET` | `/v1/tenants/legal-acceptance` | Check whether any legal documents need acceptance — returns which types are outdated. Lazily generates PENDING instances for any new template versions; third-party integrators should poll this periodically |
+| `POST` | `/v1/tenants/legal-acceptance` | Accept all PENDING legal documents — required before promoting to production |
 | `GET` | `/v1/tenants/legal-documents` | List all personalized legal document instances for the tenant, with status and acceptance timestamps |
 | `GET` | `/v1/tenants/legal-documents/:type` | Render the tenant's personalized document as HTML — includes their business name/RUC and the dates as of when the account was created |
 

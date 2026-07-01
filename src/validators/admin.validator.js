@@ -249,4 +249,6 @@ module.exports = {
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPayments, publishLegalDocument,
+  activateLegalDocument: [param('id').isInt({ min: 1 }).withMessage('id must be a positive integer')],
+  listLegalDocumentVersions: [param('type').isIn(legalDocumentService.DOCUMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],
 };

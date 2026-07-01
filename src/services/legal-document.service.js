@@ -14,9 +14,9 @@ const DOCUMENT_TYPES = ['TERMS', 'PRIVACY', 'DPA'];
 // Maps each document type to its canonical source file in docs/legal/.
 // POST /v1/admin/legal-documents reads from here — no content in the body.
 const DOCUMENT_FILE_MAP = {
-  TERMS:   path.join(process.cwd(), 'docs/legal/terminos-de-servicio.md'),
-  PRIVACY: path.join(process.cwd(), 'docs/legal/politica-de-privacidad.md'),
-  DPA:     path.join(process.cwd(), 'docs/legal/acuerdo-procesamiento-datos.md'),
+  TERMS:   path.join(process.cwd(), 'docs/legal/terms-of-service.md'),
+  PRIVACY: path.join(process.cwd(), 'docs/legal/privacy-policy.md'),
+  DPA:     path.join(process.cwd(), 'docs/legal/data-processing-agreement.md'),
 };
 
 function sha256Hex(value) {
@@ -58,9 +58,26 @@ async function publish(documentType, version) {
   // publish time so it's baked into the stored template. Tenant-specific
   // tokens ({{cliente.*}}, {{fechaDocumento}}) are resolved later in
   // tenant-legal-document.service.js when generating per-tenant instances.
-  const contentMarkdown = substitutePlaceholders(stripped, { operador: { nombre, ruc, email } });
+  const domicilio = config.operator.domicilio || 'Domicilio disponible previa solicitud razonable';
+  const contentMarkdown = substitutePlaceholders(stripped, { operador: { nombre, ruc, email, domicilio } });
   const contentHash = sha256Hex(contentMarkdown);
-  return legalDocumentModel.create({ documentType, version, contentMarkdown, contentHash });
+  const doc = await legalDocumentModel.create({ documentType, version, contentMarkdown, contentHash });
+  // Auto-activate: new version becomes current immediately, same UX as before
+  // but now reversible via activateVersion().
+  await legalDocumentModel.activate(doc.id);
+  return doc;
+}
+
+// Activates a previously published version as the current one for its type.
+// Used to roll back to a prior version without republishing.
+async function activateVersion(id) {
+  const doc = await legalDocumentModel.activate(id);
+  if (!doc) throw new NotFoundError('Legal document', ErrorCodes.LEGAL_DOCUMENT_NOT_FOUND);
+  return doc;
+}
+
+async function listVersionsByType(documentType) {
+  return legalDocumentModel.findAllByType(documentType);
 }
 
 async function getCurrent(documentType) {
@@ -115,6 +132,8 @@ module.exports = {
   DOCUMENT_TYPES,
   DOCUMENT_FILE_MAP,
   publish,
+  activateVersion,
+  listVersionsByType,
   getCurrent,
   listCurrent,
   renderHtml,

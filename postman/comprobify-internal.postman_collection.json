@@ -513,14 +513,14 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/legal-status",
+              "raw": "{{base_url}}/v1/tenants/legal-acceptance",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
                 "tenants",
-                "legal-status"
+                "legal-acceptance"
               ]
             },
             "description": "Check if any document was republished since the tenant last accepted. Use outdated[].url to show updated content."
@@ -550,21 +550,21 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/accept-legal",
+              "raw": "{{base_url}}/v1/tenants/legal-acceptance",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
                 "tenants",
-                "accept-legal"
+                "legal-acceptance"
               ]
             },
             "body": {
               "mode": "raw",
               "raw": "{\"termsVersion\":\"{{legal_version}}\"}"
             },
-            "description": "Record re-acceptance of all currently published documents. Use when legal-status returns needsAcceptance: true."
+            "description": "Record re-acceptance of all currently published documents. Use when legal-acceptance returns needsAcceptance: true."
           }
         },
         {

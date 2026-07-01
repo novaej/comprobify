@@ -59,8 +59,8 @@ const acceptLegalValidator = [
 router.get('/me', readLimiter, requireMatchingEnvironment, asyncHandler(controller.getMe));
 router.patch('/language', updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
 router.post('/promote', writeLimiter, promoteValidator, validateRequest, asyncHandler(controller.promote));
-router.get('/legal-status', readLimiter, asyncHandler(controller.getLegalStatus));
-router.post('/accept-legal', writeLimiter, acceptLegalValidator, validateRequest, asyncHandler(controller.acceptLegal));
+router.get('/legal-acceptance', readLimiter, asyncHandler(controller.getLegalStatus));
+router.post('/legal-acceptance', writeLimiter, acceptLegalValidator, validateRequest, asyncHandler(controller.acceptLegal));
 router.get('/legal-documents', readLimiter, asyncHandler(controller.listLegalDocuments));
 router.get('/legal-documents/:type', readLimiter, asyncHandler(controller.getLegalDocument));
 

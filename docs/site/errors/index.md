@@ -117,7 +117,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `DOCUMENT_NOT_AUTHORIZED` | Operation (RIDE, email) requires document status `AUTHORIZED` |
 | `SELF_REVOCATION_FORBIDDEN` | Cannot revoke the API key used to authenticate this request |
 | `INVALID_FILE_UPLOAD` | Uploaded file is missing, the wrong type, or exceeds the field's size limit (e.g. a logo over 500 KB) |
-| `LEGAL_VERSION_MISMATCH` | `termsVersion` in `POST /v1/register` or `POST /v1/tenants/accept-legal` does not match the currently published TERMS document version — re-fetch `GET /v1/legal/documents` and present the current version before asking the user to accept again |
+| `LEGAL_VERSION_MISMATCH` | `termsVersion` in `POST /v1/register` or `POST /v1/tenants/legal-acceptance` does not match the currently published TERMS document version — re-fetch `GET /v1/legal/documents` and present the current version before asking the user to accept again |
 | `LAST_ISSUER_CANNOT_BE_REMOVED` | Tenant has only one active issuer left — it cannot be removed |
 | `ISSUER_HAS_DOCUMENTS` | Issuer has issued documents (in either environment) and cannot be removed |
 | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` is not greater than the counter's current value |
@@ -148,7 +148,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `ISSUER_FORBIDDEN` | `X-Issuer-Id` names an issuer that belongs to a different tenant |
 | `ACCOUNT_SUSPENDED` | Tenant account is suspended — contact support |
 | `EMAIL_VERIFICATION_REQUIRED` | Operation requires a verified email address |
-| `LEGAL_ACCEPTANCE_REQUIRED` | Promotion blocked — one or more legal documents are still `PENDING` (check `GET /v1/tenants/legal-status`, view at `GET /v1/tenants/legal-documents/:type`, accept via `POST /v1/tenants/accept-legal`) |
+| `LEGAL_ACCEPTANCE_REQUIRED` | Promotion blocked — one or more legal documents are still `PENDING` (check `GET /v1/tenants/legal-acceptance`, view at `GET /v1/tenants/legal-documents/:type`, accept via `POST /v1/tenants/legal-acceptance`) |
 | `PRODUCTION_KEY_REQUIRES_PROMOTION` | Production API key cannot be created before promoting to production |
 | `FORBIDDEN` | Other permission failure (fallback — read `detail`) |
 

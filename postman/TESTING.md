@@ -47,7 +47,7 @@ Run from the **Admin** folder of the **internal** collection:
 2. **Publish Legal Document (PRIVACY)** — same, `"documentType": "PRIVACY"`
 3. **Publish Legal Document (DPA)** — same, `"documentType": "DPA"`
 
-**No markdown content in the body.** The server reads directly from `docs/legal/terminos-de-servicio.md`, `docs/legal/politica-de-privacidad.md`, and `docs/legal/acuerdo-procesamiento-datos.md` on the filesystem. Make sure those files are present and correct before publishing.
+**No markdown content in the body.** The server reads directly from `docs/legal/terms-of-service.md`, `docs/legal/privacy-policy.md`, and `docs/legal/data-processing-agreement.md` on the filesystem. Make sure those files are present and correct before publishing.
 
 Use the same `version` string for all three types published together — this is the "bundle version" tenants must accept.
 
@@ -156,7 +156,7 @@ Confirm your business name and RUC appear correctly in the intro paragraph.
 
 ### Step 5b — Accept all legal documents
 
-**`POST /v1/tenants/accept-legal`** *(Tenants folder)*
+**`POST /v1/tenants/legal-acceptance`** *(Tenants folder)*
 
 ```json
 { "termsVersion": "{{legal_version}}" }
@@ -170,13 +170,13 @@ Expected: `{ "ok": true }` — all three rows flip to `status: ACCEPTED`.
 
 ### Step 6 — Verify legal acceptance status
 
-**`GET /v1/tenants/legal-status`** *(Tenants folder)*
+**`GET /v1/tenants/legal-acceptance`** *(Tenants folder)*
 
 Expected: `needsAcceptance: false`, `outdated: []` — all documents accepted.
 
-> **If `needsAcceptance: true`:** The `outdated` array lists which types need acceptance and includes a `url` for each. Fetch `GET /v1/tenants/legal-documents/:type` to show the document, then call `POST /v1/tenants/accept-legal` again.
+> **If `needsAcceptance: true`:** The `outdated` array lists which types need acceptance and includes a `url` for each. Fetch `GET /v1/tenants/legal-documents/:type` to show the document, then call `POST /v1/tenants/legal-acceptance` again.
 
-> **Third-party integrators** should poll `GET /v1/tenants/legal-status` periodically. When the admin publishes a new template version, calling this endpoint automatically generates new PENDING instances, which surfaces as `needsAcceptance: true` until the tenant re-accepts.
+> **Third-party integrators** should poll `GET /v1/tenants/legal-acceptance` periodically. When the admin publishes a new template version, calling this endpoint automatically generates new PENDING instances, which surfaces as `needsAcceptance: true` until the tenant re-accepts.
 
 ---
 

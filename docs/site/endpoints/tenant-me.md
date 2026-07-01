@@ -38,7 +38,7 @@ GET /v1/tenants/me
 | `documentCount` | Documents issued in the current billing period. |
 | `documentQuota` | Document limit for the current `subscriptionTier`. |
 | `sandbox` | `true` if the tenant is in the SRI test environment, `false` if promoted to production. |
-| `legalAcceptedAt` | Timestamp of the most recent legal acceptance event, or `null` for admin-created tenants. Compare against `GET /v1/tenants/legal-status` to detect drift. |
+| `legalAcceptedAt` | Timestamp of the most recent legal acceptance event, or `null` for admin-created tenants. Compare against `GET /v1/tenants/legal-acceptance` to detect drift. |
 | `legalVersion` | The TERMS document version the tenant last accepted, or `null` for admin-created tenants. |
 
 ## Errors

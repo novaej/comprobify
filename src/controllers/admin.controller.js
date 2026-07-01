@@ -150,8 +150,18 @@ const publishLegalDocument = async (req, res) => {
   );
   res.status(201).json({
     ok: true,
-    document: { id: document.id, documentType: document.document_type, version: document.version, createdAt: document.created_at },
+    document: { id: document.id, documentType: document.document_type, version: document.version, createdAt: document.created_at, isCurrent: true },
   });
+};
+
+const activateLegalDocument = async (req, res) => {
+  const document = await legalDocumentService.activateVersion(parseInt(req.params.id, 10));
+  res.json({ ok: true, document: { id: document.id, documentType: document.document_type, version: document.version, isCurrent: document.is_current } });
+};
+
+const listLegalDocumentVersions = async (req, res) => {
+  const versions = await legalDocumentService.listVersionsByType(req.params.type);
+  res.json({ ok: true, versions });
 };
 
 // Jobs
@@ -201,5 +211,6 @@ module.exports = {
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
   runSubscriptionJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof, listPayments, publishLegalDocument, generateTenantLegalDocuments,
+  reviewPayment, getPaymentProof, listPayments,
+  publishLegalDocument, activateLegalDocument, listLegalDocumentVersions, generateTenantLegalDocuments,
 };

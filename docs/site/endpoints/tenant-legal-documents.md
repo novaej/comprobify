@@ -2,7 +2,7 @@
 
 View and accept the personalized legal document instances generated for the authenticated tenant. Each document (Terms of Service, Privacy Policy, DPA) is generated with the tenant's own business name and RUC substituted in at registration time — the stored content is an immutable snapshot of what was in effect when the account was created.
 
-Use [Legal Acceptance Status](legal-status.md) to check whether any document needs re-acceptance. Use `POST /v1/tenants/accept-legal` (on that same page) to record acceptance.
+Use [Legal Acceptance](legal-acceptance.md) to check whether any document needs re-acceptance. Use `POST /v1/tenants/legal-acceptance` (on that same page) to record acceptance.
 
 ## List documents
 
@@ -46,7 +46,7 @@ GET /v1/tenants/legal-documents
 }
 ```
 
-Returns all instances across all versions, newest first per type. Status is `PENDING` (generated, not yet accepted) or `ACCEPTED`. When a new template version is published, a new `PENDING` instance appears here after the first call to `GET /v1/tenants/legal-status` or this endpoint.
+Returns all instances across all versions, newest first per type. Status is `PENDING` (generated, not yet accepted) or `ACCEPTED`. When a new template version is published, a new `PENDING` instance appears here after the first call to `GET /v1/tenants/legal-acceptance` or this endpoint.
 
 ## Get a document (rendered HTML)
 
@@ -77,7 +77,7 @@ Response headers include:
 
 ## Notes
 
-- Documents are generated at registration and lazily for any new template version when this endpoint or `GET /v1/tenants/legal-status` is called — no separate step is needed to "request" a document.
-- Viewing the document does not change its status. Call `POST /v1/tenants/accept-legal` separately.
+- Documents are generated at registration and lazily for any new template version when this endpoint or `GET /v1/tenants/legal-acceptance` is called — no separate step is needed to "request" a document.
+- Viewing the document does not change its status. Call `POST /v1/tenants/legal-acceptance` separately.
 - All historical instances are preserved — accepting a new version never overwrites the old accepted record. `GET /v1/tenants/legal-documents` returns the full history per type ordered newest first.
 - For admin backfill of pre-existing tenants, see `POST /v1/admin/tenants/:id/legal-documents`.

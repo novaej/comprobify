@@ -23,7 +23,7 @@ GET /v1/legal/documents
 }
 ```
 
-The `version` string is what you pass as `termsVersion` in `POST /v1/register` (or `POST /v1/tenants/accept-legal`). Always read it from this response rather than hardcoding it — the server validates against whatever is currently published.
+The `version` string is what you pass as `termsVersion` in `POST /v1/register` (or `POST /v1/tenants/legal-acceptance`). Always read it from this response rather than hardcoding it — the server validates against whatever is currently published.
 
 ## Get a document
 

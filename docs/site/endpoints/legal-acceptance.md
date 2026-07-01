@@ -2,12 +2,12 @@
 
 Check whether the authenticated tenant needs to re-accept any legal documents, and record a new acceptance when they do.
 
-Use this on login/app-load to drive a re-acceptance modal. If `needsAcceptance` is `true`, show the updated documents listed in `outdated` and call `POST /v1/tenants/accept-legal` when the user confirms.
+Use this on login/app-load to drive a re-acceptance modal. If `needsAcceptance` is `true`, show the updated documents listed in `outdated` and call `POST /v1/tenants/legal-acceptance` when the user confirms.
 
 ## Check status
 
 ```
-GET /v1/tenants/legal-status
+GET /v1/tenants/legal-acceptance
 ```
 
 **Authentication:** `Authorization: Bearer <api-key>`
@@ -69,7 +69,7 @@ Each entry in `outdated` names the specific document type that changed. Use the 
 ## Record acceptance
 
 ```
-POST /v1/tenants/accept-legal
+POST /v1/tenants/legal-acceptance
 ```
 
 **Authentication:** `Authorization: Bearer <api-key>`

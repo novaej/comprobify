@@ -130,4 +130,4 @@ If the email is already registered and not suspended, the current sandbox key is
 - The verification token expires after the configured TTL (default 24 hours). Use `POST /v1/resend-verification` to issue a fresh one.
 - The endpoint is idempotent on the email address — safe to retry if the API key was lost.
 - Fetch the current `termsVersion` from `GET /v1/legal/documents` immediately before showing the acceptance checkbox, not at page load — the server validates the submitted version and rejects stale ones.
-- Returning tenants whose acceptance version has drifted (e.g. after the DPA is updated) should use `GET /v1/tenants/legal-status` to discover which documents need re-accepting, and `POST /v1/tenants/accept-legal` to record the new acceptance. See [Legal Acceptance Status](legal-status.md).
+- Returning tenants whose acceptance version has drifted (e.g. after the DPA is updated) should use `GET /v1/tenants/legal-acceptance` to discover which documents need re-accepting, and `POST /v1/tenants/legal-acceptance` to record the new acceptance. See [Legal Acceptance](legal-acceptance.md).
