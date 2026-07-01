@@ -633,4 +633,35 @@ module.exports = {
   listByTenant,
   listPendingPayments,
   getStatusForTenant,
+  addBillingPeriod,
+  resetPeriodOnPromotion,
 };
+
+// Resets the billing period of an ACTIVE subscription to start at promotion
+// time. Called from tenant.service.js when a sandbox tenant promotes to
+// production — the paid period should count production usage, not sandbox
+// testing time. Also resets the funding payment's period stamps for audit
+// trail consistency (mirrors activateIfLinked's stamping logic).
+async function resetPeriodOnPromotion(subscriptionId) {
+  const subscription = await subscriptionModel.findById(subscriptionId);
+  if (!subscription || subscription.status !== 'ACTIVE') return null;
+
+  const periodStart = new Date();
+  const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+
+  const updated = await subscriptionModel.updateStatus(subscriptionId, 'ACTIVE', {
+    current_period_start: periodStart,
+    current_period_end: periodEnd,
+  });
+
+  const payments = await paymentModel.findBySubscriptionId(subscriptionId);
+  const funding = payments.find((p) => p.status === 'VERIFIED' && p.period_start);
+  if (funding) {
+    await paymentModel.updateStatus(funding.id, funding.status, {
+      period_start: periodStart,
+      period_end: periodEnd,
+    });
+  }
+
+  return updated;
+}

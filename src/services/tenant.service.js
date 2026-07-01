@@ -87,6 +87,13 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   // time promotion happens — nothing left to select, just surface what's running.
   const activeSubscription = await subscriptionModel.findActiveByTenantId(tenantId);
 
+  // Reset the billing period to start at promotion time rather than at the
+  // moment the subscription was activated in sandbox. The paid period should
+  // count production usage, not sandbox testing time.
+  if (activeSubscription) {
+    await subscriptionService.resetPeriodOnPromotion(activeSubscription.id);
+  }
+
   // Promotion itself never waits on payment — production access is granted on FREE
   // immediately. Requesting a paid tier here only kicks off the subscription pipeline
   // in the background; the tier/quota upgrade only lands once it's paid and authorized.
