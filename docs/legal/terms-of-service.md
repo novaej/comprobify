@@ -1,19 +1,12 @@
-> **BORRADOR PARA REVISIÓN — no constituye asesoría legal.**
-> Este texto fue redactado a partir del funcionamiento real de la API (ver `CLAUDE.md`), no de una plantilla genérica. Antes de publicarlo como versión vinculante, debe ser revisado por un abogado en Ecuador, en particular las secciones de limitación de responsabilidad, cancelación/reembolsos y ley aplicable. Reemplazar todos los campos entre `[corchetes]` con la información legal real.
->
-> Deliberadamente no menciona rutas de la API, nombres de algoritmos concretos, ni proveedores de infraestructura por nombre — esos detalles cambian con mucha más frecuencia que un documento legal, y describirlos aquí obligaría a republicar los Términos cada vez que cambien. Esos detalles viven en la documentación técnica y en la Política de Privacidad.
->
-> **Versión:** `[2026-06-28]` _(este string es el que se envía como `termsVersion` al registrarse — debe coincidir exactamente con el publicado vía el endpoint administrativo de publicación de documentos legales)_
-
 # Términos de Servicio — Comprobify
 
-**Última actualización:** `[fecha]`
+**Última actualización:** {{fechaVersion}}
 
 ## 1. Quiénes somos
 
-Comprobify es operado por **[Tu nombre completo]**, persona natural con RUC **[RUC]**, domiciliado en **[Dirección]**, Ecuador (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
+Comprobify es operado por **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, domiciliado en {{operador.domicilio}} (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
 
-Al crear una cuenta o utilizar el Servicio, usted declara haber leído, entendido y aceptado estos Términos y nuestra [Política de Privacidad](./politica-de-privacidad.md). Cuando resulte aplicable, el Cliente acepta además el [Acuerdo de Procesamiento de Datos](./acuerdo-procesamiento-datos.md) ("DPA"), el cual forma parte integrante de estos Términos.
+Al crear una cuenta o utilizar el Servicio, usted declara haber leído, entendido y aceptado estos Términos, la **Política de Privacidad** y, cuando resulte aplicable, el **Acuerdo de Procesamiento de Datos** ("DPA"), todos los cuales forman parte integrante de la relación contractual entre el Cliente y Comprobify.
 
 ## 2. Descripción del Servicio
 
@@ -32,6 +25,8 @@ El Cliente garantiza que cuenta con base legal suficiente para el tratamiento de
 Toda cuenta inicia en ambiente de pruebas del SRI y debe ser activada explícitamente a producción. El Cliente entiende que los comprobantes emitidos en pruebas no tienen validez fiscal.
 
 El Cliente es responsable de la custodia de sus credenciales. Comprobify almacena la clave privada del certificado de firma cifrada, pero no puede recuperar credenciales perdidas fuera de los mecanismos de recuperación de cuenta disponibles en el Servicio.
+
+Los comprobantes electrónicos emitidos a través del Servicio y sus metadatos de autorización están sujetos a los plazos de conservación establecidos por la normativa tributaria ecuatoriana. Conforme al Art. 55 del Código Tributario, el período de prescripción de las acciones de cobro es de cinco (5) años para los casos ordinarios y de siete (7) años cuando la declaración no fue presentada o fue presentada de forma incompleta; dichos datos no serán eliminados durante este período, siendo recomendable aplicar el plazo mayor como medida prudente. Ver la Política de Privacidad para más detalle.
 
 ## 4. Planes, cuotas y facturación
 
@@ -94,7 +89,7 @@ Ninguna parte será responsable por incumplimientos causados por eventos fuera d
 
 Comprobify puede suspender o terminar cuentas en caso de incumplimiento de estos Términos, uso fraudulento, abuso del sistema, impago reiterado o actividades ilícitas.
 
-El Cliente puede solicitar la terminación de su cuenta en cualquier momento mediante comunicación a `[email de soporte]`.
+El Cliente puede solicitar la terminación de su cuenta en cualquier momento mediante comunicación a `{{operador.email}}`.
 
 La terminación no elimina obligaciones de pago ni afecta el historial de comprobantes ya emitidos.
 
@@ -108,4 +103,4 @@ Estos Términos se rigen por las leyes de la República del Ecuador. Cualquier c
 
 ## 13. Contacto
 
-Para consultas: `[email de contacto]`.
+Para consultas: `{{operador.email}}`.

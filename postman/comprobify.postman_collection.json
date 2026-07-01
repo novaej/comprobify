@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Comprobify API — Public",
-    "description": "Comprobify developer API — self-service registration through full document lifecycle. Run in order:\n1. List Current Documents → captures legal_version\n2. Register → captures api_key, issuer_id, tenant_id\n3. Verify Email (set verification_token manually from email)\n4. Get Current Tenant → confirm active\n5. Legal Acceptance Status\n6. Create Invoice → captures access_key\n7. Send to SRI / Check Authorization\n8. Subscribe / Promote to Production",
+    "description": "Comprobify developer API — self-service registration through full document lifecycle. Run in order:\n1. List Current Documents → captures agreement_version\n2. Register → captures api_key, issuer_id, tenant_id\n3. Verify Email (set verification_token manually from email)\n4. Get Current Tenant → confirm active\n5. Agreement Acceptance Status\n6. Create Invoice → captures access_key\n7. Send to SRI / Check Authorization\n8. Subscribe / Promote to Production",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -66,9 +66,9 @@
       "type": "string"
     },
     {
-      "key": "legal_version",
+      "key": "agreement_version",
       "value": "",
-      "description": "Version string of the currently published TERMS document — captured from GET /v1/legal/documents",
+      "description": "Version string of the currently published TERMS document — captured from GET /v1/agreements",
       "type": "string"
     },
     {
@@ -86,7 +86,7 @@
   ],
   "item": [
     {
-      "name": "Legal Documents",
+      "name": "Agreements",
       "item": [
         {
           "name": "List Current Documents",
@@ -99,7 +99,7 @@
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.ok && r.documents) {",
                   "  const terms = r.documents.find(d => d.documentType === 'TERMS');",
-                  "  if (terms) { pm.collectionVariables.set('legal_version', terms.version); console.log('legal_version set to', terms.version); }",
+                  "  if (terms) { pm.collectionVariables.set('agreement_version', terms.version); console.log('agreement_version set to', terms.version); }",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -110,17 +110,16 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/legal/documents",
+              "raw": "{{base_url}}/v1/agreements",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
-                "legal",
-                "documents"
+                "agreements"
               ]
             },
-            "description": "Public. Returns current version of each document type. Captures legal_version for use in Register and Accept Legal."
+            "description": "Public. Returns current version of each document type. Captures agreement_version for use in Register and Accept Agreements."
           }
         },
         {
@@ -129,14 +128,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/legal/documents/TERMS",
+              "raw": "{{base_url}}/v1/agreements/TERMS",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
-                "legal",
-                "documents",
+                "agreements",
                 "TERMS"
               ]
             },
@@ -149,14 +147,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/legal/documents/PRIVACY",
+              "raw": "{{base_url}}/v1/agreements/PRIVACY",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
-                "legal",
-                "documents",
+                "agreements",
                 "PRIVACY"
               ]
             }
@@ -168,14 +165,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/v1/legal/documents/DPA",
+              "raw": "{{base_url}}/v1/agreements/DPA",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
-                "legal",
-                "documents",
+                "agreements",
                 "DPA"
               ]
             }
@@ -454,7 +450,7 @@
                   "const r = pm.response.json();",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
-                  "if (r.tenant?.legalVersion) console.log('Last accepted legal version:', r.tenant.legalVersion);"
+                  "if (r.tenant?.agreementVersion) console.log('Last accepted agreement version:', r.tenant.agreementVersion);"
                 ],
                 "type": "text/javascript"
               }
@@ -547,7 +543,7 @@
           ]
         },
         {
-          "name": "Legal Acceptance Status",
+          "name": "Agreement Acceptance Status",
           "event": [
             {
               "listen": "test",
@@ -556,8 +552,8 @@
                   "const r = pm.response.json();",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.ok) {",
-                  "  pm.test('needsAcceptance is boolean', () => pm.expect(typeof r.legal.needsAcceptance).to.equal('boolean'));",
-                  "  if (r.legal.needsAcceptance) console.log('Re-acceptance needed for:', r.legal.outdated.map(d => d.documentType));",
+                  "  pm.test('needsAcceptance is boolean', () => pm.expect(typeof r.agreements.needsAcceptance).to.equal('boolean'));",
+                  "  if (r.agreements.needsAcceptance) console.log('Re-acceptance needed for:', r.agreements.outdated.map(d => d.documentType));",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -573,21 +569,21 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/legal-status",
+              "raw": "{{base_url}}/v1/tenants/agreements",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
                 "tenants",
-                "legal-status"
+                "agreements"
               ]
             },
             "description": "Check if any document was republished since the tenant last accepted. Use outdated[].url to show updated content."
           }
         },
         {
-          "name": "Accept Legal Documents",
+          "name": "Accept Agreements",
           "event": [
             {
               "listen": "test",
@@ -614,21 +610,138 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/tenants/accept-legal",
+              "raw": "{{base_url}}/v1/tenants/agreements",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "v1",
                 "tenants",
-                "accept-legal"
+                "agreements"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"termsVersion\":\"{{legal_version}}\"}"
+              "raw": "{\"termsVersion\":\"{{agreement_version}}\"}"
             },
-            "description": "Record re-acceptance of all currently published documents. Use when legal-status returns needsAcceptance: true."
+            "description": "Record re-acceptance of all currently published documents. Use when agreements returns needsAcceptance: true."
+          }
+        },
+        {
+          "name": "List Tenant Agreements",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.ok) {",
+                  "  const pending = r.documents.filter(d => d.status === 'PENDING');",
+                  "  if (pending.length) console.log('PENDING documents:', pending.map(d => d.documentType).join(', '));",
+                  "  const accepted = r.documents.filter(d => d.status === 'ACCEPTED');",
+                  "  console.log('ACCEPTED:', accepted.map(d => d.documentType + ' v' + d.templateVersion).join(', '));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/agreements/history",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "agreements"
+              ]
+            },
+            "description": "Lists all personalized document instances for this tenant across all versions. status: PENDING (not yet accepted) or ACCEPTED."
+          }
+        },
+        {
+          "name": "View Agreement (TERMS)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/agreements/TERMS",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "agreements",
+                "TERMS"
+              ]
+            },
+            "description": "Returns the tenant's personalized Terms of Service as HTML — their businessName and RUC substituted in, with the disclaimer notice prepended. Also try /PRIVACY and /DPA. Check response headers: X-Document-Status, X-Template-Version, X-Accepted-At."
+          }
+        },
+        {
+          "name": "View Agreement (PRIVACY)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/agreements/PRIVACY",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "agreements",
+                "PRIVACY"
+              ]
+            },
+            "description": "Returns the tenant's personalized Privacy Policy as HTML."
+          }
+        },
+        {
+          "name": "View Agreement (DPA)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/agreements/DPA",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "agreements",
+                "DPA"
+              ]
+            },
+            "description": "DPA with the tenant's own businessName and RUC in the intro paragraph. Verify the substitution is correct before accepting."
           }
         }
       ]
@@ -640,7 +753,12 @@
           "name": "Submit Payment Proof",
           "request": {
             "method": "PATCH",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/v1/payments/{{payment_id}}/proof",
               "host": [
@@ -677,6 +795,10 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -701,13 +823,35 @@
               }
             },
             "description": "Tenant-authenticated (your own API key). Starts a paid subscription on your own, independent of promotion — works while still in sandbox (no need to promote to production first) or any time after. Requires a verified email, same gate POST /v1/tenants/promote uses.\n\nSame manual proof/review pipeline as the rest of the subscription system: upload proof via Submit Payment Proof, the provider reviews it and links the self-billed invoice, and the tier/quota lands once that invoice is SRI-authorized.\n\nIf this subscription is already ACTIVE by the time you call Promote to Production, that call detects it automatically and skips tier selection — any tier/billingInterval you pass there is ignored, and its response surfaces this subscription instead of starting a new one.\n\nFails with 409 SUBSCRIPTION_ALREADY_IN_FLIGHT if you already have one in progress, or 403 EMAIL_VERIFICATION_REQUIRED if your email isn't verified yet."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.ok) {",
+                  "  if (r.subscription?.id) { pm.collectionVariables.set('subscription_id', String(r.subscription.id)); console.log('subscription_id:', r.subscription.id); }",
+                  "  if (r.payment?.id) { pm.collectionVariables.set('payment_id', String(r.payment.id)); console.log('payment_id:', r.payment.id); }",
+                  "  if (r.bankTransfer) console.log('Bank transfer info:', JSON.stringify(r.bankTransfer));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Get My Subscriptions",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
             "url": {
               "raw": "{{base_url}}/v1/subscriptions/me",
               "host": [
@@ -727,6 +871,10 @@
           "request": {
             "method": "POST",
             "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"

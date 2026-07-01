@@ -283,8 +283,39 @@ async function linkInvoice(subscriptionId, accessKey) {
 
   // No issuerId passed — this is an admin-only, cross-tenant lookup. accessKey is the
   // identifier every other document response already exposes; documents.id never is.
+  // findByAccessKey searches both public and sandbox schemas (UNION ALL); the returned
+  // row includes `sandbox: true/false` to indicate which schema it came from.
   const document = await documentModel.findByAccessKey(accessKey);
   if (!document) throw new NotFoundError('Document');
+
+  // Sandbox documents cannot be stored in invoice_document_id — the FK on
+  // subscriptions references public.documents only. For sandbox testing, activate
+  // directly if the document is already AUTHORIZED rather than waiting for the
+  // authorization webhook (which fires for public documents, not sandbox ones).
+  if (document.sandbox) {
+    await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
+      subscriptionId, accessKey, note: 'sandbox document — no FK stored',
+    });
+    if (document.status === 'AUTHORIZED') {
+      const periodStart = new Date();
+      const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+      const activated = await subscriptionModel.updateStatus(subscriptionId, 'ACTIVE', {
+        current_period_start: periodStart,
+        current_period_end: periodEnd,
+      });
+      const payments = await paymentModel.findBySubscriptionId(subscriptionId);
+      const funding = payments.find((p) => p.status === 'VERIFIED' && !p.period_start);
+      if (funding) {
+        await paymentModel.updateStatus(funding.id, funding.status, { period_start: periodStart, period_end: periodEnd });
+      }
+      await tenantModel.updateTier(subscription.tenant_id, subscription.tier, TIERS[subscription.tier].documentQuota);
+      await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
+        subscriptionId, note: 'sandbox invoice',
+      });
+      return activated;
+    }
+    return subscriptionModel.updateStatus(subscriptionId, 'INVOICE_PROCESSING', {});
+  }
 
   // A VERIFIED, unlinked TIER_CHANGE payment means this is an upgrade's
   // self-billed invoice, not the subscription's original activation invoice —
@@ -602,4 +633,35 @@ module.exports = {
   listByTenant,
   listPendingPayments,
   getStatusForTenant,
+  addBillingPeriod,
+  resetPeriodOnPromotion,
 };
+
+// Resets the billing period of an ACTIVE subscription to start at promotion
+// time. Called from tenant.service.js when a sandbox tenant promotes to
+// production — the paid period should count production usage, not sandbox
+// testing time. Also resets the funding payment's period stamps for audit
+// trail consistency (mirrors activateIfLinked's stamping logic).
+async function resetPeriodOnPromotion(subscriptionId) {
+  const subscription = await subscriptionModel.findById(subscriptionId);
+  if (!subscription || subscription.status !== 'ACTIVE') return null;
+
+  const periodStart = new Date();
+  const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+
+  const updated = await subscriptionModel.updateStatus(subscriptionId, 'ACTIVE', {
+    current_period_start: periodStart,
+    current_period_end: periodEnd,
+  });
+
+  const payments = await paymentModel.findBySubscriptionId(subscriptionId);
+  const funding = payments.find((p) => p.status === 'VERIFIED' && p.period_start);
+  if (funding) {
+    await paymentModel.updateStatus(funding.id, funding.status, {
+      period_start: periodStart,
+      period_end: periodEnd,
+    });
+  }
+
+  return updated;
+}

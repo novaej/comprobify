@@ -1,13 +1,13 @@
-# Legal Acceptance Status
+# Agreement Acceptance
 
-Check whether the authenticated tenant needs to re-accept any legal documents, and record a new acceptance when they do.
+Check whether the authenticated tenant needs to re-accept any agreements, and record a new acceptance when they do.
 
-Use this on login/app-load to drive a re-acceptance modal. If `needsAcceptance` is `true`, show the updated documents listed in `outdated` and call `POST /v1/tenants/accept-legal` when the user confirms.
+Use this on login/app-load to drive a re-acceptance modal. If `needsAcceptance` is `true`, show the updated documents listed in `outdated` and call `POST /v1/tenants/agreements` when the user confirms.
 
 ## Check status
 
 ```
-GET /v1/tenants/legal-status
+GET /v1/tenants/agreements
 ```
 
 **Authentication:** `Authorization: Bearer <api-key>`
@@ -19,7 +19,7 @@ GET /v1/tenants/legal-status
 ```json
 {
   "ok": true,
-  "legal": {
+  "agreements": {
     "needsAcceptance": false,
     "outdated": []
   }
@@ -31,14 +31,15 @@ GET /v1/tenants/legal-status
 ```json
 {
   "ok": true,
-  "legal": {
+  "agreements": {
     "needsAcceptance": true,
     "outdated": [
       {
         "documentType": "DPA",
         "currentVersion": "2026-07-01",
         "acceptedVersion": "2026-06-28",
-        "url": "/v1/legal/documents/DPA"
+        "url": "/v1/tenants/agreements/DPA",
+        "acceptUrl": "/v1/tenants/agreements"
       }
     ]
   }
@@ -49,11 +50,14 @@ Each entry in `outdated` names the specific document type that changed. Use the 
 
 | Field | Description |
 |---|---|
-| `needsAcceptance` | `true` if any document type has been republished since the tenant's last acceptance |
+| `needsAcceptance` | `true` if any document type has a new template version that isn't yet ACCEPTED |
 | `outdated[].documentType` | `TERMS`, `PRIVACY`, or `DPA` |
-| `outdated[].currentVersion` | Version currently required |
-| `outdated[].acceptedVersion` | Version the tenant last accepted, or `null` if never accepted |
-| `outdated[].url` | URL to fetch the updated document (rendered HTML) |
+| `outdated[].currentVersion` | Template version currently published |
+| `outdated[].acceptedVersion` | Template version the tenant last accepted, or `null` if never accepted |
+| `outdated[].status` | `PENDING` (generated, not accepted), or `NOT_GENERATED` (template published but instance not yet created) |
+| `outdated[].url` | URL to the tenant's personalized document instance (`GET /v1/tenants/agreements/:type`) |
+
+**Calling this endpoint automatically generates any missing `PENDING` instances** for new template versions — no separate backfill call needed after the admin publishes an update.
 
 ### Errors
 
@@ -66,7 +70,7 @@ Each entry in `outdated` names the specific document type that changed. Use the 
 ## Record acceptance
 
 ```
-POST /v1/tenants/accept-legal
+POST /v1/tenants/agreements
 ```
 
 **Authentication:** `Authorization: Bearer <api-key>`
@@ -79,7 +83,7 @@ POST /v1/tenants/accept-legal
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `termsVersion` | string | Yes | The version string from the current TERMS document (from `GET /v1/legal/documents`). The server validates this against what's currently published before recording anything. |
+| `termsVersion` | string | Yes | The version string from the current TERMS document (from `GET /v1/agreements`). The server validates this against what's currently published before recording anything. |
 
 ### Response
 
@@ -96,7 +100,7 @@ Records one acceptance row per currently-published document type (TERMS, PRIVACY
 | Status | Code | When |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `termsVersion` missing or too long |
-| `400` | `LEGAL_VERSION_MISMATCH` | The submitted `termsVersion` does not match the currently published TERMS version — the document was updated between when your UI loaded and when the user clicked accept. Re-fetch `GET /v1/legal/documents`, show the updated content, and ask for acceptance again. |
+| `400` | `VERSION_MISMATCH` | The submitted `termsVersion` does not match the currently published TERMS version — the document was updated between when your UI loaded and when the user clicked accept. Re-fetch `GET /v1/agreements`, show the updated content, and ask for acceptance again. |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `FORBIDDEN` | Account is suspended |
 | `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |

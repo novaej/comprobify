@@ -12,7 +12,7 @@ This is a **one-way** action. Once a tenant is in production, it cannot return t
 
 `Authorization: Bearer <api-key>`
 
-The tenant's email must be ACTIVE (verified) — promotion is blocked for PENDING_VERIFICATION tenants.
+The tenant's email must be ACTIVE (verified) and all agreements must be ACCEPTED — promotion is blocked if either condition is not met.
 
 ## Request body
 
@@ -65,12 +65,15 @@ If the tenant already started a subscription before promoting — via [`POST /v1
 
 Sandbox keys are revoked automatically during promotion. If you had no sandbox keys, `apiKeys` will be an empty array — mint production keys via [`POST /v1/keys`](api-keys.md#mint-a-key).
 
+**Subscription period reset:** if the tenant already has an `ACTIVE` subscription (paid while still in sandbox), the billing period (`current_period_start`/`current_period_end`) is automatically reset to the promotion date. This ensures the paid period counts production usage time rather than sandbox testing time.
+
 ## Errors
 
 | Status | Code | When |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `tier` or `billingInterval` is not a recognised value |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` | Tenant email not yet verified |
+| `403` | `FORBIDDEN` | Tenant email not yet verified (status `PENDING_VERIFICATION`) |
+| `403` | `AGREEMENT_ACCEPTANCE_REQUIRED` | One or more agreements have not been accepted — call `GET /v1/tenants/agreements` to see which ones, view them at `GET /v1/tenants/agreements/:type`, then accept via `POST /v1/tenants/agreements` |
 | `409` | `CONFLICT` | Tenant is already in production |
 | `409` | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | A `tier` was requested but the tenant already has a subscription in progress |

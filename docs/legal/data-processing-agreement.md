@@ -1,15 +1,6 @@
-> **BORRADOR PARA REVISIÓN — no constituye asesoría legal.**
-> Plantilla para uso manual/descarga, no para flujo de aceptación en la aplicación (ver `CLAUDE.md`, sección "Deferred"). Requiere revisión legal antes de entregarse a un cliente B2B. Reemplazar los campos entre `[corchetes]`; los espacios `[Cliente: ...]` se completan por cada cliente que lo solicite.
->
-> **Nota:** mientras Comprobify opere como persona natural (sin compañía constituida), el Encargado se identifica como tal — ver cláusula de partes abajo. Cuando se constituya una compañía, basta con actualizar ese dato; el resto del documento no cambia.
->
-> **Versión:** `[2026-06-28]`
-
 # Acuerdo de Procesamiento de Datos (DPA) — Comprobify
 
-**Última actualización:** `[fecha]`
-
-Este Acuerdo de Procesamiento de Datos ("DPA") complementa los Términos de Servicio y se celebra entre **[Tu nombre completo]**, persona natural con RUC **[RUC]**, titular de la plataforma Comprobify (en adelante, "Comprobify" o "el Encargado"), y **[Cliente: Razón Social]**, RUC **[Cliente: RUC]** ("el Responsable"), y se aplica al tratamiento de datos personales de terceros (compradores) que el Responsable instruye al Encargado a procesar a través del Servicio.
+Este Acuerdo de Procesamiento de Datos ("DPA") complementa los Términos de Servicio y se celebra el **{{fechaDocumento}}** entre **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, titular de la plataforma Comprobify (en adelante, "Comprobify" o "el Encargado"), y **{{cliente.razonSocial}}**, RUC **{{cliente.ruc}}** ("el Responsable"), y se aplica al tratamiento de datos personales de terceros (compradores) que el Responsable instruye al Encargado a procesar a través del Servicio.
 
 ## 1. Definiciones
 
@@ -32,7 +23,7 @@ El Encargado se compromete a:
 
 1. Tratar los datos únicamente conforme a las instrucciones documentadas del Responsable (incluyendo las transmitidas mediante el uso normal del Servicio).
 2. Garantizar la confidencialidad del personal con acceso a los datos.
-3. Implementar medidas técnicas y organizativas apropiadas para proteger los datos personales tratados. Estas medidas se describen de manera general, a título informativo, en la [Política de Privacidad](./politica-de-privacidad.md), sección 5.
+3. Implementar medidas técnicas y organizativas apropiadas para proteger los datos personales tratados. Estas medidas se describen de manera general, a título informativo, en la Política de Privacidad de Comprobify, sección 5.
 4. Notificar al Responsable sin demora indebida ante cualquier vulneración de seguridad que afecte los datos personales tratados por su cuenta, tan pronto como tenga conocimiento de ella.
 5. Realizar transferencias internacionales de datos únicamente cuando sean necesarias para la prestación del Servicio y mediante los subencargados identificados en la sección 6.
 6. Asistir al Responsable, en la medida de lo razonable, para que este pueda atender solicitudes de los interesados respecto de sus derechos bajo la LOPDP.
@@ -62,7 +53,11 @@ El Encargado notificará al Responsable con razonable antelación antes de incor
 
 ## 7. Retención y eliminación al término del contrato
 
-Los comprobantes electrónicos y su historial podrán conservarse durante el tiempo que resulte necesario para la prestación del Servicio y el cumplimiento de obligaciones legales, fiscales, de auditoría o seguridad. Mientras el Servicio no disponga de una funcionalidad de eliminación definitiva, el Encargado podrá conservar dicha información cuando ello resulte necesario para las finalidades descritas en esta sección, aplicando las medidas de seguridad previstas en la sección 4.
+El Servicio almacena exclusivamente datos relacionados con comprobantes electrónicos (facturas, notas de crédito y documentos similares) autorizados por el Servicio de Rentas Internas ("SRI"), así como los metadatos de su firma, transmisión y autorización. No almacena datos de los compradores del Responsable fuera de este contexto.
+
+Los datos contenidos en comprobantes electrónicos autorizados por el SRI están sujetos al período de conservación obligatorio establecido por la normativa tributaria ecuatoriana — en particular el Código Tributario y el Reglamento de Comprobantes de Venta, Retención y Documentos Complementarios. **Durante dicho período — que conforme al Art. 55 del Código Tributario es de cinco (5) años en los casos ordinarios y de siete (7) años cuando la declaración no fue presentada o fue presentada de forma incompleta; se recomienda conservar durante el plazo mayor como medida prudente —, el Encargado no eliminará estos datos, incluso ante una solicitud del Responsable.** Esta limitación se fundamenta en la obligación legal del Encargado de conservar documentos tributarios durante el período de prescripción de las obligaciones tributarias (Art. 15 LOPDP — limitación del derecho de supresión por obligación legal).
+
+Para los datos del Responsable que no formen parte de comprobantes electrónicos autorizados (datos de cuenta, metadatos de registro), el Encargado atenderá solicitudes de supresión conforme a la obligación establecida en la sección 4(7), una vez que no existan obligaciones legales que requieran su conservación.
 
 ## 8. Auditoría
 

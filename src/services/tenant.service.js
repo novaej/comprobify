@@ -6,7 +6,7 @@ const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const sequentialService = require('./sequential.service');
 const subscriptionService = require('./subscription.service');
-const legalAcceptanceService = require('./legal-acceptance.service');
+const tenantAgreementService = require('./tenant-agreement.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
@@ -21,20 +21,18 @@ async function updateLanguage(tenantId, language) {
   await tenantModel.updatePreferredLanguage(tenantId, language);
 }
 
-async function getLegalStatus(tenantId) {
+async function getAgreementStatus(tenantId) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
-
-  return legalAcceptanceService.getStatus(tenantId);
+  return tenantAgreementService.getStatus(tenantId);
 }
 
-// Accepts the whole currently-published bundle in one call (matches the
-// single-checkbox UX) — termsVersion is just the optimistic-concurrency check
-// confirming the frontend's TERMS copy is still current before recording.
-async function acceptLegal(tenantId, termsVersion, { ip, userAgent } = {}) {
-  await legalAcceptanceService.validateTermsVersion(termsVersion);
-  await legalAcceptanceService.recordAcceptance(tenantId, { ip, userAgent });
-  await tenantModel.updateLegalAcceptance(tenantId, termsVersion);
+// Accepts all PENDING tenant legal document instances in one call — matches
+// the single-checkbox UX. termsVersion confirms the frontend was current.
+async function acceptAgreements(tenantId, termsVersion, { ip, userAgent } = {}) {
+  await tenantAgreementService.validateTermsVersion(termsVersion);
+  await tenantAgreementService.acceptAll(tenantId, { ip, userAgent });
+  await tenantModel.updateAgreementAcceptance(tenantId, termsVersion);
 }
 
 async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY') {
@@ -48,6 +46,15 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
     );
   }
   if (!tenant.sandbox) throw new ConflictError('Tenant is already in production');
+
+  const allAccepted = await tenantAgreementService.hasAllAccepted(tenantId);
+  if (!allAccepted) {
+    throw new AppError(
+      'All legal documents must be accepted before promoting to production. Review GET /v1/tenants/agreements.',
+      403,
+      ErrorCodes.AGREEMENT_ACCEPTANCE_REQUIRED
+    );
+  }
 
   const seqMap = {};
   for (const entry of initialSequentials) {
@@ -80,6 +87,13 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   // time promotion happens — nothing left to select, just surface what's running.
   const activeSubscription = await subscriptionModel.findActiveByTenantId(tenantId);
 
+  // Reset the billing period to start at promotion time rather than at the
+  // moment the subscription was activated in sandbox. The paid period should
+  // count production usage, not sandbox testing time.
+  if (activeSubscription) {
+    await subscriptionService.resetPeriodOnPromotion(activeSubscription.id);
+  }
+
   // Promotion itself never waits on payment — production access is granted on FREE
   // immediately. Requesting a paid tier here only kicks off the subscription pipeline
   // in the background; the tier/quota upgrade only lands once it's paid and authorized.
@@ -93,4 +107,4 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   return { apiKeys, ...billing };
 }
 
-module.exports = { updateLanguage, promote, getLegalStatus, acceptLegal };
+module.exports = { updateLanguage, promote, getAgreementStatus, acceptAgreements };

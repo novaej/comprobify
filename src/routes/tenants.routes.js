@@ -49,7 +49,7 @@ const promoteValidator = [
     .withMessage('billingInterval must be one of: MONTHLY, YEARLY'),
 ];
 
-const acceptLegalValidator = [
+const acceptAgreementsValidator = [
   body('termsVersion')
     .notEmpty()
     .isLength({ max: 50 })
@@ -59,7 +59,9 @@ const acceptLegalValidator = [
 router.get('/me', readLimiter, requireMatchingEnvironment, asyncHandler(controller.getMe));
 router.patch('/language', updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
 router.post('/promote', writeLimiter, promoteValidator, validateRequest, asyncHandler(controller.promote));
-router.get('/legal-status', readLimiter, asyncHandler(controller.getLegalStatus));
-router.post('/accept-legal', writeLimiter, acceptLegalValidator, validateRequest, asyncHandler(controller.acceptLegal));
+router.get('/agreements', readLimiter, asyncHandler(controller.getAgreementStatus));
+router.post('/agreements', writeLimiter, acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
+router.get('/agreements/history', readLimiter, asyncHandler(controller.listTenantAgreements));
+router.get('/agreements/:type', readLimiter, asyncHandler(controller.getTenantAgreement));
 
 module.exports = router;

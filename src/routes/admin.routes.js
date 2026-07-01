@@ -39,8 +39,11 @@ router.get('/payments',                         v.listPayments,       validateRe
 router.patch('/payments/:id/review',            v.reviewPayment,      validateRequest, asyncHandler(controller.reviewPayment));
 router.get('/payments/:id/proof',               v.getPaymentProof,    validateRequest, asyncHandler(controller.getPaymentProof));
 
-// Legal documents — markdown text in the JSON body, not a file upload
-router.post('/legal-documents', v.publishLegalDocument, validateRequest, asyncHandler(controller.publishLegalDocument));
+// Agreements
+router.post('/agreements', v.publishAgreement, validateRequest, asyncHandler(controller.publishAgreement));
+router.get('/agreements/:type/versions', v.listAgreementVersions, validateRequest, asyncHandler(controller.listAgreementVersions));
+router.patch('/agreements/:id/activate', v.activateAgreement, validateRequest, asyncHandler(controller.activateAgreement));
+router.post('/tenants/:id/agreements', v.verifyTenant, validateRequest, asyncHandler(controller.generateTenantAgreements));
 
 // Jobs
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));

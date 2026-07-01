@@ -14,6 +14,6 @@ router.use('/subscriptions', require('./subscriptions.routes'));
 router.use('/mailgun', require('./mailgun-webhook.routes'));
 router.use('/notifications', require('./notifications.routes'));
 router.use('/webhooks',      require('./webhook-endpoints.routes'));
-router.use('/legal',         require('./legal-documents.routes'));
+router.use('/agreements',         require('./agreements.routes'));
 
 module.exports = router;

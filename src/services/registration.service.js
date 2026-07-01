@@ -8,7 +8,7 @@ const certificateService = require('./certificate.service');
 const emailService = require('./email.service');
 const tenantEventModel = require('../models/tenant-event.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
-const legalAcceptanceService = require('./legal-acceptance.service');
+const tenantAgreementService = require('./tenant-agreement.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const TIERS = require('../constants/subscription-tiers');
@@ -29,8 +29,8 @@ function formatTenant(row) {
     documentQuota: row.document_quota,
     documentCount: row.document_count,
     createdAt: row.created_at,
-    legalAcceptedAt: row.legal_accepted_at,
-    legalVersion: row.legal_version,
+    agreementAcceptedAt: row.agreement_accepted_at,
+    agreementVersion: row.agreement_version,
   };
 }
 
@@ -79,7 +79,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null, accep
   // admin endpoint, there's nothing authoritative to check against, so
   // termsVersion is trusted as-is (matches the original "API just records it"
   // behavior for that case).
-  await legalAcceptanceService.validateTermsVersion(fields.termsVersion);
+  await tenantAgreementService.validateTermsVersion(fields.termsVersion);
 
   const parsed = certificateService.parseCertificate(p12Buffer, p12Password || '');
   const encryptedPrivateKey = cryptoService.encrypt(parsed.privateKeyPem);
@@ -100,10 +100,8 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null, accep
       verificationTokenExpiresAt,
       verificationRedirectUrl: fields.verificationRedirectUrl || null,
       preferredLanguage: fields.language || 'es',
-      legalVersion: fields.termsVersion,
+      agreementVersion: fields.termsVersion,
     });
-
-    await legalAcceptanceService.recordAcceptance(tenant.id, acceptanceContext);
 
     issuer = await issuerModel.create({
       tenantId: tenant.id,
@@ -129,6 +127,13 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null, accep
     }
     throw err;
   }
+
+  // Generate per-tenant legal document instances (PENDING) after the issuer
+  // exists so we can substitute {{cliente.razonSocial}} etc. into the DPA.
+  // Fire-and-forget pattern: failure does not block registration, and the
+  // admin can backfill via POST /v1/admin/tenants/:id/agreements.
+  tenantAgreementService.generateForTenant(tenant.id, issuer)
+    .catch((err) => console.warn('[registration] generateForTenant failed:', err.message));
 
   const documentTypes = Array.isArray(fields.documentTypes) && fields.documentTypes.length > 0
     ? [...new Set(fields.documentTypes)]

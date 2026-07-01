@@ -46,6 +46,17 @@ const config = {
   // (mirrors the SENTRY_DSN optional pattern), since it's an operational
   // convenience, not something tenant-facing behavior depends on.
   adminNotificationEmail: process.env.ADMIN_NOTIFICATION_EMAIL || '',
+
+  // Operator identity — substituted into legal document templates at publish
+  // time ({{operador.nombre}}, {{operador.ruc}}, {{operador.email}}).
+  // Required before calling POST /v1/admin/agreements; not needed for
+  // any other API path so not validated at startup.
+  operator: {
+    nombre:   process.env.OPERATOR_NAME    || '',
+    ruc:      process.env.OPERATOR_RUC     || '',
+    email:    process.env.OPERATOR_EMAIL   || '',
+    domicilio: process.env.OPERATOR_ADDRESS || 'Domicilio disponible previa solicitud razonable',
+  },
 };
 
 module.exports = config;

@@ -1,13 +1,8 @@
-> **BORRADOR PARA REVISIÓN — no constituye asesoría legal.**
-> Redactado a partir del funcionamiento real de la API (ver `CLAUDE.md`), no de una plantilla genérica. Requiere revisión legal antes de publicarse, especialmente en lo referente a derechos del titular bajo la LOPDP y plazos de respuesta. Reemplazar los campos entre `[corchetes]`.
->
-> **Versión:** `[2026-06-28]` _(debe coincidir con el `termsVersion` enviado al registrarse y con el publicado vía `POST /v1/admin/legal-documents`)_
-
 # Política de Privacidad — Comprobify
 
-**Última actualización:** `[fecha]`
+**Última actualización:** {{fechaVersion}}
 
-Esta Política de Privacidad describe cómo **[Tu nombre completo]**, persona natural con RUC **[RUC]**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP"). _(Cuando se constituya una compañía, basta con actualizar este dato.)_
+Esta Política de Privacidad describe cómo **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP").
 
 ## 1. Roles: quién es responsable de qué
 
@@ -68,13 +63,19 @@ Esta política cubre la API. El sitio web y el panel de administración (cuando 
 
 ## 8. Retención de datos
 
-Comprobify conservará la información mientras resulte necesaria para la prestación del Servicio, el cumplimiento de obligaciones legales, contables, fiscales y de auditoría, la trazabilidad de los comprobantes electrónicos, y la atención de requerimientos administrativos o judiciales. Actualmente el sistema no implementa un mecanismo de eliminación definitiva de comprobantes electrónicos ni de su historial de auditoría y cumplimiento normativo; únicamente admite la desactivación lógica de recursos como emisores.
+Comprobify almacena exclusivamente datos relacionados con comprobantes electrónicos emitidos a través del Servicio (facturas, notas de crédito y documentos similares) y los metadatos necesarios para su autorización por el SRI. No almacena datos de compradores fuera del contexto de estos comprobantes.
+
+Los comprobantes electrónicos y su historial de autorización, firma y transmisión están sujetos a los plazos de conservación establecidos por la normativa tributaria ecuatoriana — en particular el Código Tributario y el Reglamento de Comprobantes de Venta, Retención y Documentos Complementarios —, que exigen conservar los documentos tributarios durante el período de prescripción de las obligaciones tributarias. **Durante este período — que conforme al Art. 55 del Código Tributario es de cinco (5) años para los casos ordinarios y de siete (7) años cuando la declaración no fue presentada o fue presentada de forma incompleta; se recomienda conservar durante el plazo mayor como medida prudente —, Comprobify no eliminará ni permitirá la eliminación de dichos datos, incluso ante una solicitud de supresión.** El derecho de supresión reconocido por la LOPDP no es aplicable cuando la conservación es necesaria para el cumplimiento de una obligación legal (Art. 15 LOPDP).
+
+Para los datos de la cuenta del Cliente (correo electrónico, metadatos de registro, historial de pagos) que no formen parte de un comprobante electrónico autorizado por el SRI, Comprobify atenderá solicitudes de supresión una vez terminada la relación contractual, siempre que no existan obligaciones legales que requieran su conservación.
+
+Actualmente el sistema no implementa un mecanismo de eliminación definitiva de comprobantes electrónicos ni de su historial de auditoría y cumplimiento normativo; únicamente admite la desactivación lógica de recursos como emisores.
 
 ## 9. Derechos del titular de los datos
 
-Bajo la LOPDP, los compradores cuyos datos constan en un comprobante pueden ejercer sus derechos de acceso, rectificación, actualización, eliminación (cuando proceda), oposición y portabilidad (si aplica), **directamente ante el Cliente** (Responsable del Tratamiento), quien decidió incluir esos datos. Comprobify, como Encargado, colaborará con el Cliente para atender dichas solicitudes en la medida técnicamente posible.
+Bajo la LOPDP, los compradores cuyos datos constan en un comprobante pueden ejercer sus derechos de acceso, rectificación, actualización, eliminación (cuando proceda), oposición y portabilidad (si aplica), **directamente ante el Cliente** (Responsable del Tratamiento), quien decidió incluir esos datos. Comprobify, como Encargado, colaborará con el Cliente para atender dichas solicitudes en la medida técnicamente posible. **El derecho de eliminación no aplica a los datos contenidos en comprobantes electrónicos autorizados por el SRI durante el período de conservación obligatorio establecido por la normativa tributaria ecuatoriana (ver sección 8).**
 
-El Cliente, respecto de los datos de su propia cuenta (correo, certificado, historial de pagos), puede ejercer los mismos derechos señalados anteriormente directamente ante Comprobify, escribiendo a `[email de contacto]`.
+El Cliente, respecto de los datos de su propia cuenta (correo, certificado, historial de pagos), puede ejercer los mismos derechos señalados anteriormente directamente ante Comprobify, escribiendo a `{{operador.email}}`.
 
 ## 10. Cambios a esta política
 
@@ -82,4 +83,4 @@ Publicaremos cualquier cambio material en esta página con una nueva fecha de ve
 
 ## 11. Contacto
 
-`[Tu nombre completo]` — RUC `[RUC]` — Domicilio disponible previa solicitud razonable del interesado — `[email de contacto]`
+`{{operador.nombre}}` — RUC `{{operador.ruc}}` — {{operador.domicilio}} — `{{operador.email}}`
