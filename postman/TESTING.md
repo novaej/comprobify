@@ -453,6 +453,8 @@ To reject:
 
 ✓ Test script logs the new payment status. On `VERIFIED`, the subscription moves to `PAYMENT_RECEIVED`.
 
+> **Email sent to tenant at this step:** "Tu pago de suscripción para el plan STARTER ha sido verificado... tu plan se activará automáticamente una vez que la factura correspondiente sea autorizada por el SRI." This is the **payment verification email** — it's telling the tenant their payment was approved and to wait for the invoice to be SRI-authorized. This is not the activation confirmation; that comes after Step 10.
+
 ---
 
 ### Step 9 — Self-bill the invoice
@@ -471,7 +473,10 @@ Issue an invoice from your **own** issuer (the operator's issuer) to the tenant 
 
 ✓ Test script logs the new subscription status (`INVOICE_PROCESSING` or `ACTIVE` if already authorized).
 
-Once SRI authorizes the linked invoice, the subscription automatically activates, the tenant's tier upgrades, and they receive a notification.
+Once SRI authorizes the linked invoice, the subscription automatically activates and the tenant's tier upgrades. **There is no activation notification or email** — the tenant finds out by polling:
+
+- `GET /v1/tenants/me` → `subscriptionTier` and `documentQuota` will reflect the new plan
+- `GET /v1/subscriptions/me` → subscription `status` will be `ACTIVE` with `current_period_start`/`current_period_end` set
 
 ---
 
