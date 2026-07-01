@@ -453,7 +453,7 @@ To reject:
 
 ✓ Test script logs the new payment status. On `VERIFIED`, the subscription moves to `PAYMENT_RECEIVED`.
 
-> **Email sent to tenant at this step:** "Tu pago de suscripción para el plan STARTER ha sido verificado... tu plan se activará automáticamente una vez que la factura correspondiente sea autorizada por el SRI." This is the **payment verification email** — it's telling the tenant their payment was approved and to wait for the invoice to be SRI-authorized. This is not the activation confirmation; that comes after Step 10.
+> **What fires at this step:** (1) A `PAYMENT_VERIFIED` notification is inserted into the `notifications` table (visible via `GET /v1/notifications` with the tenant's API key, and fanned out to any subscribed webhooks). (2) The payment verification **email** is sent to the tenant: *"Tu pago ha sido verificado... tu plan se activará automáticamente una vez que la factura sea autorizada por el SRI."* Both are telling the tenant their payment was approved — not that the subscription is active yet. The subscription only activates after Step 10.
 
 ---
 
