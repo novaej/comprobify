@@ -370,6 +370,54 @@ Skips the email verification flow. Useful for tenants onboarded out-of-band.
 
 ---
 
+### Step 5b — Tenant views and accepts agreements
+
+The agreement instances were generated in Step 4a. The tenant must accept them before they can be promoted to production — do this now using the `api_key` captured in Step 4.
+
+**`GET /v1/tenants/agreements`** — check which documents need acceptance (all three will be `PENDING`).
+
+**`GET /v1/tenants/agreements/TERMS`** — view the personalized Terms of Service HTML.
+
+**`GET /v1/tenants/agreements/DPA`** — verify the tenant's `businessName` and `ruc` appear in the DPA intro paragraph.
+
+**`POST /v1/tenants/agreements`** *(Tenants folder)*
+
+```json
+{ "termsVersion": "{{agreement_version}}" }
+```
+
+Expected: `{ "ok": true }` — all three documents flip to `ACCEPTED`.
+
+> The `agreement_version` variable was captured in Step 1 from the TERMS publish response. If it's empty, run `GET /v1/agreements` first to capture it.
+
+---
+
+### Step 5c — Tenant creates a subscription
+
+Using the tenant's `api_key` from Step 4:
+
+**`POST /v1/subscriptions`** *(Subscriptions folder)*
+
+```json
+{ "tier": "STARTER", "billingInterval": "MONTHLY" }
+```
+
+✓ Test script captures `subscription_id` and `payment_id`.
+
+Response includes `bankTransfer` instructions showing where to send the SPI transfer. The subscription stays `PENDING_PAYMENT` until the payment is reviewed and an invoice is linked.
+
+---
+
+### Step 5d — Tenant submits proof of payment
+
+After making the bank transfer, the tenant uploads a receipt:
+
+**`PATCH /v1/payments/{{payment_id}}/proof`** *(Payments folder)*
+
+Attach a screenshot or PDF of the transfer as the `proof` form-data file field. This moves the payment to `REPORTED` and triggers an email to the operator inbox (if `ADMIN_NOTIFICATION_EMAIL` is set).
+
+---
+
 ### Step 6 — Check the payments review queue
 
 **`GET /v1/admin/payments?status=REPORTED`** *(Admin folder)*
