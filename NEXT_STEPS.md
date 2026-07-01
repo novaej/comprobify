@@ -220,15 +220,23 @@ Two things have to exist before `overagePerDocumentUsd` (`subscription-tiers.js`
 
 ---
 
-## 12. Legal Document Finalization, Deletion-Rights Process, and Evidence PDF
+## 12. LOPDP Deletion-Rights Process and Evidence PDF
 
-**Priority: High — self-service registration doesn't actually gate on anything until this lands. With no document published yet, `legalAcceptanceService.validateTermsVersion()` skips validation entirely (the "nothing authoritative to check against" pre-launch fallback), so `termsVersion` is currently trusted as-is from whatever the caller sends.**
+**Priority: Low — remaining items are non-blocking and explicitly deferred.**
 
-The engineering side is done — see CLAUDE.md's "Legal documents and tenant acceptance" entry and ADR-018. What's left is mostly non-engineering:
+Most of this item is now done:
 
-- **Lawyer review and finalization of `docs/legal/*.md`.** All three documents (ToS, Privacy Policy, DPA) are drafted in Spanish but still contain placeholders (`[Tu nombre completo]`, `[RUC]`, `[Dirección]`, jurisdiction/liability-cap clauses flagged for legal confirmation) and have not been reviewed by an actual lawyer. Until this happens, do not publish anything via `POST /v1/admin/legal-documents` — doing so would make the validation above start enforcing an unreviewed document.
-- **LOPDP deletion-rights process.** `politica-de-privacidad.md` discloses that the system has no hard-delete mechanism for documents/audit trail (intentional — see CLAUDE.md's "no hard deletes" rule) but doesn't define a concrete process for handling a deletion request, because none exists yet. Needs an actual decision: is "we don't delete, here's why" the permanent answer (defensible given the SRI audit-trail requirement), or does some scoped erasure path need building for data that isn't fiscally required to persist (e.g. a cancelled tenant's own account email, as opposed to authorized invoice records)?
-- **Evidence PDF generation** — deferred by design (ADR-018's "Alternatives Considered"). The substantive evidence (version, content hash, timestamp, IP, user agent) is already fully captured in `legal_acceptances`; build an actual downloadable PDF/certificate once a real client asks for one, reusing the HTML rendering `legal-document.service.js` already provides.
-- **Tenant-specific placeholder substitution** — `renderHtml()`'s `{{token}}` support exists but nothing calls it with real tenant data yet (e.g. a personalized DPA copy with the Client's actual business name). Build when there's an actual use case (a B2B client requesting a named DPA), not speculatively.
+- ✅ **Per-tenant document instances** — `tenant_legal_documents` stores a personalized, immutable Markdown snapshot (DPA named with the client's actual `businessName`/`ruc`, dates resolved at generation) for every registered tenant.
+- ✅ **Per-type acceptance tracking** — `PENDING` → `ACCEPTED` with `accepted_at`, `ip`, `user_agent`. Full history preserved across re-acceptances (old rows never overwritten).
+- ✅ **Promotion gate** — `POST /v1/tenants/promote` requires all three document types to be `ACCEPTED` (`403 LEGAL_ACCEPTANCE_REQUIRED` if not).
+- ✅ **Re-acceptance on template update** — `GET /v1/tenants/legal-status` lazily generates new `PENDING` rows when a new template version is published and the tenant doesn't have one yet. Same endpoint third parties should poll periodically to check whether their tenant still needs to sign updated documents.
+- ✅ **Viewing accepted documents** — `GET /v1/tenants/legal-documents/:type` serves the personalized HTML exactly as it was when generated (no reconstruction needed), with a disclaimer notice prepended.
+- ✅ **Formal legal review deferred** — a disclaimer is rendered at the top of every document ("generado automáticamente, no revisado por asesor legal"). The documents are drafted accurately from how the API actually works and are being shipped in good faith. Formal review remains on the list but is not blocking launch.
 
-**Effort:** Mostly non-engineering (legal review). The deletion-rights process, once decided, is Low–Medium engineering effort depending on scope. Evidence PDF and placeholder wiring are each Low–Medium when their triggering use case arrives.
+What genuinely remains:
+
+- **LOPDP deletion-rights process.** The Privacy Policy correctly discloses that there is no hard-delete mechanism. An actual process for responding to a deletion request under LOPDP (Art. 13) still needs to be decided: either "we don't delete invoice records for legal/fiscal reasons and here is the escalation path for the request" (defensible, most likely the right answer for SRI-authorized documents), or a scoped erasure path for non-fiscal personal data (account email, registration metadata). Neither option requires a code change today — the decision itself is what's open.
+
+- **Evidence PDF generation** — deferred (ADR-018). `GET /v1/tenants/legal-documents/:type` already serves the accepted HTML including the exact content, date, and tenant info. A downloadable signed PDF certificate is a nice-to-have for enterprise clients; build it when one asks for it.
+
+**Effort:** Evidence PDF is Low–Medium once someone requests it. Deletion-rights is mostly a business/legal decision, not engineering.

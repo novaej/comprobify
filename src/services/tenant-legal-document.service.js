@@ -1,20 +1,28 @@
 const tenantLegalDocumentModel = require('../models/tenant-legal-document.model');
 const legalDocumentService = require('./legal-document.service');
+const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 
+// Prepended to every rendered document at response time — never stored in
+// the DB content, so updating the wording doesn't require republishing all
+// tenant document snapshots.
+const DISCLAIMER_HTML = `<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:12px 16px;margin-bottom:24px;font-size:0.9em">
+<strong>Aviso:</strong> Este documento ha sido generado automáticamente y no ha sido revisado formalmente por un asesor legal. Se proporciona de buena fe como referencia de los términos que rigen el uso del Servicio. Para consultas legales, escriba a <a href="mailto:japc.93@outlook.com">japc.93@outlook.com</a>.
+</div>
+`;
+
 // Generates personalized document instances for a tenant using the current
-// published template versions. Called at registration and by the admin
-// backfill endpoint. Skips any type that has no published template yet.
-// Returns the array of created rows (PENDING status).
-async function generateForTenant(tenantId, issuer) {
+// published template versions. If issuer is not provided, fetches the
+// tenant's primary issuer automatically (used by lazy-generation paths).
+// ON CONFLICT DO NOTHING makes this idempotent — safe to call multiple times.
+async function generateForTenant(tenantId, issuer = null) {
+  const resolvedIssuer = issuer ?? await issuerModel.findByTenantId(tenantId);
   const templates = await legalDocumentService.listCurrent();
   const created = [];
 
   for (const template of templates) {
-    // Resolve all {{}} tokens into the stored content — the result is an
-    // immutable snapshot: no substitution needed at read time.
-    const values = buildValues(template, issuer);
+    const values = buildValues(template, resolvedIssuer);
     const rendered = legalDocumentService.substitutePlaceholders(
       template.content_markdown,
       values
@@ -34,10 +42,6 @@ async function generateForTenant(tenantId, issuer) {
   return created;
 }
 
-// Builds the substitution values for a given template + issuer combination.
-// fechaVersion comes from the template's own created_at (when this version
-// was published by the admin). fechaDocumento is today — the date this
-// per-tenant copy was generated (= registration date).
 function buildValues(template, issuer) {
   return {
     fechaVersion: legalDocumentService.formatDate(template.created_at),
@@ -50,9 +54,6 @@ function buildValues(template, issuer) {
   };
 }
 
-// Validates that the submitted version matches the current TERMS template —
-// same intent as before, but now the version is also used to key the
-// tenant_legal_documents rows. Only enforced once something is published.
 async function validateTermsVersion(termsVersion) {
   let current;
   try {
@@ -70,18 +71,25 @@ async function validateTermsVersion(termsVersion) {
   }
 }
 
-// Accepts all PENDING documents for a tenant in one call (single checkbox UX).
 async function acceptAll(tenantId, { ip, userAgent } = {}) {
   return tenantLegalDocumentModel.acceptAllPendingByTenant(tenantId, { ip, userAgent });
 }
 
-// Returns per-type status for the tenant — used by GET /v1/tenants/legal-status.
-// A type is "pending" if the tenant has no ACCEPTED row for the current
-// template version (either not generated yet, or generated but not accepted).
+// Per-type status check. Lazily generates PENDING instances for any template
+// version the tenant doesn't have a row for yet — so calling this endpoint
+// after a new template is published is the mechanism that surfaces the new
+// version to the tenant without requiring an admin backfill job.
+// This is also what third-party integrators should call periodically to check
+// whether the tenant still needs to accept updated documents.
 async function getStatus(tenantId) {
   const templates = await legalDocumentService.listCurrent();
-  const outdated = [];
+  if (templates.length === 0) return { needsAcceptance: false, outdated: [] };
 
+  // Lazy generation: ensure the tenant has a row for every current template
+  // version. ON CONFLICT DO NOTHING makes this safe to call any time.
+  await generateForTenant(tenantId);
+
+  const outdated = [];
   for (const template of templates) {
     const latest = await tenantLegalDocumentModel.findLatestByTenantAndType(
       tenantId,
@@ -97,8 +105,7 @@ async function getStatus(tenantId) {
       outdated.push({
         documentType: template.document_type,
         currentVersion: template.version,
-        acceptedVersion:
-          latest?.status === 'ACCEPTED' ? latest.template_version : null,
+        acceptedVersion: latest?.status === 'ACCEPTED' ? latest.template_version : null,
         status: latest ? latest.status : 'NOT_GENERATED',
         url: `/v1/tenants/legal-documents/${template.document_type}`,
       });
@@ -108,34 +115,36 @@ async function getStatus(tenantId) {
   return { needsAcceptance: outdated.length > 0, outdated };
 }
 
-// Returns true only if the tenant has an ACCEPTED row for the current template
-// version of every published document type. Used as the promotion gate.
 async function hasAllAccepted(tenantId) {
   const { outdated } = await getStatus(tenantId);
   return outdated.length === 0;
 }
 
-// Returns all document instances for the tenant, newest first per type.
 async function listForTenant(tenantId) {
   return tenantLegalDocumentModel.findAllByTenant(tenantId);
 }
 
-// Returns the tenant's latest document instance for a type, rendered to HTML.
-// Since all tokens were resolved at generation time, rendering is just
-// markdown → HTML with no further substitution needed.
+// Returns the tenant's most recent document instance for a given type,
+// rendered to HTML with the disclaimer prepended. Lazily generates a PENDING
+// row if the tenant has no instance for the current template version.
 async function renderForTenant(tenantId, documentType) {
+  // Lazy generation: if nothing exists yet (e.g. called before getStatus),
+  // create the PENDING row now rather than returning a 404.
+  await generateForTenant(tenantId);
+
   const doc = await tenantLegalDocumentModel.findLatestByTenantAndType(
     tenantId,
     documentType
   );
   if (!doc) {
     throw new AppError(
-      `No legal document of type '${documentType}' has been generated for this tenant yet`,
+      `No legal document of type '${documentType}' has been generated for this tenant`,
       404,
       ErrorCodes.LEGAL_DOCUMENT_NOT_FOUND
     );
   }
-  const html = legalDocumentService.renderHtml(doc.content_markdown, {});
+
+  const html = DISCLAIMER_HTML + legalDocumentService.renderHtml(doc.content_markdown, {});
   return { html, status: doc.status, templateVersion: doc.template_version, acceptedAt: doc.accepted_at };
 }
 
