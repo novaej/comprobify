@@ -4,7 +4,7 @@
 
 ## 1. Quiénes somos
 
-Comprobify es operado por **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, domiciliado en Ecuador (domicilio disponible previa solicitud razonable) (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
+Comprobify es operado por **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, domiciliado en {{operador.domicilio}} (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
 
 Al crear una cuenta o utilizar el Servicio, usted declara haber leído, entendido y aceptado estos Términos, la **Política de Privacidad** y, cuando resulte aplicable, el **Acuerdo de Procesamiento de Datos** ("DPA"), todos los cuales forman parte integrante de la relación contractual entre el Cliente y Comprobify.
 

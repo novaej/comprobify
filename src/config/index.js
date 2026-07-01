@@ -52,9 +52,10 @@ const config = {
   // Required before calling POST /v1/admin/legal-documents; not needed for
   // any other API path so not validated at startup.
   operator: {
-    nombre: process.env.OPERATOR_NAME  || '',
-    ruc:    process.env.OPERATOR_RUC   || '',
-    email:  process.env.OPERATOR_EMAIL || '',
+    nombre:   process.env.OPERATOR_NAME    || '',
+    ruc:      process.env.OPERATOR_RUC     || '',
+    email:    process.env.OPERATOR_EMAIL   || '',
+    domicilio: process.env.OPERATOR_ADDRESS || 'Domicilio disponible previa solicitud razonable',
   },
 };
 

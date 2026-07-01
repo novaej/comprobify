@@ -83,4 +83,4 @@ Publicaremos cualquier cambio material en esta página con una nueva fecha de ve
 
 ## 11. Contacto
 
-`{{operador.nombre}}` — RUC `{{operador.ruc}}` — Domicilio disponible previa solicitud razonable del interesado — `{{operador.email}}`
+`{{operador.nombre}}` — RUC `{{operador.ruc}}` — {{operador.domicilio}} — `{{operador.email}}`
