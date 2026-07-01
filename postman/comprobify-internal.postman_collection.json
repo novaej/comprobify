@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Comprobify API — Internal (Admin)",
-    "description": "Full internal collection — every public endpoint plus the admin-only ones. Set `base_url`, `api_key`, and `admin_secret` in the collection variables before running requests. After creating an invoice, copy the returned `accessKey` into the `access_key` variable to use it across subsequent requests.\n\nDocument endpoints require both `Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>`. Tenant and issuer management require only the Bearer token. Admin endpoints use the `admin_secret` as the Bearer token.",
+    "description": "Comprobify internal/admin collection. Flow:\n1. Publish Legal Documents (TERMS, PRIVACY, DPA)\n2. Register or Create Tenant + Create Issuer + Create API Key\n3. Verify tenant (admin or email)\n4. Tenant creates a subscription → payment_id captured\n5. List Payments → review queue\n6. Get Payment Proof → view file\n7. Review Payment (VERIFIED)\n8. Self-bill invoice through own issuer → capture accessKey\n9. Link Invoice to Subscription → awaits SRI authorization\n10. Run Subscription Jobs (for tier-changes and renewals)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -70,9 +70,60 @@
       "value": "",
       "description": "Webhook endpoint ID — copy from Register Webhook response",
       "type": "string"
+    },
+    {
+      "key": "legal_version",
+      "value": "",
+      "description": "Version string of the currently published TERMS document — captured from GET /v1/legal/documents",
+      "type": "string"
+    },
+    {
+      "key": "verification_token",
+      "value": "",
+      "description": "Email verification token — copy from the verification email link (?token=...)",
+      "type": "string"
     }
   ],
   "item": [
+    {
+      "name": "Legal Documents (Public)",
+      "item": [
+        {
+          "name": "List Current Documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.ok && r.documents) {",
+                  "  const terms = r.documents.find(d => d.documentType === 'TERMS');",
+                  "  if (terms) pm.collectionVariables.set('legal_version', terms.version);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/legal/documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "legal",
+                "documents"
+              ]
+            }
+          }
+        }
+      ]
+    },
     {
       "name": "Tiers",
       "item": [
@@ -228,7 +279,22 @@
               ]
             },
             "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nIf the email already exists and is not suspended, the endpoint revokes the current sandbox key and returns a new one (200 with `recovered: true`).\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201 or 200', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "if (r.apiKey) pm.collectionVariables.set('api_key', r.apiKey);",
+                  "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
+                  "if (r.issuer?.id) pm.collectionVariables.set('issuer_id', String(r.issuer.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Verify Email",
@@ -319,7 +385,21 @@
               ]
             },
             "description": "Resolves the tenant owning the authenticated API key (id, email, subscriptionTier, status, documentCount, documentQuota, sandbox). Useful for a third-party app that only has an API key and needs to discover its numeric tenant id."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
+                  "if (r.tenant?.legalVersion) console.log('Last accepted legal version:', r.tenant.legalVersion);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Update Preferred Language",
@@ -385,6 +465,106 @@
               }
             },
             "description": "Promotes the entire tenant (all branches) from sandbox to production. This is **one-way** — cannot be reversed.\n\nAll active sandbox API keys are revoked automatically. The response includes one new production key per revoked sandbox key (same label). **Store all tokens immediately — they are shown only once.**\n\n`initialSequentials` is optional. If omitted, all active document types on all issuers start at sequential 1. Pass `issuerId` + `documentType` + `sequential` for each combination you want to pre-seed.\n\nRequires the tenant's email to be verified (status ACTIVE).\n\n**`tier` and `billingInterval` are optional.** Omit them (or pass `tier` as absent) to stay on FREE in production — promotion never waits on payment. If a paid tier is requested, this also kicks off the subscription pipeline (same as Admin's Create Subscription) and the response includes `subscription`, `payment`, and `bankTransfer` alongside `apiKeys`. The tier/quota upgrade itself only lands once that subscription is paid and its self-billed invoice is SRI-authorized — see Submit Payment Proof and Admin > Review Payment.\n\n**If you already started a subscription pre-promotion** via the tenant-facing Create Subscription request (works in sandbox) and it's already ACTIVE, `tier`/`billingInterval` here are ignored entirely — the response surfaces that existing subscription instead of starting a new one."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.apiKeys?.length) {",
+                  "  pm.collectionVariables.set('api_key', r.apiKeys[0].apiKey);",
+                  "  console.log('PRODUCTION API KEYS (store immediately):');",
+                  "  r.apiKeys.forEach(k => console.log(' ', k.label, ':', k.apiKey));",
+                  "}",
+                  "if (r.subscription?.id) pm.collectionVariables.set('subscription_id', String(r.subscription.id));",
+                  "if (r.payment?.id) pm.collectionVariables.set('payment_id', String(r.payment.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Legal Acceptance Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.ok) {",
+                  "  pm.test('needsAcceptance is boolean', () => pm.expect(typeof r.legal.needsAcceptance).to.equal('boolean'));",
+                  "  if (r.legal.needsAcceptance) console.log('Re-acceptance needed for:', r.legal.outdated.map(d => d.documentType));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/legal-status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "legal-status"
+              ]
+            },
+            "description": "Check if any document was republished since the tenant last accepted. Use outdated[].url to show updated content."
+          }
+        },
+        {
+          "name": "Accept Legal Documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('ok', () => pm.expect(r.ok).to.be.true);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/accept-legal",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "accept-legal"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\"termsVersion\":\"{{legal_version}}\"}"
+            },
+            "description": "Record re-acceptance of all currently published documents. Use when legal-status returns needsAcceptance: true."
           }
         }
       ]
@@ -625,7 +805,20 @@
               ]
             },
             "description": "Returns all active issuers (branches / issue points) belonging to the authenticated tenant.\n\nCopy an issuer's `id` into the `issuer_id` collection variable to use it as `X-Issuer-Id` on document requests."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.ok && r.issuers?.length) { pm.collectionVariables.set('issuer_id', String(r.issuers[0].id)); console.log('issuer_id set to', r.issuers[0].id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Get Issuer",
@@ -907,7 +1100,20 @@
               }
             },
             "description": "Creates, XSD-validates, and signs a new electronic invoice. Returns the document with status `SIGNED`.\n\nAfter a successful response, copy the `accessKey` value into the `access_key` collection variable.\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use. Get the id from `GET /v1/issuers`.\n\nThe `Idempotency-Key` header makes creation idempotent — generate it once per intended invoice and reuse on retries."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.document?.accessKey) pm.collectionVariables.set('access_key', r.document.accessKey);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Create Credit Note",
@@ -949,7 +1155,20 @@
               }
             },
             "description": "Creates, XSD-validates, and signs a new credit note referencing a previously authorized invoice. Returns the document with status `SIGNED`.\n\nUnlike Create Invoice, this body has no `payments` block and instead requires `originalDocument` (the invoice being credited — its document type, number, and issue date) plus a `motivo` (reason for the credit note).\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use — the issuer must have document type `04` enabled first (see Add Document Type).\n\nThe `Idempotency-Key` header makes creation idempotent — generate it once per intended credit note and reuse on retries."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.document?.accessKey) pm.collectionVariables.set('access_key', r.document.accessKey);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "List Documents",
@@ -1086,7 +1305,20 @@
               ]
             },
             "description": "Submits the signed XML to the SRI reception service. Document moves to `RECEIVED` or `RETURNED`."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Status RECEIVED or RETURNED', () => pm.expect(['RECEIVED','RETURNED']).to.include(r.document?.status));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Check Authorization",
@@ -1112,7 +1344,20 @@
               ]
             },
             "description": "Queries the SRI authorization service. Document moves to `AUTHORIZED` or `NOT_AUTHORIZED`. On authorization, an email with the RIDE PDF and XML is sent to the buyer."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.document?.status) console.log('Document status:', r.document.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Rebuild Invoice",
@@ -1589,7 +1834,21 @@
               }
             },
             "description": "Registers a new webhook endpoint and returns the signing `secret` — **shown only once**. Store it immediately; it is used to verify `X-Comprobify-Signature` on incoming webhook requests.\n\n`url` must be a valid HTTPS URL.\n\n`eventTypes` is optional. Omit it or pass `[]` to subscribe to **all** event types. Valid values: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`.\n\nCopy the returned `id` into the `webhook_id` collection variable."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.endpoint?.id) pm.collectionVariables.set('webhook_id', String(r.endpoint.id));",
+                  "if (r.endpoint?.secret) console.log('Webhook secret (shown once):', r.endpoint.secret);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "List Webhooks",
@@ -1708,7 +1967,20 @@
               }
             },
             "description": "Create a tenant for manual onboarding. Status is set to ACTIVE automatically — no email verification required.\n\nCopy the returned `id` into the `tenant_id` collection variable."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.tenant?.id) { pm.collectionVariables.set('tenant_id', String(r.tenant.id)); console.log('tenant_id set to', r.tenant.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "List Tenants",
@@ -2182,6 +2454,187 @@
           }
         },
         {
+          "name": "List Payments (Review Queue)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.payments?.length) {",
+                  "  pm.collectionVariables.set('payment_id', String(r.payments[0].id));",
+                  "  console.log('First pending payment_id set to', r.payments[0].id);",
+                  "  r.payments.forEach(p => console.log(' Payment', p.id, p.status, p.amount, 'USD — tenant', p.tenant?.email));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/payments?status=REPORTED",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "REPORTED",
+                  "description": "PENDING | REPORTED | VERIFIED | REJECTED"
+                }
+              ]
+            },
+            "description": "List payments awaiting manual review. Default status=REPORTED (proof submitted, decision pending). Captures payment_id of the first result."
+          }
+        },
+        {
+          "name": "Publish Legal Document (TERMS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.document?.version) { pm.collectionVariables.set('legal_version', r.document.version); console.log('Published TERMS v', r.document.version); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/legal-documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "legal-documents"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"TERMS\",\n  \"version\": \"2026-07-01\",\n  \"contentMarkdown\": \"# Términos de Servicio\\n\\nEste es un documento de prueba.\\n\\n## 1. Uso del servicio\\n\\nEl servicio se presta en modo de pruebas.\"\n}"
+            },
+            "description": "Publish a new version of a legal document. contentMarkdown is the full Markdown source. Run once for TERMS, once for PRIVACY, once for DPA. After publishing, registration will validate termsVersion against the TERMS doc."
+          }
+        },
+        {
+          "name": "Publish Legal Document (PRIVACY)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.document?.version) console.log('Published PRIVACY v', r.document.version);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/legal-documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "legal-documents"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"PRIVACY\",\n  \"version\": \"2026-07-01\",\n  \"contentMarkdown\": \"# Política de Privacidad\\n\\nEste es un documento de prueba.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Publish Legal Document (DPA)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.document?.version) console.log('Published DPA v', r.document.version);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/legal-documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "legal-documents"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"DPA\",\n  \"version\": \"2026-07-01\",\n  \"contentMarkdown\": \"# Acuerdo de Procesamiento de Datos\\n\\nEste es un documento de prueba.\"\n}"
+            }
+          }
+        },
+        {
           "name": "Run Notification Jobs",
           "request": {
             "method": "POST",
@@ -2310,7 +2763,20 @@
               }
             },
             "description": "Records your decision after checking the proof the tenant uploaded (Submit Payment Proof) against the bank. `decision` must be `VERIFIED` or `REJECTED`.\n\n`rejectionReason` is **required when `decision` is `REJECTED`** — the tenant sees it via `GET /v1/subscriptions/me` and needs to know what to fix before re-uploading. Not used for `VERIFIED`.\n\n`VERIFIED` moves the subscription to PAYMENT_RECEIVED — your next step is self-billing the invoice and Link Invoice to Subscription. `REJECTED` leaves the subscription at PENDING_PAYMENT; the tenant can submit a new proof for the *same* payment (Submit Payment Proof works again once REJECTED — it only refuses once a payment is VERIFIED).\n\nEither decision fires a notification + email to the tenant automatically (PAYMENT_VERIFIED/PAYMENT_REJECTED) — covers initial subscriptions, tier changes, and renewals uniformly, so there's nothing extra to do here.\n\nView the actual uploaded file first with Get Payment Proof."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.payment?.status) console.log('Payment status now:', r.payment.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Get Payment Proof",
@@ -2331,7 +2797,19 @@
               ]
             },
             "description": "Downloads the proof-of-transfer file the tenant uploaded via Submit Payment Proof. Returns 404 if nothing was uploaded yet."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Returns a file', () => pm.expect(pm.response.headers.get('Content-Disposition')).to.exist);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Link Invoice to Subscription",
@@ -2366,7 +2844,20 @@
               }
             },
             "description": "Attaches the self-billed invoice (created the normal way via Create Invoice, using Comprobify's own issuer) to a subscription, by `accessKey` — the 49-digit SRI key, the same identifier every document response already exposes. `documents.id` is never returned anywhere, public or admin, so this couldn't take a numeric id. Moves the subscription to INVOICE_PROCESSING.\n\nOnce that invoice reaches AUTHORIZED (via the normal Send to SRI / Check Authorization flow), the subscription activates automatically — no further admin action needed."
-          }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.subscription?.status) console.log('Subscription status now:', r.subscription.status, '— awaiting SRI authorization');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         },
         {
           "name": "Cancel Subscription",
