@@ -2541,9 +2541,9 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"documentType\": \"TERMS\",\n  \"version\": \"2026-07-01\",\n  \"contentMarkdown\": \"# Términos de Servicio\\n\\nEste es un documento de prueba.\\n\\n## 1. Uso del servicio\\n\\nEl servicio se presta en modo de pruebas.\"\n}"
+              "raw": "{\n  \"documentType\": \"TERMS\",\n  \"version\": \"2026-07-01\"\n}"
             },
-            "description": "Publish a new version of a legal document. contentMarkdown is the full Markdown source. Run once for TERMS, once for PRIVACY, once for DPA. After publishing, registration will validate termsVersion against the TERMS doc."
+            "description": "Reads content from docs/legal/*.md on the server — no markdown in the body. Only documentType and version are required."
           }
         },
         {
@@ -2586,8 +2586,9 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"documentType\": \"PRIVACY\",\n  \"version\": \"2026-07-01\",\n  \"contentMarkdown\": \"# Política de Privacidad\\n\\nEste es un documento de prueba.\"\n}"
-            }
+              "raw": "{\n  \"documentType\": \"PRIVACY\",\n  \"version\": \"2026-07-01\"\n}"
+            },
+            "description": "Reads content from docs/legal/*.md on the server — no markdown in the body. Only documentType and version are required."
           }
         },
         {
@@ -2630,8 +2631,9 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"documentType\": \"DPA\",\n  \"version\": \"2026-07-01\",\n  \"contentMarkdown\": \"# Acuerdo de Procesamiento de Datos\\n\\nEste es un documento de prueba.\"\n}"
-            }
+              "raw": "{\n  \"documentType\": \"DPA\",\n  \"version\": \"2026-07-01\"\n}"
+            },
+            "description": "Reads content from docs/legal/*.md on the server — no markdown in the body. Only documentType and version are required."
           }
         },
         {

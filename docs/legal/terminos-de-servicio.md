@@ -7,7 +7,7 @@
 
 # Términos de Servicio — Comprobify
 
-**Última actualización:** `[fecha]`
+**Última actualización:** `{{fecha}}`
 
 ## 1. Quiénes somos
 
@@ -94,7 +94,7 @@ Ninguna parte será responsable por incumplimientos causados por eventos fuera d
 
 Comprobify puede suspender o terminar cuentas en caso de incumplimiento de estos Términos, uso fraudulento, abuso del sistema, impago reiterado o actividades ilícitas.
 
-El Cliente puede solicitar la terminación de su cuenta en cualquier momento mediante comunicación a `[email de soporte]`.
+El Cliente puede solicitar la terminación de su cuenta en cualquier momento mediante comunicación a `japc.93@outlook.com`.
 
 La terminación no elimina obligaciones de pago ni afecta el historial de comprobantes ya emitidos.
 
@@ -108,4 +108,4 @@ Estos Términos se rigen por las leyes de la República del Ecuador. Cualquier c
 
 ## 13. Contacto
 
-Para consultas: `[email de contacto]`.
+Para consultas: `japc.93@outlook.com`.

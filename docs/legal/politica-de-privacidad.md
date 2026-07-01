@@ -5,7 +5,7 @@
 
 # Política de Privacidad — Comprobify
 
-**Última actualización:** `[fecha]`
+**Última actualización:** `{{fecha}}`
 
 Esta Política de Privacidad describe cómo **Jonathan Andrés Pillajo Coka**, persona natural con RUC **1715824775001**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP"). _(Cuando se constituya una compañía, basta con actualizar este dato.)_
 
@@ -74,7 +74,7 @@ Comprobify conservará la información mientras resulte necesaria para la presta
 
 Bajo la LOPDP, los compradores cuyos datos constan en un comprobante pueden ejercer sus derechos de acceso, rectificación, actualización, eliminación (cuando proceda), oposición y portabilidad (si aplica), **directamente ante el Cliente** (Responsable del Tratamiento), quien decidió incluir esos datos. Comprobify, como Encargado, colaborará con el Cliente para atender dichas solicitudes en la medida técnicamente posible.
 
-El Cliente, respecto de los datos de su propia cuenta (correo, certificado, historial de pagos), puede ejercer los mismos derechos señalados anteriormente directamente ante Comprobify, escribiendo a `[email de contacto]`.
+El Cliente, respecto de los datos de su propia cuenta (correo, certificado, historial de pagos), puede ejercer los mismos derechos señalados anteriormente directamente ante Comprobify, escribiendo a `japc.93@outlook.com`.
 
 ## 10. Cambios a esta política
 
@@ -82,4 +82,4 @@ Publicaremos cualquier cambio material en esta página con una nueva fecha de ve
 
 ## 11. Contacto
 
-`Jonathan Andrés Pillajo Coka` — RUC `1715824775001` — Domicilio disponible previa solicitud razonable del interesado — `[email de contacto]`
+`Jonathan Andrés Pillajo Coka` — RUC `1715824775001` — Domicilio disponible previa solicitud razonable del interesado — `japc.93@outlook.com`

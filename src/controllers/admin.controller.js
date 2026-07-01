@@ -136,7 +136,6 @@ const publishLegalDocument = async (req, res) => {
   const document = await legalDocumentService.publish(
     req.body.documentType,
     req.body.version,
-    req.body.contentMarkdown,
   );
   res.status(201).json({
     ok: true,
