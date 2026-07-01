@@ -459,7 +459,11 @@ To reject:
 
 ### Step 9 — Self-bill the invoice
 
-Issue an invoice from your **own** issuer (the operator's issuer) to the tenant as the buyer. This is a normal document creation through the Developer flow. Capture the resulting `accessKey`.
+Issue an invoice from your **own** issuer (the operator's issuer) to the tenant as the buyer. This is a normal document creation — use `POST /v1/documents` with your operator API key and `X-Issuer-Id` set to your own issuer. Capture the resulting `accessKey`.
+
+**Sandbox vs production:** the invoice can come from either environment. For testing, issuing from a sandbox issuer is fine — `link-invoice` searches both `public.documents` and `sandbox.documents`. In production, the self-billed invoice should come from your operator's production issuer so it is a legally valid fiscal document.
+
+After creating the invoice, authorize it: `POST /v1/documents/:accessKey/send` then `GET /v1/documents/:accessKey/authorize` — wait for `AUTHORIZED` status before linking (if not yet authorized, the subscription will sit in `INVOICE_PROCESSING` until SRI authorizes it).
 
 ---
 

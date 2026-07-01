@@ -65,6 +65,8 @@ If the tenant already started a subscription before promoting — via [`POST /v1
 
 Sandbox keys are revoked automatically during promotion. If you had no sandbox keys, `apiKeys` will be an empty array — mint production keys via [`POST /v1/keys`](api-keys.md#mint-a-key).
 
+**Subscription period reset:** if the tenant already has an `ACTIVE` subscription (paid while still in sandbox), the billing period (`current_period_start`/`current_period_end`) is automatically reset to the promotion date. This ensures the paid period counts production usage time rather than sandbox testing time.
+
 ## Errors
 
 | Status | Code | When |
