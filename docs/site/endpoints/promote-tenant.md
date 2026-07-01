@@ -12,7 +12,7 @@ This is a **one-way** action. Once a tenant is in production, it cannot return t
 
 `Authorization: Bearer <api-key>`
 
-The tenant's email must be ACTIVE (verified) — promotion is blocked for PENDING_VERIFICATION tenants.
+The tenant's email must be ACTIVE (verified) and all legal documents must be ACCEPTED — promotion is blocked if either condition is not met.
 
 ## Request body
 
@@ -71,6 +71,7 @@ Sandbox keys are revoked automatically during promotion. If you had no sandbox k
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `tier` or `billingInterval` is not a recognised value |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` | Tenant email not yet verified |
+| `403` | `FORBIDDEN` | Tenant email not yet verified (status `PENDING_VERIFICATION`) |
+| `403` | `LEGAL_ACCEPTANCE_REQUIRED` | One or more legal documents have not been accepted — call `GET /v1/tenants/legal-status` to see which ones, view them at `GET /v1/tenants/legal-documents/:type`, then accept via `POST /v1/tenants/accept-legal` |
 | `409` | `CONFLICT` | Tenant is already in production |
 | `409` | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | A `tier` was requested but the tenant already has a subscription in progress |

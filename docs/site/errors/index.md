@@ -148,6 +148,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `ISSUER_FORBIDDEN` | `X-Issuer-Id` names an issuer that belongs to a different tenant |
 | `ACCOUNT_SUSPENDED` | Tenant account is suspended — contact support |
 | `EMAIL_VERIFICATION_REQUIRED` | Operation requires a verified email address |
+| `LEGAL_ACCEPTANCE_REQUIRED` | Promotion blocked — one or more legal documents are still `PENDING` (check `GET /v1/tenants/legal-status`, view at `GET /v1/tenants/legal-documents/:type`, accept via `POST /v1/tenants/accept-legal`) |
 | `PRODUCTION_KEY_REQUIRES_PROMOTION` | Production API key cannot be created before promoting to production |
 | `FORBIDDEN` | Other permission failure (fallback — read `detail`) |
 

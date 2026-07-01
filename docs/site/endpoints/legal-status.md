@@ -49,11 +49,14 @@ Each entry in `outdated` names the specific document type that changed. Use the 
 
 | Field | Description |
 |---|---|
-| `needsAcceptance` | `true` if any document type has been republished since the tenant's last acceptance |
+| `needsAcceptance` | `true` if any document type has a new template version that isn't yet ACCEPTED |
 | `outdated[].documentType` | `TERMS`, `PRIVACY`, or `DPA` |
-| `outdated[].currentVersion` | Version currently required |
-| `outdated[].acceptedVersion` | Version the tenant last accepted, or `null` if never accepted |
-| `outdated[].url` | URL to fetch the updated document (rendered HTML) |
+| `outdated[].currentVersion` | Template version currently published |
+| `outdated[].acceptedVersion` | Template version the tenant last accepted, or `null` if never accepted |
+| `outdated[].status` | `PENDING` (generated, not accepted), or `NOT_GENERATED` (template published but instance not yet created) |
+| `outdated[].url` | URL to the tenant's personalized document instance (`GET /v1/tenants/legal-documents/:type`) |
+
+**Calling this endpoint automatically generates any missing `PENDING` instances** for new template versions — no separate backfill call needed after the admin publishes an update.
 
 ### Errors
 

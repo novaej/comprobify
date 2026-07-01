@@ -26,7 +26,7 @@ Toda cuenta inicia en ambiente de pruebas del SRI y debe ser activada explícita
 
 El Cliente es responsable de la custodia de sus credenciales. Comprobify almacena la clave privada del certificado de firma cifrada, pero no puede recuperar credenciales perdidas fuera de los mecanismos de recuperación de cuenta disponibles en el Servicio.
 
-Los comprobantes electrónicos emitidos a través del Servicio y sus metadatos de autorización están sujetos a los plazos de conservación establecidos por la normativa tributaria ecuatoriana. Conforme al Código Tributario, dichos datos no serán eliminados durante el período de prescripción de las obligaciones tributarias, que no es inferior a siete (7) años desde la fecha de emisión. Ver la Política de Privacidad para más detalle.
+Los comprobantes electrónicos emitidos a través del Servicio y sus metadatos de autorización están sujetos a los plazos de conservación establecidos por la normativa tributaria ecuatoriana. Conforme al Art. 55 del Código Tributario, el período de prescripción de las acciones de cobro es de cinco (5) años para los casos ordinarios y de siete (7) años cuando la declaración no fue presentada o fue presentada de forma incompleta; dichos datos no serán eliminados durante este período, siendo recomendable aplicar el plazo mayor como medida prudente. Ver la Política de Privacidad para más detalle.
 
 ## 4. Planes, cuotas y facturación
 

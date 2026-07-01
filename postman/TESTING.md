@@ -35,19 +35,23 @@ Everything else (`api_key`, `issuer_id`, `access_key`, etc.) is auto-captured by
 
 ## Flow A — Developer (Tenant)
 
-### Pre-flight: publish legal documents (admin only, one time)
+### Pre-flight: publish legal documents (admin only, one time per version)
 
-> The developer collection includes a few admin steps at the start. If you're testing
-> against a fresh environment where documents have never been published, run these first.
-> If legal documents are already published, skip straight to step 1.
+> Run these before any tenant registers for the first time, or whenever the legal text
+> changes and you want existing tenants to re-accept. If documents are already published,
+> skip straight to step 1.
 
-Run these three requests from the **Admin** folder of the **internal** collection (or use the developer collection's Legal Documents folder just to verify they exist):
+Run from the **Admin** folder of the **internal** collection:
 
-1. **Publish Legal Document (TERMS)** — `POST /v1/admin/legal-documents`
-2. **Publish Legal Document (PRIVACY)** — `POST /v1/admin/legal-documents`
-3. **Publish Legal Document (DPA)** — `POST /v1/admin/legal-documents`
+1. **Publish Legal Document (TERMS)** — `POST /v1/admin/legal-documents` body: `{ "documentType": "TERMS", "version": "2026-07-01" }`
+2. **Publish Legal Document (PRIVACY)** — same, `"documentType": "PRIVACY"`
+3. **Publish Legal Document (DPA)** — same, `"documentType": "DPA"`
 
-Each request has a placeholder markdown body — replace with the real legal text before going to production. For testing, the placeholder content is fine.
+**No markdown content in the body.** The server reads directly from `docs/legal/terminos-de-servicio.md`, `docs/legal/politica-de-privacidad.md`, and `docs/legal/acuerdo-procesamiento-datos.md` on the filesystem. Make sure those files are present and correct before publishing.
+
+Use the same `version` string for all three types published together — this is the "bundle version" tenants must accept.
+
+✓ Postman test script captures `legal_version` from the TERMS publish response.
 
 ---
 
@@ -132,11 +136,47 @@ Expected: `status: ACTIVE`, `sandbox: true`, `subscriptionTier: FREE`, `legalAcc
 
 ---
 
-### Step 6 — Check legal acceptance status
+### Step 5a — View your personalized legal documents
+
+After registration the server fires-and-forget generates three personalized document instances (TERMS, PRIVACY, DPA) with your business name and RUC substituted in.
+
+**`GET /v1/tenants/legal-documents`** *(Tenants folder)*
+
+Expected: three rows, all `status: PENDING` (registration generates but does not automatically accept).
+
+**`GET /v1/tenants/legal-documents/TERMS`** *(Tenants folder)*
+
+Returns your personalized Terms of Service as HTML — a yellow disclaimer notice is prepended. The DPA will show your actual `businessName` and `ruc` substituted in.
+
+**`GET /v1/tenants/legal-documents/DPA`**
+
+Confirm your business name and RUC appear correctly in the intro paragraph.
+
+---
+
+### Step 5b — Accept all legal documents
+
+**`POST /v1/tenants/accept-legal`** *(Tenants folder)*
+
+```json
+{ "termsVersion": "{{legal_version}}" }
+```
+
+Accepts all PENDING instances at once (TERMS, PRIVACY, DPA), recording IP address and user agent.
+
+Expected: `{ "ok": true }` — all three rows flip to `status: ACCEPTED`.
+
+---
+
+### Step 6 — Verify legal acceptance status
 
 **`GET /v1/tenants/legal-status`** *(Tenants folder)*
 
-Expected: `needsAcceptance: false`, `outdated: []` — you just accepted at registration.
+Expected: `needsAcceptance: false`, `outdated: []` — all documents accepted.
+
+> **If `needsAcceptance: true`:** The `outdated` array lists which types need acceptance and includes a `url` for each. Fetch `GET /v1/tenants/legal-documents/:type` to show the document, then call `POST /v1/tenants/accept-legal` again.
+
+> **Third-party integrators** should poll `GET /v1/tenants/legal-status` periodically. When the admin publishes a new template version, calling this endpoint automatically generates new PENDING instances, which surfaces as `needsAcceptance: true` until the tenant re-accepts.
 
 ---
 
@@ -211,8 +251,10 @@ Attach a screenshot or PDF of the bank transfer confirmation as the `proof` file
 
 ### Step 14 — Promote to production
 
-> Complete the subscription payment cycle first (Steps 12–13 + admin review in Flow B), OR promote
-> on the FREE tier and subscribe afterward.
+> **Prerequisites before calling promote:**
+> 1. Email must be verified (status ACTIVE — see Step 4)
+> 2. All legal documents must be ACCEPTED (see Step 5b) — promotion returns `403 LEGAL_ACCEPTANCE_REQUIRED` if not
+> 3. Complete the subscription payment cycle (Steps 12–13 + admin review in Flow B) OR promote on FREE tier and subscribe afterward
 
 **`POST /v1/tenants/promote`** *(Tenants folder)*
 
@@ -303,6 +345,20 @@ Attach the tenant's `.p12` file and fill in `tenantId` (uses `{{tenant_id}}`), R
 ```
 
 ✓ Test script captures `api_key` — share this with the tenant. Shown once.
+
+---
+
+### Step 4a — Generate legal documents for the tenant (admin-created tenants)
+
+Admin-created tenants skip `termsVersion` validation at creation, so no legal document instances are auto-generated for them. Generate them now:
+
+**`POST /v1/admin/tenants/{{tenant_id}}/legal-documents`** *(Admin folder)*
+
+Creates PENDING instances (TERMS, PRIVACY, DPA) using the current published templates with the tenant's business name and RUC substituted in. The tenant can then view and accept them via their own API key.
+
+Expected: `{ "ok": true, "generated": 3, "documents": [...] }`
+
+> **Also use this** to backfill any existing tenant who registered before legal documents were first published, or after a template update when you want to regenerate their personalized copy immediately rather than waiting for lazy generation.
 
 ---
 

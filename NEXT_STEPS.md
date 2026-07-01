@@ -218,25 +218,3 @@ Two things have to exist before `overagePerDocumentUsd` (`subscription-tiers.js`
 
 **Effort:** Low — one event write per existing call site, no new flow.
 
----
-
-## 12. LOPDP Deletion-Rights Process and Evidence PDF
-
-**Priority: Low — remaining items are non-blocking and explicitly deferred.**
-
-Most of this item is now done:
-
-- ✅ **Per-tenant document instances** — `tenant_legal_documents` stores a personalized, immutable Markdown snapshot (DPA named with the client's actual `businessName`/`ruc`, dates resolved at generation) for every registered tenant.
-- ✅ **Per-type acceptance tracking** — `PENDING` → `ACCEPTED` with `accepted_at`, `ip`, `user_agent`. Full history preserved across re-acceptances (old rows never overwritten).
-- ✅ **Promotion gate** — `POST /v1/tenants/promote` requires all three document types to be `ACCEPTED` (`403 LEGAL_ACCEPTANCE_REQUIRED` if not).
-- ✅ **Re-acceptance on template update** — `GET /v1/tenants/legal-status` lazily generates new `PENDING` rows when a new template version is published and the tenant doesn't have one yet. Same endpoint third parties should poll periodically to check whether their tenant still needs to sign updated documents.
-- ✅ **Viewing accepted documents** — `GET /v1/tenants/legal-documents/:type` serves the personalized HTML exactly as it was when generated (no reconstruction needed), with a disclaimer notice prepended.
-- ✅ **Formal legal review deferred** — a disclaimer is rendered at the top of every document ("generado automáticamente, no revisado por asesor legal"). The documents are drafted accurately from how the API actually works and are being shipped in good faith. Formal review remains on the list but is not blocking launch.
-
-What genuinely remains:
-
-- **LOPDP deletion-rights process.** The Privacy Policy correctly discloses that there is no hard-delete mechanism. An actual process for responding to a deletion request under LOPDP (Art. 13) still needs to be decided: either "we don't delete invoice records for legal/fiscal reasons and here is the escalation path for the request" (defensible, most likely the right answer for SRI-authorized documents), or a scoped erasure path for non-fiscal personal data (account email, registration metadata). Neither option requires a code change today — the decision itself is what's open.
-
-- **Evidence PDF generation** — deferred (ADR-018). `GET /v1/tenants/legal-documents/:type` already serves the accepted HTML including the exact content, date, and tenant info. A downloadable signed PDF certificate is a nice-to-have for enterprise clients; build it when one asks for it.
-
-**Effort:** Evidence PDF is Low–Medium once someone requests it. Deletion-rights is mostly a business/legal decision, not engineering.
