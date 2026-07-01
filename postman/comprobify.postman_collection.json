@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Comprobify API — Public",
-    "description": "Comprobify developer API — self-service registration through full document lifecycle. Run in order:\n1. List Current Documents → captures legal_version\n2. Register → captures api_key, issuer_id, tenant_id\n3. Verify Email (set verification_token manually from email)\n4. Get Current Tenant → confirm active\n5. Legal Acceptance Status\n6. Create Invoice → captures access_key\n7. Send to SRI / Check Authorization\n8. Subscribe / Promote to Production",
+    "description": "Comprobify developer API — self-service registration through full document lifecycle. Run in order:\n1. List Current Documents → captures agreement_version\n2. Register → captures api_key, issuer_id, tenant_id\n3. Verify Email (set verification_token manually from email)\n4. Get Current Tenant → confirm active\n5. Agreement Acceptance Status\n6. Create Invoice → captures access_key\n7. Send to SRI / Check Authorization\n8. Subscribe / Promote to Production",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -66,7 +66,7 @@
       "type": "string"
     },
     {
-      "key": "legal_version",
+      "key": "agreement_version",
       "value": "",
       "description": "Version string of the currently published TERMS document — captured from GET /v1/agreements",
       "type": "string"
@@ -86,7 +86,7 @@
   ],
   "item": [
     {
-      "name": "Legal Documents",
+      "name": "Agreements",
       "item": [
         {
           "name": "List Current Documents",
@@ -99,7 +99,7 @@
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.ok && r.documents) {",
                   "  const terms = r.documents.find(d => d.documentType === 'TERMS');",
-                  "  if (terms) { pm.collectionVariables.set('legal_version', terms.version); console.log('legal_version set to', terms.version); }",
+                  "  if (terms) { pm.collectionVariables.set('agreement_version', terms.version); console.log('agreement_version set to', terms.version); }",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -115,12 +115,10 @@
                 "{{base_url}}"
               ],
               "path": [
-                "v1",
-                "legal",
-                "documents"
+                "v1","agreements"
               ]
             },
-            "description": "Public. Returns current version of each document type. Captures legal_version for use in Register and Accept Legal."
+            "description": "Public. Returns current version of each document type. Captures agreement_version for use in Register and Accept Agreements."
           }
         },
         {
@@ -134,9 +132,7 @@
                 "{{base_url}}"
               ],
               "path": [
-                "v1",
-                "legal",
-                "documents",
+                "v1","agreements",
                 "TERMS"
               ]
             },
@@ -154,9 +150,7 @@
                 "{{base_url}}"
               ],
               "path": [
-                "v1",
-                "legal",
-                "documents",
+                "v1","agreements",
                 "PRIVACY"
               ]
             }
@@ -173,9 +167,7 @@
                 "{{base_url}}"
               ],
               "path": [
-                "v1",
-                "legal",
-                "documents",
+                "v1","agreements",
                 "DPA"
               ]
             }
@@ -454,7 +446,7 @@
                   "const r = pm.response.json();",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
-                  "if (r.tenant?.agreementVersion) console.log('Last accepted legal version:', r.tenant.agreementVersion);"
+                  "if (r.tenant?.agreementVersion) console.log('Last accepted agreement version:', r.tenant.agreementVersion);"
                 ],
                 "type": "text/javascript"
               }
@@ -547,7 +539,7 @@
           ]
         },
         {
-          "name": "Legal Acceptance Status",
+          "name": "Agreement Acceptance Status",
           "event": [
             {
               "listen": "test",
@@ -556,8 +548,8 @@
                   "const r = pm.response.json();",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.ok) {",
-                  "  pm.test('needsAcceptance is boolean', () => pm.expect(typeof r.legal.needsAcceptance).to.equal('boolean'));",
-                  "  if (r.legal.needsAcceptance) console.log('Re-acceptance needed for:', r.legal.outdated.map(d => d.documentType));",
+                  "  pm.test('needsAcceptance is boolean', () => pm.expect(typeof r.agreements.needsAcceptance).to.equal('boolean'));",
+                  "  if (r.agreements.needsAcceptance) console.log('Re-acceptance needed for:', r.agreements.outdated.map(d => d.documentType));",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -587,7 +579,7 @@
           }
         },
         {
-          "name": "Accept Legal Documents",
+          "name": "Accept Agreements",
           "event": [
             {
               "listen": "test",
@@ -626,13 +618,13 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"termsVersion\":\"{{legal_version}}\"}"
+              "raw": "{\"termsVersion\":\"{{agreement_version}}\"}"
             },
-            "description": "Record re-acceptance of all currently published documents. Use when legal-acceptance returns needsAcceptance: true."
+            "description": "Record re-acceptance of all currently published documents. Use when agreements returns needsAcceptance: true."
           }
         },
         {
-          "name": "List Tenant Legal Documents",
+          "name": "List Tenant Agreements",
           "event": [
             {
               "listen": "test",
@@ -674,7 +666,7 @@
           }
         },
         {
-          "name": "View Legal Document (TERMS)",
+          "name": "View Agreement (TERMS)",
           "request": {
             "method": "GET",
             "header": [
@@ -699,7 +691,7 @@
           }
         },
         {
-          "name": "View Legal Document (DPA)",
+          "name": "View Agreement (DPA)",
           "request": {
             "method": "GET",
             "header": [

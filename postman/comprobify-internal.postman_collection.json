@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Comprobify API — Internal (Admin)",
-    "description": "Comprobify internal/admin collection. Flow:\n1. Publish Legal Documents (TERMS, PRIVACY, DPA)\n2. Register or Create Tenant + Create Issuer + Create API Key\n3. Verify tenant (admin or email)\n4. Tenant creates a subscription → payment_id captured\n5. List Payments → review queue\n6. Get Payment Proof → view file\n7. Review Payment (VERIFIED)\n8. Self-bill invoice through own issuer → capture accessKey\n9. Link Invoice to Subscription → awaits SRI authorization\n10. Run Subscription Jobs (for tier-changes and renewals)",
+    "description": "Comprobify internal/admin collection. Flow:\n1. Publish Agreements (TERMS, PRIVACY, DPA)\n2. Register or Create Tenant + Create Issuer + Create API Key\n3. Verify tenant (admin or email)\n4. Tenant creates a subscription → payment_id captured\n5. List Payments → review queue\n6. Get Payment Proof → view file\n7. Review Payment (VERIFIED)\n8. Self-bill invoice through own issuer → capture accessKey\n9. Link Invoice to Subscription → awaits SRI authorization\n10. Run Subscription Jobs (for tier-changes and renewals)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -72,7 +72,7 @@
       "type": "string"
     },
     {
-      "key": "legal_version",
+      "key": "agreement_version",
       "value": "",
       "description": "Version string of the currently published TERMS document — captured from GET /v1/agreements",
       "type": "string"
@@ -86,7 +86,7 @@
   ],
   "item": [
     {
-      "name": "Legal Documents (Public)",
+      "name": "Agreements (Public)",
       "item": [
         {
           "name": "List Current Documents",
@@ -99,7 +99,7 @@
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.ok && r.documents) {",
                   "  const terms = r.documents.find(d => d.documentType === 'TERMS');",
-                  "  if (terms) pm.collectionVariables.set('legal_version', terms.version);",
+                  "  if (terms) pm.collectionVariables.set('agreement_version', terms.version);",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -115,9 +115,7 @@
                 "{{base_url}}"
               ],
               "path": [
-                "v1",
-                "legal",
-                "documents"
+                "v1","agreements"
               ]
             }
           }
@@ -394,7 +392,7 @@
                   "const r = pm.response.json();",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
-                  "if (r.tenant?.agreementVersion) console.log('Last accepted legal version:', r.tenant.agreementVersion);"
+                  "if (r.tenant?.agreementVersion) console.log('Last accepted agreement version:', r.tenant.agreementVersion);"
                 ],
                 "type": "text/javascript"
               }
@@ -487,7 +485,7 @@
           ]
         },
         {
-          "name": "Legal Acceptance Status",
+          "name": "Agreement Acceptance Status",
           "event": [
             {
               "listen": "test",
@@ -496,8 +494,8 @@
                   "const r = pm.response.json();",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
                   "if (r.ok) {",
-                  "  pm.test('needsAcceptance is boolean', () => pm.expect(typeof r.legal.needsAcceptance).to.equal('boolean'));",
-                  "  if (r.legal.needsAcceptance) console.log('Re-acceptance needed for:', r.legal.outdated.map(d => d.documentType));",
+                  "  pm.test('needsAcceptance is boolean', () => pm.expect(typeof r.agreements.needsAcceptance).to.equal('boolean'));",
+                  "  if (r.agreements.needsAcceptance) console.log('Re-acceptance needed for:', r.agreements.outdated.map(d => d.documentType));",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -527,7 +525,7 @@
           }
         },
         {
-          "name": "Accept Legal Documents",
+          "name": "Accept Agreements",
           "event": [
             {
               "listen": "test",
@@ -562,13 +560,13 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\"termsVersion\":\"{{legal_version}}\"}"
+              "raw": "{\"termsVersion\":\"{{agreement_version}}\"}"
             },
-            "description": "Record re-acceptance of all currently published documents. Use when legal-acceptance returns needsAcceptance: true."
+            "description": "Record re-acceptance of all currently published documents. Use when agreements returns needsAcceptance: true."
           }
         },
         {
-          "name": "List Tenant Legal Documents",
+          "name": "List Tenant Agreements",
           "event": [
             {
               "listen": "test",
@@ -610,7 +608,7 @@
           }
         },
         {
-          "name": "View Legal Document (TERMS)",
+          "name": "View Agreement (TERMS)",
           "request": {
             "method": "GET",
             "header": [
@@ -635,7 +633,7 @@
           }
         },
         {
-          "name": "View Legal Document (DPA)",
+          "name": "View Agreement (DPA)",
           "request": {
             "method": "GET",
             "header": [
@@ -2594,7 +2592,7 @@
           }
         },
         {
-          "name": "Generate Legal Documents for Tenant (Backfill)",
+          "name": "Generate Agreements for Tenant (Backfill)",
           "event": [
             {
               "listen": "test",
@@ -2633,11 +2631,11 @@
               "mode": "raw",
               "raw": "{}"
             },
-            "description": "Generates personalized PENDING document instances for a tenant who registered before legal documents were published, or to regenerate after a template update. Reads current published templates + the tenant's primary issuer data. Idempotent — skips types already generated for the current template version."
+            "description": "Generates personalized PENDING document instances for a tenant who registered before agreements were published, or to regenerate after a template update. Reads current published templates + the tenant's primary issuer data. Idempotent — skips types already generated for the current template version."
           }
         },
         {
-          "name": "Publish Legal Document (TERMS)",
+          "name": "Publish Agreement (TERMS)",
           "event": [
             {
               "listen": "test",
@@ -2645,7 +2643,7 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('Status 201', () => pm.response.to.have.status(201));",
-                  "if (r.document?.version) { pm.collectionVariables.set('legal_version', r.document.version); console.log('Published TERMS v', r.document.version); }"
+                  "if (r.document?.version) { pm.collectionVariables.set('agreement_version', r.document.version); console.log('Published TERMS v', r.document.version); }"
                 ],
                 "type": "text/javascript"
               }
@@ -2682,7 +2680,7 @@
           }
         },
         {
-          "name": "Publish Legal Document (PRIVACY)",
+          "name": "Publish Agreement (PRIVACY)",
           "event": [
             {
               "listen": "test",
@@ -2727,7 +2725,7 @@
           }
         },
         {
-          "name": "Publish Legal Document (DPA)",
+          "name": "Publish Agreement (DPA)",
           "event": [
             {
               "listen": "test",
