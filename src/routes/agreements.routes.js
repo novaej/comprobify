@@ -8,7 +8,7 @@ const router = Router();
 
 // Public — no auth, no rate limiter. Same precedent as /v1/tiers: static content
 // any frontend or third-party integrator needs before/during signup.
-router.get('/documents', asyncHandler(controller.list));
-router.get('/documents/:type', v.getByType, validateRequest, asyncHandler(controller.getByType));
+router.get('/', asyncHandler(controller.list));
+router.get('/:type', v.getByType, validateRequest, asyncHandler(controller.getByType));
 
 module.exports = router;
