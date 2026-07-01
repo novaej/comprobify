@@ -115,7 +115,8 @@
                 "{{base_url}}"
               ],
               "path": [
-                "v1","agreements"
+                "v1",
+                "agreements"
               ]
             }
           }
@@ -630,6 +631,31 @@
               ]
             },
             "description": "Returns the tenant's personalized Terms of Service as HTML — their businessName and RUC substituted in, with the disclaimer notice prepended. Also try /PRIVACY and /DPA. Check response headers: X-Document-Status, X-Template-Version, X-Accepted-At."
+          }
+        },
+        {
+          "name": "View Agreement (PRIVACY)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/agreements/PRIVACY",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "agreements",
+                "PRIVACY"
+              ]
+            },
+            "description": "Returns the tenant's personalized Privacy Policy as HTML."
           }
         },
         {
