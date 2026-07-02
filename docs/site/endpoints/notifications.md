@@ -129,15 +129,14 @@ Created automatically (fire-and-forget) when your provider verifies a payment pr
   "paymentId": 18,
   "subscriptionId": 12,
   "tier": "STARTER",
+  "billingInterval": "MONTHLY",
   "purpose": "INITIAL",
-  "amount": "17.39",
-  "ivaAmount": "2.61",
-  "totalAmount": "20.00",
+  "amount": "20.00",
   "rejectionReasonCode": null
 }
 ```
 
-`purpose` is `INITIAL`, `TIER_CHANGE`, or `RENEWAL`.
+`purpose` is `INITIAL`, `TIER_CHANGE`, or `RENEWAL`. For a `TIER_CHANGE` payment, `tier`/`billingInterval` are the **target** plan being purchased, not the subscription's current one — e.g. on a payment for a monthly-STARTER-to-yearly-GROWTH change, this shows `"tier": "GROWTH"`, `"billingInterval": "YEARLY"`. `amount` is the full IVA-inclusive total (what's actually transferred via SPI), not the pre-IVA base.
 
 ---
 

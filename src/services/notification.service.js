@@ -178,6 +178,12 @@ async function createPaymentReviewed(payment, subscription, decision) {
   if (!enabled) return null;
 
   const purposeLabel = PAYMENT_PURPOSE_LABELS[payment.purpose] || PAYMENT_PURPOSE_LABELS.INITIAL;
+  // For a TIER_CHANGE payment, the subscription still reflects its CURRENT
+  // tier/interval — target_tier/target_billing_interval on the payment carry
+  // what's actually being purchased. INITIAL/RENEWAL payments never set
+  // target_tier, so this correctly falls back to the subscription's own.
+  const tier = payment.target_tier || subscription.tier;
+  const billingInterval = payment.target_billing_interval || subscription.billing_interval;
 
   const notification = await notificationModel.create({
     tenantId: subscription.tenant_id,
@@ -185,14 +191,15 @@ async function createPaymentReviewed(payment, subscription, decision) {
     severity: decision === 'VERIFIED' ? NotificationSeverity.INFO : NotificationSeverity.WARNING,
     title: decision === 'VERIFIED' ? 'Payment verified' : 'Payment rejected',
     message: decision === 'VERIFIED'
-      ? `Your ${purposeLabel} payment for the ${subscription.tier} plan was verified.`
-      : `Your ${purposeLabel} payment for the ${subscription.tier} plan was rejected: ${REJECTION_REASON_LABELS[payment.rejection_reason_code] || REJECTION_REASON_LABELS.OTHER}.`,
+      ? `Your ${purposeLabel} payment for the ${tier} plan was verified.`
+      : `Your ${purposeLabel} payment for the ${tier} plan was rejected: ${REJECTION_REASON_LABELS[payment.rejection_reason_code] || REJECTION_REASON_LABELS.OTHER}.`,
     metadata: {
       paymentId: payment.id,
       subscriptionId: subscription.id,
-      tier: subscription.tier,
+      tier,
+      billingInterval,
       purpose: payment.purpose,
-      amount: payment.amount,
+      amount: payment.total_amount,
       rejectionReasonCode: payment.rejection_reason_code || null,
     },
   });
