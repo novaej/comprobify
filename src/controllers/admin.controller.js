@@ -120,7 +120,7 @@ const reviewPayment = async (req, res) => {
   const result = await subscriptionService.reviewPayment(
     parseInt(req.params.id, 10),
     req.body.decision,
-    req.body.rejectionReason,
+    req.body.rejectionReasonCode,
   );
   res.json({ ok: true, ...result });
 };

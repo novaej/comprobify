@@ -104,6 +104,8 @@ const ErrorCodes = Object.freeze({
   TIER_CHANGE_ALREADY_PENDING: 'TIER_CHANGE_ALREADY_PENDING',
   /** A cancellation is already scheduled for this subscription */
   CANCELLATION_ALREADY_PENDING: 'CANCELLATION_ALREADY_PENDING',
+  /** rejectionReasonCode is missing or not a recognised value when rejecting a payment */
+  INVALID_REJECTION_REASON: 'INVALID_REJECTION_REASON',
 
   // --- Webhook endpoints ---
   /** Tenant has reached the maximum number of webhook endpoints for their plan */

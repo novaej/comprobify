@@ -7,6 +7,7 @@ const notificationService = require('./notification.service');
 const emailService = require('./email.service');
 const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
+const RejectionReasons = require('../constants/rejection-reasons');
 const config = require('../config');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
@@ -367,13 +368,13 @@ async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeT
   }
 
   // A REJECTED payment can be re-submitted (e.g. the transfer hadn't reflected in
-  // the bank yet) — clear the old rejection_reason since it's being re-addressed.
+  // the bank yet) — clear the old rejection_reason_code since it's being re-addressed.
   const updated = await paymentModel.updateStatus(paymentId, 'REPORTED', {
     reported_at: new Date(),
     proof_file: buffer,
     proof_filename: filename,
     proof_mime_type: mimeType,
-    rejection_reason: null,
+    rejection_reason_code: null,
   });
 
   await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REPORTED', { paymentId });
@@ -400,9 +401,16 @@ async function getPaymentProofForTenant(paymentId, tenantId) {
   return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
 }
 
-async function reviewPayment(paymentId, decision, rejectionReason = null) {
+async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   if (!DECISIONS.includes(decision)) {
     throw new AppError(`Invalid decision '${decision}'. Valid values: ${DECISIONS.join(', ')}`, 400);
+  }
+  if (decision === 'REJECTED' && !Object.values(RejectionReasons).includes(rejectionReasonCode)) {
+    throw new AppError(
+      `Invalid rejectionReasonCode '${rejectionReasonCode}'. Valid values: ${Object.values(RejectionReasons).join(', ')}`,
+      400,
+      ErrorCodes.INVALID_REJECTION_REASON
+    );
   }
 
   const payment = await paymentModel.findById(paymentId);
@@ -410,7 +418,7 @@ async function reviewPayment(paymentId, decision, rejectionReason = null) {
 
   const extraFields = decision === 'VERIFIED'
     ? { verified_at: new Date() }
-    : { rejection_reason: rejectionReason };
+    : { rejection_reason_code: rejectionReasonCode };
   const updatedPayment = await paymentModel.updateStatus(paymentId, decision, extraFields);
 
   const subscription = await subscriptionModel.findById(payment.subscription_id);

@@ -133,7 +133,7 @@ Created automatically (fire-and-forget) when your provider verifies a payment pr
   "amount": "17.39",
   "ivaAmount": "2.61",
   "totalAmount": "20.00",
-  "rejectionReason": null
+  "rejectionReasonCode": null
 }
 ```
 
@@ -147,7 +147,7 @@ Same trigger as `PAYMENT_VERIFIED`, for a rejected decision instead.
 
 **Severity:** `WARNING`
 
-**Metadata:** same shape as `PAYMENT_VERIFIED`, with `rejectionReason` populated — re-submit proof for the same `paymentId` via [Submit Payment Proof](submit-payment-proof.md).
+**Metadata:** same shape as `PAYMENT_VERIFIED`, with `rejectionReasonCode` populated (one of `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — re-submit proof for the same `paymentId` via [Submit Payment Proof](submit-payment-proof.md).
 
 ---
 

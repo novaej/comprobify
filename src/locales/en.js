@@ -36,6 +36,14 @@ module.exports = {
     },
     paymentRejected: {
       purposeLabels: { INITIAL: 'subscription', TIER_CHANGE: 'tier change', RENEWAL: 'renewal' },
+      rejectionReasonLabels: {
+        AMOUNT_MISMATCH: 'The transferred amount does not match what was requested.',
+        TRANSFER_NOT_FOUND: 'No matching transfer was found in the account.',
+        WRONG_ACCOUNT: 'The transfer was sent to the wrong account.',
+        ILLEGIBLE_PROOF: 'The uploaded proof is illegible or corrupted.',
+        DUPLICATE_SUBMISSION: 'This proof was already submitted and reviewed for another payment.',
+        OTHER: 'Contact support for details.',
+      },
       subject: (purposeLabel) => `Your ${purposeLabel} payment needs attention`,
       greeting: 'Hello,',
       body: (purposeLabel, tier) => `Your ${purposeLabel} payment for the ${tier} plan was rejected.`,

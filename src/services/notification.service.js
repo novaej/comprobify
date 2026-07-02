@@ -42,6 +42,14 @@ const NotificationTypes = require('../constants/notification-types');
 const NotificationSeverity = require('../constants/notification-severity');
 
 const PAYMENT_PURPOSE_LABELS = { INITIAL: 'subscription', TIER_CHANGE: 'tier change', RENEWAL: 'renewal' };
+const REJECTION_REASON_LABELS = {
+  AMOUNT_MISMATCH: 'the transferred amount did not match what was requested',
+  TRANSFER_NOT_FOUND: 'no matching transfer was found in the account',
+  WRONG_ACCOUNT: 'the transfer was sent to the wrong account',
+  ILLEGIBLE_PROOF: 'the uploaded proof was illegible or corrupted',
+  DUPLICATE_SUBMISSION: 'this proof was already submitted and reviewed for another payment',
+  OTHER: 'see proof for details',
+};
 
 /** All defined notification types — used to populate the full preferences list. */
 const ALL_TYPES = Object.values(NotificationTypes);
@@ -178,14 +186,14 @@ async function createPaymentReviewed(payment, subscription, decision) {
     title: decision === 'VERIFIED' ? 'Payment verified' : 'Payment rejected',
     message: decision === 'VERIFIED'
       ? `Your ${purposeLabel} payment for the ${subscription.tier} plan was verified.`
-      : `Your ${purposeLabel} payment for the ${subscription.tier} plan was rejected: ${payment.rejection_reason || 'see proof for details'}.`,
+      : `Your ${purposeLabel} payment for the ${subscription.tier} plan was rejected: ${REJECTION_REASON_LABELS[payment.rejection_reason_code] || REJECTION_REASON_LABELS.OTHER}.`,
     metadata: {
       paymentId: payment.id,
       subscriptionId: subscription.id,
       tier: subscription.tier,
       purpose: payment.purpose,
       amount: payment.amount,
-      rejectionReason: payment.rejection_reason || null,
+      rejectionReasonCode: payment.rejection_reason_code || null,
     },
   });
 

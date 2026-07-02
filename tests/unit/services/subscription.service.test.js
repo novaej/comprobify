@@ -627,8 +627,8 @@ describe('SubscriptionService', () => {
         .rejects.toMatchObject({ statusCode: 409 });
     });
 
-    test('allows re-submitting after REJECTED and clears the old rejection_reason', async () => {
-      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'REJECTED', rejection_reason: 'Transfer not reflected yet' });
+    test('allows re-submitting after REJECTED and clears the old rejection_reason_code', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
 
@@ -639,7 +639,7 @@ describe('SubscriptionService', () => {
         proof_file: proof.buffer,
         proof_filename: proof.filename,
         proof_mime_type: proof.mimeType,
-        rejection_reason: null,
+        rejection_reason_code: null,
       });
     });
 
@@ -655,7 +655,7 @@ describe('SubscriptionService', () => {
         proof_file: proof.buffer,
         proof_filename: proof.filename,
         proof_mime_type: proof.mimeType,
-        rejection_reason: null,
+        rejection_reason_code: null,
       });
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REPORTED', { paymentId: 20 });
       expect(result).toEqual({ id: 20, status: 'REPORTED' });
@@ -721,15 +721,15 @@ describe('SubscriptionService', () => {
       );
     });
 
-    test('REJECTED leaves the subscription untouched and stores the rejection reason', async () => {
+    test('REJECTED leaves the subscription untouched and stores the rejection reason code', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10 });
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REJECTED' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' });
 
-      const result = await subscriptionService.reviewPayment(20, 'REJECTED', 'Transfer not reflected in our account yet');
+      const result = await subscriptionService.reviewPayment(20, 'REJECTED', 'TRANSFER_NOT_FOUND');
 
       expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REJECTED', {
-        rejection_reason: 'Transfer not reflected in our account yet',
+        rejection_reason_code: 'TRANSFER_NOT_FOUND',
       });
       expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REJECTED', { paymentId: 20 });
@@ -740,6 +740,18 @@ describe('SubscriptionService', () => {
       expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(
         { id: 20, status: 'REJECTED' }, { id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' }, 'REJECTED',
       );
+    });
+
+    test('rejects REJECTED decision with a missing rejectionReasonCode', async () => {
+      await expect(subscriptionService.reviewPayment(20, 'REJECTED'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_REJECTION_REASON' });
+      expect(paymentModel.findById).not.toHaveBeenCalled();
+    });
+
+    test('rejects REJECTED decision with an unrecognized rejectionReasonCode', async () => {
+      await expect(subscriptionService.reviewPayment(20, 'REJECTED', 'NOT_A_REASON'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_REJECTION_REASON' });
+      expect(paymentModel.findById).not.toHaveBeenCalled();
     });
 
     test('rejects when the payment does not exist', async () => {
@@ -960,7 +972,7 @@ describe('SubscriptionService', () => {
         { id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING' },
       ]);
       paymentModel.findBySubscriptionId.mockResolvedValue([
-        { id: 20, status: 'REJECTED', rejection_reason: 'Transfer not reflected yet', proof_file: Buffer.from('x'), proof_filename: 'old.pdf' },
+        { id: 20, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND', proof_file: Buffer.from('x'), proof_filename: 'old.pdf' },
         { id: 21, status: 'VERIFIED', proof_file: Buffer.from('y'), proof_filename: 'new.pdf' },
       ]);
 
@@ -972,7 +984,7 @@ describe('SubscriptionService', () => {
         {
           id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING',
           payments: [
-            { id: 20, status: 'REJECTED', rejection_reason: 'Transfer not reflected yet', proof_filename: 'old.pdf' },
+            { id: 20, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND', proof_filename: 'old.pdf' },
             { id: 21, status: 'VERIFIED', proof_filename: 'new.pdf' },
           ],
         },

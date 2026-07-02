@@ -53,7 +53,7 @@ The raw file is never echoed back — only its filename and content type. `statu
 
 You'll get a `PAYMENT_VERIFIED` or `PAYMENT_REJECTED` notification and email as soon as your provider records their decision (see [Notifications](notifications.md)) — no need to poll, though [`GET /v1/subscriptions/me`](get-my-subscriptions.md) (in-between states and any rejection reason) and [`GET /v1/tenants/me`](tenant-me.md) (resulting tier/quota once it lands) are always available too.
 
-**If your proof is rejected**, the email and `GET /v1/subscriptions/me` both show a `rejection_reason` explaining why (e.g. "transfer not reflected yet"). Once you've fixed whatever it flagged, call this same endpoint again with new proof for the same payment — rejection isn't a dead end, only an already-`VERIFIED` payment refuses further uploads.
+**If your proof is rejected**, the email explains why in plain language, and `GET /v1/subscriptions/me` shows the same reason as a stable `rejection_reason_code` (one of `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) for your own UI to map to a message. Once you've fixed whatever it flagged, call this same endpoint again with new proof for the same payment — rejection isn't a dead end, only an already-`VERIFIED` payment refuses further uploads.
 
 ## Errors
 

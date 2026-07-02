@@ -8,7 +8,7 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'proof_mime_type',
   'period_start',
   'period_end',
-  'rejection_reason',
+  'rejection_reason_code',
   'invoice_document_id',
 ]);
 

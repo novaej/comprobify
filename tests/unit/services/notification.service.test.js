@@ -41,7 +41,7 @@ describe('NotificationService', () => {
         tenantId: 1,
         type: 'PAYMENT_VERIFIED',
         severity: 'INFO',
-        metadata: expect.objectContaining({ paymentId: 20, subscriptionId: 10, tier: 'STARTER', purpose: 'INITIAL', amount: 19, rejectionReason: null }),
+        metadata: expect.objectContaining({ paymentId: 20, subscriptionId: 10, tier: 'STARTER', purpose: 'INITIAL', amount: 19, rejectionReasonCode: null }),
       }));
       expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: 100, type: 'PAYMENT_VERIFIED' });
       expect(result).toEqual({ id: 100, type: 'PAYMENT_VERIFIED' });
@@ -52,7 +52,7 @@ describe('NotificationService', () => {
       notificationModel.create.mockResolvedValue({ id: 101, type: 'PAYMENT_REJECTED' });
 
       await notificationService.createPaymentReviewed(
-        { id: 20, purpose: 'RENEWAL', amount: 19, rejection_reason: 'Transfer not reflected yet' },
+        { id: 20, purpose: 'RENEWAL', amount: 19, rejection_reason_code: 'TRANSFER_NOT_FOUND' },
         { id: 10, tenant_id: 1, tier: 'STARTER' },
         'REJECTED',
       );
@@ -60,8 +60,8 @@ describe('NotificationService', () => {
       expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
         type: 'PAYMENT_REJECTED',
         severity: 'WARNING',
-        message: expect.stringContaining('Transfer not reflected yet'),
-        metadata: expect.objectContaining({ rejectionReason: 'Transfer not reflected yet' }),
+        message: expect.stringContaining('no matching transfer was found in the account'),
+        metadata: expect.objectContaining({ rejectionReasonCode: 'TRANSFER_NOT_FOUND' }),
       }));
     });
   });

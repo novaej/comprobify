@@ -1,6 +1,7 @@
 const { body, param, query } = require('express-validator');
 const { TIERS } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
+const RejectionReasons = require('../constants/rejection-reasons');
 const { SUPPORTED_TYPES } = require('../builders');
 const agreementService = require('../services/agreement.service');
 
@@ -214,16 +215,11 @@ const reviewPayment = [
     .isIn(['VERIFIED', 'REJECTED'])
     .withMessage('decision must be one of: VERIFIED, REJECTED'),
 
-  body('rejectionReason')
+  body('rejectionReasonCode')
     .if(body('decision').equals('REJECTED'))
     .notEmpty()
-    .withMessage('rejectionReason is required when decision is REJECTED — the tenant needs to know what to fix before re-uploading'),
-
-  body('rejectionReason')
-    .optional()
-    .isString()
-    .isLength({ max: 500 })
-    .withMessage('rejectionReason must be a string of max 500 characters'),
+    .isIn(Object.values(RejectionReasons))
+    .withMessage(`rejectionReasonCode is required when decision is REJECTED and must be one of: ${Object.values(RejectionReasons).join(', ')}`),
 ];
 
 const getPaymentProof = [

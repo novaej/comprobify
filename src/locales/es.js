@@ -36,6 +36,14 @@ module.exports = {
     },
     paymentRejected: {
       purposeLabels: { INITIAL: 'suscripción', TIER_CHANGE: 'cambio de plan', RENEWAL: 'renovación' },
+      rejectionReasonLabels: {
+        AMOUNT_MISMATCH: 'El monto transferido no coincide con el solicitado.',
+        TRANSFER_NOT_FOUND: 'No se encontró una transferencia coincidente en la cuenta.',
+        WRONG_ACCOUNT: 'La transferencia fue enviada a la cuenta incorrecta.',
+        ILLEGIBLE_PROOF: 'El comprobante subido es ilegible o está dañado.',
+        DUPLICATE_SUBMISSION: 'Este comprobante ya fue enviado y revisado para otro pago.',
+        OTHER: 'Contacta a soporte para más detalles.',
+      },
       subject: (purposeLabel) => `Tu pago de ${purposeLabel} necesita atención`,
       greeting: 'Hola,',
       body: (purposeLabel, tier) => `Tu pago de ${purposeLabel} para el plan ${tier} fue rechazado.`,

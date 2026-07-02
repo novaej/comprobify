@@ -14,6 +14,9 @@ function render(payment, subscription, decision, language = 'es') {
   const purposeLabel = t.purposeLabels[payment.purpose] || t.purposeLabels.INITIAL;
   const amount = parseFloat(payment.amount).toFixed(2);
   const tier = subscription.tier;
+  const reasonLabel = decision === 'REJECTED'
+    ? t.rejectionReasonLabels[payment.rejection_reason_code] || t.rejectionReasonLabels.OTHER
+    : null;
 
   const subject = t.subject(purposeLabel);
 
@@ -26,7 +29,7 @@ function render(payment, subscription, decision, language = 'es') {
     `  ${t.labelAmount}: $${amount}`,
   ];
   if (decision === 'REJECTED') {
-    textLines.push(`  ${t.labelReason}: ${payment.rejection_reason || ''}`);
+    textLines.push(`  ${t.labelReason}: ${reasonLabel}`);
   }
   textLines.push('', t.nextSteps, '', t.disclaimer);
   const text = textLines.join('\n');
@@ -36,7 +39,7 @@ function render(payment, subscription, decision, language = 'es') {
     `<tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelAmount)}</td><td style="padding: 6px 12px;">$${amount}</td></tr>`,
   ];
   if (decision === 'REJECTED') {
-    htmlRows.push(`<tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelReason)}</td><td style="padding: 6px 12px;">${escapeHtml(payment.rejection_reason || '')}</td></tr>`);
+    htmlRows.push(`<tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelReason)}</td><td style="padding: 6px 12px;">${escapeHtml(reasonLabel)}</td></tr>`);
   }
 
   const html = `
