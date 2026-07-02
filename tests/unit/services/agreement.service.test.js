@@ -25,12 +25,14 @@ describe('AgreementService', () => {
       };
     });
 
-    test('throws a plain Error when any OPERATOR_* env var is missing', async () => {
+    test('throws an AppError (OPERATOR_CONFIG_MISSING, 500) when any OPERATOR_* env var is missing', async () => {
       config.operator = { nombre: '', ruc: '1790000000001', email: 'legal@comprobify.com' };
 
-      await expect(agreementService.publish('TERMS', '1.0')).rejects.toThrow(
-        'OPERATOR_NAME, OPERATOR_RUC, and OPERATOR_EMAIL must all be set before publishing legal documents'
-      );
+      await expect(agreementService.publish('TERMS', '1.0')).rejects.toMatchObject({
+        statusCode: 500,
+        code: 'OPERATOR_CONFIG_MISSING',
+        message: 'OPERATOR_NAME, OPERATOR_RUC, and OPERATOR_EMAIL must all be set before publishing legal documents',
+      });
       expect(fs.readFileSync).not.toHaveBeenCalled();
       expect(agreementModel.create).not.toHaveBeenCalled();
     });

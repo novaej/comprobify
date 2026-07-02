@@ -54,6 +54,9 @@ async function createTenant(fields) {
     throw new ConflictError(`A tenant with email ${fields.email} already exists`);
   }
   const tier = fields.subscriptionTier || 'FREE';
+  if (!TIERS[tier]) {
+    throw new AppError(`Unknown subscription tier: '${tier}'. Valid tiers: ${Object.keys(TIERS).join(', ')}`, 400, ErrorCodes.INVALID_TIER);
+  }
   const row = await tenantModel.create({
     email: fields.email,
     subscriptionTier: tier,

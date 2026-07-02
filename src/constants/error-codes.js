@@ -128,6 +128,8 @@ const ErrorCodes = Object.freeze({
   DECRYPTION_FAILED: 'DECRYPTION_FAILED',
   /** No builder is registered for the requested document type code */
   BUILDER_NOT_FOUND: 'BUILDER_NOT_FOUND',
+  /** OPERATOR_NAME/OPERATOR_RUC/OPERATOR_EMAIL env vars not set — cannot publish legal documents */
+  OPERATOR_CONFIG_MISSING: 'OPERATOR_CONFIG_MISSING',
 });
 
 module.exports = ErrorCodes;

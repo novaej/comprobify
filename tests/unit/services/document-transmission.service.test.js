@@ -337,5 +337,31 @@ describe('DocumentTransmissionService', () => {
         updatedDoc.id, 'EMAIL_FAILED', null, null, { error: 'mailgun unreachable' }, null, updatedDoc.issuer_id, mockIssuer.sandbox
       );
     });
+
+    test('records SKIPPED email status and an EMAIL_SKIPPED event when the email is intentionally skipped (e.g. no buyer_email)', async () => {
+      const doc = baseDoc({ status: 'RECEIVED' });
+      documentModel.findByAccessKey.mockResolvedValue(doc);
+      sriService.checkAuthorization.mockResolvedValue({
+        pending: false, status: 'AUTORIZADO', messages: [], rawResponse: '<raw/>',
+      });
+      sriResponseModel.create.mockResolvedValue({});
+      const updatedDoc = baseDoc({ status: 'AUTHORIZED', issuer_id: mockIssuer.id });
+      documentModel.updateStatus.mockResolvedValue(updatedDoc);
+      documentEventModel.create.mockResolvedValue({});
+      emailService.sendInvoiceAuthorized.mockResolvedValue({ sent: false });
+
+      await documentTransmission.checkAuthorization(ACCESS_KEY, mockIssuer);
+      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(documentModel.updateStatus).toHaveBeenCalledWith(
+        updatedDoc.id, updatedDoc.status,
+        { email_status: 'SKIPPED' },
+        updatedDoc.issuer_id, mockIssuer.sandbox
+      );
+      expect(documentEventModel.create).toHaveBeenCalledWith(
+        updatedDoc.id, 'EMAIL_SKIPPED', null, null, { to: updatedDoc.buyer_email }, null, updatedDoc.issuer_id, mockIssuer.sandbox
+      );
+    });
   });
 });

@@ -68,18 +68,12 @@ describe('AdminService', () => {
     // subscriptionTier against TIERS — an unrecognized value is passed straight
     // through to tenantModel.create, only the *quota* falls back to FREE's.
     // Documented here as observed behavior, not asserted as desirable.
-    test('passes an unrecognized tier through unvalidated, falling back only on the document quota', async () => {
+    test('rejects an unrecognized tier', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({
-        id: 3, email: 'c@d.com', subscription_tier: 'BOGUS', status: 'ACTIVE',
-        document_quota: 5, document_count: 0, created_at: new Date('2026-01-01'),
-      });
 
-      await adminService.createTenant({ email: 'c@d.com', subscriptionTier: 'BOGUS' });
-
-      expect(tenantModel.create).toHaveBeenCalledWith({
-        email: 'c@d.com', subscriptionTier: 'BOGUS', status: 'ACTIVE', documentQuota: 5,
-      });
+      await expect(adminService.createTenant({ email: 'c@d.com', subscriptionTier: 'BOGUS' }))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_TIER' });
+      expect(tenantModel.create).not.toHaveBeenCalled();
     });
   });
 

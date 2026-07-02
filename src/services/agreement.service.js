@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const MarkdownIt = require('markdown-it');
 const agreementModel = require('../models/agreement.model');
+const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const ErrorCodes = require('../constants/error-codes');
 const config = require('../config');
@@ -46,8 +47,10 @@ function stripDraftHeader(markdown) {
 async function publish(documentType, version) {
   const { nombre, ruc, email } = config.operator;
   if (!nombre || !ruc || !email) {
-    throw new Error(
-      'OPERATOR_NAME, OPERATOR_RUC, and OPERATOR_EMAIL must all be set before publishing legal documents'
+    throw new AppError(
+      'OPERATOR_NAME, OPERATOR_RUC, and OPERATOR_EMAIL must all be set before publishing legal documents',
+      500,
+      ErrorCodes.OPERATOR_CONFIG_MISSING
     );
   }
 
