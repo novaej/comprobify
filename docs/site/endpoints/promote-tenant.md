@@ -54,7 +54,7 @@ If the tenant already started a subscription before promoting — via [`POST /v1
     { "label": "erp-integration",     "apiKey": "d94e17ac..." }
   ],
   "subscription": { "id": 12, "tier": "STARTER", "status": "PENDING_PAYMENT", "billing_interval": "MONTHLY" },
-  "payment": { "id": 18, "status": "PENDING", "amount": "19.00" },
+  "payment": { "id": 18, "status": "PENDING", "amount": "17.39", "iva_rate": "0.1500", "iva_amount": "2.61", "total_amount": "20.00" },
   "bankTransfer": { "bankName": "...", "accountType": "...", "accountNumber": "...", "accountHolder": "...", "identification": "..." }
 }
 ```

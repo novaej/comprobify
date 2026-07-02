@@ -13,5 +13,6 @@ router.use(authenticate);
 router.get('/me', readLimiter, asyncHandler(controller.getMyStatus));
 router.post('/', writeLimiter, v.createSubscription, validateRequest, asyncHandler(controller.createSubscription));
 router.post('/change-tier', writeLimiter, v.changeTier, validateRequest, asyncHandler(controller.changeTier));
+router.delete('/', writeLimiter, asyncHandler(controller.cancelSubscription));
 
 module.exports = router;

@@ -36,6 +36,8 @@ El pago se realiza mediante transferencia bancaria manual. La activación del se
 
 Los cambios de plan y renovaciones siguen el mismo mecanismo de verificación de pago.
 
+Comprobify se reserva el derecho de modificar los precios de los planes de suscripción. Cualquier cambio de precio será notificado al Cliente con al menos treinta (30) días de anticipación mediante correo electrónico a la dirección registrada en la cuenta. Para suscripciones mensuales, el nuevo precio entrará en vigencia en el siguiente ciclo de facturación posterior al vencimiento del plazo de notificación. Para suscripciones anuales, el nuevo precio aplicará en la siguiente renovación anual. El uso continuado del Servicio tras la fecha de entrada en vigencia del cambio de precio constituye la aceptación del nuevo precio.
+
 El Cliente puede cancelar su suscripción en cualquier momento. El acceso se mantiene hasta el final del periodo ya pagado.
 
 Los pagos no son reembolsables una vez procesado el pago y activado el Servicio, salvo obligación legal aplicable o decisión discrecional de Comprobify.

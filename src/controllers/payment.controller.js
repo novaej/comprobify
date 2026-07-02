@@ -14,4 +14,16 @@ const submitProof = async (req, res) => {
   res.json({ ok: true, payment });
 };
 
-module.exports = { submitProof };
+// Streams the proof file back to the tenant who uploaded it.
+// Ownership is verified in getPaymentProofForTenant via the subscription join.
+const getProof = async (req, res) => {
+  const { buffer, filename, mimeType } = await subscriptionService.getPaymentProofForTenant(
+    parseInt(req.params.id, 10),
+    req.tenant.id,
+  );
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+  res.send(buffer);
+};
+
+module.exports = { submitProof, getProof };

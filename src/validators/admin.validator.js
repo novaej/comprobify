@@ -1,5 +1,5 @@
 const { body, param, query } = require('express-validator');
-const TIERS = require('../constants/subscription-tiers');
+const { TIERS } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const { SUPPORTED_TYPES } = require('../builders');
 const agreementService = require('../services/agreement.service');

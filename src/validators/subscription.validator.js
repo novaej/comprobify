@@ -1,5 +1,5 @@
 const { body } = require('express-validator');
-const TIERS = require('../constants/subscription-tiers');
+const { TIERS } = require('../constants/subscription-tiers');
 
 const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 

@@ -29,6 +29,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/v1/payments/:id/proof` | Download the proof-of-transfer file you previously uploaded for a payment |
 | `PATCH` | `/v1/payments/:id/proof` | Upload proof of an SPI bank transfer for a pending subscription payment. A `REJECTED` payment can be re-submitted; only `VERIFIED` blocks further uploads. |
 
 ## Subscriptions (authenticated)
@@ -37,7 +38,8 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 |---|---|---|
 | `POST` | `/v1/subscriptions` | Start a paid subscription for the authenticated tenant — works while still in sandbox or after promotion, requires a verified email |
 | `GET` | `/v1/subscriptions/me` | Full subscription/payment history, newest first, with `rejection_reason` when applicable — payment reviews and renewals fire notifications too, but activation itself doesn't, so this is still how a tenant checks status |
-| `POST` | `/v1/subscriptions/change-tier` | Upgrade (immediate, prorated payment) or downgrade (scheduled, no payment) an existing `ACTIVE` subscription's tier |
+| `POST` | `/v1/subscriptions/change-tier` | Upgrade (immediate, prorated payment) or downgrade (scheduled, no payment) an existing `ACTIVE` subscription's tier — use `DELETE` below to cancel entirely |
+| `DELETE` | `/v1/subscriptions` | Schedule a cancellation at period end — drops the tenant to FREE with no refund when `current_period_end` passes |
 
 ## Tenants (authenticated)
 

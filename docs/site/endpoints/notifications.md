@@ -130,7 +130,9 @@ Created automatically (fire-and-forget) when your provider verifies a payment pr
   "subscriptionId": 12,
   "tier": "STARTER",
   "purpose": "INITIAL",
-  "amount": "19.00",
+  "amount": "17.39",
+  "ivaAmount": "2.61",
+  "totalAmount": "20.00",
   "rejectionReason": null
 }
 ```
@@ -162,7 +164,9 @@ Created automatically by the provider's scheduled job about 7 days before your s
   "subscriptionId": 12,
   "paymentId": 25,
   "tier": "STARTER",
-  "amount": "19.00",
+  "amount": "17.39",
+  "ivaAmount": "2.61",
+  "totalAmount": "20.00",
   "currentPeriodEnd": "2026-07-15T00:00:00.000Z"
 }
 ```

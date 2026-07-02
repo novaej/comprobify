@@ -37,7 +37,10 @@ A payment review (verified/rejected) and the renewal reminder/expiry both fire a
         {
           "id": 18,
           "status": "REJECTED",
-          "amount": "19.00",
+          "amount": "17.39",
+          "iva_rate": "0.1500",
+          "iva_amount": "2.61",
+          "total_amount": "20.00",
           "method": "SPI_TRANSFER",
           "rejection_reason": "Transfer not reflected in our account yet — please check the amount and resend",
           "proof_filename": "receipt.pdf",
@@ -51,7 +54,7 @@ A payment review (verified/rejected) and the renewal reminder/expiry both fire a
 }
 ```
 
-The raw proof file is never included — only its filename and content type. `rejection_reason` is only present on `REJECTED` payments, and is cleared automatically once you [re-submit proof](submit-payment-proof.md) for that payment.
+The raw proof file is never included — only its filename and content type. `rejection_reason` is only present on `REJECTED` payments, and is cleared automatically once you [re-submit proof](submit-payment-proof.md) for that payment. `amount` is the pre-IVA base (base imponible); `total_amount` is what was actually transferred via SPI.
 
 ## Errors
 

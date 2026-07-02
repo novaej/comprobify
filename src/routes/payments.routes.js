@@ -5,7 +5,7 @@ const controller = require('../controllers/payment.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
-const { writeLimiter } = require('../middleware/rate-limit');
+const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 
@@ -36,6 +36,7 @@ const handleProofUpload = (req, res, next) => {
   });
 };
 
+router.get('/:id/proof', readLimiter, idParam, validateRequest, asyncHandler(controller.getProof));
 router.patch('/:id/proof', writeLimiter, handleProofUpload, idParam, validateRequest, asyncHandler(controller.submitProof));
 
 module.exports = router;

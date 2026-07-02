@@ -12,18 +12,31 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'invoice_document_id',
 ]);
 
-async function create({ subscriptionId, amount, method = 'SPI_TRANSFER', purpose = 'INITIAL', targetTier = null }) {
+async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = 'SPI_TRANSFER', purpose = 'INITIAL', targetTier = null }) {
   const { rows } = await db.query(
-    `INSERT INTO payments (subscription_id, amount, method, purpose, target_tier)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [subscriptionId, amount, method, purpose, targetTier]
+    [subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method, purpose, targetTier]
   );
   return rows[0];
 }
 
 async function findById(id) {
   const { rows } = await db.query('SELECT * FROM payments WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
+// Looks up a payment scoped to a specific tenant — joins subscriptions to verify
+// ownership. Used by the tenant-facing proof download endpoint so a tenant can
+// never access another tenant's proof by guessing an ID.
+async function findByIdAndTenantId(id, tenantId) {
+  const { rows } = await db.query(
+    `SELECT p.* FROM payments p
+     JOIN subscriptions s ON s.id = p.subscription_id
+     WHERE p.id = $1 AND s.tenant_id = $2`,
+    [id, tenantId]
+  );
   return rows[0] || null;
 }
 
@@ -116,6 +129,7 @@ async function updateStatus(id, status, extraFields = {}) {
 module.exports = {
   create,
   findById,
+  findByIdAndTenantId,
   findBySubscriptionId,
   findByInvoiceDocumentId,
   findAllByStatus,

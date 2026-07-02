@@ -5,7 +5,7 @@ const tenantModel = require('../models/tenant.model');
 const tenantEventModel = require('../models/tenant-event.model');
 const notificationService = require('./notification.service');
 const emailService = require('./email.service');
-const TIERS = require('../constants/subscription-tiers');
+const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const config = require('../config');
 const AppError = require('../errors/app-error');
@@ -16,6 +16,16 @@ const ErrorCodes = require('../constants/error-codes');
 const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 const BILLING_INTERVALS = ['MONTHLY', 'YEARLY'];
 const DECISIONS = ['VERIFIED', 'REJECTED'];
+
+// Splits an IVA-inclusive all-in total into base imponible + IVA so each
+// payment row carries a full audit trail of the tax breakdown at creation time.
+// Rounding: IVA is rounded to 2dp; base = total − IVA (avoids off-by-one).
+function breakdownAmount(totalAmount) {
+  if (totalAmount <= 0) return { baseAmount: 0, ivaAmount: 0, totalAmount: 0 };
+  const ivaAmount = Math.round(totalAmount * IVA_RATE / (1 + IVA_RATE) * 100) / 100;
+  const baseAmount = Math.round((totalAmount - ivaAmount) * 100) / 100;
+  return { baseAmount, ivaAmount, totalAmount };
+}
 
 // How far ahead of current_period_end a renewal payment is opened and the
 // tenant is reminded. How long past current_period_end a subscription can go
@@ -79,8 +89,16 @@ async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
   }
 
   const subscription = await subscriptionModel.create({ tenantId: tenant.id, tier, billingInterval });
-  const amount = billingInterval === 'YEARLY' ? TIERS[tier].priceYearlyUsd : TIERS[tier].priceMonthlyUsd;
-  const payment = await paymentModel.create({ subscriptionId: subscription.id, amount });
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(
+    billingInterval === 'YEARLY' ? TIERS[tier].priceYearlyUsd : TIERS[tier].priceMonthlyUsd
+  );
+  const payment = await paymentModel.create({
+    subscriptionId: subscription.id,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
+  });
 
   await tenantEventModel.create(tenant.id, 'SUBSCRIPTION_CREATED', { subscriptionId: subscription.id, tier, billingInterval });
 
@@ -138,6 +156,12 @@ async function requestTierChange(tenantId, tier) {
     throw new AppError(`Tenant is already on the '${tier}' tier`, 400, ErrorCodes.TIER_CHANGE_NO_OP);
   }
 
+  if (subscription.pending_tier === 'FREE') {
+    throw new ConflictError(
+      'A cancellation is already scheduled for this subscription',
+      ErrorCodes.CANCELLATION_ALREADY_PENDING
+    );
+  }
   if (subscription.pending_tier) {
     throw new ConflictError(
       `A downgrade to '${subscription.pending_tier}' is already scheduled for this subscription`,
@@ -171,27 +195,31 @@ async function requestTierChange(tenantId, tier) {
   const totalMs = periodEnd - periodStart;
   const remainingMs = Math.min(Math.max(periodEnd - Date.now(), 0), totalMs);
   const remainingFraction = totalMs > 0 ? remainingMs / totalMs : 0;
-  const amount = Math.round((TIERS[tier][priceField] - TIERS[subscription.tier][priceField]) * remainingFraction * 100) / 100;
+  const proratedTotal = Math.round((TIERS[tier][priceField] - TIERS[subscription.tier][priceField]) * remainingFraction * 100) / 100;
 
   // With ~no time left in the current period, the prorated amount can round
   // to $0 — asking for proof of a $0 transfer isn't something a tenant can
   // actually do. Apply the upgrade immediately instead of routing it through
   // the payment/proof pipeline; there's nothing to collect.
-  if (amount <= 0) {
+  if (proratedTotal <= 0) {
     const updated = await subscriptionModel.applyTierChange(subscription.id, tier);
     await tenantModel.updateTier(tenant.id, tier, TIERS[tier].documentQuota);
     await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
       subscriptionId: subscription.id,
       fromTier: subscription.tier,
       toTier: tier,
-      amount: 0,
+      totalAmount: 0,
     });
     return { subscription: updated, payment: null, amount: 0 };
   }
 
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
-    amount,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
     purpose: 'TIER_CHANGE',
     targetTier: tier,
   });
@@ -200,10 +228,65 @@ async function requestTierChange(tenantId, tier) {
     subscriptionId: subscription.id,
     fromTier: subscription.tier,
     toTier: tier,
-    amount,
+    totalAmount,
   });
 
   return { subscription, payment, bankTransfer: config.bankTransfer };
+}
+
+// Schedules an end-of-period cancellation by setting pending_tier = 'FREE'.
+// No refund is issued — the current period runs to completion at the existing
+// tier, then applyScheduledTierChanges() drops the tenant to FREE and closes
+// the subscription. Works exactly like a downgrade, except FREE is the target.
+async function scheduleCancellation(tenantId) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  if (tenant.sandbox) {
+    throw new AppError(
+      'Subscription cancellation is only available in production — promote first',
+      403,
+      ErrorCodes.REQUIRES_PRODUCTION
+    );
+  }
+
+  const subscription = await subscriptionModel.findActiveByTenantId(tenant.id);
+  if (!subscription) {
+    throw new AppError(
+      'Tenant has no ACTIVE subscription to cancel',
+      409,
+      ErrorCodes.NO_ACTIVE_SUBSCRIPTION
+    );
+  }
+
+  if (subscription.pending_tier === 'FREE') {
+    throw new ConflictError(
+      'A cancellation is already scheduled for this subscription',
+      ErrorCodes.CANCELLATION_ALREADY_PENDING
+    );
+  }
+  if (subscription.pending_tier) {
+    throw new ConflictError(
+      `A downgrade to '${subscription.pending_tier}' is already scheduled — cancel it or wait for it to apply before cancelling`,
+      ErrorCodes.TIER_CHANGE_ALREADY_PENDING
+    );
+  }
+  const pendingPayment = await paymentModel.findPendingTierChangeBySubscriptionId(subscription.id);
+  if (pendingPayment) {
+    throw new ConflictError(
+      `An upgrade to '${pendingPayment.target_tier}' is already in progress — wait for it to complete before cancelling`,
+      ErrorCodes.TIER_CHANGE_ALREADY_PENDING
+    );
+  }
+
+  const updated = await subscriptionModel.scheduleDowngrade(subscription.id, 'FREE');
+  await tenantEventModel.create(tenant.id, 'SUBSCRIPTION_CANCELLATION_SCHEDULED', {
+    subscriptionId: subscription.id,
+    fromTier: subscription.tier,
+    effectiveAt: subscription.current_period_end,
+  });
+
+  return { subscription: updated, effectiveAt: subscription.current_period_end };
 }
 
 async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeType }) {
@@ -241,6 +324,14 @@ async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeT
 
 async function getPaymentProof(paymentId) {
   const payment = await paymentModel.findById(paymentId);
+  if (!payment || !payment.proof_file) throw new NotFoundError('Payment proof');
+  return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
+}
+
+// Tenant-scoped variant: verifies the payment belongs to the requesting tenant
+// before returning the proof bytes, so tenants can't access each other's files.
+async function getPaymentProofForTenant(paymentId, tenantId) {
+  const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
   if (!payment || !payment.proof_file) throw new NotFoundError('Payment proof');
   return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
 }
@@ -493,20 +584,30 @@ async function applyScheduledTierChanges() {
   const due = await subscriptionModel.findDuePendingDowngrades();
 
   for (const subscription of due) {
-    const periodStart = new Date(subscription.current_period_end);
-    const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+    if (subscription.pending_tier === 'FREE') {
+      await subscriptionModel.applyTierChange(subscription.id, 'FREE');
+      await subscriptionModel.updateStatus(subscription.id, 'CANCELLED', { canceled_at: new Date() });
+      await tenantModel.updateTier(subscription.tenant_id, 'FREE', TIERS['FREE'].documentQuota);
+      await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_CANCELLED', {
+        subscriptionId: subscription.id,
+        fromTier: subscription.tier,
+      });
+    } else {
+      const periodStart = new Date(subscription.current_period_end);
+      const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
 
-    await subscriptionModel.applyTierChange(subscription.id, subscription.pending_tier);
-    await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
-      current_period_start: periodStart,
-      current_period_end: periodEnd,
-    });
-    await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier, TIERS[subscription.pending_tier].documentQuota);
-    await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
-      subscriptionId: subscription.id,
-      fromTier: subscription.tier,
-      toTier: subscription.pending_tier,
-    });
+      await subscriptionModel.applyTierChange(subscription.id, subscription.pending_tier);
+      await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
+        current_period_start: periodStart,
+        current_period_end: periodEnd,
+      });
+      await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier, TIERS[subscription.pending_tier].documentQuota);
+      await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
+        subscriptionId: subscription.id,
+        fromTier: subscription.tier,
+        toTier: subscription.pending_tier,
+      });
+    }
   }
 
   return { applied: due.length };
@@ -533,11 +634,14 @@ async function processDueRenewals() {
 
 async function createRenewalReminder(subscription) {
   const priceField = subscription.billing_interval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
-  const amount = TIERS[subscription.tier][priceField];
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(TIERS[subscription.tier][priceField]);
 
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
-    amount,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
     purpose: 'RENEWAL',
   });
 
@@ -620,8 +724,10 @@ module.exports = {
   createSubscription,
   createSubscriptionForTenant,
   requestTierChange,
+  scheduleCancellation,
   submitPaymentProof,
   getPaymentProof,
+  getPaymentProofForTenant,
   reviewPayment,
   linkInvoice,
   activateIfLinked,
