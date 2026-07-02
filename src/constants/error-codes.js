@@ -30,6 +30,8 @@ const ErrorCodes = Object.freeze({
   ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
   /** Operation requires a verified email address */
   EMAIL_VERIFICATION_REQUIRED: 'EMAIL_VERIFICATION_REQUIRED',
+  /** Operation is only available to tenants in production (not sandbox) */
+  REQUIRES_PRODUCTION: 'REQUIRES_PRODUCTION',
   /** Resend request too soon — server-side cooldown not elapsed */
   RESEND_COOLDOWN: 'RESEND_COOLDOWN',
   /** Verification token does not exist or has expired */

@@ -220,6 +220,14 @@ async function scheduleCancellation(tenantId) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
 
+  if (tenant.sandbox) {
+    throw new AppError(
+      'Subscription cancellation is only available in production — promote first',
+      403,
+      ErrorCodes.REQUIRES_PRODUCTION
+    );
+  }
+
   const subscription = await subscriptionModel.findActiveByTenantId(tenant.id);
   if (!subscription) {
     throw new AppError(

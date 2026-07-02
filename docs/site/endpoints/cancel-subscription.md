@@ -10,7 +10,7 @@ DELETE /v1/subscriptions
 
 `Authorization: Bearer <api-key>`
 
-Requires an `ACTIVE` subscription. If you want to move to a lower **paid** tier instead of cancelling entirely, use [`POST /v1/subscriptions/change-tier`](change-tier.md).
+Requires an `ACTIVE` subscription and a production API key — sandbox tenants must [promote first](promote-tenant.md). If you want to move to a lower **paid** tier instead of cancelling entirely, use [`POST /v1/subscriptions/change-tier`](change-tier.md).
 
 ## How it works
 
@@ -56,6 +56,7 @@ No renewal reminder will be issued for a pending-cancellation subscription.
 | Status | Code | When |
 |---|---|---|
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
+| `403` | `REQUIRES_PRODUCTION` | Tenant is still in sandbox — promote to production first |
 | `409` | `NO_ACTIVE_SUBSCRIPTION` | You have no `ACTIVE` subscription to cancel |
 | `409` | `CANCELLATION_ALREADY_PENDING` | A cancellation is already scheduled for this subscription |
 | `409` | `TIER_CHANGE_ALREADY_PENDING` | A paid-tier downgrade is already scheduled, or an upgrade payment is already in flight — resolve it first |
