@@ -4,9 +4,11 @@ const subscriptionModel = require('../models/subscription.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
+const tenantEventModel = require('../models/tenant-event.model');
 const sequentialService = require('./sequential.service');
 const subscriptionService = require('./subscription.service');
 const tenantAgreementService = require('./tenant-agreement.service');
+const { formatTenantEvent } = require('../presenters/tenant-event.presenter');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
@@ -25,6 +27,16 @@ async function getAgreementStatus(tenantId) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
   return tenantAgreementService.getStatus(tenantId);
+}
+
+// Full tenant-level audit trail — verification, subscription, payment, and
+// tier/interval-change lifecycle events — so a tenant can see e.g. it had a
+// GROWTH monthly subscription that later changed to STARTER yearly.
+async function getEvents(tenantId) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+  const events = await tenantEventModel.findByTenantId(tenantId);
+  return events.map(formatTenantEvent);
 }
 
 // Accepts all PENDING tenant legal document instances in one call — matches
@@ -107,4 +119,4 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   return { apiKeys, ...billing };
 }
 
-module.exports = { updateLanguage, promote, getAgreementStatus, acceptAgreements };
+module.exports = { updateLanguage, promote, getAgreementStatus, acceptAgreements, getEvents };

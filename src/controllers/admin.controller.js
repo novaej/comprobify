@@ -33,6 +33,11 @@ const verifyTenant = async (req, res) => {
   res.json({ ok: true, tenant });
 };
 
+const listTenantEvents = async (req, res) => {
+  const events = await adminService.listTenantEvents(parseInt(req.params.id, 10));
+  res.json({ ok: true, events });
+};
+
 // Issuers
 const createIssuer = async (req, res) => {
   const { issuer } = await adminService.createIssuer(
@@ -207,7 +212,7 @@ const runSubscriptionJobs = async (req, res) => {
 };
 
 module.exports = {
-  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
+  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
   runSubscriptionJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,

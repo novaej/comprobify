@@ -3,6 +3,7 @@ jest.mock('../../../src/models/subscription.model');
 jest.mock('../../../src/models/issuer.model');
 jest.mock('../../../src/models/api-key.model');
 jest.mock('../../../src/models/issuer-document-type.model');
+jest.mock('../../../src/models/tenant-event.model');
 jest.mock('../../../src/services/sequential.service');
 jest.mock('../../../src/services/subscription.service');
 jest.mock('../../../src/services/tenant-agreement.service', () => ({
@@ -17,6 +18,7 @@ const subscriptionModel = require('../../../src/models/subscription.model');
 const issuerModel = require('../../../src/models/issuer.model');
 const apiKeyModel = require('../../../src/models/api-key.model');
 const issuerDocumentTypeModel = require('../../../src/models/issuer-document-type.model');
+const tenantEventModel = require('../../../src/models/tenant-event.model');
 const sequentialService = require('../../../src/services/sequential.service');
 const subscriptionService = require('../../../src/services/subscription.service');
 const tenantService = require('../../../src/services/tenant.service');
@@ -121,6 +123,30 @@ describe('TenantService', () => {
 
       expect(sequentialService.initialize).toHaveBeenCalledWith(5, '001', '001', '01', 7, false);
       expect(sequentialService.initialize).toHaveBeenCalledWith(5, '001', '001', '04', 1, false);
+    });
+  });
+
+  describe('getEvents', () => {
+    test('rejects when the tenant does not exist', async () => {
+      tenantModel.findById.mockResolvedValue(null);
+
+      await expect(tenantService.getEvents(1)).rejects.toMatchObject({ statusCode: 404 });
+      expect(tenantEventModel.findByTenantId).not.toHaveBeenCalled();
+    });
+
+    test('returns the tenant event log mapped to the camelCase response shape', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      const createdAt = new Date('2026-06-01T00:00:00Z');
+      tenantEventModel.findByTenantId.mockResolvedValue([
+        { id: 100, event_type: 'SUBSCRIPTION_CREATED', detail: { tier: 'GROWTH' }, created_at: createdAt },
+      ]);
+
+      const result = await tenantService.getEvents(1);
+
+      expect(tenantEventModel.findByTenantId).toHaveBeenCalledWith(1);
+      expect(result).toEqual([
+        { id: 100, eventType: 'SUBSCRIPTION_CREATED', detail: { tier: 'GROWTH' }, createdAt },
+      ]);
     });
   });
 });

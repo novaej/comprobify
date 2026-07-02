@@ -15,7 +15,7 @@ const createSubscription = async (req, res) => {
 };
 
 const changeTier = async (req, res) => {
-  const result = await subscriptionService.requestTierChange(req.tenant.id, req.body.tier);
+  const result = await subscriptionService.requestTierChange(req.tenant.id, req.body.tier, req.body.billingInterval);
   res.status(201).json({ ok: true, ...result });
 };
 

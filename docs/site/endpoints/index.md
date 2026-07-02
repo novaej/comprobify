@@ -52,6 +52,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `POST` | `/v1/tenants/agreements` | Accept all PENDING agreements — required before promoting to production |
 | `GET` | `/v1/tenants/agreements/history` | List all personalized agreement instances for the tenant, with status and acceptance timestamps |
 | `GET` | `/v1/tenants/agreements/:type` | Render the tenant's personalized document as HTML — includes their business name/RUC and the dates as of when the account was created |
+| `GET` | `/v1/tenants/events` | Full tenant-level audit trail (verification, subscription, payment, tier/billing-interval change history), chronological |
 
 ## Issuers (authenticated)
 

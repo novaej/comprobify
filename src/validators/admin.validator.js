@@ -37,6 +37,10 @@ const verifyTenant = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
+const listTenantEvents = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
 // Issuers
 const createIssuer = [
   body('tenantId')
@@ -245,7 +249,7 @@ const publishAgreement = [
 ];
 
 module.exports = {
-  createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
+  createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPayments, publishAgreement,

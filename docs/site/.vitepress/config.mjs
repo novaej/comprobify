@@ -63,6 +63,7 @@ export default defineConfig({
               { text: 'Get Current Tenant', link: '/endpoints/tenant-me' },
               { text: 'Update Language', link: '/endpoints/tenant-language' },
               { text: 'Promote to Production', link: '/endpoints/promote-tenant' },
+              { text: 'Get Tenant Events', link: '/endpoints/tenant-events' },
             ],
           },
           {

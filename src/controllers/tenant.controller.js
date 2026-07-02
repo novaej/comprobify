@@ -58,4 +58,9 @@ const getTenantAgreement = async (req, res) => {
   res.send(html);
 };
 
-module.exports = { getMe, updateLanguage, promote, getAgreementStatus, acceptAgreements, listTenantAgreements, getTenantAgreement };
+const getEvents = async (req, res) => {
+  const events = await tenantService.getEvents(req.tenant.id);
+  res.json({ ok: true, events });
+};
+
+module.exports = { getMe, updateLanguage, promote, getAgreementStatus, acceptAgreements, listTenantAgreements, getTenantAgreement, getEvents };

@@ -4,6 +4,7 @@ const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const tenantEventModel = require('../models/tenant-event.model');
+const { formatTenantEvent } = require('../presenters/tenant-event.presenter');
 const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
@@ -93,6 +94,13 @@ async function verifyTenant(id) {
   const row = await tenantModel.activate(id);
   if (!row) throw new NotFoundError('Tenant');
   return formatTenant(row);
+}
+
+async function listTenantEvents(id) {
+  const tenant = await tenantModel.findById(id);
+  if (!tenant) throw new NotFoundError('Tenant');
+  const events = await tenantEventModel.findByTenantId(id);
+  return events.map(formatTenantEvent);
 }
 
 // --- Issuer management ---
@@ -296,6 +304,6 @@ async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
 }
 
 module.exports = {
-  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant,
+  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, listTenantEvents,
   createIssuer, listIssuers, createApiKey, revokeApiKey, promoteTenant, renewIssuerCertificate,
 };

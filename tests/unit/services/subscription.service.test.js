@@ -242,6 +242,92 @@ describe('SubscriptionService', () => {
       });
       expect(result).toEqual({ subscription: { id: 10, tier: 'GROWTH' }, payment: null, amount: 0 });
     });
+
+    test('rejects an invalid billingInterval', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH', billing_interval: 'MONTHLY' });
+
+      await expect(subscriptionService.requestTierChange(1, 'GROWTH', 'WEEKLY'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_BILLING_INTERVAL' });
+      expect(paymentModel.create).not.toHaveBeenCalled();
+    });
+
+    test('rejects when tier and billingInterval both match the current subscription', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH', billing_interval: 'MONTHLY' });
+
+      await expect(subscriptionService.requestTierChange(1, 'GROWTH', 'MONTHLY'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'TIER_CHANGE_NO_OP' });
+    });
+
+    test('interval-only change (same tier): deferred, full price, no proration', async () => {
+      const periodEnd = new Date('2026-08-01T00:00:00Z');
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: 40, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' });
+
+      const result = await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.subscriptionId).toBe(10);
+      expect(createArgs.purpose).toBe('TIER_CHANGE');
+      expect(createArgs.targetTier).toBe('GROWTH');
+      expect(createArgs.targetBillingInterval).toBe('YEARLY');
+      // Full yearly-GROWTH sticker price (900), not prorated against the
+      // remaining monthly period.
+      expect(createArgs.totalAmount).toBe(900);
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGE_REQUESTED', expect.objectContaining({
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'GROWTH',
+        fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY', effectiveAt: periodEnd,
+      }));
+      expect(result).toEqual({
+        subscription: expect.objectContaining({ id: 10 }),
+        payment: { id: 40, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' },
+        bankTransfer: config.bankTransfer,
+        effectiveAt: periodEnd,
+      });
+    });
+
+    test('tier upgrade + interval change: deferred (not the immediate prorated path)', async () => {
+      const now = Date.now();
+      const periodStart = new Date(now - 15 * 24 * 60 * 60 * 1000);
+      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000);
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'STARTER', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_start: periodStart, current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: 41, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' });
+
+      await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+
+      expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.targetBillingInterval).toBe('YEARLY');
+      expect(createArgs.totalAmount).toBe(900); // full yearly-GROWTH price, not prorated
+    });
+
+    test('tier downgrade + interval change: deferred and paid (unlike a plain same-interval downgrade)', async () => {
+      const periodEnd = new Date('2026-08-01T00:00:00Z');
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: 42, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'STARTER', target_billing_interval: 'YEARLY' });
+
+      const result = await subscriptionService.requestTierChange(1, 'STARTER', 'YEARLY');
+
+      expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.targetTier).toBe('STARTER');
+      expect(createArgs.targetBillingInterval).toBe('YEARLY');
+      expect(createArgs.totalAmount).toBe(200); // full yearly-STARTER price
+      expect(result.subscription).toEqual(expect.objectContaining({ id: 10, tier: 'GROWTH' }));
+    });
   });
 
   describe('applyTierChangeIfLinked', () => {
@@ -293,6 +379,30 @@ describe('SubscriptionService', () => {
       });
       expect(result).toEqual({ id: 10, tier: 'GROWTH' });
     });
+
+    test('a payment with target_billing_interval set schedules the change for period-end instead of applying it now', async () => {
+      const periodEnd = new Date('2026-08-01T00:00:00Z');
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
+        id: 31, subscription_id: 10, purpose: 'TIER_CHANGE', status: 'VERIFIED',
+        target_tier: 'STARTER', target_billing_interval: 'YEARLY',
+      });
+      subscriptionModel.findById.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'GROWTH', billing_interval: 'MONTHLY', current_period_end: periodEnd,
+      });
+      subscriptionModel.scheduleDowngrade.mockResolvedValue({ id: 10, tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: 'YEARLY' });
+
+      const result = await subscriptionService.applyTierChangeIfLinked(999);
+
+      expect(subscriptionModel.scheduleDowngrade).toHaveBeenCalledWith(10, 'STARTER', 'YEARLY');
+      expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+      expect(tenantModel.updateTier).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGE_SCHEDULED', {
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER',
+        fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY',
+        effectiveAt: periodEnd, paymentId: 31,
+      });
+      expect(result).toEqual({ id: 10, tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: 'YEARLY' });
+    });
   });
 
   describe('applyScheduledTierChanges', () => {
@@ -300,18 +410,18 @@ describe('SubscriptionService', () => {
       const periodEnd1 = new Date('2026-06-15T00:00:00Z');
       const periodEnd2 = new Date('2026-06-20T00:00:00Z');
       subscriptionModel.findDuePendingDowngrades.mockResolvedValue([
-        { id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd1 },
-        { id: 11, tenant_id: 2, tier: 'BUSINESS', pending_tier: 'GROWTH', billing_interval: 'YEARLY', current_period_end: periodEnd2 },
+        { id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: null, billing_interval: 'MONTHLY', current_period_end: periodEnd1 },
+        { id: 11, tenant_id: 2, tier: 'BUSINESS', pending_tier: 'GROWTH', pending_billing_interval: null, billing_interval: 'YEARLY', current_period_end: periodEnd2 },
       ]);
 
       const result = await subscriptionService.applyScheduledTierChanges();
 
-      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER');
-      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(11, 'GROWTH');
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER', null);
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(11, 'GROWTH', null);
       expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
       expect(tenantModel.updateTier).toHaveBeenCalledWith(2, 'GROWTH', 1000);
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
-        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER',
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER', fromBillingInterval: 'MONTHLY', toBillingInterval: 'MONTHLY',
       });
 
       // Rolled forward from the OLD current_period_end, not "now" — +1 month for
@@ -336,6 +446,35 @@ describe('SubscriptionService', () => {
 
       expect(result).toEqual({ applied: 0 });
       expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+    });
+
+    test('a due paid interval change rolls the period forward using the NEW interval and stamps the funding payment', async () => {
+      const periodEnd = new Date('2026-06-15T00:00:00Z');
+      subscriptionModel.findDuePendingDowngrades.mockResolvedValue([
+        { id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: 'YEARLY', billing_interval: 'MONTHLY', current_period_end: periodEnd },
+      ]);
+      paymentModel.findBySubscriptionId.mockResolvedValue([
+        { id: 50, purpose: 'TIER_CHANGE', status: 'VERIFIED', invoice_document_id: 900, period_start: null },
+      ]);
+
+      const result = await subscriptionService.applyScheduledTierChanges();
+
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER', 'YEARLY');
+
+      const call10 = subscriptionModel.updateStatus.mock.calls.find((c) => c[0] === 10);
+      expect(call10[2].current_period_start).toEqual(periodEnd);
+      // Rolled forward using the NEW (YEARLY) interval, not the old MONTHLY one.
+      expect(call10[2].current_period_end.getFullYear()).toBe(periodEnd.getFullYear() + 1);
+
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(50, 'VERIFIED', {
+        period_start: call10[2].current_period_start,
+        period_end: call10[2].current_period_end,
+      });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER',
+        fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY',
+      });
+      expect(result).toEqual({ applied: 1 });
     });
   });
 

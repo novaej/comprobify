@@ -78,6 +78,8 @@ const ErrorCodes = Object.freeze({
   DOCUMENT_TYPE_NOT_IN_TIER: 'DOCUMENT_TYPE_NOT_IN_TIER',
   /** Supplied subscription tier is not recognised */
   INVALID_TIER: 'INVALID_TIER',
+  /** Supplied billingInterval is not recognised */
+  INVALID_BILLING_INTERVAL: 'INVALID_BILLING_INTERVAL',
   /** Supplied tenant status value is not recognised */
   INVALID_TENANT_STATUS: 'INVALID_TENANT_STATUS',
   /** Source issuer RUC does not match the supplied RUC */

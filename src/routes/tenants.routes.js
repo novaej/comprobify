@@ -63,5 +63,6 @@ router.get('/agreements', readLimiter, asyncHandler(controller.getAgreementStatu
 router.post('/agreements', writeLimiter, acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
 router.get('/agreements/history', readLimiter, asyncHandler(controller.listTenantAgreements));
 router.get('/agreements/:type', readLimiter, asyncHandler(controller.getTenantAgreement));
+router.get('/events', readLimiter, asyncHandler(controller.getEvents));
 
 module.exports = router;

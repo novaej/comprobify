@@ -20,6 +20,7 @@ router.patch('/tenants/:id/tier',        v.updateTenantTier,   validateRequest, 
 router.patch('/tenants/:id/status',      v.updateTenantStatus, validateRequest, asyncHandler(controller.updateTenantStatus));
 router.post('/tenants/:id/verify',       v.verifyTenant,       validateRequest, asyncHandler(controller.verifyTenant));
 router.post('/tenants/:id/promote',      v.promoteTenant,      validateRequest, asyncHandler(controller.promoteTenant));
+router.get('/tenants/:id/events',        v.listTenantEvents,   validateRequest, asyncHandler(controller.listTenantEvents));
 
 // Issuers
 router.post('/issuers', upload.single('cert'), v.createIssuer, validateRequest, asyncHandler(controller.createIssuer));
