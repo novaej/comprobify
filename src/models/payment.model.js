@@ -27,6 +27,19 @@ async function findById(id) {
   return rows[0] || null;
 }
 
+// Looks up a payment scoped to a specific tenant — joins subscriptions to verify
+// ownership. Used by the tenant-facing proof download endpoint so a tenant can
+// never access another tenant's proof by guessing an ID.
+async function findByIdAndTenantId(id, tenantId) {
+  const { rows } = await db.query(
+    `SELECT p.* FROM payments p
+     JOIN subscriptions s ON s.id = p.subscription_id
+     WHERE p.id = $1 AND s.tenant_id = $2`,
+    [id, tenantId]
+  );
+  return rows[0] || null;
+}
+
 async function findBySubscriptionId(subscriptionId) {
   const { rows } = await db.query(
     'SELECT * FROM payments WHERE subscription_id = $1 ORDER BY created_at DESC',
@@ -116,6 +129,7 @@ async function updateStatus(id, status, extraFields = {}) {
 module.exports = {
   create,
   findById,
+  findByIdAndTenantId,
   findBySubscriptionId,
   findByInvoiceDocumentId,
   findAllByStatus,

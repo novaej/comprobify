@@ -298,6 +298,14 @@ async function getPaymentProof(paymentId) {
   return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
 }
 
+// Tenant-scoped variant: verifies the payment belongs to the requesting tenant
+// before returning the proof bytes, so tenants can't access each other's files.
+async function getPaymentProofForTenant(paymentId, tenantId) {
+  const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
+  if (!payment || !payment.proof_file) throw new NotFoundError('Payment proof');
+  return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
+}
+
 async function reviewPayment(paymentId, decision, rejectionReason = null) {
   if (!DECISIONS.includes(decision)) {
     throw new AppError(`Invalid decision '${decision}'. Valid values: ${DECISIONS.join(', ')}`, 400);
@@ -686,6 +694,7 @@ module.exports = {
   scheduleCancellation,
   submitPaymentProof,
   getPaymentProof,
+  getPaymentProofForTenant,
   reviewPayment,
   linkInvoice,
   activateIfLinked,
