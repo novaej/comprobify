@@ -5,7 +5,7 @@ const tenantModel = require('../models/tenant.model');
 const tenantEventModel = require('../models/tenant-event.model');
 const notificationService = require('./notification.service');
 const emailService = require('./email.service');
-const TIERS = require('../constants/subscription-tiers');
+const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const config = require('../config');
 const AppError = require('../errors/app-error');
@@ -16,6 +16,16 @@ const ErrorCodes = require('../constants/error-codes');
 const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 const BILLING_INTERVALS = ['MONTHLY', 'YEARLY'];
 const DECISIONS = ['VERIFIED', 'REJECTED'];
+
+// Splits an IVA-inclusive all-in total into base imponible + IVA so each
+// payment row carries a full audit trail of the tax breakdown at creation time.
+// Rounding: IVA is rounded to 2dp; base = total − IVA (avoids off-by-one).
+function breakdownAmount(totalAmount) {
+  if (totalAmount <= 0) return { baseAmount: 0, ivaAmount: 0, totalAmount: 0 };
+  const ivaAmount = Math.round(totalAmount * IVA_RATE / (1 + IVA_RATE) * 100) / 100;
+  const baseAmount = Math.round((totalAmount - ivaAmount) * 100) / 100;
+  return { baseAmount, ivaAmount, totalAmount };
+}
 
 // How far ahead of current_period_end a renewal payment is opened and the
 // tenant is reminded. How long past current_period_end a subscription can go
@@ -79,8 +89,16 @@ async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
   }
 
   const subscription = await subscriptionModel.create({ tenantId: tenant.id, tier, billingInterval });
-  const amount = billingInterval === 'YEARLY' ? TIERS[tier].priceYearlyUsd : TIERS[tier].priceMonthlyUsd;
-  const payment = await paymentModel.create({ subscriptionId: subscription.id, amount });
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(
+    billingInterval === 'YEARLY' ? TIERS[tier].priceYearlyUsd : TIERS[tier].priceMonthlyUsd
+  );
+  const payment = await paymentModel.create({
+    subscriptionId: subscription.id,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
+  });
 
   await tenantEventModel.create(tenant.id, 'SUBSCRIPTION_CREATED', { subscriptionId: subscription.id, tier, billingInterval });
 
@@ -177,27 +195,31 @@ async function requestTierChange(tenantId, tier) {
   const totalMs = periodEnd - periodStart;
   const remainingMs = Math.min(Math.max(periodEnd - Date.now(), 0), totalMs);
   const remainingFraction = totalMs > 0 ? remainingMs / totalMs : 0;
-  const amount = Math.round((TIERS[tier][priceField] - TIERS[subscription.tier][priceField]) * remainingFraction * 100) / 100;
+  const proratedTotal = Math.round((TIERS[tier][priceField] - TIERS[subscription.tier][priceField]) * remainingFraction * 100) / 100;
 
   // With ~no time left in the current period, the prorated amount can round
   // to $0 — asking for proof of a $0 transfer isn't something a tenant can
   // actually do. Apply the upgrade immediately instead of routing it through
   // the payment/proof pipeline; there's nothing to collect.
-  if (amount <= 0) {
+  if (proratedTotal <= 0) {
     const updated = await subscriptionModel.applyTierChange(subscription.id, tier);
     await tenantModel.updateTier(tenant.id, tier, TIERS[tier].documentQuota);
     await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
       subscriptionId: subscription.id,
       fromTier: subscription.tier,
       toTier: tier,
-      amount: 0,
+      totalAmount: 0,
     });
     return { subscription: updated, payment: null, amount: 0 };
   }
 
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
-    amount,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
     purpose: 'TIER_CHANGE',
     targetTier: tier,
   });
@@ -206,7 +228,7 @@ async function requestTierChange(tenantId, tier) {
     subscriptionId: subscription.id,
     fromTier: subscription.tier,
     toTier: tier,
-    amount,
+    totalAmount,
   });
 
   return { subscription, payment, bankTransfer: config.bankTransfer };
@@ -612,11 +634,14 @@ async function processDueRenewals() {
 
 async function createRenewalReminder(subscription) {
   const priceField = subscription.billing_interval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
-  const amount = TIERS[subscription.tier][priceField];
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(TIERS[subscription.tier][priceField]);
 
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
-    amount,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
     purpose: 'RENEWAL',
   });
 

@@ -4,12 +4,18 @@
 // these lists (not just the commented full distribution below) as each new builder
 // in NEXT_STEPS.md #1 ships, or new types will be silently unreachable on Growth/Business.
 //
-// priceMonthlyUsd / priceYearlyUsd / overagePerDocumentUsd are not enforced or
-// billed anywhere yet — no payment gateway is wired up (NEXT_STEPS.md #9 depends
-// on one landing first). They live here, not only in marketing copy, so quota
-// and price stay one source of truth instead of drifting between this file and
-// the frontend's pricing page. priceYearlyUsd is priceMonthlyUsd × 10 (2 months
-// free) — the standard SaaS yearly-discount convention.
+// priceMonthlyUsd / priceYearlyUsd are IVA-inclusive all-in amounts — the exact
+// figure a tenant transfers via SPI and what appears as the invoice total. The
+// taxable base (base imponible) is derived at payment-creation time as
+// total / (1 + IVA_RATE), stored in payments.amount alongside payments.iva_amount
+// and payments.total_amount for a full per-payment audit trail.
+//
+// priceYearlyUsd = priceMonthlyUsd × 10 (2 months free — standard SaaS yearly
+// discount). overagePerDocumentUsd is not enforced yet (no payment gateway —
+// NEXT_STEPS.md #9).
+
+const IVA_RATE = 0.15;
+
 const TIERS = {
   FREE: {
     documentQuota:           5,
@@ -31,8 +37,8 @@ const TIERS = {
     writeRateLimit:          60,
     readRateLimit:           300,
     allowedDocumentTypes:    ['01'],
-    priceMonthlyUsd:         19,
-    priceYearlyUsd:          190,
+    priceMonthlyUsd:         20,
+    priceYearlyUsd:          200,
     overagePerDocumentUsd:   0.30,
   },
   GROWTH: {
@@ -43,8 +49,8 @@ const TIERS = {
     writeRateLimit:          120,
     readRateLimit:           600,
     allowedDocumentTypes:    ['01', '04'],
-    priceMonthlyUsd:         79,
-    priceYearlyUsd:          790,
+    priceMonthlyUsd:         90,
+    priceYearlyUsd:          900,
     overagePerDocumentUsd:   0.15,
   },
   BUSINESS: {
@@ -55,8 +61,8 @@ const TIERS = {
     writeRateLimit:          300,
     readRateLimit:           1500,
     allowedDocumentTypes:    ['01', '04'],
-    priceMonthlyUsd:         199,
-    priceYearlyUsd:          1990,
+    priceMonthlyUsd:         230,
+    priceYearlyUsd:          2300,
     overagePerDocumentUsd:   0.08,
   },
 };
@@ -71,4 +77,4 @@ const TIERS = {
 // GROWTH:   allowedDocumentTypes: ['01', '04', '07'],
 // BUSINESS: allowedDocumentTypes: ['01', '03', '04', '05', '06', '07'],
 
-module.exports = TIERS;
+module.exports = { TIERS, IVA_RATE };

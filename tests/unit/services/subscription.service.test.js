@@ -64,16 +64,16 @@ describe('SubscriptionService', () => {
       tenantModel.findById.mockResolvedValue({ id: 1 });
       subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
       subscriptionModel.create.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER' });
-      paymentModel.create.mockResolvedValue({ id: 20, subscription_id: 10, amount: 19 });
+      paymentModel.create.mockResolvedValue({ id: 20, subscription_id: 10, amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20 });
 
       const result = await subscriptionService.createSubscription(1, 'STARTER');
 
       expect(subscriptionModel.create).toHaveBeenCalledWith({ tenantId: 1, tier: 'STARTER', billingInterval: 'MONTHLY' });
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 19 });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 17.39, ivaRate: 0.15, ivaAmount: 2.61, totalAmount: 20 });
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'SUBSCRIPTION_CREATED', { subscriptionId: 10, tier: 'STARTER', billingInterval: 'MONTHLY' });
       expect(result).toEqual({
         subscription: { id: 10, tenant_id: 1, tier: 'STARTER' },
-        payment: { id: 20, subscription_id: 10, amount: 19 },
+        payment: { id: 20, subscription_id: 10, amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20 },
         bankTransfer: config.bankTransfer,
       });
     });
@@ -82,12 +82,12 @@ describe('SubscriptionService', () => {
       tenantModel.findById.mockResolvedValue({ id: 1 });
       subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
       subscriptionModel.create.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'YEARLY' });
-      paymentModel.create.mockResolvedValue({ id: 20, subscription_id: 10, amount: 190 });
+      paymentModel.create.mockResolvedValue({ id: 20, subscription_id: 10, amount: 173.91, iva_rate: 0.15, iva_amount: 26.09, total_amount: 200 });
 
       await subscriptionService.createSubscription(1, 'STARTER', 'YEARLY');
 
       expect(subscriptionModel.create).toHaveBeenCalledWith({ tenantId: 1, tier: 'STARTER', billingInterval: 'YEARLY' });
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 190 });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 173.91, ivaRate: 0.15, ivaAmount: 26.09, totalAmount: 200 });
     });
   });
 
@@ -238,7 +238,7 @@ describe('SubscriptionService', () => {
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'GROWTH');
       expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
-        subscriptionId: 10, fromTier: 'STARTER', toTier: 'GROWTH', amount: 0,
+        subscriptionId: 10, fromTier: 'STARTER', toTier: 'GROWTH', totalAmount: 0,
       });
       expect(result).toEqual({ subscription: { id: 10, tier: 'GROWTH' }, payment: null, amount: 0 });
     });
@@ -350,21 +350,21 @@ describe('SubscriptionService', () => {
       subscriptionModel.findDueForRenewalReminder.mockResolvedValue([
         { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
       ]);
-      paymentModel.create.mockResolvedValue({ id: 40, subscription_id: 10, amount: 19, purpose: 'RENEWAL' });
+      paymentModel.create.mockResolvedValue({ id: 40, subscription_id: 10, amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20, purpose: 'RENEWAL' });
 
       const result = await subscriptionService.processDueRenewals();
 
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 19, purpose: 'RENEWAL' });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 17.39, ivaRate: 0.15, ivaAmount: 2.61, totalAmount: 20, purpose: 'RENEWAL' });
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'RENEWAL_DUE', {
         subscriptionId: 10, paymentId: 40, tier: 'STARTER', currentPeriodEnd: periodEnd,
       });
       expect(notificationService.createSubscriptionRenewalDue).toHaveBeenCalledWith(
         { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
-        { id: 40, subscription_id: 10, amount: 19, purpose: 'RENEWAL' },
+        { id: 40, subscription_id: 10, amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20, purpose: 'RENEWAL' },
       );
       expect(emailService.sendSubscriptionRenewalDue).toHaveBeenCalledWith(
         { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
-        { id: 40, subscription_id: 10, amount: 19, purpose: 'RENEWAL' },
+        { id: 40, subscription_id: 10, amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20, purpose: 'RENEWAL' },
       );
       expect(result).toEqual({ remindersSent: 1, expired: 0 });
     });
@@ -377,7 +377,7 @@ describe('SubscriptionService', () => {
 
       await subscriptionService.processDueRenewals();
 
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 790, purpose: 'RENEWAL' });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: 10, amount: 782.61, ivaRate: 0.15, ivaAmount: 117.39, totalAmount: 900, purpose: 'RENEWAL' });
     });
 
     test('downgrades an expired subscription to FREE, logs SUBSCRIPTION_EXPIRED, and notifies the tenant', async () => {

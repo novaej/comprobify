@@ -8,7 +8,7 @@ const requireMatchingEnvironment = require('../middleware/require-matching-envir
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_LANGUAGES } = require('../locales');
 const { SUPPORTED_TYPES } = require('../builders');
-const TIERS = require('../constants/subscription-tiers');
+const { TIERS } = require('../constants/subscription-tiers');
 
 const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 

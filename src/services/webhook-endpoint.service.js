@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const webhookEndpointModel = require('../models/webhook-endpoint.model');
 const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
-const TIERS = require('../constants/subscription-tiers');
+const { TIERS } = require('../constants/subscription-tiers');
 const ErrorCodes = require('../constants/error-codes');
 
 /** Generate a 64-char hex secret (32 random bytes). */

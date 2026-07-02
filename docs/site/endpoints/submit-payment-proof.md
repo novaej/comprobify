@@ -14,7 +14,7 @@ The payment must belong to a subscription owned by your tenant. This is your own
 
 ## When to call this
 
-After requesting a paid tier — either via [`POST /v1/subscriptions`](create-subscription.md) or [`POST /v1/tenants/promote`](promote-tenant.md) (`tier`/`billingInterval` fields), or having your provider start one via the admin API — the response includes a `payment` and `bankTransfer` instructions. Send the SPI transfer for the amount shown, then call this endpoint with proof of it. The same flow also covers a renewal — about 7 days before your subscription's `current_period_end` you'll get a `SUBSCRIPTION_RENEWAL_DUE` notification and email with a fresh `payment.id` to submit proof against (see [Notifications](notifications.md)).
+After requesting a paid tier — either via [`POST /v1/subscriptions`](create-subscription.md) or [`POST /v1/tenants/promote`](promote-tenant.md) (`tier`/`billingInterval` fields), or having your provider start one via the admin API — the response includes a `payment` and `bankTransfer` instructions. Send the SPI transfer for `payment.total_amount` (the IVA-inclusive all-in amount), then call this endpoint with proof of it. The same flow also covers a renewal — about 7 days before your subscription's `current_period_end` you'll get a `SUBSCRIPTION_RENEWAL_DUE` notification and email with a fresh `payment.id` to submit proof against (see [Notifications](notifications.md)).
 
 ## Request body
 
@@ -35,7 +35,10 @@ After requesting a paid tier — either via [`POST /v1/subscriptions`](create-su
     "id": 18,
     "subscription_id": 12,
     "status": "REPORTED",
-    "amount": "19.00",
+    "amount": "17.39",
+    "iva_rate": "0.1500",
+    "iva_amount": "2.61",
+    "total_amount": "20.00",
     "method": "SPI_TRANSFER",
     "reported_at": "2026-06-28T23:14:03.087Z",
     "proof_filename": "receipt.pdf",

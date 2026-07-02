@@ -1,7 +1,7 @@
 const rateLimit = require('express-rate-limit');
 const { ipKeyGenerator } = require('express-rate-limit');
 const config = require('../config');
-const TIERS = require('../constants/subscription-tiers');
+const { TIERS } = require('../constants/subscription-tiers');
 
 const handler = (req, res) => {
   res.status(429).json({

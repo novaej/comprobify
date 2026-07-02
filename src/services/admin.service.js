@@ -10,7 +10,7 @@ const certificateService = require('./certificate.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
-const TIERS = require('../constants/subscription-tiers');
+const { TIERS } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const ErrorCodes = require('../constants/error-codes');
 

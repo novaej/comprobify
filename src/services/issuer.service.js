@@ -9,7 +9,7 @@ const { SUPPORTED_TYPES } = require('../builders');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
-const TIERS = require('../constants/subscription-tiers');
+const { TIERS } = require('../constants/subscription-tiers');
 const ErrorCodes = require('../constants/error-codes');
 
 async function listDocumentTypes(issuerId) {
