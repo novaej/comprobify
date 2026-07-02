@@ -170,8 +170,9 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 |---|---|
 | `ALREADY_VERIFIED` | Attempting to resend verification to an already-verified account |
 | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | Tenant already has a subscription in progress (promotion with `tier`, or Admin's Create Subscription) |
-| `NO_ACTIVE_SUBSCRIPTION` | Change Tier requested but the tenant has no `ACTIVE` subscription |
+| `NO_ACTIVE_SUBSCRIPTION` | Cancel or Change Tier requested but the tenant has no `ACTIVE` subscription |
 | `TIER_CHANGE_ALREADY_PENDING` | A downgrade is already scheduled, or an upgrade payment is already in flight, for this subscription |
+| `CANCELLATION_ALREADY_PENDING` | A cancellation (`DELETE /v1/subscriptions`) is already scheduled for this subscription |
 | `CONFLICT` | Idempotency key reused with a different payload, payment already decided, or other conflict |
 
 ### 429 Too Many Requests

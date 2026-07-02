@@ -52,6 +52,7 @@ export default defineConfig({
               { text: 'Create Subscription', link: '/endpoints/create-subscription' },
               { text: 'Get My Subscriptions', link: '/endpoints/get-my-subscriptions' },
               { text: 'Change Tier (Upgrade/Downgrade)', link: '/endpoints/change-tier' },
+              { text: 'Cancel Subscription', link: '/endpoints/cancel-subscription' },
             ],
           },
           {

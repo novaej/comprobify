@@ -138,6 +138,12 @@ async function requestTierChange(tenantId, tier) {
     throw new AppError(`Tenant is already on the '${tier}' tier`, 400, ErrorCodes.TIER_CHANGE_NO_OP);
   }
 
+  if (subscription.pending_tier === 'FREE') {
+    throw new ConflictError(
+      'A cancellation is already scheduled for this subscription',
+      ErrorCodes.CANCELLATION_ALREADY_PENDING
+    );
+  }
   if (subscription.pending_tier) {
     throw new ConflictError(
       `A downgrade to '${subscription.pending_tier}' is already scheduled for this subscription`,
@@ -204,6 +210,53 @@ async function requestTierChange(tenantId, tier) {
   });
 
   return { subscription, payment, bankTransfer: config.bankTransfer };
+}
+
+// Schedules an end-of-period cancellation by setting pending_tier = 'FREE'.
+// No refund is issued — the current period runs to completion at the existing
+// tier, then applyScheduledTierChanges() drops the tenant to FREE and closes
+// the subscription. Works exactly like a downgrade, except FREE is the target.
+async function scheduleCancellation(tenantId) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  const subscription = await subscriptionModel.findActiveByTenantId(tenant.id);
+  if (!subscription) {
+    throw new AppError(
+      'Tenant has no ACTIVE subscription to cancel',
+      409,
+      ErrorCodes.NO_ACTIVE_SUBSCRIPTION
+    );
+  }
+
+  if (subscription.pending_tier === 'FREE') {
+    throw new ConflictError(
+      'A cancellation is already scheduled for this subscription',
+      ErrorCodes.CANCELLATION_ALREADY_PENDING
+    );
+  }
+  if (subscription.pending_tier) {
+    throw new ConflictError(
+      `A downgrade to '${subscription.pending_tier}' is already scheduled — cancel it or wait for it to apply before cancelling`,
+      ErrorCodes.TIER_CHANGE_ALREADY_PENDING
+    );
+  }
+  const pendingPayment = await paymentModel.findPendingTierChangeBySubscriptionId(subscription.id);
+  if (pendingPayment) {
+    throw new ConflictError(
+      `An upgrade to '${pendingPayment.target_tier}' is already in progress — wait for it to complete before cancelling`,
+      ErrorCodes.TIER_CHANGE_ALREADY_PENDING
+    );
+  }
+
+  const updated = await subscriptionModel.scheduleDowngrade(subscription.id, 'FREE');
+  await tenantEventModel.create(tenant.id, 'SUBSCRIPTION_CANCELLATION_SCHEDULED', {
+    subscriptionId: subscription.id,
+    fromTier: subscription.tier,
+    effectiveAt: subscription.current_period_end,
+  });
+
+  return { subscription: updated, effectiveAt: subscription.current_period_end };
 }
 
 async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeType }) {
@@ -493,20 +546,30 @@ async function applyScheduledTierChanges() {
   const due = await subscriptionModel.findDuePendingDowngrades();
 
   for (const subscription of due) {
-    const periodStart = new Date(subscription.current_period_end);
-    const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+    if (subscription.pending_tier === 'FREE') {
+      await subscriptionModel.applyTierChange(subscription.id, 'FREE');
+      await subscriptionModel.updateStatus(subscription.id, 'CANCELLED', { canceled_at: new Date() });
+      await tenantModel.updateTier(subscription.tenant_id, 'FREE', TIERS['FREE'].documentQuota);
+      await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_CANCELLED', {
+        subscriptionId: subscription.id,
+        fromTier: subscription.tier,
+      });
+    } else {
+      const periodStart = new Date(subscription.current_period_end);
+      const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
 
-    await subscriptionModel.applyTierChange(subscription.id, subscription.pending_tier);
-    await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
-      current_period_start: periodStart,
-      current_period_end: periodEnd,
-    });
-    await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier, TIERS[subscription.pending_tier].documentQuota);
-    await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
-      subscriptionId: subscription.id,
-      fromTier: subscription.tier,
-      toTier: subscription.pending_tier,
-    });
+      await subscriptionModel.applyTierChange(subscription.id, subscription.pending_tier);
+      await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
+        current_period_start: periodStart,
+        current_period_end: periodEnd,
+      });
+      await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier, TIERS[subscription.pending_tier].documentQuota);
+      await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
+        subscriptionId: subscription.id,
+        fromTier: subscription.tier,
+        toTier: subscription.pending_tier,
+      });
+    }
   }
 
   return { applied: due.length };
@@ -620,6 +683,7 @@ module.exports = {
   createSubscription,
   createSubscriptionForTenant,
   requestTierChange,
+  scheduleCancellation,
   submitPaymentProof,
   getPaymentProof,
   reviewPayment,

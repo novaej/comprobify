@@ -10,7 +10,7 @@ POST /v1/subscriptions/change-tier
 
 `Authorization: Bearer <api-key>`
 
-Requires an `ACTIVE` subscription already in place — promote with a paid tier first (see [Promote Tenant](promote-tenant.md)) and complete that initial payment review before changing tiers.
+Requires an `ACTIVE` subscription already in place — promote with a paid tier first (see [Promote Tenant](promote-tenant.md)) and complete that initial payment review before changing tiers. To cancel entirely and return to FREE, use [`DELETE /v1/subscriptions`](cancel-subscription.md) instead.
 
 ## When to call this
 

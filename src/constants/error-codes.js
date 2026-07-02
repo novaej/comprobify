@@ -98,6 +98,8 @@ const ErrorCodes = Object.freeze({
   TIER_CHANGE_NO_OP: 'TIER_CHANGE_NO_OP',
   /** A tier change (upgrade payment or scheduled downgrade) is already in flight for this subscription */
   TIER_CHANGE_ALREADY_PENDING: 'TIER_CHANGE_ALREADY_PENDING',
+  /** A cancellation is already scheduled for this subscription */
+  CANCELLATION_ALREADY_PENDING: 'CANCELLATION_ALREADY_PENDING',
 
   // --- Webhook endpoints ---
   /** Tenant has reached the maximum number of webhook endpoints for their plan */
