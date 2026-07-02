@@ -829,6 +829,14 @@ describe('SubscriptionService', () => {
 
     beforeEach(() => {
       paymentModel.findBySubscriptionId.mockResolvedValue([]);
+      // Explicit, not implicit via jest.clearAllMocks() (which only clears call
+      // history, not mockResolvedValue implementations) — without this, a truthy
+      // value left behind by an unrelated test earlier in the run (e.g.
+      // requestTierChange's "upgrade payment already in flight" case) can leak in
+      // under randomized test ordering and silently steer linkInvoice into the
+      // wrong branch.
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
+      paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue(null);
     });
 
     test('rejects when the subscription does not exist', async () => {
