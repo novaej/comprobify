@@ -10,8 +10,7 @@ const register = async (req, res) => {
     throw new AppError('Logo file must not exceed 500 KB', 400, ErrorCodes.INVALID_FILE_UPLOAD);
   }
   const logoBuffer = logoFile?.buffer || null;
-  const acceptanceContext = { ip: req.ip, userAgent: req.headers['user-agent'] || null };
-  const result = await registrationService.register(req.body, req.file?.buffer, req.body.certPassword, logoBuffer, acceptanceContext);
+  const result = await registrationService.register(req.body, req.file?.buffer, req.body.certPassword, logoBuffer);
   const { tenant, issuer, apiKey, recovered } = result;
   res.status(recovered ? 200 : 201).json({ ok: true, tenant, issuer, apiKey });
 };

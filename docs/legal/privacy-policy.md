@@ -18,7 +18,7 @@ Para los datos del propio Cliente (su cuenta, su correo, su certificado de firma
 | Correo electrónico, RUC, razón social del Cliente | Del Cliente (titular de la cuenta) | Identificación de la cuenta, comunicaciones operativas (verificación, facturación, alertas) |
 | Datos contenidos en los comprobantes electrónicos, incluyendo RUC/cédula, nombre, dirección, correo electrónico, teléfono, y demás campos exigidos por la normativa del SRI según el tipo de comprobante | Del Cliente, por instrucción suya | Requisito legal del SRI para la emisión válida de comprobantes electrónicos |
 | Clave privada de firma (cifrada con AES-256-GCM) y certificado digital (.p12) | Del Cliente | Almacenados únicamente para prestar el servicio de firma electrónica (XAdES-BES) solicitado por el Cliente, requerido por el SRI |
-| Dirección IP, fecha, endpoint solicitado, e identificador de cuenta de cada solicitud a la API | De quien usa la API (Cliente o su integración) | Seguridad del Servicio, prevención de fraude, diagnóstico de errores y trazabilidad de operaciones (ver sección de Registros) |
+| Dirección IP y user-agent del Cliente | Del Cliente | Evidencia de aceptación al aceptar los Términos de Servicio, la Política de Privacidad o el DPA (ver sección de Registros) |
 | Comprobante de pago (transferencia bancaria) | Del Cliente | Verificación manual de pagos de suscripción |
 
 No recopilamos datos de comprador más allá de los exigidos por la normativa aplicable del SRI para el tipo de comprobante electrónico, la cual puede ser actualizada por el Servicio de Rentas Internas (SRI) o la autoridad tributaria competente. Esto aplica al uso del Servicio a través de la API.
@@ -58,7 +58,9 @@ Esta lista de proveedores puede actualizarse conforme evolucione la infraestruct
 
 ## 6. Registros (logs)
 
-Comprobify registra información técnica de las solicitudes realizadas a la API, incluyendo direcciones IP, fechas, endpoints solicitados, identificadores de cuenta, y registros de eventos del ciclo de vida de cada comprobante, con la finalidad de garantizar la seguridad del Servicio, prevenir fraudes, diagnosticar errores y mantener la trazabilidad de las operaciones.
+Comprobify mantiene un registro de auditoría de los eventos relevantes del ciclo de vida de cada comprobante y de la cuenta del Cliente (creación, envío, autorización, cambios de estado, entre otros), con la finalidad de garantizar la seguridad del Servicio, diagnosticar errores y mantener la trazabilidad de las operaciones.
+
+La dirección IP y el user-agent del Cliente se registran únicamente al momento de aceptar los Términos de Servicio, la Política de Privacidad o el DPA, como evidencia de dicha aceptación. Comprobify no mantiene un registro de la dirección IP de cada solicitud individual a la API.
 
 ## 7. Cookies y tecnologías similares
 

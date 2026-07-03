@@ -34,7 +34,7 @@ function formatTenant(row) {
   };
 }
 
-async function register(fields, p12Buffer, p12Password, logoBuffer = null, acceptanceContext = {}) {
+async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   const existing = await tenantModel.findByEmail(fields.email);
   if (existing) {
     if (existing.status === TenantStatus.SUSPENDED) {
