@@ -20,7 +20,6 @@ function stubSingleTemplateGeneration({ documentType = 'TERMS', version = 'v1', 
   });
   agreementService.substitutePlaceholders.mockReturnValue('rendered markdown');
   agreementService.computeHash.mockReturnValue('hash123');
-  agreementService.formatDate.mockReturnValue('1 de enero de 2026');
 }
 
 describe('TenantAgreementService', () => {
@@ -68,15 +67,12 @@ describe('TenantAgreementService', () => {
       }));
       agreementService.substitutePlaceholders.mockReturnValue('rendered markdown');
       agreementService.computeHash.mockReturnValue('hash123');
-      agreementService.formatDate.mockReturnValue('1 de enero de 2026');
       tenantAgreementModel.create.mockResolvedValue({ id: 1 });
 
       const issuer = { business_name: 'ACME S.A.', ruc: '1712345678001', email: 'billing@acme.com' };
       const result = await tenantAgreementService.generateForTenant(5, issuer);
 
       expect(agreementService.substitutePlaceholders).toHaveBeenCalledWith('raw markdown', {
-        fechaVersion: '1 de enero de 2026',
-        fechaDocumento: '1 de enero de 2026',
         cliente: { razonSocial: 'ACME S.A.', ruc: '1712345678001', email: 'billing@acme.com' },
       });
       expect(tenantAgreementModel.create).toHaveBeenCalledWith({

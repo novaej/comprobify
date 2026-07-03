@@ -1,7 +1,5 @@
 # Términos de Servicio — Comprobify
 
-**Última actualización:** {{fechaVersion}}
-
 ## 1. Quiénes somos
 
 Comprobify es operado por **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, domiciliado en {{operador.domicilio}} (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").

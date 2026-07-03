@@ -1,7 +1,5 @@
 # Política de Privacidad — Comprobify
 
-**Última actualización:** {{fechaVersion}}
-
 Esta Política de Privacidad describe cómo **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, titular de la plataforma Comprobify ("Comprobify", "nosotros") trata los datos personales en el contexto de la prestación de la API de facturación electrónica, en cumplimiento de la Ley Orgánica de Protección de Datos Personales de la República del Ecuador (la "LOPDP").
 
 ## 1. Roles: quién es responsable de qué
