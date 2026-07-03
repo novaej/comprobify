@@ -120,8 +120,13 @@ async function getCurrentHtml(documentType, values = {}) {
 // Returns the notice block prepended to every rendered legal document.
 // Professional, transparent without undermining confidence — no mention of
 // "not reviewed by a lawyer" which reads as a warning rather than context.
+// Uses ADMIN_NOTIFICATION_EMAIL (the support inbox), not OPERATOR_EMAIL —
+// this is a "have questions before you accept" prompt, not a legal-identity
+// contact point. OPERATOR_EMAIL stays reserved for the operator's identity
+// baked into the template content itself (data controller contact, account
+// termination requests — see docs/legal/*.md's {{operador.email}} tokens).
 function buildDisclaimer(version) {
-  const email = config.operator?.email || '';
+  const email = config.adminNotificationEmail || '';
   const contact = email
     ? `puede contactarnos en <a href="mailto:${email}" style="color:#495057">${email}</a>`
     : 'puede contactarnos a través de los canales indicados en los documentos';

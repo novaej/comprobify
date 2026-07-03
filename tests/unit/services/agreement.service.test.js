@@ -243,17 +243,32 @@ describe('AgreementService', () => {
   });
 
   describe('buildDisclaimer', () => {
-    test('includes a mailto link when the operator email is configured', () => {
+    const originalAdminNotificationEmail = config.adminNotificationEmail;
+
+    afterEach(() => {
+      config.adminNotificationEmail = originalAdminNotificationEmail;
+    });
+
+    test('includes a mailto link to the support inbox (ADMIN_NOTIFICATION_EMAIL) when configured', () => {
+      config.adminNotificationEmail = 'soporte@comprobify.com';
+
+      const html = agreementService.buildDisclaimer('1.0');
+
+      expect(html).toContain('mailto:soporte@comprobify.com');
+      expect(html).toContain('Versión: 1.0');
+    });
+
+    test('does not use the operator identity email even when configured', () => {
+      config.adminNotificationEmail = '';
       config.operator = { ...config.operator, email: 'legal@comprobify.com' };
 
       const html = agreementService.buildDisclaimer('1.0');
 
-      expect(html).toContain('mailto:legal@comprobify.com');
-      expect(html).toContain('Versión: 1.0');
+      expect(html).not.toContain('legal@comprobify.com');
     });
 
-    test('falls back to generic contact wording when no operator email is configured', () => {
-      config.operator = { ...config.operator, email: '' };
+    test('falls back to generic contact wording when no support email is configured', () => {
+      config.adminNotificationEmail = '';
 
       const html = agreementService.buildDisclaimer('1.0');
 
