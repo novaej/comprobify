@@ -277,6 +277,33 @@ describe('AgreementService', () => {
     });
   });
 
+  describe('wrapDocumentHtml', () => {
+    test('wraps the body in a full HTML document with a <title> derived from documentType', () => {
+      const html = agreementService.wrapDocumentHtml('TERMS', '<h1>Términos de Servicio — Comprobify</h1><p>body</p>');
+
+      expect(html).toContain('<!DOCTYPE html>');
+      expect(html).toContain('<title>Términos de Servicio — Comprobify</title>');
+      expect(html).toContain('<h1>Términos de Servicio — Comprobify</h1><p>body</p>');
+    });
+
+    test('uses the correct title per document type', () => {
+      expect(agreementService.wrapDocumentHtml('PRIVACY', '')).toContain('<title>Política de Privacidad — Comprobify</title>');
+      expect(agreementService.wrapDocumentHtml('DPA', '')).toContain('<title>Acuerdo de Procesamiento de Datos — Comprobify</title>');
+    });
+
+    test('falls back to the raw documentType when unrecognized', () => {
+      expect(agreementService.wrapDocumentHtml('UNKNOWN', '')).toContain('<title>UNKNOWN — Comprobify</title>');
+    });
+
+    test('includes styling for formal presentation (justified text, container, headings)', () => {
+      const html = agreementService.wrapDocumentHtml('TERMS', '<p>body</p>');
+
+      expect(html).toContain('text-align: justify');
+      expect(html).toContain('doc-container');
+      expect(html).toContain('<style>');
+    });
+  });
+
   describe('AGREEMENT_TYPES / AGREEMENT_FILE_MAP', () => {
     test('exposes exactly TERMS, PRIVACY, DPA', () => {
       expect(agreementService.AGREEMENT_TYPES).toEqual(['TERMS', 'PRIVACY', 'DPA']);

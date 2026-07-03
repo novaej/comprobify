@@ -58,7 +58,7 @@ GET /v1/tenants/agreements/:type
 
 **URL parameter:** `:type` must be `TERMS`, `PRIVACY`, or `DPA`.
 
-Returns the tenant's personalized document as `text/html` — the exact content that was stored at generation time, including the tenant's own business name and RUC where applicable (particularly visible in the DPA). A disclaimer notice is prepended indicating the document has not been formally reviewed by a legal counsel.
+Returns the tenant's personalized document as a complete, self-contained `text/html` page (styled, same formal-document formatting as `GET /v1/agreements/:type` — see its Notes) — the exact content that was stored at generation time, including the tenant's own business name and RUC where applicable (particularly visible in the DPA). A disclaimer notice is prepended pointing to the support inbox for questions before accepting.
 
 Response headers include:
 - `X-Document-Status` — `PENDING` or `ACCEPTED`

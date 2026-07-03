@@ -274,10 +274,11 @@ describe('TenantAgreementService', () => {
         .rejects.toMatchObject({ statusCode: 404, code: 'AGREEMENT_NOT_FOUND' });
     });
 
-    test('renders the personalized stored snapshot with the disclaimer prepended', async () => {
+    test('renders the personalized stored snapshot with the disclaimer prepended, wrapped in the full page', async () => {
       agreementService.listCurrent.mockResolvedValue([]);
       const acceptedAt = new Date('2026-02-01');
       tenantAgreementModel.findLatestByTenantAndType.mockResolvedValue({
+        document_type: 'TERMS',
         content_markdown: 'stored personalized markdown',
         template_version: 'v1',
         status: 'ACCEPTED',
@@ -285,13 +286,15 @@ describe('TenantAgreementService', () => {
       });
       agreementService.buildDisclaimer.mockReturnValue('<disclaimer/>');
       agreementService.renderHtml.mockReturnValue('<p>rendered</p>');
+      agreementService.wrapDocumentHtml.mockReturnValue('<html>full page</html>');
 
       const result = await tenantAgreementService.renderForTenant(1, 'TERMS');
 
       expect(agreementService.buildDisclaimer).toHaveBeenCalledWith('v1');
       expect(agreementService.renderHtml).toHaveBeenCalledWith('stored personalized markdown', {});
+      expect(agreementService.wrapDocumentHtml).toHaveBeenCalledWith('TERMS', '<disclaimer/><p>rendered</p>');
       expect(result).toEqual({
-        html: '<disclaimer/><p>rendered</p>',
+        html: '<html>full page</html>',
         status: 'ACCEPTED',
         templateVersion: 'v1',
         acceptedAt,
@@ -303,7 +306,7 @@ describe('TenantAgreementService', () => {
       issuerModel.findByTenantId.mockResolvedValue(null);
       tenantAgreementModel.create.mockResolvedValue({ id: 1 });
       tenantAgreementModel.findLatestByTenantAndType.mockResolvedValue({
-        content_markdown: 'md', template_version: 'v1', status: 'PENDING', accepted_at: null,
+        document_type: 'TERMS', content_markdown: 'md', template_version: 'v1', status: 'PENDING', accepted_at: null,
       });
       agreementService.buildDisclaimer.mockReturnValue('');
       agreementService.renderHtml.mockReturnValue('');

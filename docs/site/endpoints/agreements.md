@@ -35,7 +35,7 @@ GET /v1/agreements/:type
 
 **URL parameter:** `:type` must be one of `TERMS`, `PRIVACY`, or `DPA`.
 
-Returns the document rendered as `text/html`. Embed it in an iframe, modal, or full page in your registration UI.
+Returns a complete, self-contained `text/html` page — `<!DOCTYPE html>` with its own `<head>`/`<style>` (serif typography, justified body text, a titled/bordered heading hierarchy) — formatted to look like a formal legal document on its own. Best embedded via `<iframe>` or opened as a full page; it is not meant to be injected into an existing page's DOM (e.g. via `innerHTML`), since browsers strip the `<html>`/`<head>`/`<style>` wrapper in that case and the styling would be lost.
 
 ### Errors
 

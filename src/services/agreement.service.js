@@ -12,6 +12,14 @@ const markdownRenderer = new MarkdownIt();
 
 const AGREEMENT_TYPES = ['TERMS', 'PRIVACY', 'DPA'];
 
+// Spanish-only — docs/legal/*.md source is Spanish, same as the documents
+// themselves (no locale system involved here, unlike email/notifications).
+const DOCUMENT_TYPE_TITLES = {
+  TERMS: 'Términos de Servicio',
+  PRIVACY: 'Política de Privacidad',
+  DPA: 'Acuerdo de Procesamiento de Datos',
+};
+
 // Maps each document type to its canonical source file in docs/legal/.
 // POST /v1/admin/agreements reads from here — no content in the body.
 const AGREEMENT_FILE_MAP = {
@@ -136,6 +144,90 @@ function buildDisclaimer(version) {
 `;
 }
 
+// Wraps a rendered document (disclaimer + markdown-it output) in a full,
+// self-contained HTML page — the raw fragment markdown-it produces has no
+// <head>/<title>/styling, so viewed directly in a browser it reads as
+// unstyled plain text. Both GET /v1/agreements/:type and
+// GET /v1/tenants/agreements/:type route through this so a tenant or
+// prospective client sees a properly formatted, formal-looking document
+// (justified body text, a title, spaced/underlined headings, a paper-like
+// container) rather than raw HTML. Every document's markdown source already
+// opens with its own `# Title — Comprobify` (rendered as <h1>), so this only
+// adds the page chrome around it plus the <title> tag for the browser tab.
+function wrapDocumentHtml(documentType, bodyHtml) {
+  const title = DOCUMENT_TYPE_TITLES[documentType] || documentType;
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title} — Comprobify</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px;
+    background: #f1f3f5;
+    font-family: Georgia, 'Times New Roman', Cambria, serif;
+    color: #212529;
+    line-height: 1.7;
+  }
+  .doc-container {
+    max-width: 820px;
+    margin: 0 auto;
+    background: #ffffff;
+    padding: 56px 64px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  }
+  h1 {
+    font-size: 1.9em;
+    text-align: center;
+    margin: 0 0 28px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #212529;
+    letter-spacing: 0.02em;
+  }
+  h2 {
+    font-size: 1.25em;
+    margin-top: 2.2em;
+    margin-bottom: 0.6em;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #dee2e6;
+    color: #343a40;
+  }
+  h3 {
+    font-size: 1.05em;
+    margin-top: 1.6em;
+    margin-bottom: 0.5em;
+    color: #495057;
+  }
+  p, li { text-align: justify; hyphens: auto; }
+  p { margin: 0 0 1em; }
+  ul, ol { margin: 0 0 1em; padding-left: 1.4em; }
+  strong { color: #212529; }
+  a { color: #1864ab; }
+  table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.95em; }
+  th, td { border: 1px solid #dee2e6; padding: 8px 12px; text-align: left; }
+  hr { border: none; border-top: 1px solid #dee2e6; margin: 2em 0; }
+  @media print {
+    body { background: #ffffff; padding: 0; }
+    .doc-container { box-shadow: none; padding: 0; }
+  }
+  @media (max-width: 600px) {
+    .doc-container { padding: 32px 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="doc-container">
+${bodyHtml}
+</div>
+</body>
+</html>
+`;
+}
+
 module.exports = {
   AGREEMENT_TYPES,
   AGREEMENT_FILE_MAP,
@@ -151,4 +243,5 @@ module.exports = {
   formatDate,
   stripDraftHeader,
   buildDisclaimer,
+  wrapDocumentHtml,
 };

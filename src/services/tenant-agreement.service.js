@@ -141,7 +141,8 @@ async function renderForTenant(tenantId, documentType) {
     );
   }
 
-  const html = agreementService.buildDisclaimer(doc.template_version) + agreementService.renderHtml(doc.content_markdown, {});
+  const body = agreementService.buildDisclaimer(doc.template_version) + agreementService.renderHtml(doc.content_markdown, {});
+  const html = agreementService.wrapDocumentHtml(doc.document_type, body);
   return { html, status: doc.status, templateVersion: doc.template_version, acceptedAt: doc.accepted_at };
 }
 
