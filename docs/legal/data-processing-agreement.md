@@ -8,7 +8,7 @@ A los efectos de este DPA, los términos "Responsable del Tratamiento", "Encarga
 
 ## 2. Objeto
 
-El Encargado procesa, por instrucción documentada del Responsable, los datos personales de los compradores incluidos en los comprobantes electrónicos que el Responsable genera a través del Servicio, con la finalidad de generar, firmar electrónicamente, transmitir al Servicio de Rentas Internas ("SRI") y conservar los comprobantes electrónicos.
+El Encargado procesa, por instrucción documentada del Responsable, los datos personales de los compradores incluidos en los comprobantes electrónicos que el Responsable genera a través del Servicio, con la finalidad de generar, firmar electrónicamente, transmitir al Servicio de Rentas Internas ("SRI") y conservar los comprobantes electrónicos, así como, cuando el Responsable utiliza la interfaz web del Servicio (comprobify-web), facilitar la reutilización de datos de compradores mediante un catálogo, conforme a lo descrito en la sección 3.
 
 ## 3. Categorías de datos e interesados
 
@@ -16,6 +16,10 @@ El Encargado procesa, por instrucción documentada del Responsable, los datos pe
 - **Categorías de datos:** RUC/cédula, nombre o razón social, dirección, correo electrónico, teléfono, y demás datos del comprador incluidos en el comprobante, entre otros datos exigidos por el esquema de comprobantes electrónicos del SRI según el tipo de documento.
 
 El Encargado no trata ninguna otra categoría de datos de los interesados, ni los utiliza para fines distintos a los instruidos por el Responsable.
+
+**Catálogo de compradores (solo interfaz web).** Cuando el Responsable utiliza la interfaz web del Servicio (comprobify-web) para guardar perfiles de comprador con fines de reutilización en futuros comprobantes, el Encargado almacena las mismas categorías de datos indicadas arriba de forma independiente al comprobante. Esta funcionalidad no se activa si el Responsable utiliza el Servicio únicamente a través de la API — en ese caso, el Encargado no almacena datos de comprador fuera de los comprobantes ya emitidos.
+
+El catálogo de productos o servicios que el Responsable puede guardar a través de la interfaz web constituye información propia del negocio del Responsable, no datos personales de un interesado, por lo que no forma parte del objeto de este DPA; su tratamiento se rige por los Términos de Servicio y la Política de Privacidad.
 
 ## 4. Obligaciones del Encargado
 
@@ -37,13 +41,16 @@ El Responsable declara que cuenta con una base legal para el tratamiento de los 
 
 El Responsable autoriza el uso de los siguientes subencargados, ya en operación al momento de la aceptación de este DPA:
 
-| Subencargado | Finalidad |
-|---|---|
-| Render | Infraestructura y alojamiento del Servicio |
-| Neon | Base de datos |
-| Mailgun | Envío de correos transaccionales |
-| Sentry | Monitoreo y diagnóstico de errores |
-| SRI | Recepción obligatoria de comprobantes electrónicos conforme a la normativa ecuatoriana |
+| Subencargado | Finalidad | Aplica a |
+|---|---|---|
+| Render | Infraestructura y alojamiento del Servicio (API) | Todos los clientes |
+| Neon | Base de datos del Servicio, incluida la base de datos independiente de la interfaz web cuando el Responsable la utiliza | Todos los clientes |
+| Mailgun | Envío de correos transaccionales | Todos los clientes |
+| Sentry | Monitoreo y diagnóstico de errores | Todos los clientes |
+| SRI | Recepción obligatoria de comprobantes electrónicos conforme a la normativa ecuatoriana | Todos los clientes |
+| Vercel | Alojamiento de la interfaz web del Servicio (comprobify-web) | Solo clientes que utilizan la interfaz web |
+
+Los subencargados marcados como aplicables únicamente a la interfaz web solo tratan datos del Responsable si este utiliza comprobify-web; un Responsable que utiliza el Servicio exclusivamente a través de la API no está sujeto a dichos subencargados.
 
 Algunos subencargados pueden procesar datos personales fuera del territorio ecuatoriano. Comprobify selecciona y procura mantener proveedores que implementen medidas de seguridad apropiadas para la protección de los datos personales.
 
@@ -53,9 +60,11 @@ El Encargado notificará al Responsable con razonable antelación antes de incor
 
 ## 7. Retención y eliminación al término del contrato
 
-El Servicio almacena exclusivamente datos relacionados con comprobantes electrónicos (facturas, notas de crédito y documentos similares) autorizados por el Servicio de Rentas Internas ("SRI"), así como los metadatos de su firma, transmisión y autorización. No almacena datos de los compradores del Responsable fuera de este contexto.
+El Servicio almacena los datos relacionados con comprobantes electrónicos (facturas, notas de crédito y documentos similares) autorizados por el Servicio de Rentas Internas ("SRI"), así como los metadatos de su firma, transmisión y autorización. Cuando el Responsable utiliza la interfaz web del Servicio (comprobify-web), el Servicio también almacena, de forma independiente al comprobante, el catálogo de compradores descrito en la sección 3 — funcionalidad que no se activa si el Responsable utiliza el Servicio únicamente a través de la API. Fuera de estos dos contextos, el Servicio no almacena datos de los compradores del Responsable.
 
 Los datos contenidos en comprobantes electrónicos autorizados por el SRI están sujetos al período de conservación obligatorio establecido por la normativa tributaria ecuatoriana — en particular el Código Tributario y el Reglamento de Comprobantes de Venta, Retención y Documentos Complementarios. **Durante dicho período — que conforme al Art. 55 del Código Tributario es de cinco (5) años en los casos ordinarios y de siete (7) años cuando la declaración no fue presentada o fue presentada de forma incompleta; se recomienda conservar durante el plazo mayor como medida prudente —, el Encargado no eliminará estos datos, incluso ante una solicitud del Responsable.** Esta limitación se fundamenta en la obligación legal del Encargado de conservar documentos tributarios durante el período de prescripción de las obligaciones tributarias (Art. 15 LOPDP — limitación del derecho de supresión por obligación legal).
+
+**El catálogo de compradores no está sujeto a esta limitación.** A diferencia de los datos ya incorporados en un comprobante autorizado, una entrada del catálogo de compradores no constituye por sí misma un documento tributario, por lo que el Encargado la suprimirá conforme a la solicitud del Responsable según la obligación establecida en la sección 4(7), sin las restricciones aplicables a los datos de comprobantes ya autorizados.
 
 Para los datos del Responsable que no formen parte de comprobantes electrónicos autorizados (datos de cuenta, metadatos de registro), el Encargado atenderá solicitudes de supresión conforme a la obligación establecida en la sección 4(7), una vez que no existan obligaciones legales que requieran su conservación.
 
