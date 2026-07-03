@@ -137,9 +137,9 @@ function buildDisclaimer(version) {
   const email = config.adminNotificationEmail || '';
   const contact = email
     ? `puede contactarnos en <a href="mailto:${email}" style="color:#495057">${email}</a>`
-    : 'puede contactarnos a través de los canales indicados en los documentos';
+    : 'puede contactarnos a través de los canales indicados en el documento';
   return `<div style="background:#f8f9fa;border-left:4px solid #6c757d;padding:12px 16px;margin-bottom:24px;font-size:0.9em;color:#495057">
-<strong>Aviso:</strong> Estos documentos han sido elaborados para establecer las condiciones de uso del Servicio y el tratamiento de datos personales. Pueden actualizarse para reflejar cambios en la legislación o en el funcionamiento del Servicio. Si tiene preguntas sobre su contenido, ${contact} antes de aceptarlos.<br><small style="color:#6c757d">Versión: ${version}</small>
+<strong>Aviso:</strong> Este documento ha sido elaborado para establecer las condiciones de uso del Servicio y el tratamiento de datos personales. Puede actualizarse para reflejar cambios en la legislación o en el funcionamiento del Servicio. Si tiene preguntas sobre su contenido, ${contact} antes de aceptarlo.<br><small style="color:#6c757d">Versión: ${version}</small>
 </div>
 `;
 }
