@@ -129,13 +129,15 @@ describe('AdminService', () => {
     });
 
     test('rejects when the tenant does not exist', async () => {
-      tenantModel.updateStatus.mockResolvedValue(null);
+      tenantModel.findById.mockResolvedValue(null);
 
       await expect(adminService.updateTenantStatus(1, 'SUSPENDED'))
         .rejects.toMatchObject({ statusCode: 404 });
+      expect(tenantModel.updateStatus).not.toHaveBeenCalled();
     });
 
-    test('updates the status and returns the formatted tenant', async () => {
+    test('updates the status, logs a STATUS_CHANGED event with from/to, and returns the formatted tenant', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE' });
       tenantModel.updateStatus.mockResolvedValue({
         id: 1, email: 'a@b.com', subscription_tier: 'FREE', status: 'SUSPENDED',
         document_quota: 5, document_count: 0, created_at: new Date('2026-01-01'),
@@ -144,6 +146,7 @@ describe('AdminService', () => {
       const result = await adminService.updateTenantStatus(1, 'SUSPENDED');
 
       expect(tenantModel.updateStatus).toHaveBeenCalledWith(1, 'SUSPENDED');
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'STATUS_CHANGED', { from: 'ACTIVE', to: 'SUSPENDED' });
       expect(result.status).toBe('SUSPENDED');
     });
   });

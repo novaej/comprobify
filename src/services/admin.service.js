@@ -88,8 +88,11 @@ async function updateTenantStatus(id, status) {
   if (!allowed.includes(status)) {
     throw new AppError(`Invalid status: '${status}'. Valid values: ${allowed.join(', ')}`, 400, ErrorCodes.INVALID_TENANT_STATUS);
   }
+  const previous = await tenantModel.findById(id);
+  if (!previous) throw new NotFoundError('Tenant');
+
   const row = await tenantModel.updateStatus(id, status);
-  if (!row) throw new NotFoundError('Tenant');
+  await tenantEventModel.create(id, 'STATUS_CHANGED', { from: previous.status, to: status });
   return formatTenant(row);
 }
 
