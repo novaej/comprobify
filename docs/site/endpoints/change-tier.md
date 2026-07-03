@@ -22,6 +22,8 @@ No payment gateway exists yet, so this rides the same manual proof-upload-and-re
 
 Only one tier/interval change can be outstanding at a time — request another before the current one resolves and you'll get `409 TIER_CHANGE_ALREADY_PENDING`.
 
+**In sandbox, all three behaviors above collapse into two simpler ones.** A sandbox subscription's billing period is discarded entirely the moment you [promote](promote-tenant.md) — there's nothing meaningful to prorate against or defer a change to. So while you're still in sandbox: a downgrade applies **immediately and for free**, and everything else (an upgrade, or any billing-interval change) is billed at the target plan's **full price, never prorated**, and applies **immediately** once its self-billed invoice authorizes — never scheduled for a period boundary. Once you promote to production, the three same-interval/interval-change behaviors described above take over as normal.
+
 ## Request body
 
 | Field | Type | Required | Description |

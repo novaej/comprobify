@@ -206,6 +206,15 @@ async function requestTierChange(tenantId, tier, billingInterval) {
   const isTierUpgrade = TIERS[tier].priceMonthlyUsd > TIERS[subscription.tier].priceMonthlyUsd;
   const isTierDowngrade = TIERS[tier].priceMonthlyUsd < TIERS[subscription.tier].priceMonthlyUsd;
 
+  // Sandbox subscriptions have no meaningful current_period_end — it's fully
+  // discarded the moment the tenant promotes (resetPeriodOnPromotion resets
+  // it to "now" at that point, regardless of what was there before) — so
+  // there's nothing to prorate against or defer a change to. See
+  // requestSandboxTierChange.
+  if (tenant.sandbox) {
+    return requestSandboxTierChange(tenant, subscription, tier, targetInterval, isTierDowngrade);
+  }
+
   // Same-interval downgrade: free, scheduled at period end — unchanged from
   // the tier-only design.
   if (isTierDowngrade && !intervalChanged) {
@@ -297,6 +306,60 @@ async function requestTierChange(tenantId, tier, billingInterval) {
   });
 
   return { subscription, payment, bankTransfer: config.bankTransfer, effectiveAt: subscription.current_period_end };
+}
+
+// Sandbox variant of requestTierChange's pricing/application logic. Every
+// sandbox tier/interval change applies immediately (see linkSandboxDocument,
+// which is where a paid change actually lands once its self-billed invoice
+// authorizes) and is priced at the target plan's FULL sticker price — never
+// prorated. Proration only makes sense against a real, running billing
+// period; a sandbox current_period_end is thrown away entirely at promotion,
+// so crediting "remaining time" in it doesn't reflect anything the tenant
+// will actually owe once real billing starts. Downgrades still owe nothing
+// (that principle is about "you already paid for this," not period math),
+// but apply immediately rather than being scheduled for a period boundary
+// that's about to be discarded anyway.
+async function requestSandboxTierChange(tenant, subscription, tier, targetInterval, isTierDowngrade) {
+  if (isTierDowngrade) {
+    const updated = await subscriptionModel.applyTierChange(subscription.id, tier, targetInterval);
+    await tenantModel.updateTier(tenant.id, tier, TIERS[tier].documentQuota);
+    await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: tier,
+      fromBillingInterval: subscription.billing_interval,
+      toBillingInterval: targetInterval,
+      totalAmount: 0,
+      note: 'sandbox — applied immediately, no charge',
+    });
+    return { subscription: updated, payment: null, amount: 0 };
+  }
+
+  const priceField = targetInterval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
+  const fullPrice = TIERS[tier][priceField];
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
+  const payment = await paymentModel.create({
+    subscriptionId: subscription.id,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
+    purpose: 'TIER_CHANGE',
+    targetTier: tier,
+    targetBillingInterval: targetInterval,
+  });
+
+  await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
+    subscriptionId: subscription.id,
+    fromTier: subscription.tier,
+    toTier: tier,
+    fromBillingInterval: subscription.billing_interval,
+    toBillingInterval: targetInterval,
+    totalAmount,
+    note: 'sandbox — full price, applies immediately once the self-billed invoice authorizes',
+  });
+
+  return { subscription, payment, bankTransfer: config.bankTransfer };
 }
 
 // Schedules an end-of-period cancellation by setting pending_tier = 'FREE'.
@@ -451,40 +514,25 @@ async function linkInvoice(subscriptionId, accessKey) {
   const document = await documentModel.findByAccessKey(accessKey);
   if (!document) throw new NotFoundError('Document');
 
-  // Sandbox documents cannot be stored in invoice_document_id — the FK on
-  // subscriptions references public.documents only. For sandbox testing, activate
-  // directly if the document is already AUTHORIZED rather than waiting for the
-  // authorization webhook (which fires for public documents, not sandbox ones).
+  // Purpose detection runs BEFORE the sandbox/production fork so both paths
+  // route TIER_CHANGE/RENEWAL payments correctly — a sandbox self-billed
+  // invoice can fund any of the three purposes, not just the initial
+  // activation (see linkSandboxDocument's comment for why sandbox needs its
+  // own application path rather than reusing applyTierChangeIfLinked/
+  // applyRenewalIfLinked/activateIfLinked).
+  const pendingTierChange = await paymentModel.findPendingTierChangeBySubscriptionId(subscriptionId);
+  const pendingRenewal = !pendingTierChange
+    ? await paymentModel.findPendingRenewalBySubscriptionId(subscriptionId)
+    : null;
+
   if (document.sandbox) {
-    await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
-      subscriptionId, accessKey, note: 'sandbox document — no FK stored',
-    });
-    if (document.status === 'AUTHORIZED') {
-      const periodStart = new Date();
-      const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
-      const activated = await subscriptionModel.updateStatus(subscriptionId, 'ACTIVE', {
-        current_period_start: periodStart,
-        current_period_end: periodEnd,
-      });
-      const payments = await paymentModel.findBySubscriptionId(subscriptionId);
-      const funding = payments.find((p) => p.status === 'VERIFIED' && !p.period_start);
-      if (funding) {
-        await paymentModel.updateStatus(funding.id, funding.status, { period_start: periodStart, period_end: periodEnd });
-      }
-      await tenantModel.updateTier(subscription.tenant_id, subscription.tier, TIERS[subscription.tier].documentQuota);
-      await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
-        subscriptionId, note: 'sandbox invoice',
-      });
-      return activated;
-    }
-    return subscriptionModel.updateStatus(subscriptionId, 'INVOICE_PROCESSING', {});
+    return linkSandboxDocument(subscription, document, pendingTierChange, pendingRenewal);
   }
 
   // A VERIFIED, unlinked TIER_CHANGE payment means this is an upgrade's
   // self-billed invoice, not the subscription's original activation invoice —
   // link it to the payment instead so the subscription's own
   // invoice_document_id (already spent on activation) is left untouched.
-  const pendingTierChange = await paymentModel.findPendingTierChangeBySubscriptionId(subscriptionId);
   if (pendingTierChange && pendingTierChange.status === 'VERIFIED') {
     await paymentModel.updateStatus(pendingTierChange.id, 'VERIFIED', { invoice_document_id: document.id });
     await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
@@ -502,7 +550,6 @@ async function linkInvoice(subscriptionId, accessKey) {
   // Same idea, but for a renewal payment opened by processDueRenewals ahead of
   // current_period_end — link to the payment, not the subscription's own
   // invoice_document_id (already spent on initial activation).
-  const pendingRenewal = await paymentModel.findPendingRenewalBySubscriptionId(subscriptionId);
   if (pendingRenewal && pendingRenewal.status === 'VERIFIED') {
     await paymentModel.updateStatus(pendingRenewal.id, 'VERIFIED', { invoice_document_id: document.id });
     await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
@@ -533,6 +580,81 @@ async function linkInvoice(subscriptionId, accessKey) {
   }
 
   return updated;
+}
+
+// Sandbox documents cannot be stored in invoice_document_id — the FK on both
+// subscriptions and payments references public.documents only, and
+// sandbox.documents is a fully independent id sequence that can (and will)
+// collide with public.documents ids. So this applies whatever payment is
+// pending directly, without ever writing invoice_document_id, and — unlike
+// the production applyTierChangeIfLinked — always IMMEDIATELY: a sandbox
+// current_period_end is thrown away entirely at promotion
+// (resetPeriodOnPromotion), so there's nothing meaningful to defer a change
+// to (see requestSandboxTierChange, which already priced this payment at the
+// full sticker price for exactly this reason).
+async function linkSandboxDocument(subscription, document, pendingTierChange, pendingRenewal) {
+  const pendingPayment = pendingTierChange || pendingRenewal;
+  await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
+    subscriptionId: subscription.id, documentId: document.id,
+    paymentId: pendingPayment?.id ?? null, note: 'sandbox document — no FK stored',
+  });
+
+  if (document.status !== 'AUTHORIZED') {
+    return pendingPayment ? subscription : subscriptionModel.updateStatus(subscription.id, 'INVOICE_PROCESSING', {});
+  }
+
+  if (pendingTierChange && pendingTierChange.status === 'VERIFIED') {
+    const updated = await subscriptionModel.applyTierChange(
+      subscription.id, pendingTierChange.target_tier, pendingTierChange.target_billing_interval
+    );
+    await tenantModel.updateTier(subscription.tenant_id, pendingTierChange.target_tier, TIERS[pendingTierChange.target_tier].documentQuota);
+    await paymentModel.updateStatus(pendingTierChange.id, pendingTierChange.status, {
+      period_start: subscription.current_period_start,
+      period_end: subscription.current_period_end,
+    });
+    await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: pendingTierChange.target_tier,
+      fromBillingInterval: subscription.billing_interval,
+      toBillingInterval: pendingTierChange.target_billing_interval,
+      paymentId: pendingTierChange.id,
+      note: 'sandbox invoice — applied immediately',
+    });
+    return updated;
+  }
+
+  if (pendingRenewal && pendingRenewal.status === 'VERIFIED') {
+    const periodStart = new Date(subscription.current_period_end);
+    const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+    const updated = await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
+      current_period_start: periodStart,
+      current_period_end: periodEnd,
+    });
+    await paymentModel.updateStatus(pendingRenewal.id, pendingRenewal.status, { period_start: periodStart, period_end: periodEnd });
+    await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_RENEWED', {
+      subscriptionId: subscription.id, tier: subscription.tier, periodStart, periodEnd, note: 'sandbox invoice',
+    });
+    return updated;
+  }
+
+  // No pending TIER_CHANGE/RENEWAL — this is the subscription's initial activation.
+  const periodStart = new Date();
+  const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+  const activated = await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
+    current_period_start: periodStart,
+    current_period_end: periodEnd,
+  });
+  const payments = await paymentModel.findBySubscriptionId(subscription.id);
+  const funding = payments.find((p) => p.status === 'VERIFIED' && !p.period_start);
+  if (funding) {
+    await paymentModel.updateStatus(funding.id, funding.status, { period_start: periodStart, period_end: periodEnd });
+  }
+  await tenantModel.updateTier(subscription.tenant_id, subscription.tier, TIERS[subscription.tier].documentQuota);
+  await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
+    subscriptionId: subscription.id, note: 'sandbox invoice',
+  });
+  return activated;
 }
 
 async function activateIfLinked(documentId) {
