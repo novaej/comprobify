@@ -67,10 +67,22 @@ async function publish(documentType, version) {
   const stripped = stripDraftHeader(raw);
   // Operator identity is the same across all tenants — substitute it at
   // publish time so it's baked into the stored template. Tenant-specific
-  // tokens ({{cliente.*}}, {{fechaDocumento}}) are resolved later in
-  // tenant-legal-document.service.js when generating per-tenant instances.
+  // tokens ({{cliente.*}}) are resolved later in tenant-agreement.service.js
+  // when generating per-tenant instances.
   const domicilio = config.operator.domicilio || 'Domicilio disponible previa solicitud razonable';
-  const contentMarkdown = substitutePlaceholders(stripped, { operador: { nombre, ruc, email, domicilio } });
+  // {{soporte.email}} is for "write to us" invitations (termination requests,
+  // "para consultas", exercising data rights) — routed to the support inbox,
+  // not the operator's personal address, same reasoning as buildDisclaimer()
+  // above. {{operador.email}} stays reserved for identifying the legally
+  // responsible party (e.g. the DPA's "Encargado" clause). Falls back to the
+  // operator's email (already validated non-empty above) when
+  // ADMIN_NOTIFICATION_EMAIL is unset, so a published document never bakes in
+  // a blank contact address.
+  const soporteEmail = config.adminNotificationEmail || email;
+  const contentMarkdown = substitutePlaceholders(stripped, {
+    operador: { nombre, ruc, email, domicilio },
+    soporte: { email: soporteEmail },
+  });
   const contentHash = sha256Hex(contentMarkdown);
   const doc = await agreementModel.create({ documentType, version, contentMarkdown, contentHash });
   // Auto-activate: new version becomes current immediately, same UX as before

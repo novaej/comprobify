@@ -22,6 +22,8 @@ El Cliente garantiza que cuenta con base legal suficiente para el tratamiento de
 
 Toda cuenta inicia en ambiente de pruebas del SRI y debe ser activada explícitamente a producción. El Cliente entiende que los comprobantes emitidos en pruebas no tienen validez fiscal.
 
+Si el Cliente utiliza la interfaz web del Servicio (comprobify-web), el Servicio podrá almacenar adicionalmente otros datos que el Cliente decida ingresar para facilitar su uso, tales como catálogos de compradores o de productos/servicios propios. El detalle de qué se almacena, según el Cliente utilice la API, la interfaz web, o ambas, se describe en la Política de Privacidad.
+
 El Cliente es responsable de la custodia de sus credenciales. Comprobify almacena la clave privada del certificado de firma cifrada, pero no puede recuperar credenciales perdidas fuera de los mecanismos de recuperación de cuenta disponibles en el Servicio.
 
 Los comprobantes electrónicos emitidos a través del Servicio y sus metadatos de autorización están sujetos a los plazos de conservación establecidos por la normativa tributaria ecuatoriana. Conforme al Art. 55 del Código Tributario, el período de prescripción de las acciones de cobro es de cinco (5) años para los casos ordinarios y de siete (7) años cuando la declaración no fue presentada o fue presentada de forma incompleta; dichos datos no serán eliminados durante este período, siendo recomendable aplicar el plazo mayor como medida prudente. Ver la Política de Privacidad para más detalle.
@@ -34,7 +36,7 @@ El pago se realiza mediante transferencia bancaria manual. La activación del se
 
 Los cambios de plan y renovaciones siguen el mismo mecanismo de verificación de pago.
 
-Comprobify se reserva el derecho de modificar los precios de los planes de suscripción. Cualquier cambio de precio será notificado al Cliente con al menos treinta (30) días de anticipación mediante correo electrónico a la dirección registrada en la cuenta. Para suscripciones mensuales, el nuevo precio entrará en vigencia en el siguiente ciclo de facturación posterior al vencimiento del plazo de notificación. Para suscripciones anuales, el nuevo precio aplicará en la siguiente renovación anual. El uso continuado del Servicio tras la fecha de entrada en vigencia del cambio de precio constituye la aceptación del nuevo precio.
+Comprobify se reserva el derecho de modificar los precios de los planes de suscripción. Cualquier cambio de precio será notificado al Cliente con al menos treinta (30) días de anticipación mediante correo electrónico a la dirección de correo electrónico de la cuenta del Cliente. El nuevo precio no se aplicará a ninguna renovación que ocurra antes de cumplirse dicho plazo de treinta (30) días: si la renovación más próxima del Cliente cae dentro de ese plazo, esa renovación se cobrará todavía al precio anterior, y el nuevo precio aplicará recién a partir de la primera renovación —mensual o anual, según corresponda— que ocurra una vez cumplidos los treinta (30) días de aviso. El uso continuado del Servicio tras la fecha de entrada en vigencia del cambio de precio constituye la aceptación del nuevo precio.
 
 El Cliente puede cancelar su suscripción en cualquier momento. El acceso se mantiene hasta el final del periodo ya pagado.
 
@@ -89,7 +91,7 @@ Ninguna parte será responsable por incumplimientos causados por eventos fuera d
 
 Comprobify puede suspender o terminar cuentas en caso de incumplimiento de estos Términos, uso fraudulento, abuso del sistema, impago reiterado o actividades ilícitas.
 
-El Cliente puede solicitar la terminación de su cuenta en cualquier momento mediante comunicación a `{{operador.email}}`.
+El Cliente puede solicitar la terminación de su cuenta en cualquier momento mediante comunicación a `{{soporte.email}}`.
 
 La terminación no elimina obligaciones de pago ni afecta el historial de comprobantes ya emitidos.
 
@@ -103,4 +105,4 @@ Estos Términos se rigen por las leyes de la República del Ecuador. Cualquier c
 
 ## 13. Contacto
 
-Para consultas: `{{operador.email}}`.
+Para consultas: `{{soporte.email}}`.

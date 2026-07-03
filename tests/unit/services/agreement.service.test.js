@@ -9,10 +9,12 @@ const agreementService = require('../../../src/services/agreement.service');
 
 describe('AgreementService', () => {
   const originalOperator = { ...config.operator };
+  const originalAdminNotificationEmail = config.adminNotificationEmail;
 
   afterEach(() => {
     jest.clearAllMocks();
     config.operator = { ...originalOperator };
+    config.adminNotificationEmail = originalAdminNotificationEmail;
   });
 
   describe('publish', () => {
@@ -69,6 +71,30 @@ describe('AgreementService', () => {
 
       const [createArgs] = agreementModel.create.mock.calls[0];
       expect(createArgs.contentMarkdown).toContain('Domicilio disponible previa solicitud razonable');
+    });
+
+    test('substitutes {{soporte.email}} from ADMIN_NOTIFICATION_EMAIL when set', async () => {
+      config.adminNotificationEmail = 'soporte@comprobify.com';
+      fs.readFileSync.mockReturnValue('Contacto: {{soporte.email}}');
+      agreementModel.create.mockResolvedValue({ id: 7 });
+      agreementModel.activate.mockResolvedValue({ id: 7 });
+
+      await agreementService.publish('TERMS', '1.0');
+
+      const [createArgs] = agreementModel.create.mock.calls[0];
+      expect(createArgs.contentMarkdown).toContain('Contacto: soporte@comprobify.com');
+    });
+
+    test('falls back to the operator email for {{soporte.email}} when ADMIN_NOTIFICATION_EMAIL is unset', async () => {
+      config.adminNotificationEmail = '';
+      fs.readFileSync.mockReturnValue('Contacto: {{soporte.email}}');
+      agreementModel.create.mockResolvedValue({ id: 8 });
+      agreementModel.activate.mockResolvedValue({ id: 8 });
+
+      await agreementService.publish('TERMS', '1.0');
+
+      const [createArgs] = agreementModel.create.mock.calls[0];
+      expect(createArgs.contentMarkdown).toContain('Contacto: legal@comprobify.com');
     });
   });
 
