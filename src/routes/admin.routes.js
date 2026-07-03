@@ -38,7 +38,8 @@ router.patch('/subscriptions/:id/link-invoice', v.linkInvoice,        validateRe
 router.patch('/subscriptions/:id/cancel',       v.cancelSubscription, validateRequest, asyncHandler(controller.cancelSubscription));
 router.get('/payments',                         v.listPayments,       validateRequest, asyncHandler(controller.listPayments));
 router.patch('/payments/:id/review',            v.reviewPayment,      validateRequest, asyncHandler(controller.reviewPayment));
-router.get('/payments/:id/proof',               v.getPaymentProof,    validateRequest, asyncHandler(controller.getPaymentProof));
+router.get('/payments/:id/proofs',              v.listPaymentProofs,  validateRequest, asyncHandler(controller.listPaymentProofs));
+router.get('/payments/:id/proofs/:proofId',     v.getPaymentProof,    validateRequest, asyncHandler(controller.getPaymentProof));
 
 // Agreements
 router.post('/agreements', v.publishAgreement, validateRequest, asyncHandler(controller.publishAgreement));

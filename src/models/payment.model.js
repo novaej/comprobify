@@ -3,9 +3,6 @@ const db = require('../config/database');
 const MUTABLE_EXTRA_COLUMNS = new Set([
   'reported_at',
   'verified_at',
-  'proof_file',
-  'proof_filename',
-  'proof_mime_type',
   'period_start',
   'period_end',
   'rejection_reason_code',

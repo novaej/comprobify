@@ -1,5 +1,6 @@
 jest.mock('../../../src/models/subscription.model');
 jest.mock('../../../src/models/payment.model');
+jest.mock('../../../src/models/payment-proof.model');
 jest.mock('../../../src/models/document.model');
 jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/tenant-event.model');
@@ -8,6 +9,7 @@ jest.mock('../../../src/services/email.service');
 
 const subscriptionModel = require('../../../src/models/subscription.model');
 const paymentModel = require('../../../src/models/payment.model');
+const paymentProofModel = require('../../../src/models/payment-proof.model');
 const documentModel = require('../../../src/models/document.model');
 const tenantModel = require('../../../src/models/tenant.model');
 const tenantEventModel = require('../../../src/models/tenant-event.model');
@@ -658,12 +660,16 @@ describe('SubscriptionService', () => {
   });
 
   describe('submitPaymentProof', () => {
-    const proof = { buffer: Buffer.from('test'), filename: 'receipt.pdf', mimeType: 'application/pdf' };
+    const files = [{ buffer: Buffer.from('test'), filename: 'receipt.pdf', mimeType: 'application/pdf' }];
+
+    beforeEach(() => {
+      paymentProofModel.countActiveByPaymentId.mockResolvedValue(0);
+    });
 
     test('rejects when the payment does not exist', async () => {
       paymentModel.findById.mockResolvedValue(null);
 
-      await expect(subscriptionService.submitPaymentProof(20, 1, proof))
+      await expect(subscriptionService.submitPaymentProof(20, 1, files))
         .rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     });
 
@@ -671,7 +677,7 @@ describe('SubscriptionService', () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 2 });
 
-      await expect(subscriptionService.submitPaymentProof(20, 1, proof))
+      await expect(subscriptionService.submitPaymentProof(20, 1, files))
         .rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     });
 
@@ -679,51 +685,79 @@ describe('SubscriptionService', () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'VERIFIED' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
 
-      await expect(subscriptionService.submitPaymentProof(20, 1, proof))
+      await expect(subscriptionService.submitPaymentProof(20, 1, files))
         .rejects.toMatchObject({ statusCode: 409 });
     });
 
-    test('allows re-submitting after REJECTED and clears the old rejection_reason_code', async () => {
+    test('rejects when the cumulative active file count would exceed the limit', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentProofModel.countActiveByPaymentId.mockResolvedValue(10);
+
+      await expect(subscriptionService.submitPaymentProof(20, 1, files))
+        .rejects.toMatchObject({ statusCode: 400, code: 'PROOF_FILE_LIMIT_REACHED' });
+      expect(paymentProofModel.createMany).not.toHaveBeenCalled();
+    });
+
+    test('allows re-submitting after REJECTED, adds new files without touching old ones, and clears the old rejection_reason_code', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentProofModel.createMany.mockResolvedValue([{ id: 2, payment_id: 20, filename: files[0].filename, mime_type: files[0].mimeType, active: true, created_at: new Date() }]);
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
 
-      await subscriptionService.submitPaymentProof(20, 1, proof);
+      await subscriptionService.submitPaymentProof(20, 1, files);
 
+      expect(paymentProofModel.createMany).toHaveBeenCalledWith(20, files);
       expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REPORTED', {
         reported_at: expect.any(Date),
-        proof_file: proof.buffer,
-        proof_filename: proof.filename,
-        proof_mime_type: proof.mimeType,
         rejection_reason_code: null,
       });
     });
 
-    test('stores the proof and moves the payment to REPORTED', async () => {
+    test('stores the files and moves the payment to REPORTED', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentProofModel.createMany.mockResolvedValue([
+        { id: 1, payment_id: 20, filename: 'receipt.pdf', mime_type: 'application/pdf', active: true, created_at: new Date('2026-06-01') },
+      ]);
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
 
-      const result = await subscriptionService.submitPaymentProof(20, 1, proof);
+      const result = await subscriptionService.submitPaymentProof(20, 1, files);
 
-      expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REPORTED', {
-        reported_at: expect.any(Date),
-        proof_file: proof.buffer,
-        proof_filename: proof.filename,
-        proof_mime_type: proof.mimeType,
-        rejection_reason_code: null,
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REPORTED', { paymentId: 20, proofCount: 1 });
+      expect(result).toEqual({
+        payment: { id: 20, status: 'REPORTED' },
+        proofs: [{ id: 1, filename: 'receipt.pdf', mimeType: 'application/pdf', active: true, createdAt: new Date('2026-06-01') }],
       });
-      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REPORTED', { paymentId: 20 });
-      expect(result).toEqual({ id: 20, status: 'REPORTED' });
+    });
+
+    test('accepts multiple files in one submission', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      const multiFiles = [
+        { buffer: Buffer.from('a'), filename: 'front.pdf', mimeType: 'application/pdf' },
+        { buffer: Buffer.from('b'), filename: 'back.pdf', mimeType: 'application/pdf' },
+      ];
+      paymentProofModel.createMany.mockResolvedValue([
+        { id: 1, payment_id: 20, filename: 'front.pdf', mime_type: 'application/pdf', active: true, created_at: new Date() },
+        { id: 2, payment_id: 20, filename: 'back.pdf', mime_type: 'application/pdf', active: true, created_at: new Date() },
+      ]);
+      paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
+
+      const result = await subscriptionService.submitPaymentProof(20, 1, multiFiles);
+
+      expect(paymentProofModel.createMany).toHaveBeenCalledWith(20, multiFiles);
+      expect(result.proofs).toHaveLength(2);
     });
 
     test('notifies the operator (fire-and-forget) with the tenant that owns the payment', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentProofModel.createMany.mockResolvedValue([]);
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
       tenantModel.findById.mockResolvedValue({ id: 1, email: 'tenant@example.com' });
 
-      await subscriptionService.submitPaymentProof(20, 1, proof);
+      await subscriptionService.submitPaymentProof(20, 1, files);
 
       expect(emailService.sendPaymentProofSubmitted).toHaveBeenCalledWith(
         { id: 20, status: 'REPORTED' },
@@ -733,21 +767,114 @@ describe('SubscriptionService', () => {
     });
   });
 
-  describe('getPaymentProof', () => {
-    test('rejects when no proof was uploaded', async () => {
-      paymentModel.findById.mockResolvedValue({ id: 20, proof_file: null });
+  describe('getPaymentProofFile (admin)', () => {
+    test('rejects when the proof does not exist', async () => {
+      paymentProofModel.findByIdAndPaymentId.mockResolvedValue(null);
 
-      await expect(subscriptionService.getPaymentProof(20)).rejects.toMatchObject({ statusCode: 404 });
+      await expect(subscriptionService.getPaymentProofFile(20, 1)).rejects.toMatchObject({ statusCode: 404 });
     });
 
-    test('returns the stored file', async () => {
-      paymentModel.findById.mockResolvedValue({
-        id: 20, proof_file: Buffer.from('x'), proof_filename: 'receipt.pdf', proof_mime_type: 'application/pdf',
+    test('returns an inactive (soft-deleted) file too — admin sees full history', async () => {
+      paymentProofModel.findByIdAndPaymentId.mockResolvedValue({
+        id: 1, payment_id: 20, file: Buffer.from('x'), filename: 'receipt.pdf', mime_type: 'application/pdf', active: false,
       });
 
-      const result = await subscriptionService.getPaymentProof(20);
+      const result = await subscriptionService.getPaymentProofFile(20, 1);
 
       expect(result).toEqual({ buffer: Buffer.from('x'), filename: 'receipt.pdf', mimeType: 'application/pdf' });
+    });
+  });
+
+  describe('getPaymentProofFileForTenant', () => {
+    test('rejects when the payment does not belong to the tenant', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(null);
+
+      await expect(subscriptionService.getPaymentProofFileForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    test('rejects (404) an inactive (deleted) file — tenant loses access once deleted', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, subscription_id: 10 });
+      paymentProofModel.findByIdAndPaymentId.mockResolvedValue({ id: 1, active: false });
+
+      await expect(subscriptionService.getPaymentProofFileForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    test('returns an active file', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, subscription_id: 10 });
+      paymentProofModel.findByIdAndPaymentId.mockResolvedValue({
+        id: 1, file: Buffer.from('x'), filename: 'receipt.pdf', mime_type: 'application/pdf', active: true,
+      });
+
+      const result = await subscriptionService.getPaymentProofFileForTenant(20, 1, 1);
+
+      expect(result).toEqual({ buffer: Buffer.from('x'), filename: 'receipt.pdf', mimeType: 'application/pdf' });
+    });
+  });
+
+  describe('listPaymentProofsForTenant', () => {
+    test('rejects when the payment does not belong to the tenant', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(null);
+
+      await expect(subscriptionService.listPaymentProofsForTenant(20, 1)).rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    });
+
+    test('returns only active proofs, formatted', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20 });
+      paymentProofModel.findActiveByPaymentId.mockResolvedValue([
+        { id: 1, filename: 'a.pdf', mime_type: 'application/pdf', active: true, created_at: new Date('2026-06-01') },
+      ]);
+
+      const result = await subscriptionService.listPaymentProofsForTenant(20, 1);
+
+      expect(result).toEqual([{ id: 1, filename: 'a.pdf', mimeType: 'application/pdf', active: true, createdAt: new Date('2026-06-01') }]);
+    });
+  });
+
+  describe('listPaymentProofsForAdmin', () => {
+    test('returns every proof including inactive ones', async () => {
+      paymentProofModel.findAllByPaymentId.mockResolvedValue([
+        { id: 1, filename: 'a.pdf', mime_type: 'application/pdf', active: true, created_at: new Date() },
+        { id: 2, filename: 'b.pdf', mime_type: 'application/pdf', active: false, created_at: new Date() },
+      ]);
+
+      const result = await subscriptionService.listPaymentProofsForAdmin(20);
+
+      expect(result).toHaveLength(2);
+      expect(result[1].active).toBe(false);
+    });
+  });
+
+  describe('deletePaymentProofForTenant', () => {
+    test('rejects when the payment does not belong to the tenant', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(null);
+
+      await expect(subscriptionService.deletePaymentProofForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    });
+
+    test('rejects once the payment is VERIFIED', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, status: 'VERIFIED' });
+
+      await expect(subscriptionService.deletePaymentProofForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 409 });
+      expect(paymentProofModel.softDelete).not.toHaveBeenCalled();
+    });
+
+    test('rejects when the proof does not exist for this payment', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, status: 'PENDING' });
+      paymentProofModel.softDelete.mockResolvedValue(null);
+
+      await expect(subscriptionService.deletePaymentProofForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    test('soft-deletes the proof and returns it formatted', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, status: 'PENDING' });
+      paymentProofModel.softDelete.mockResolvedValue({
+        id: 1, filename: 'a.pdf', mime_type: 'application/pdf', active: false, created_at: new Date('2026-06-01'),
+      });
+
+      const result = await subscriptionService.deletePaymentProofForTenant(20, 1, 1);
+
+      expect(paymentProofModel.softDelete).toHaveBeenCalledWith(1, 20);
+      expect(result).toEqual({ id: 1, filename: 'a.pdf', mimeType: 'application/pdf', active: false, createdAt: new Date('2026-06-01') });
     });
   });
 
@@ -1117,13 +1244,13 @@ describe('SubscriptionService', () => {
   });
 
   describe('getStatusForTenant', () => {
-    test('returns each subscription with its payments nested, proof_file stripped', async () => {
+    test('returns each subscription with its payments nested (proof files live behind the dedicated proofs endpoints, not inline here)', async () => {
       subscriptionModel.findByTenantId.mockResolvedValue([
         { id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING' },
       ]);
       paymentModel.findBySubscriptionId.mockResolvedValue([
-        { id: 20, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND', proof_file: Buffer.from('x'), proof_filename: 'old.pdf' },
-        { id: 21, status: 'VERIFIED', proof_file: Buffer.from('y'), proof_filename: 'new.pdf' },
+        { id: 20, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND' },
+        { id: 21, status: 'VERIFIED' },
       ]);
 
       const result = await subscriptionService.getStatusForTenant(1);
@@ -1134,8 +1261,8 @@ describe('SubscriptionService', () => {
         {
           id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING',
           payments: [
-            { id: 20, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND', proof_filename: 'old.pdf' },
-            { id: 21, status: 'VERIFIED', proof_filename: 'new.pdf' },
+            { id: 20, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND' },
+            { id: 21, status: 'VERIFIED' },
           ],
         },
       ]);

@@ -43,8 +43,6 @@ A payment review (verified/rejected) and the renewal reminder/expiry both fire a
           "total_amount": "20.00",
           "method": "SPI_TRANSFER",
           "rejection_reason_code": "TRANSFER_NOT_FOUND",
-          "proof_filename": "receipt.pdf",
-          "proof_mime_type": "application/pdf",
           "reported_at": "2026-06-29T04:45:40.278Z",
           "verified_at": null
         }
@@ -54,7 +52,7 @@ A payment review (verified/rejected) and the renewal reminder/expiry both fire a
 }
 ```
 
-The raw proof file is never included — only its filename and content type. `rejection_reason_code` is only present on `REJECTED` payments, and is cleared automatically once you [re-submit proof](submit-payment-proof.md) for that payment. It's one of a predefined set of codes (`AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — map it to your own UI message rather than displaying the raw code, the same way you'd handle an [error `code`](../errors/index.md). `amount` is the pre-IVA base (base imponible); `total_amount` is what was actually transferred via SPI.
+Proof files themselves are never inlined here — call [List Payment Proofs](list-payment-proofs.md) for a payment to see what's been uploaded, or [Download Payment Proof](download-payment-proof.md) for a specific file. `rejection_reason_code` is only present on `REJECTED` payments, and is cleared automatically once you [re-submit proof](submit-payment-proof.md) for that payment. It's one of a predefined set of codes (`AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — map it to your own UI message rather than displaying the raw code, the same way you'd handle an [error `code`](../errors/index.md). `amount` is the pre-IVA base (base imponible); `total_amount` is what was actually transferred via SPI.
 
 ## Errors
 

@@ -125,8 +125,17 @@ const reviewPayment = async (req, res) => {
   res.json({ ok: true, ...result });
 };
 
+const listPaymentProofs = async (req, res) => {
+  const proofs = await subscriptionService.listPaymentProofsForAdmin(parseInt(req.params.id, 10));
+  res.json({ ok: true, proofs });
+};
+
+// Streams any proof file (active or soft-deleted) for full audit visibility.
 const getPaymentProof = async (req, res) => {
-  const { buffer, filename, mimeType } = await subscriptionService.getPaymentProof(parseInt(req.params.id, 10));
+  const { buffer, filename, mimeType } = await subscriptionService.getPaymentProofFile(
+    parseInt(req.params.id, 10),
+    parseInt(req.params.proofId, 10),
+  );
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(buffer);
@@ -216,6 +225,6 @@ module.exports = {
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
   runSubscriptionJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof, listPayments,
+  reviewPayment, getPaymentProof, listPaymentProofs, listPayments,
   publishAgreement, activateAgreement, listAgreementVersions, generateTenantAgreements,
 };

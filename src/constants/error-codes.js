@@ -124,6 +124,8 @@ const ErrorCodes = Object.freeze({
   // --- File upload ---
   /** Multipart file upload is malformed or contains an unexpected field */
   INVALID_FILE_UPLOAD: 'INVALID_FILE_UPLOAD',
+  /** Payment already has the maximum number of active proof files */
+  PROOF_FILE_LIMIT_REACHED: 'PROOF_FILE_LIMIT_REACHED',
 
   // --- Infrastructure (internal errors) ---
   /** AES-GCM decryption failed — possible data corruption or wrong key */

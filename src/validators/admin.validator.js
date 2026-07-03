@@ -222,8 +222,13 @@ const reviewPayment = [
     .withMessage(`rejectionReasonCode is required when decision is REJECTED and must be one of: ${Object.values(RejectionReasons).join(', ')}`),
 ];
 
+const listPaymentProofs = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
 const getPaymentProof = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('proofId').isInt({ min: 1 }).withMessage('proofId must be a positive integer'),
 ];
 
 const listPayments = [
@@ -248,7 +253,7 @@ module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof, listPayments, publishAgreement,
+  reviewPayment, getPaymentProof, listPaymentProofs, listPayments, publishAgreement,
   activateAgreement: [param('id').isInt({ min: 1 }).withMessage('id must be a positive integer')],
   listAgreementVersions: [param('type').isIn(agreementService.AGREEMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],
 };

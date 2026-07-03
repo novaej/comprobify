@@ -10,9 +10,10 @@ const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 
 const PROOF_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'application/pdf']);
+const MAX_FILES_PER_UPLOAD = 5;
 const uploadProof = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 2 * 1024 * 1024 },
+  limits: { fileSize: 2 * 1024 * 1024, files: MAX_FILES_PER_UPLOAD },
   fileFilter: (_req, file, cb) => {
     if (!PROOF_MIME_TYPES.has(file.mimetype)) {
       return cb(new AppError('Proof file must be a PNG, JPEG, GIF, or PDF', 400, ErrorCodes.INVALID_FILE_UPLOAD));
@@ -26,9 +27,15 @@ const router = Router();
 router.use(authenticate);
 
 const idParam = [param('id').isInt({ min: 1 }).withMessage('id must be a positive integer')];
+const idAndProofIdParams = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('proofId').isInt({ min: 1 }).withMessage('proofId must be a positive integer'),
+];
 
+// Field name 'proof' repeated per file — the standard multipart convention
+// for uploading an array of files in one request.
 const handleProofUpload = (req, res, next) => {
-  uploadProof.single('proof')(req, res, (err) => {
+  uploadProof.array('proof', MAX_FILES_PER_UPLOAD)(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       return next(new AppError(err.message, 400, ErrorCodes.INVALID_FILE_UPLOAD));
     }
@@ -36,7 +43,9 @@ const handleProofUpload = (req, res, next) => {
   });
 };
 
-router.get('/:id/proof', readLimiter, idParam, validateRequest, asyncHandler(controller.getProof));
+router.get('/:id/proofs', readLimiter, idParam, validateRequest, asyncHandler(controller.listProofs));
+router.get('/:id/proofs/:proofId', readLimiter, idAndProofIdParams, validateRequest, asyncHandler(controller.downloadProof));
 router.patch('/:id/proof', writeLimiter, handleProofUpload, idParam, validateRequest, asyncHandler(controller.submitProof));
+router.delete('/:id/proofs/:proofId', writeLimiter, idAndProofIdParams, validateRequest, asyncHandler(controller.deleteProof));
 
 module.exports = router;

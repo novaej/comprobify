@@ -42,8 +42,10 @@ export default defineConfig({
             text: 'Payments',
             collapsed: false,
             items: [
-              { text: 'Get Payment Proof', link: '/endpoints/get-payment-proof' },
               { text: 'Submit Payment Proof', link: '/endpoints/submit-payment-proof' },
+              { text: 'List Payment Proofs', link: '/endpoints/list-payment-proofs' },
+              { text: 'Download Payment Proof', link: '/endpoints/download-payment-proof' },
+              { text: 'Delete Payment Proof', link: '/endpoints/delete-payment-proof' },
             ],
           },
           {

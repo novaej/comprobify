@@ -29,8 +29,10 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/v1/payments/:id/proof` | Download the proof-of-transfer file you previously uploaded for a payment |
-| `PATCH` | `/v1/payments/:id/proof` | Upload proof of an SPI bank transfer for a pending subscription payment. A `REJECTED` payment can be re-submitted; only `VERIFIED` blocks further uploads. |
+| `PATCH` | `/v1/payments/:id/proof` | Upload proof of an SPI bank transfer for a pending subscription payment — up to 5 files per request, nothing already uploaded is ever overwritten. A `REJECTED` payment can be re-submitted; only `VERIFIED` blocks further uploads. |
+| `GET` | `/v1/payments/:id/proofs` | List every active proof file uploaded for a payment |
+| `GET` | `/v1/payments/:id/proofs/:proofId` | Download one specific proof file |
+| `DELETE` | `/v1/payments/:id/proofs/:proofId` | Soft-delete a proof file from your own view (your provider can still see it) |
 
 ## Subscriptions (authenticated)
 

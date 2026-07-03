@@ -1,5 +1,6 @@
 const subscriptionModel = require('../models/subscription.model');
 const paymentModel = require('../models/payment.model');
+const paymentProofModel = require('../models/payment-proof.model');
 const documentModel = require('../models/document.model');
 const tenantModel = require('../models/tenant.model');
 const tenantEventModel = require('../models/tenant-event.model');
@@ -18,6 +19,11 @@ const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 const BILLING_INTERVALS = ['MONTHLY', 'YEARLY'];
 const DECISIONS = ['VERIFIED', 'REJECTED'];
 
+// Per-request file count is enforced by multer (payments.routes.js); this is
+// the cumulative cap across every upload attempt for one payment, so repeated
+// resubmission can't grow the file list unboundedly.
+const MAX_ACTIVE_PROOFS_PER_PAYMENT = 10;
+
 // Splits an IVA-inclusive all-in total into base imponible + IVA so each
 // payment row carries a full audit trail of the tax breakdown at creation time.
 // Rounding: IVA is rounded to 2dp; base = total − IVA (avoids off-by-one).
@@ -33,14 +39,6 @@ function breakdownAmount(totalAmount) {
 // with no verified renewal before it's downgraded to FREE. See processDueRenewals.
 const RENEWAL_REMINDER_DAYS = 7;
 const RENEWAL_GRACE_DAYS = 7;
-
-// Never echo the raw file bytes back in a JSON response — the caller just sent it
-// (submitPaymentProof) or doesn't need it (reviewPayment). GET .../proof streams it.
-function omitProofFile(payment) {
-  if (!payment) return payment;
-  const { proof_file, ...rest } = payment;
-  return rest;
-}
 
 // Shared period math for activation, renewal, and the free period-rollover a
 // downgrade gets. Always advances from a fixed anchor date (never "now") so
@@ -417,7 +415,21 @@ async function scheduleCancellation(tenantId) {
   return { subscription: updated, effectiveAt: subscription.current_period_end };
 }
 
-async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeType }) {
+function formatPaymentProof(row) {
+  return {
+    id: row.id,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    active: row.active,
+    createdAt: row.created_at,
+  };
+}
+
+// files: array of { buffer, filename, mimeType } — one submission attempt can
+// carry multiple files (limit enforced by multer in payments.routes.js).
+// Every file is kept forever (soft-deletable, but never overwritten) — see
+// payment-proof.model.js and db/migrations/069_payment_proofs.sql.
+async function submitPaymentProof(paymentId, tenantId, files) {
   const payment = await paymentModel.findById(paymentId);
   if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
 
@@ -430,38 +442,78 @@ async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeT
     throw new ConflictError('Payment has already been verified and can no longer accept new proof');
   }
 
+  const activeCount = await paymentProofModel.countActiveByPaymentId(paymentId);
+  if (activeCount + files.length > MAX_ACTIVE_PROOFS_PER_PAYMENT) {
+    throw new AppError(
+      `This payment already has ${activeCount} proof file(s); at most ${MAX_ACTIVE_PROOFS_PER_PAYMENT} are allowed in total. Delete an old one before uploading more.`,
+      400,
+      ErrorCodes.PROOF_FILE_LIMIT_REACHED
+    );
+  }
+
+  const createdProofs = await paymentProofModel.createMany(paymentId, files);
+
   // A REJECTED payment can be re-submitted (e.g. the transfer hadn't reflected in
   // the bank yet) — clear the old rejection_reason_code since it's being re-addressed.
+  // The files themselves are never overwritten — createMany above only adds rows.
   const updated = await paymentModel.updateStatus(paymentId, 'REPORTED', {
     reported_at: new Date(),
-    proof_file: buffer,
-    proof_filename: filename,
-    proof_mime_type: mimeType,
     rejection_reason_code: null,
   });
 
-  await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REPORTED', { paymentId });
+  await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REPORTED', { paymentId, proofCount: files.length });
 
   // Fire-and-forget: let the operator know there's a proof to review. No-op
   // (resolves { sent: false }) if ADMIN_NOTIFICATION_EMAIL isn't configured.
   const tenant = await tenantModel.findById(tenantId);
   fireAndForget(emailService.sendPaymentProofSubmitted(updated, subscription, tenant), 'Payment proof submitted email');
 
-  return omitProofFile(updated);
+  return { payment: updated, proofs: createdProofs.map(formatPaymentProof) };
 }
 
-async function getPaymentProof(paymentId) {
-  const payment = await paymentModel.findById(paymentId);
-  if (!payment || !payment.proof_file) throw new NotFoundError('Payment proof');
-  return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
+// Admin: any proof file regardless of active state, for full audit visibility.
+async function getPaymentProofFile(paymentId, proofId) {
+  const proof = await paymentProofModel.findByIdAndPaymentId(proofId, paymentId);
+  if (!proof) throw new NotFoundError('Payment proof');
+  return { buffer: proof.file, filename: proof.filename, mimeType: proof.mime_type };
 }
 
-// Tenant-scoped variant: verifies the payment belongs to the requesting tenant
-// before returning the proof bytes, so tenants can't access each other's files.
-async function getPaymentProofForTenant(paymentId, tenantId) {
+// Tenant-scoped variant: verifies the payment belongs to the requesting tenant,
+// and only serves an active (non-deleted) file — a file the tenant deleted
+// disappears from their own access, same as their list view.
+async function getPaymentProofFileForTenant(paymentId, proofId, tenantId) {
   const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
-  if (!payment || !payment.proof_file) throw new NotFoundError('Payment proof');
-  return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
+  if (!payment) throw new NotFoundError('Payment proof');
+  const proof = await paymentProofModel.findByIdAndPaymentId(proofId, paymentId);
+  if (!proof || !proof.active) throw new NotFoundError('Payment proof');
+  return { buffer: proof.file, filename: proof.filename, mimeType: proof.mime_type };
+}
+
+async function listPaymentProofsForTenant(paymentId, tenantId) {
+  const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
+  if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
+  const proofs = await paymentProofModel.findActiveByPaymentId(paymentId);
+  return proofs.map(formatPaymentProof);
+}
+
+// Admin: every file ever uploaded for this payment, active or not, so the
+// operator can see the full history across rejections/resubmissions.
+async function listPaymentProofsForAdmin(paymentId) {
+  const proofs = await paymentProofModel.findAllByPaymentId(paymentId);
+  return proofs.map(formatPaymentProof);
+}
+
+async function deletePaymentProofForTenant(paymentId, proofId, tenantId) {
+  const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
+  if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
+
+  if (payment.status === 'VERIFIED') {
+    throw new ConflictError('Payment has already been verified and its proof files can no longer be changed');
+  }
+
+  const deleted = await paymentProofModel.softDelete(proofId, paymentId);
+  if (!deleted) throw new NotFoundError('Payment proof');
+  return formatPaymentProof(deleted);
 }
 
 async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
@@ -500,7 +552,7 @@ async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   fireAndForget(notificationService.createPaymentReviewed(updatedPayment, updatedSubscription, decision), 'Payment reviewed notification');
   fireAndForget(emailService.sendPaymentReviewed(updatedPayment, updatedSubscription, decision), 'Payment reviewed email');
 
-  return { payment: omitProofFile(updatedPayment), subscription: updatedSubscription };
+  return { payment: updatedPayment, subscription: updatedSubscription };
 }
 
 async function linkInvoice(subscriptionId, accessKey) {
@@ -928,8 +980,9 @@ async function listByTenant(tenantId) {
 // Cross-tenant review queue for the admin panel — every payment in the given
 // status (default REPORTED: proof submitted, awaiting a decision), with the
 // tenant's business identity attached so the admin doesn't need a second
-// lookup per row. proof_file is never included; GET /admin/payments/:id/proof
-// streams it separately (same omitProofFile pattern as everywhere else here).
+// lookup per row. Proof files themselves never appear here — GET
+// /admin/payments/:id/proofs (list) and .../proofs/:proofId (download)
+// stream them separately.
 async function listPendingPayments(status = 'REPORTED') {
   const payments = await paymentModel.findAllByStatus(status);
   const tenantIds = [...new Set(payments.map((p) => p.tenant_id))];
@@ -939,7 +992,7 @@ async function listPendingPayments(status = 'REPORTED') {
   return payments.map((payment) => {
     const tenant = tenantsById.get(payment.tenant_id);
     return {
-      ...omitProofFile(payment),
+      ...payment,
       tenant: tenant ? { id: tenant.id, email: tenant.email } : null,
     };
   });
@@ -947,14 +1000,14 @@ async function listPendingPayments(status = 'REPORTED') {
 
 // Tenant-facing read: full subscription history with each one's payments nested,
 // newest first. No notification exists when a review/activation happens — this
-// (polled) is how a tenant finds out. proof_file is never included; the file
-// itself stays behind the dedicated proof-download flow (admin-only).
+// (polled) is how a tenant finds out. Proof files themselves never appear here —
+// the dedicated GET .../proofs / .../proofs/:proofId endpoints handle those.
 async function getStatusForTenant(tenantId) {
   const subscriptions = await subscriptionModel.findByTenantId(tenantId);
   const withPayments = await Promise.all(
     subscriptions.map(async (subscription) => ({
       ...subscription,
-      payments: (await paymentModel.findBySubscriptionId(subscription.id)).map(omitProofFile),
+      payments: await paymentModel.findBySubscriptionId(subscription.id),
     }))
   );
   return withPayments;
@@ -966,8 +1019,11 @@ module.exports = {
   requestTierChange,
   scheduleCancellation,
   submitPaymentProof,
-  getPaymentProof,
-  getPaymentProofForTenant,
+  getPaymentProofFile,
+  getPaymentProofFileForTenant,
+  listPaymentProofsForTenant,
+  listPaymentProofsForAdmin,
+  deletePaymentProofForTenant,
   reviewPayment,
   linkInvoice,
   activateIfLinked,
