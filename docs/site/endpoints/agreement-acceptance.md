@@ -64,8 +64,9 @@ Each entry in `outdated` names the specific document type that changed. Use the 
 | Status | Code | When |
 |---|---|---|
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` | Account is suspended |
 | `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+
+This is a read-only endpoint, so it stays reachable even if the tenant's account is `SUSPENDED` — see the `ACCOUNT_SUSPENDED` entry in the [error catalogue](../errors/index.md).
 
 ## Record acceptance
 

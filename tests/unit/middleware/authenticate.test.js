@@ -63,10 +63,11 @@ describe('authenticate middleware', () => {
     await expect(runMiddleware(req)).rejects.toMatchObject({ statusCode: 401 });
   });
 
-  test('passes 403 when tenant is suspended', async () => {
+  test('does not reject a SUSPENDED tenant — that check lives in require-not-suspended.js', async () => {
     apiKeyModel.findByKeyHash.mockResolvedValue({ ...mockRow, tenant_status: 'SUSPENDED' });
     const req = makeReq('Bearer mytoken');
-    await expect(runMiddleware(req)).rejects.toMatchObject({ statusCode: 403 });
+    await runMiddleware(req);
+    expect(req.tenant.status).toBe('SUSPENDED');
   });
 
   test('hashes the token with SHA-256 before querying', async () => {

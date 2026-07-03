@@ -1,8 +1,10 @@
 const crypto = require('crypto');
 const apiKeyModel = require('../models/api-key.model');
 const AppError = require('../errors/app-error');
-const TenantStatus = require('../constants/tenant-status');
 
+// Identity only — does NOT reject a SUSPENDED tenant. That check lives in
+// require-not-suspended.js, applied selectively per-route so some read-only
+// endpoints can stay reachable while suspended. See CLAUDE.md "Tenant model."
 const authenticate = async (req, _res, next) => {
   const authHeader = req.headers['authorization'];
 
@@ -20,10 +22,6 @@ const authenticate = async (req, _res, next) => {
 
   if (!row) {
     return next(new AppError('Invalid or revoked API key', 401));
-  }
-
-  if (row.tenant_status === TenantStatus.SUSPENDED) {
-    return next(new AppError('This account has been suspended. Contact support.', 403));
   }
 
   req.keyHash = keyHash;

@@ -52,6 +52,7 @@ If the document was not authorized, `status` will be `"NOT_AUTHORIZED"` and `aut
 | `BAD_REQUEST` | 400 | Document is not in `RECEIVED` status |
 | `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
 | `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
+| `ACCOUNT_SUSPENDED` | 403 | Tenant account is suspended — unlike most other document read endpoints (list, get, RIDE, XML, events, credit-notes), this one stays blocked while suspended because it makes a live SRI call and can send the authorization email; see the [error catalogue](../errors/index.md) |
 | `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
 | `NOT_FOUND` | 404 | Document not found |
 | `SRI_SUBMISSION_FAILED` | 502 | Network error communicating with SRI |

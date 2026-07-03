@@ -5,6 +5,7 @@ const controller = require('../controllers/payment.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
+const requireNotSuspended = require('../middleware/require-not-suspended');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
@@ -43,9 +44,11 @@ const handleProofUpload = (req, res, next) => {
   });
 };
 
+// A SUSPENDED tenant may still view/download proof files already submitted —
+// relevant precisely when the suspension itself is payment-related.
 router.get('/:id/proofs', readLimiter, idParam, validateRequest, asyncHandler(controller.listProofs));
 router.get('/:id/proofs/:proofId', readLimiter, idAndProofIdParams, validateRequest, asyncHandler(controller.downloadProof));
-router.patch('/:id/proof', writeLimiter, handleProofUpload, idParam, validateRequest, asyncHandler(controller.submitProof));
-router.delete('/:id/proofs/:proofId', writeLimiter, idAndProofIdParams, validateRequest, asyncHandler(controller.deleteProof));
+router.patch('/:id/proof', writeLimiter, requireNotSuspended, handleProofUpload, idParam, validateRequest, asyncHandler(controller.submitProof));
+router.delete('/:id/proofs/:proofId', writeLimiter, requireNotSuspended, idAndProofIdParams, validateRequest, asyncHandler(controller.deleteProof));
 
 module.exports = router;

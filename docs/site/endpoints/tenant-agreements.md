@@ -71,9 +71,10 @@ Response headers include:
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `:type` is not a valid document type |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` | Account is suspended |
 | `404` | `AGREEMENT_NOT_FOUND` | No template has been published yet for this type |
 | `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+
+Both endpoints on this page are read-only, so they stay reachable even if the tenant's account is `SUSPENDED` — see the `ACCOUNT_SUSPENDED` entry in the [error catalogue](../errors/index.md).
 
 ## Notes
 

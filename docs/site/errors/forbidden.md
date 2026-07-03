@@ -14,9 +14,9 @@ The `X-Issuer-Id` header names an issuer that exists but belongs to a different 
 
 ### `ACCOUNT_SUSPENDED`
 
-The tenant account has been suspended. All authenticated requests will fail until the suspension is lifted.
+The tenant account has been suspended. Every write request fails until the suspension is lifted, and so does `GET /:accessKey/authorize` (it makes a live SRI call and can send an email). A curated set of other read-only endpoints stays available so you can still see your existing data: listing/downloading your own documents (including RIDE and XML), your subscription and payment-proof history, and your account status/agreements/event log.
 
-**What to do:** Contact support. Suspended accounts cannot self-recover.
+**What to do:** Contact support. Suspended accounts cannot self-recover, but you can keep reviewing what's already in your account while the issue is resolved.
 
 ### `EMAIL_VERIFICATION_REQUIRED`
 
