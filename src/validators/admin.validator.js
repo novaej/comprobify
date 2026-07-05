@@ -1,6 +1,7 @@
 const { body, param, query } = require('express-validator');
 const { TIERS } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
+const RejectionReasons = require('../constants/rejection-reasons');
 const { SUPPORTED_TYPES } = require('../builders');
 const agreementService = require('../services/agreement.service');
 
@@ -34,6 +35,10 @@ const updateTenantStatus = [
 ];
 
 const verifyTenant = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+];
+
+const listTenantEvents = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
@@ -210,20 +215,20 @@ const reviewPayment = [
     .isIn(['VERIFIED', 'REJECTED'])
     .withMessage('decision must be one of: VERIFIED, REJECTED'),
 
-  body('rejectionReason')
+  body('rejectionReasonCode')
     .if(body('decision').equals('REJECTED'))
     .notEmpty()
-    .withMessage('rejectionReason is required when decision is REJECTED — the tenant needs to know what to fix before re-uploading'),
+    .isIn(Object.values(RejectionReasons))
+    .withMessage(`rejectionReasonCode is required when decision is REJECTED and must be one of: ${Object.values(RejectionReasons).join(', ')}`),
+];
 
-  body('rejectionReason')
-    .optional()
-    .isString()
-    .isLength({ max: 500 })
-    .withMessage('rejectionReason must be a string of max 500 characters'),
+const listPaymentProofs = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
 const getPaymentProof = [
   param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('proofId').isInt({ min: 1 }).withMessage('proofId must be a positive integer'),
 ];
 
 const listPayments = [
@@ -245,10 +250,10 @@ const publishAgreement = [
 ];
 
 module.exports = {
-  createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
+  createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof, listPayments, publishAgreement,
+  reviewPayment, getPaymentProof, listPaymentProofs, listPayments, publishAgreement,
   activateAgreement: [param('id').isInt({ min: 1 }).withMessage('id must be a positive integer')],
   listAgreementVersions: [param('type').isIn(agreementService.AGREEMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],
 };

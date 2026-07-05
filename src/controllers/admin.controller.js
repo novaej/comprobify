@@ -33,6 +33,11 @@ const verifyTenant = async (req, res) => {
   res.json({ ok: true, tenant });
 };
 
+const listTenantEvents = async (req, res) => {
+  const events = await adminService.listTenantEvents(parseInt(req.params.id, 10));
+  res.json({ ok: true, events });
+};
+
 // Issuers
 const createIssuer = async (req, res) => {
   const { issuer } = await adminService.createIssuer(
@@ -115,13 +120,22 @@ const reviewPayment = async (req, res) => {
   const result = await subscriptionService.reviewPayment(
     parseInt(req.params.id, 10),
     req.body.decision,
-    req.body.rejectionReason,
+    req.body.rejectionReasonCode,
   );
   res.json({ ok: true, ...result });
 };
 
+const listPaymentProofs = async (req, res) => {
+  const proofs = await subscriptionService.listPaymentProofsForAdmin(parseInt(req.params.id, 10));
+  res.json({ ok: true, proofs });
+};
+
+// Streams any proof file (active or soft-deleted) for full audit visibility.
 const getPaymentProof = async (req, res) => {
-  const { buffer, filename, mimeType } = await subscriptionService.getPaymentProof(parseInt(req.params.id, 10));
+  const { buffer, filename, mimeType } = await subscriptionService.getPaymentProofFile(
+    parseInt(req.params.id, 10),
+    parseInt(req.params.proofId, 10),
+  );
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.send(buffer);
@@ -207,10 +221,10 @@ const runSubscriptionJobs = async (req, res) => {
 };
 
 module.exports = {
-  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant,
+  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
   runSubscriptionJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof, listPayments,
+  reviewPayment, getPaymentProof, listPaymentProofs, listPayments,
   publishAgreement, activateAgreement, listAgreementVersions, generateTenantAgreements,
 };

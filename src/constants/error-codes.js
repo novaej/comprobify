@@ -78,6 +78,8 @@ const ErrorCodes = Object.freeze({
   DOCUMENT_TYPE_NOT_IN_TIER: 'DOCUMENT_TYPE_NOT_IN_TIER',
   /** Supplied subscription tier is not recognised */
   INVALID_TIER: 'INVALID_TIER',
+  /** Supplied billingInterval is not recognised */
+  INVALID_BILLING_INTERVAL: 'INVALID_BILLING_INTERVAL',
   /** Supplied tenant status value is not recognised */
   INVALID_TENANT_STATUS: 'INVALID_TENANT_STATUS',
   /** Source issuer RUC does not match the supplied RUC */
@@ -102,6 +104,8 @@ const ErrorCodes = Object.freeze({
   TIER_CHANGE_ALREADY_PENDING: 'TIER_CHANGE_ALREADY_PENDING',
   /** A cancellation is already scheduled for this subscription */
   CANCELLATION_ALREADY_PENDING: 'CANCELLATION_ALREADY_PENDING',
+  /** rejectionReasonCode is missing or not a recognised value when rejecting a payment */
+  INVALID_REJECTION_REASON: 'INVALID_REJECTION_REASON',
 
   // --- Webhook endpoints ---
   /** Tenant has reached the maximum number of webhook endpoints for their plan */
@@ -120,12 +124,16 @@ const ErrorCodes = Object.freeze({
   // --- File upload ---
   /** Multipart file upload is malformed or contains an unexpected field */
   INVALID_FILE_UPLOAD: 'INVALID_FILE_UPLOAD',
+  /** Payment already has the maximum number of active proof files */
+  PROOF_FILE_LIMIT_REACHED: 'PROOF_FILE_LIMIT_REACHED',
 
   // --- Infrastructure (internal errors) ---
   /** AES-GCM decryption failed — possible data corruption or wrong key */
   DECRYPTION_FAILED: 'DECRYPTION_FAILED',
   /** No builder is registered for the requested document type code */
   BUILDER_NOT_FOUND: 'BUILDER_NOT_FOUND',
+  /** OPERATOR_NAME/OPERATOR_RUC/OPERATOR_EMAIL env vars not set — cannot publish legal documents */
+  OPERATOR_CONFIG_MISSING: 'OPERATOR_CONFIG_MISSING',
 });
 
 module.exports = ErrorCodes;

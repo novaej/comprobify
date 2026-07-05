@@ -66,7 +66,8 @@ GET /v1/documents/:accessKey/events
 | `REBUILT` | Document was rebuilt after rejection |
 | `ERROR` | An error occurred during a lifecycle operation |
 | `EMAIL_SENT` | Authorization email sent to buyer |
-| `EMAIL_FAILED` | Email send failed permanently |
+| `EMAIL_FAILED` | Email send was attempted and failed |
+| `EMAIL_SKIPPED` | Email was intentionally not sent (e.g. no buyer email on file) — no send was attempted |
 | `EMAIL_DELIVERED` | Mailgun confirmed delivery to the recipient's mail server |
 | `EMAIL_TEMP_FAILED` | Temporary delivery failure — Mailgun will retry |
 | `EMAIL_COMPLAINED` | Recipient marked the email as spam |

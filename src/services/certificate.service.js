@@ -20,6 +20,18 @@ function parseCertificate(p12Buffer, p12Password) {
   const pkcs8Bags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
   const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
   const certBag = certBags[forge.oids.certBag];
+  // Index 1 (not 0) is where the issuing CA's friendly name lives in a
+  // well-formed SRI-accredited P12 (leaf + CA chain) — this is what
+  // classifies BANCO CENTRAL vs. SECURITY DATA below. A P12 with only a
+  // single certificate (no chain) doesn't have that second entry; fail with
+  // a clean CERTIFICATE_INVALID instead of an unformatted TypeError crash.
+  if (!certBag || certBag.length < 2 || !certBag[1].attributes?.friendlyName?.length) {
+    throw new AppError(
+      'P12 certificate does not contain the expected certificate chain (leaf + CA certificate).',
+      400,
+      ErrorCodes.CERTIFICATE_INVALID
+    );
+  }
   const friendlyName = certBag[1].attributes.friendlyName[0];
 
   const cert = certBag.reduce((prev, curr) =>

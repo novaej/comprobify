@@ -4,12 +4,14 @@ const controller = require('../controllers/notification.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
+const requireNotSuspended = require('../middleware/require-not-suspended');
 const { readLimiter, writeLimiter } = require('../middleware/rate-limit');
 const NotificationTypes = require('../constants/notification-types');
 
 const router = Router();
 
 router.use(authenticate);
+router.use(requireNotSuspended);
 
 // ---------------------------------------------------------------------------
 // Validators

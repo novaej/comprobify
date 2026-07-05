@@ -29,15 +29,17 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/v1/payments/:id/proof` | Download the proof-of-transfer file you previously uploaded for a payment |
-| `PATCH` | `/v1/payments/:id/proof` | Upload proof of an SPI bank transfer for a pending subscription payment. A `REJECTED` payment can be re-submitted; only `VERIFIED` blocks further uploads. |
+| `PATCH` | `/v1/payments/:id/proof` | Upload proof of an SPI bank transfer for a pending subscription payment — up to 5 files per request, nothing already uploaded is ever overwritten. A `REJECTED` payment can be re-submitted; only `VERIFIED` blocks further uploads. |
+| `GET` | `/v1/payments/:id/proofs` | List every active proof file uploaded for a payment |
+| `GET` | `/v1/payments/:id/proofs/:proofId` | Download one specific proof file |
+| `DELETE` | `/v1/payments/:id/proofs/:proofId` | Soft-delete a proof file from your own view (your provider can still see it) |
 
 ## Subscriptions (authenticated)
 
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/v1/subscriptions` | Start a paid subscription for the authenticated tenant — works while still in sandbox or after promotion, requires a verified email |
-| `GET` | `/v1/subscriptions/me` | Full subscription/payment history, newest first, with `rejection_reason` when applicable — payment reviews and renewals fire notifications too, but activation itself doesn't, so this is still how a tenant checks status |
+| `GET` | `/v1/subscriptions/me` | Full subscription/payment history, newest first, with `rejection_reason_code` when applicable — payment reviews and renewals fire notifications too, but activation itself doesn't, so this is still how a tenant checks status |
 | `POST` | `/v1/subscriptions/change-tier` | Upgrade (immediate, prorated payment) or downgrade (scheduled, no payment) an existing `ACTIVE` subscription's tier — use `DELETE` below to cancel entirely |
 | `DELETE` | `/v1/subscriptions` | Schedule a cancellation at period end — drops the tenant to FREE with no refund when `current_period_end` passes |
 
@@ -52,6 +54,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `POST` | `/v1/tenants/agreements` | Accept all PENDING agreements — required before promoting to production |
 | `GET` | `/v1/tenants/agreements/history` | List all personalized agreement instances for the tenant, with status and acceptance timestamps |
 | `GET` | `/v1/tenants/agreements/:type` | Render the tenant's personalized document as HTML — includes their business name/RUC and the dates as of when the account was created |
+| `GET` | `/v1/tenants/events` | Full tenant-level audit trail (verification, subscription, payment, tier/billing-interval change history), chronological |
 
 ## Issuers (authenticated)
 

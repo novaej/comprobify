@@ -42,8 +42,10 @@ export default defineConfig({
             text: 'Payments',
             collapsed: false,
             items: [
-              { text: 'Get Payment Proof', link: '/endpoints/get-payment-proof' },
               { text: 'Submit Payment Proof', link: '/endpoints/submit-payment-proof' },
+              { text: 'List Payment Proofs', link: '/endpoints/list-payment-proofs' },
+              { text: 'Download Payment Proof', link: '/endpoints/download-payment-proof' },
+              { text: 'Delete Payment Proof', link: '/endpoints/delete-payment-proof' },
             ],
           },
           {
@@ -63,6 +65,7 @@ export default defineConfig({
               { text: 'Get Current Tenant', link: '/endpoints/tenant-me' },
               { text: 'Update Language', link: '/endpoints/tenant-language' },
               { text: 'Promote to Production', link: '/endpoints/promote-tenant' },
+              { text: 'Get Tenant Events', link: '/endpoints/tenant-events' },
             ],
           },
           {

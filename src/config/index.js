@@ -20,6 +20,9 @@ const config = {
   email: {
     provider:                 process.env.EMAIL_PROVIDER                 || 'mailgun',
     from:                     process.env.EMAIL_FROM                     || '',
+    // Optional override for invoice/document emails only — falls back to
+    // EMAIL_FROM when unset, so existing deployments need no change.
+    fromDocuments:            process.env.EMAIL_FROM_DOCUMENTS           || process.env.EMAIL_FROM || '',
     mailgunApiKey:            process.env.MAILGUN_API_KEY                || '',
     mailgunDomain:            process.env.MAILGUN_DOMAIN                 || '',
     mailgunWebhookSigningKey: process.env.MAILGUN_WEBHOOK_SIGNING_KEY    || '',

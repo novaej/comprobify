@@ -4,6 +4,7 @@ const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const tenantEventModel = require('../models/tenant-event.model');
+const { formatTenantEvent } = require('../presenters/tenant-event.presenter');
 const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
@@ -53,6 +54,9 @@ async function createTenant(fields) {
     throw new ConflictError(`A tenant with email ${fields.email} already exists`);
   }
   const tier = fields.subscriptionTier || 'FREE';
+  if (!TIERS[tier]) {
+    throw new AppError(`Unknown subscription tier: '${tier}'. Valid tiers: ${Object.keys(TIERS).join(', ')}`, 400, ErrorCodes.INVALID_TIER);
+  }
   const row = await tenantModel.create({
     email: fields.email,
     subscriptionTier: tier,
@@ -84,8 +88,11 @@ async function updateTenantStatus(id, status) {
   if (!allowed.includes(status)) {
     throw new AppError(`Invalid status: '${status}'. Valid values: ${allowed.join(', ')}`, 400, ErrorCodes.INVALID_TENANT_STATUS);
   }
+  const previous = await tenantModel.findById(id);
+  if (!previous) throw new NotFoundError('Tenant');
+
   const row = await tenantModel.updateStatus(id, status);
-  if (!row) throw new NotFoundError('Tenant');
+  await tenantEventModel.create(id, 'STATUS_CHANGED', { from: previous.status, to: status });
   return formatTenant(row);
 }
 
@@ -93,6 +100,13 @@ async function verifyTenant(id) {
   const row = await tenantModel.activate(id);
   if (!row) throw new NotFoundError('Tenant');
   return formatTenant(row);
+}
+
+async function listTenantEvents(id) {
+  const tenant = await tenantModel.findById(id);
+  if (!tenant) throw new NotFoundError('Tenant');
+  const events = await tenantEventModel.findByTenantId(id);
+  return events.map(formatTenantEvent);
 }
 
 // --- Issuer management ---
@@ -296,6 +310,6 @@ async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
 }
 
 module.exports = {
-  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant,
+  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, listTenantEvents,
   createIssuer, listIssuers, createApiKey, revokeApiKey, promoteTenant, renewIssuerCertificate,
 };

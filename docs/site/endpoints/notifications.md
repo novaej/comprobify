@@ -129,15 +129,14 @@ Created automatically (fire-and-forget) when your provider verifies a payment pr
   "paymentId": 18,
   "subscriptionId": 12,
   "tier": "STARTER",
+  "billingInterval": "MONTHLY",
   "purpose": "INITIAL",
-  "amount": "17.39",
-  "ivaAmount": "2.61",
-  "totalAmount": "20.00",
-  "rejectionReason": null
+  "amount": "20.00",
+  "rejectionReasonCode": null
 }
 ```
 
-`purpose` is `INITIAL`, `TIER_CHANGE`, or `RENEWAL`.
+`purpose` is `INITIAL`, `TIER_CHANGE`, or `RENEWAL`. For a `TIER_CHANGE` payment, `tier`/`billingInterval` are the **target** plan being purchased, not the subscription's current one — e.g. on a payment for a monthly-STARTER-to-yearly-GROWTH change, this shows `"tier": "GROWTH"`, `"billingInterval": "YEARLY"`. `amount` is the full IVA-inclusive total (what's actually transferred via SPI), not the pre-IVA base.
 
 ---
 
@@ -147,7 +146,7 @@ Same trigger as `PAYMENT_VERIFIED`, for a rejected decision instead.
 
 **Severity:** `WARNING`
 
-**Metadata:** same shape as `PAYMENT_VERIFIED`, with `rejectionReason` populated — re-submit proof for the same `paymentId` via [Submit Payment Proof](submit-payment-proof.md).
+**Metadata:** same shape as `PAYMENT_VERIFIED`, with `rejectionReasonCode` populated (one of `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — re-submit proof for the same `paymentId` via [Submit Payment Proof](submit-payment-proof.md).
 
 ---
 

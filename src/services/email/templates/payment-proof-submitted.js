@@ -10,17 +10,24 @@ const PURPOSE_LABELS = { INITIAL: 'initial subscription', TIER_CHANGE: 'tier cha
  */
 function render(payment, subscription, tenant) {
   const purposeLabel = PURPOSE_LABELS[payment.purpose] || payment.purpose;
-  const amount = parseFloat(payment.amount).toFixed(2);
+  const amount = parseFloat(payment.total_amount).toFixed(2);
+  // For a TIER_CHANGE payment, the subscription still reflects its CURRENT
+  // tier/interval — target_tier/target_billing_interval on the payment carry
+  // what's actually being purchased. INITIAL/RENEWAL payments never set
+  // target_tier, so this correctly falls back to the subscription's own.
+  const tier = payment.target_tier || subscription.tier;
+  const billingInterval = payment.target_billing_interval || subscription.billing_interval;
 
   const subject = `[Comprobify] Payment proof submitted — tenant #${tenant.id}, payment #${payment.id}`;
 
   const text = [
     `Tenant #${tenant.id} (${tenant.email}) uploaded proof for a ${purposeLabel} payment.`,
     '',
-    `  Payment ID:      ${payment.id}`,
-    `  Subscription ID: ${subscription.id}`,
-    `  Tier:             ${subscription.tier}`,
-    `  Amount:           $${amount}`,
+    `  Payment ID:        ${payment.id}`,
+    `  Subscription ID:   ${subscription.id}`,
+    `  Tier:              ${tier}`,
+    `  Billing Frequency: ${billingInterval}`,
+    `  Amount:            $${amount}`,
     '',
     'Review the uploaded file:',
     `  GET /v1/admin/payments/${payment.id}/proof`,
@@ -38,7 +45,8 @@ function render(payment, subscription, tenant) {
   <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Payment ID</td><td style="padding: 6px 12px;">${payment.id}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Subscription ID</td><td style="padding: 6px 12px;">${subscription.id}</td></tr>
-    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Tier</td><td style="padding: 6px 12px;">${escapeHtml(subscription.tier)}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Tier</td><td style="padding: 6px 12px;">${escapeHtml(tier)}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Billing Frequency</td><td style="padding: 6px 12px;">${escapeHtml(billingInterval)}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Amount</td><td style="padding: 6px 12px;">$${amount}</td></tr>
   </table>
   <p>Review: <code>GET /v1/admin/payments/${payment.id}/proof</code></p>

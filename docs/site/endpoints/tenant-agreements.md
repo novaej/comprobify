@@ -58,7 +58,7 @@ GET /v1/tenants/agreements/:type
 
 **URL parameter:** `:type` must be `TERMS`, `PRIVACY`, or `DPA`.
 
-Returns the tenant's personalized document as `text/html` — the exact content that was stored at generation time, including the tenant's own business name and RUC where applicable (particularly visible in the DPA). A disclaimer notice is prepended indicating the document has not been formally reviewed by a legal counsel.
+Returns the tenant's personalized document as a complete, self-contained `text/html` page (styled, same formal-document formatting as `GET /v1/agreements/:type` — see its Notes) — the exact content that was stored at generation time, including the tenant's own business name and RUC where applicable (particularly visible in the DPA). A disclaimer notice is prepended pointing to the support inbox for questions before accepting.
 
 Response headers include:
 - `X-Document-Status` — `PENDING` or `ACCEPTED`
@@ -71,9 +71,10 @@ Response headers include:
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `:type` is not a valid document type |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` | Account is suspended |
 | `404` | `AGREEMENT_NOT_FOUND` | No template has been published yet for this type |
 | `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+
+Both endpoints on this page are read-only, so they stay reachable even if the tenant's account is `SUSPENDED` — see the `ACCOUNT_SUSPENDED` entry in the [error catalogue](../errors/index.md).
 
 ## Notes
 

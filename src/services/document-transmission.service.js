@@ -141,7 +141,7 @@ async function checkAuthorization(accessKey, issuer) {
           return Promise.all([
             documentModel.updateStatus(updated.id, updated.status, emailFields, updated.issuer_id, issuer.sandbox),
             documentEventModel.create(updated.id,
-              sent ? EventType.EMAIL_SENT : EventType.EMAIL_FAILED,
+              sent ? EventType.EMAIL_SENT : EventType.EMAIL_SKIPPED,
               null, null, { to: updated.buyer_email }, null, updated.issuer_id, issuer.sandbox),
           ]);
         })

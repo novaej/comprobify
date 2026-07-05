@@ -12,8 +12,16 @@ function render(payment, subscription, decision, language = 'es') {
   const t = getTranslations(language).email[key];
 
   const purposeLabel = t.purposeLabels[payment.purpose] || t.purposeLabels.INITIAL;
-  const amount = parseFloat(payment.amount).toFixed(2);
-  const tier = subscription.tier;
+  const amount = parseFloat(payment.total_amount).toFixed(2);
+  // For a TIER_CHANGE payment, the subscription still reflects its CURRENT
+  // tier/interval — target_tier/target_billing_interval on the payment carry
+  // what's actually being purchased. INITIAL/RENEWAL payments never set
+  // target_tier, so this correctly falls back to the subscription's own.
+  const tier = payment.target_tier || subscription.tier;
+  const billingInterval = payment.target_billing_interval || subscription.billing_interval;
+  const reasonLabel = decision === 'REJECTED'
+    ? t.rejectionReasonLabels[payment.rejection_reason_code] || t.rejectionReasonLabels.OTHER
+    : null;
 
   const subject = t.subject(purposeLabel);
 
@@ -22,21 +30,23 @@ function render(payment, subscription, decision, language = 'es') {
     '',
     t.body(purposeLabel, tier),
     '',
-    `  ${t.labelTier}:   ${tier}`,
+    `  ${t.labelTier}: ${tier}`,
+    `  ${t.labelBillingInterval}: ${billingInterval}`,
     `  ${t.labelAmount}: $${amount}`,
   ];
   if (decision === 'REJECTED') {
-    textLines.push(`  ${t.labelReason}: ${payment.rejection_reason || ''}`);
+    textLines.push(`  ${t.labelReason}: ${reasonLabel}`);
   }
   textLines.push('', t.nextSteps, '', t.disclaimer);
   const text = textLines.join('\n');
 
   const htmlRows = [
     `<tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelTier)}</td><td style="padding: 6px 12px;">${escapeHtml(tier)}</td></tr>`,
+    `<tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelBillingInterval)}</td><td style="padding: 6px 12px;">${escapeHtml(billingInterval)}</td></tr>`,
     `<tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelAmount)}</td><td style="padding: 6px 12px;">$${amount}</td></tr>`,
   ];
   if (decision === 'REJECTED') {
-    htmlRows.push(`<tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelReason)}</td><td style="padding: 6px 12px;">${escapeHtml(payment.rejection_reason || '')}</td></tr>`);
+    htmlRows.push(`<tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">${escapeHtml(t.labelReason)}</td><td style="padding: 6px 12px;">${escapeHtml(reasonLabel)}</td></tr>`);
   }
 
   const html = `

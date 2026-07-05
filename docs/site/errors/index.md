@@ -117,11 +117,13 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `DOCUMENT_NOT_AUTHORIZED` | Operation (RIDE, email) requires document status `AUTHORIZED` |
 | `SELF_REVOCATION_FORBIDDEN` | Cannot revoke the API key used to authenticate this request |
 | `INVALID_FILE_UPLOAD` | Uploaded file is missing, the wrong type, or exceeds the field's size limit (e.g. a logo over 500 KB) |
+| `PROOF_FILE_LIMIT_REACHED` | Payment already has the maximum number of active proof files (10) — delete one before uploading more |
 | `VERSION_MISMATCH` | `termsVersion` in `POST /v1/register` or `POST /v1/tenants/agreements` does not match the currently published TERMS document version — re-fetch `GET /v1/agreements` and present the current version before asking the user to accept again |
 | `LAST_ISSUER_CANNOT_BE_REMOVED` | Tenant has only one active issuer left — it cannot be removed |
 | `ISSUER_HAS_DOCUMENTS` | Issuer has issued documents (in either environment) and cannot be removed |
 | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` is not greater than the counter's current value |
-| `TIER_CHANGE_NO_OP` | Requested tier on Change Tier matches the subscription's current tier |
+| `TIER_CHANGE_NO_OP` | Requested tier and billing interval on Change Tier both match the subscription's current values |
+| `INVALID_BILLING_INTERVAL` | `billingInterval` on Create Subscription or Change Tier is not `MONTHLY` or `YEARLY` |
 | `BAD_REQUEST` | Other malformed request (fallback — read `detail`) |
 
 ### 401 Unauthorized
@@ -171,7 +173,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `ALREADY_VERIFIED` | Attempting to resend verification to an already-verified account |
 | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | Tenant already has a subscription in progress (promotion with `tier`, or Admin's Create Subscription) |
 | `NO_ACTIVE_SUBSCRIPTION` | Cancel or Change Tier requested but the tenant has no `ACTIVE` subscription |
-| `TIER_CHANGE_ALREADY_PENDING` | A downgrade is already scheduled, or an upgrade payment is already in flight, for this subscription |
+| `TIER_CHANGE_ALREADY_PENDING` | A tier/billing-interval change is already scheduled, or its payment is already in flight, for this subscription |
 | `CANCELLATION_ALREADY_PENDING` | A cancellation (`DELETE /v1/subscriptions`) is already scheduled for this subscription |
 | `CONFLICT` | Idempotency key reused with a different payload, payment already decided, or other conflict |
 

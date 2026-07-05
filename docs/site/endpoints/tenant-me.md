@@ -46,7 +46,6 @@ GET /v1/tenants/me
 | Status | Code | When |
 |---|---|---|
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` | Account is suspended |
 | `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
 
 ## Notes
@@ -54,4 +53,5 @@ GET /v1/tenants/me
 - No `X-Issuer-Id` header is required — this endpoint resolves the tenant, not an issuer.
 - The response reflects exactly what the `authenticate` middleware already resolved from the API key — there is no separate database lookup, so any active key (sandbox or production) returns its tenant's current state.
 - This does not return the list of issuers (branches) — use `GET /v1/issuers` for that.
+- Unlike most authenticated endpoints, this one stays reachable even when `status` is `SUSPENDED` — it's one of a small set of read-only endpoints a suspended tenant can still use (see the `ACCOUNT_SUSPENDED` entry in the [error catalogue](../errors/index.md)). Polling this endpoint is a valid way to detect a suspension and check the account's current `status`.
 - **This is also how you find out a paid-tier upgrade completed.** After requesting a tier at [promotion](promote-tenant.md) and [submitting payment proof](submit-payment-proof.md), you'll get a [notification](notifications.md) and email the moment your provider records a decision, but final activation (once SRI authorizes the self-billed invoice) still has no notification of its own — poll this endpoint periodically; `subscriptionTier` and `documentQuota` update the moment the subscription activates. For the in-between states (pending, rejected, why) see [`GET /v1/subscriptions/me`](get-my-subscriptions.md) instead — this endpoint only shows the end result.

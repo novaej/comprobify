@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const MarkdownIt = require('markdown-it');
 const agreementModel = require('../models/agreement.model');
+const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const ErrorCodes = require('../constants/error-codes');
 const config = require('../config');
@@ -10,6 +11,14 @@ const config = require('../config');
 const markdownRenderer = new MarkdownIt();
 
 const AGREEMENT_TYPES = ['TERMS', 'PRIVACY', 'DPA'];
+
+// Spanish-only — docs/legal/*.md source is Spanish, same as the documents
+// themselves (no locale system involved here, unlike email/notifications).
+const DOCUMENT_TYPE_TITLES = {
+  TERMS: 'Términos de Servicio',
+  PRIVACY: 'Política de Privacidad',
+  DPA: 'Acuerdo de Procesamiento de Datos',
+};
 
 // Maps each document type to its canonical source file in docs/legal/.
 // POST /v1/admin/agreements reads from here — no content in the body.
@@ -46,8 +55,10 @@ function stripDraftHeader(markdown) {
 async function publish(documentType, version) {
   const { nombre, ruc, email } = config.operator;
   if (!nombre || !ruc || !email) {
-    throw new Error(
-      'OPERATOR_NAME, OPERATOR_RUC, and OPERATOR_EMAIL must all be set before publishing legal documents'
+    throw new AppError(
+      'OPERATOR_NAME, OPERATOR_RUC, and OPERATOR_EMAIL must all be set before publishing legal documents',
+      500,
+      ErrorCodes.OPERATOR_CONFIG_MISSING
     );
   }
 
@@ -56,10 +67,22 @@ async function publish(documentType, version) {
   const stripped = stripDraftHeader(raw);
   // Operator identity is the same across all tenants — substitute it at
   // publish time so it's baked into the stored template. Tenant-specific
-  // tokens ({{cliente.*}}, {{fechaDocumento}}) are resolved later in
-  // tenant-legal-document.service.js when generating per-tenant instances.
+  // tokens ({{cliente.*}}) are resolved later in tenant-agreement.service.js
+  // when generating per-tenant instances.
   const domicilio = config.operator.domicilio || 'Domicilio disponible previa solicitud razonable';
-  const contentMarkdown = substitutePlaceholders(stripped, { operador: { nombre, ruc, email, domicilio } });
+  // {{soporte.email}} is for "write to us" invitations (termination requests,
+  // "para consultas", exercising data rights) — routed to the support inbox,
+  // not the operator's personal address, same reasoning as buildDisclaimer()
+  // above. {{operador.email}} stays reserved for identifying the legally
+  // responsible party (e.g. the DPA's "Encargado" clause). Falls back to the
+  // operator's email (already validated non-empty above) when
+  // ADMIN_NOTIFICATION_EMAIL is unset, so a published document never bakes in
+  // a blank contact address.
+  const soporteEmail = config.adminNotificationEmail || email;
+  const contentMarkdown = substitutePlaceholders(stripped, {
+    operador: { nombre, ruc, email, domicilio },
+    soporte: { email: soporteEmail },
+  });
   const contentHash = sha256Hex(contentMarkdown);
   const doc = await agreementModel.create({ documentType, version, contentMarkdown, contentHash });
   // Auto-activate: new version becomes current immediately, same UX as before
@@ -117,14 +140,103 @@ async function getCurrentHtml(documentType, values = {}) {
 // Returns the notice block prepended to every rendered legal document.
 // Professional, transparent without undermining confidence — no mention of
 // "not reviewed by a lawyer" which reads as a warning rather than context.
+// Uses ADMIN_NOTIFICATION_EMAIL (the support inbox), not OPERATOR_EMAIL —
+// this is a "have questions before you accept" prompt, not a legal-identity
+// contact point. OPERATOR_EMAIL stays reserved for the operator's identity
+// baked into the template content itself (data controller contact, account
+// termination requests — see docs/legal/*.md's {{operador.email}} tokens).
 function buildDisclaimer(version) {
-  const email = config.operator?.email || '';
+  const email = config.adminNotificationEmail || '';
   const contact = email
     ? `puede contactarnos en <a href="mailto:${email}" style="color:#495057">${email}</a>`
-    : 'puede contactarnos a través de los canales indicados en los documentos';
+    : 'puede contactarnos a través de los canales indicados en el documento';
   return `<div style="background:#f8f9fa;border-left:4px solid #6c757d;padding:12px 16px;margin-bottom:24px;font-size:0.9em;color:#495057">
-<strong>Aviso:</strong> Estos documentos han sido elaborados para establecer las condiciones de uso del Servicio y el tratamiento de datos personales. Pueden actualizarse para reflejar cambios en la legislación o en el funcionamiento del Servicio. Si tiene preguntas sobre su contenido, ${contact} antes de aceptarlos.<br><small style="color:#6c757d">Versión: ${version}</small>
+<strong>Aviso:</strong> Este documento ha sido elaborado para establecer las condiciones de uso del Servicio y el tratamiento de datos personales. Puede actualizarse para reflejar cambios en la legislación o en el funcionamiento del Servicio. Si tiene preguntas sobre su contenido, ${contact} antes de aceptarlo.<br><small style="color:#6c757d">Versión: ${version}</small>
 </div>
+`;
+}
+
+// Wraps a rendered document (disclaimer + markdown-it output) in a full,
+// self-contained HTML page — the raw fragment markdown-it produces has no
+// <head>/<title>/styling, so viewed directly in a browser it reads as
+// unstyled plain text. Both GET /v1/agreements/:type and
+// GET /v1/tenants/agreements/:type route through this so a tenant or
+// prospective client sees a properly formatted, formal-looking document
+// (justified body text, a title, spaced/underlined headings, a paper-like
+// container) rather than raw HTML. Every document's markdown source already
+// opens with its own `# Title — Comprobify` (rendered as <h1>), so this only
+// adds the page chrome around it plus the <title> tag for the browser tab.
+function wrapDocumentHtml(documentType, bodyHtml) {
+  const title = DOCUMENT_TYPE_TITLES[documentType] || documentType;
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title} — Comprobify</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 20px;
+    background: #f1f3f5;
+    font-family: Georgia, 'Times New Roman', Cambria, serif;
+    color: #212529;
+    line-height: 1.7;
+  }
+  .doc-container {
+    max-width: 820px;
+    margin: 0 auto;
+    background: #ffffff;
+    padding: 56px 64px;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  }
+  h1 {
+    font-size: 1.9em;
+    text-align: center;
+    margin: 0 0 28px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #212529;
+    letter-spacing: 0.02em;
+  }
+  h2 {
+    font-size: 1.25em;
+    margin-top: 2.2em;
+    margin-bottom: 0.6em;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #dee2e6;
+    color: #343a40;
+  }
+  h3 {
+    font-size: 1.05em;
+    margin-top: 1.6em;
+    margin-bottom: 0.5em;
+    color: #495057;
+  }
+  p, li { text-align: justify; hyphens: auto; }
+  p { margin: 0 0 1em; }
+  ul, ol { margin: 0 0 1em; padding-left: 1.4em; }
+  strong { color: #212529; }
+  a { color: #1864ab; }
+  table { width: 100%; border-collapse: collapse; margin: 1em 0; font-size: 0.95em; }
+  th, td { border: 1px solid #dee2e6; padding: 8px 12px; text-align: left; }
+  hr { border: none; border-top: 1px solid #dee2e6; margin: 2em 0; }
+  @media print {
+    body { background: #ffffff; padding: 0; }
+    .doc-container { box-shadow: none; padding: 0; }
+  }
+  @media (max-width: 600px) {
+    .doc-container { padding: 32px 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="doc-container">
+${bodyHtml}
+</div>
+</body>
+</html>
 `;
 }
 
@@ -143,4 +255,5 @@ module.exports = {
   formatDate,
   stripDraftHeader,
   buildDisclaimer,
+  wrapDocumentHtml,
 };

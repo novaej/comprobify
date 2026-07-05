@@ -448,7 +448,7 @@ Run this after a tenant submits proof via `PATCH /v1/payments/{{payment_id}}/pro
 
 To reject:
 ```json
-{ "decision": "REJECTED", "rejectionReason": "Transfer amount does not match. Expected $19.00." }
+{ "decision": "REJECTED", "rejectionReasonCode": "AMOUNT_MISMATCH" }
 ```
 
 ✓ Test script logs the new payment status. On `VERIFIED`, the subscription moves to `PAYMENT_RECEIVED`.

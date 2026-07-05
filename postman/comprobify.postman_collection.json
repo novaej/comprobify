@@ -82,6 +82,10 @@
       "value": "",
       "description": "Email verification token — copy from the verification email link (?token=...)",
       "type": "string"
+    },
+    {
+      "key": "proof_id",
+      "value": ""
     }
   ],
   "item": [
@@ -743,6 +747,25 @@
             },
             "description": "DPA with the tenant's own businessName and RUC in the intro paragraph. Verify the substitution is correct before accepting."
           }
+        },
+        {
+          "name": "Get Tenant Events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "events"
+              ]
+            },
+            "description": "Full tenant-level audit trail (email verification, subscription, payment, and tier/billing-interval change lifecycle events), chronological (oldest first). This is the one place that shows the sequence of changes to a subscription over time — e.g. that it started as monthly GROWTH and later changed to yearly STARTER — not just its current state (see Get My Subscriptions / Get Current Tenant for that)."
+          }
         }
       ]
     },
@@ -750,7 +773,7 @@
       "name": "Payments",
       "item": [
         {
-          "name": "Get Payment Proof",
+          "name": "List Payment Proofs",
           "request": {
             "method": "GET",
             "header": [
@@ -760,7 +783,7 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/v1/payments/{{payment_id}}/proof",
+              "raw": "{{base_url}}/v1/payments/{{payment_id}}/proofs",
               "host": [
                 "{{base_url}}"
               ],
@@ -768,10 +791,62 @@
                 "v1",
                 "payments",
                 "{{payment_id}}",
-                "proof"
+                "proofs"
               ]
             },
-            "description": "Tenant-authenticated (your own API key). Downloads the proof-of-transfer file previously uploaded for a payment. The payment must belong to your tenant — the API enforces this via the subscription join. Returns the raw file with its original Content-Type and Content-Disposition headers. Returns 404 if no proof has been uploaded yet."
+            "description": "Tenant-authenticated (your own API key). Lists metadata (id, filename, mimeType, active, createdAt) for every ACTIVE proof file uploaded for a payment — a deleted file drops out of this list. Use a proof's id with Download Payment Proof to fetch the file itself."
+          }
+        },
+        {
+          "name": "Download Payment Proof",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/payments/{{payment_id}}/proofs/{{proof_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "{{payment_id}}",
+                "proofs",
+                "{{proof_id}}"
+              ]
+            },
+            "description": "Tenant-authenticated (your own API key). Downloads one specific proof-of-transfer file. The payment must belong to your tenant, and the file must still be active (not deleted) — the API enforces this via the subscription join. Returns the raw file with its original Content-Type and Content-Disposition headers. Returns 404 if the proof doesn't exist, doesn't belong to this payment, or has been deleted."
+          }
+        },
+        {
+          "name": "Delete Payment Proof",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/payments/{{payment_id}}/proofs/{{proof_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "{{payment_id}}",
+                "proofs",
+                "{{proof_id}}"
+              ]
+            },
+            "description": "Tenant-authenticated (your own API key). Soft-deletes one proof file from your own view — the operator can still see and download it for their records (see Admin > List Payment Proofs). Fails with 409 if the payment is already VERIFIED. Deleting frees up room under the 10-file cumulative limit enforced on Submit Payment Proof."
           }
         },
         {
@@ -803,11 +878,30 @@
                   "key": "proof",
                   "type": "file",
                   "src": []
+                },
+                {
+                  "key": "proof",
+                  "type": "file",
+                  "src": [],
+                  "disabled": true
                 }
               ]
             },
-            "description": "Tenant-authenticated (your own API key, not admin_secret). Upload proof of the SPI bank transfer (PNG/JPEG/GIF/PDF, max 2 MB) for a payment you created via promotion, Create Subscription, Change Tier, or a renewal reminder. Moves the payment to REPORTED. Fails if the payment isn't yours, or has already been VERIFIED/REJECTED.\n\nEmails the operator (if ADMIN_NOTIFICATION_EMAIL is configured) that a proof is waiting. After this, the operator reviews the proof (Admin > Review Payment) and verifies or rejects it — you'll get an email either way."
-          }
+            "description": "Tenant-authenticated (your own API key, not admin_secret). Upload proof of the SPI bank transfer (PNG/JPEG/GIF/PDF, max 2 MB per file) for a payment you created via promotion, Create Subscription, Change Tier, or a renewal reminder. Repeat the `proof` field to send up to 5 files in one request — call this endpoint again any time to add more, nothing already uploaded is ever overwritten (a payment can have at most 10 active files total, across every attempt combined). Moves the payment to REPORTED. Fails if the payment isn't yours, has already been VERIFIED, or is already at the file limit.\n\nEmails the operator (if ADMIN_NOTIFICATION_EMAIL is configured) that a proof is waiting. After this, the operator reviews the files (Admin > List Payment Proofs / Get Payment Proof) and verifies or rejects the payment — you'll get an email either way. If rejected, the files from that attempt stay visible (see List Payment Proofs) — you're not starting over, just adding more."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.proofs?.length) pm.collectionVariables.set('proof_id', String(r.proofs[0].id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     },
@@ -888,7 +982,7 @@
                 "me"
               ]
             },
-            "description": "Tenant-authenticated (your own API key). Returns your full subscription history, newest first, each with its payments nested (status, amount, rejection_reason if rejected). The proof file itself is never included — only filename/mime type.\n\nThis is how you find out a paid-tier upgrade landed — there's no notification; `subscriptionTier`/`documentQuota` on `GET /v1/tenants/me` update automatically once it does, but this endpoint shows the in-between states (and the `rejection_reason` if a proof was rejected, so you know what to fix before re-uploading via Submit Payment Proof)."
+            "description": "Tenant-authenticated (your own API key). Returns your full subscription history, newest first, each with its payments nested (status, amount, rejection_reason_code if rejected). The proof file itself is never included — only filename/mime type.\n\nThis is how you find out a paid-tier upgrade landed — there's no notification; `subscriptionTier`/`documentQuota` on `GET /v1/tenants/me` update automatically once it does, but this endpoint shows the in-between states (and the `rejection_reason_code` if a proof was rejected, so you know what to fix before re-uploading via Submit Payment Proof)."
           }
         },
         {
@@ -918,14 +1012,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tier\": \"GROWTH\"\n}",
+              "raw": "{\n  \"tier\": \"GROWTH\",\n  \"billingInterval\": \"YEARLY\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Tenant-authenticated (your own API key). Changes the tier on your existing ACTIVE subscription — requires having already promoted with a paid tier (see Promote to Production / Admin > Create Subscription). No payment gateway exists, so this rides the same manual proof/review pipeline as the initial subscription rather than charging anything automatically.\n\n**Upgrade** (target tier's price higher than your current one): takes effect immediately once paid. The response includes a prorated `payment` (the price difference scaled by the remaining time in your current billing period) and `bankTransfer` instructions — upload proof via the same Submit Payment Proof endpoint used for your initial subscription. If the prorated amount rounds to $0 (almost no time left in the period), it's applied immediately with no payment step at all.\n\n**Downgrade** (target tier's price lower): scheduled, not immediate, and needs no payment — you already paid for the current period at the higher tier. Your tier/quota stay exactly as they are until `current_period_end`, at which point it's applied automatically by the provider's scheduled job.\n\nTo cancel entirely and return to FREE, use `DELETE /v1/subscriptions` instead.\n\nFails with 409 `NO_ACTIVE_SUBSCRIPTION` if you have no ACTIVE subscription, 400 `TIER_CHANGE_NO_OP` if `tier` matches your current one, or 409 `TIER_CHANGE_ALREADY_PENDING` if a change is already in flight (only one at a time).\n\nPoll `GET /v1/subscriptions/me` to see status, and `GET /v1/tenants/me` once it lands."
+            "description": "Tenant-authenticated (your own API key). Changes the tier and/or billing interval on your existing ACTIVE subscription — requires having already promoted with a paid tier (see Promote to Production / Admin > Create Subscription). `billingInterval` is optional; omit it to keep your current interval (tier-only change). No payment gateway exists, so this rides the same manual proof/review pipeline as the initial subscription rather than charging anything automatically.\n\n**Same-interval upgrade** (target tier's price higher, interval unchanged): takes effect immediately once paid. The response includes a prorated `payment` (the price difference scaled by the remaining time in your current billing period) and `bankTransfer` instructions — upload proof via the same Submit Payment Proof endpoint used for your initial subscription. If the prorated amount rounds to $0 (almost no time left in the period), it's applied immediately with no payment step at all.\n\n**Same-interval downgrade** (target tier's price lower, interval unchanged): scheduled, not immediate, and needs no payment — you already paid for the current period at the higher tier. Your tier/quota stay exactly as they are until `current_period_end`, at which point it's applied automatically by the provider's scheduled job.\n\n**Any billing-interval change** (tier same, up, or down): always deferred to `current_period_end` and billed at the new tier+interval's full price — never prorated across mismatched cadences. E.g. monthly GROWTH -> yearly STARTER pays the full yearly-STARTER price and only takes effect once your current monthly period ends.\n\nTo cancel entirely and return to FREE, use `DELETE /v1/subscriptions` instead.\n\nFails with 409 `NO_ACTIVE_SUBSCRIPTION` if you have no ACTIVE subscription, 400 `TIER_CHANGE_NO_OP` if both `tier` and the resolved interval match your current subscription, 400 `INVALID_BILLING_INTERVAL` if `billingInterval` isn't MONTHLY/YEARLY, or 409 `TIER_CHANGE_ALREADY_PENDING` if a change is already in flight (only one at a time).\n\nPoll `GET /v1/subscriptions/me` to see status, `GET /v1/tenants/me` once it lands, or `GET /v1/tenants/events` for the full history of tier/interval changes.\n\n**In sandbox**, all of the above collapses into two simpler rules: a downgrade applies immediately for free, and everything else (an upgrade, or any interval change) is billed at the target plan's full price (never prorated) and applies immediately once its invoice authorizes (never scheduled to a period boundary) — a sandbox billing period is discarded entirely at promotion, so there's nothing meaningful to prorate against or defer to."
           }
         },
         {

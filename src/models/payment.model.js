@@ -3,21 +3,18 @@ const db = require('../config/database');
 const MUTABLE_EXTRA_COLUMNS = new Set([
   'reported_at',
   'verified_at',
-  'proof_file',
-  'proof_filename',
-  'proof_mime_type',
   'period_start',
   'period_end',
-  'rejection_reason',
+  'rejection_reason_code',
   'invoice_document_id',
 ]);
 
-async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = 'SPI_TRANSFER', purpose = 'INITIAL', targetTier = null }) {
+async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = 'SPI_TRANSFER', purpose = 'INITIAL', targetTier = null, targetBillingInterval = null }) {
   const { rows } = await db.query(
-    `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier, target_billing_interval)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method, purpose, targetTier]
+    [subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method, purpose, targetTier, targetBillingInterval]
   );
   return rows[0];
 }

@@ -14,8 +14,9 @@ const list = async (req, res) => {
 
 const getByType = async (req, res) => {
   const { html, version } = await agreementService.getCurrentHtml(req.params.type);
+  const body = agreementService.buildDisclaimer(version) + html;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(agreementService.buildDisclaimer(version) + html);
+  res.send(agreementService.wrapDocumentHtml(req.params.type, body));
 };
 
 module.exports = { list, getByType };

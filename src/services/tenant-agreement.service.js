@@ -18,7 +18,7 @@ async function generateForTenant(tenantId, issuer = null) {
 
   for (const { document_type } of lightweight) {
     const template = await agreementService.getCurrent(document_type);
-    const values = buildValues(template, resolvedIssuer);
+    const values = buildValues(resolvedIssuer);
     const rendered = agreementService.substitutePlaceholders(
       template.content_markdown,
       values
@@ -38,10 +38,8 @@ async function generateForTenant(tenantId, issuer = null) {
   return created;
 }
 
-function buildValues(template, issuer) {
+function buildValues(issuer) {
   return {
-    fechaVersion: agreementService.formatDate(template.created_at),
-    fechaDocumento: agreementService.formatDate(new Date()),
     cliente: {
       razonSocial: issuer?.business_name || '',
       ruc: issuer?.ruc || '',
@@ -141,7 +139,8 @@ async function renderForTenant(tenantId, documentType) {
     );
   }
 
-  const html = agreementService.buildDisclaimer(doc.template_version) + agreementService.renderHtml(doc.content_markdown, {});
+  const body = agreementService.buildDisclaimer(doc.template_version) + agreementService.renderHtml(doc.content_markdown, {});
+  const html = agreementService.wrapDocumentHtml(doc.document_type, body);
   return { html, status: doc.status, templateVersion: doc.template_version, acceptedAt: doc.accepted_at };
 }
 

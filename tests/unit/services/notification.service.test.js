@@ -34,14 +34,19 @@ describe('NotificationService', () => {
       notificationModel.create.mockResolvedValue({ id: 100, type: 'PAYMENT_VERIFIED' });
 
       const result = await notificationService.createPaymentReviewed(
-        { id: 20, purpose: 'INITIAL', amount: 19 }, { id: 10, tenant_id: 1, tier: 'STARTER' }, 'VERIFIED',
+        { id: 20, purpose: 'INITIAL', amount: 17.39, total_amount: 20 },
+        { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY' },
+        'VERIFIED',
       );
 
       expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
         tenantId: 1,
         type: 'PAYMENT_VERIFIED',
         severity: 'INFO',
-        metadata: expect.objectContaining({ paymentId: 20, subscriptionId: 10, tier: 'STARTER', purpose: 'INITIAL', amount: 19, rejectionReason: null }),
+        metadata: expect.objectContaining({
+          paymentId: 20, subscriptionId: 10, tier: 'STARTER', billingInterval: 'MONTHLY',
+          purpose: 'INITIAL', amount: 20, rejectionReasonCode: null,
+        }),
       }));
       expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: 100, type: 'PAYMENT_VERIFIED' });
       expect(result).toEqual({ id: 100, type: 'PAYMENT_VERIFIED' });
@@ -52,16 +57,35 @@ describe('NotificationService', () => {
       notificationModel.create.mockResolvedValue({ id: 101, type: 'PAYMENT_REJECTED' });
 
       await notificationService.createPaymentReviewed(
-        { id: 20, purpose: 'RENEWAL', amount: 19, rejection_reason: 'Transfer not reflected yet' },
-        { id: 10, tenant_id: 1, tier: 'STARTER' },
+        { id: 20, purpose: 'RENEWAL', amount: 16.52, total_amount: 19, rejection_reason_code: 'TRANSFER_NOT_FOUND' },
+        { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY' },
         'REJECTED',
       );
 
       expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
         type: 'PAYMENT_REJECTED',
         severity: 'WARNING',
-        message: expect.stringContaining('Transfer not reflected yet'),
-        metadata: expect.objectContaining({ rejectionReason: 'Transfer not reflected yet' }),
+        message: expect.stringContaining('no matching transfer was found in the account'),
+        metadata: expect.objectContaining({ amount: 19, rejectionReasonCode: 'TRANSFER_NOT_FOUND' }),
+      }));
+    });
+
+    test('uses the payment target_tier/target_billing_interval for a TIER_CHANGE payment, not the subscription\'s current values', async () => {
+      notificationPreferenceModel.isEnabled.mockResolvedValue(true);
+      notificationModel.create.mockResolvedValue({ id: 102, type: 'PAYMENT_VERIFIED' });
+
+      await notificationService.createPaymentReviewed(
+        {
+          id: 20, purpose: 'TIER_CHANGE', amount: 782.61, total_amount: 900,
+          target_tier: 'GROWTH', target_billing_interval: 'YEARLY',
+        },
+        { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY' },
+        'VERIFIED',
+      );
+
+      expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('GROWTH'),
+        metadata: expect.objectContaining({ tier: 'GROWTH', billingInterval: 'YEARLY', amount: 900 }),
       }));
     });
   });

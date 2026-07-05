@@ -1,5 +1,6 @@
 jest.mock('../../../src/models/subscription.model');
 jest.mock('../../../src/models/payment.model');
+jest.mock('../../../src/models/payment-proof.model');
 jest.mock('../../../src/models/document.model');
 jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/tenant-event.model');
@@ -8,6 +9,7 @@ jest.mock('../../../src/services/email.service');
 
 const subscriptionModel = require('../../../src/models/subscription.model');
 const paymentModel = require('../../../src/models/payment.model');
+const paymentProofModel = require('../../../src/models/payment-proof.model');
 const documentModel = require('../../../src/models/document.model');
 const tenantModel = require('../../../src/models/tenant.model');
 const tenantEventModel = require('../../../src/models/tenant-event.model');
@@ -242,6 +244,148 @@ describe('SubscriptionService', () => {
       });
       expect(result).toEqual({ subscription: { id: 10, tier: 'GROWTH' }, payment: null, amount: 0 });
     });
+
+    test('rejects an invalid billingInterval', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH', billing_interval: 'MONTHLY' });
+
+      await expect(subscriptionService.requestTierChange(1, 'GROWTH', 'WEEKLY'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_BILLING_INTERVAL' });
+      expect(paymentModel.create).not.toHaveBeenCalled();
+    });
+
+    test('rejects when tier and billingInterval both match the current subscription', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH', billing_interval: 'MONTHLY' });
+
+      await expect(subscriptionService.requestTierChange(1, 'GROWTH', 'MONTHLY'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'TIER_CHANGE_NO_OP' });
+    });
+
+    test('interval-only change (same tier): deferred, full price, no proration', async () => {
+      const periodEnd = new Date('2026-08-01T00:00:00Z');
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: 40, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' });
+
+      const result = await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.subscriptionId).toBe(10);
+      expect(createArgs.purpose).toBe('TIER_CHANGE');
+      expect(createArgs.targetTier).toBe('GROWTH');
+      expect(createArgs.targetBillingInterval).toBe('YEARLY');
+      // Full yearly-GROWTH sticker price (900), not prorated against the
+      // remaining monthly period.
+      expect(createArgs.totalAmount).toBe(900);
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGE_REQUESTED', expect.objectContaining({
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'GROWTH',
+        fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY', effectiveAt: periodEnd,
+      }));
+      expect(result).toEqual({
+        subscription: expect.objectContaining({ id: 10 }),
+        payment: { id: 40, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' },
+        bankTransfer: config.bankTransfer,
+        effectiveAt: periodEnd,
+      });
+    });
+
+    test('tier upgrade + interval change: deferred (not the immediate prorated path)', async () => {
+      const now = Date.now();
+      const periodStart = new Date(now - 15 * 24 * 60 * 60 * 1000);
+      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000);
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'STARTER', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_start: periodStart, current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: 41, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' });
+
+      await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+
+      expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.targetBillingInterval).toBe('YEARLY');
+      expect(createArgs.totalAmount).toBe(900); // full yearly-GROWTH price, not prorated
+    });
+
+    test('tier downgrade + interval change: deferred and paid (unlike a plain same-interval downgrade)', async () => {
+      const periodEnd = new Date('2026-08-01T00:00:00Z');
+      tenantModel.findById.mockResolvedValue({ id: 1 });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: 42, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'STARTER', target_billing_interval: 'YEARLY' });
+
+      const result = await subscriptionService.requestTierChange(1, 'STARTER', 'YEARLY');
+
+      expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.targetTier).toBe('STARTER');
+      expect(createArgs.targetBillingInterval).toBe('YEARLY');
+      expect(createArgs.totalAmount).toBe(200); // full yearly-STARTER price
+      expect(result.subscription).toEqual(expect.objectContaining({ id: 10, tier: 'GROWTH' }));
+    });
+
+    describe('sandbox tenant', () => {
+      test('downgrade applies immediately, free, no payment created', async () => {
+        tenantModel.findById.mockResolvedValue({ id: 1, sandbox: true });
+        subscriptionModel.findActiveByTenantId.mockResolvedValue({
+          id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: null, billing_interval: 'MONTHLY',
+        });
+        subscriptionModel.applyTierChange.mockResolvedValue({ id: 10, tier: 'STARTER' });
+
+        const result = await subscriptionService.requestTierChange(1, 'STARTER');
+
+        expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER', 'MONTHLY');
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
+        expect(paymentModel.create).not.toHaveBeenCalled();
+        expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', expect.objectContaining({
+          subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER', totalAmount: 0,
+        }));
+        expect(result).toEqual({ subscription: { id: 10, tier: 'STARTER' }, payment: null, amount: 0 });
+      });
+
+      test('same-interval upgrade is priced at the FULL sticker price, not prorated', async () => {
+        const now = Date.now();
+        tenantModel.findById.mockResolvedValue({ id: 1, sandbox: true });
+        subscriptionModel.findActiveByTenantId.mockResolvedValue({
+          id: 10, tenant_id: 1, tier: 'STARTER', pending_tier: null, billing_interval: 'MONTHLY',
+          current_period_start: new Date(now - 15 * 24 * 60 * 60 * 1000),
+          current_period_end: new Date(now + 15 * 24 * 60 * 60 * 1000), // ~50% remaining — would prorate to ~30 in production
+        });
+        paymentModel.create.mockResolvedValue({ id: 50, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'GROWTH' });
+
+        const result = await subscriptionService.requestTierChange(1, 'GROWTH');
+
+        const [createArgs] = paymentModel.create.mock.calls[0];
+        expect(createArgs.targetTier).toBe('GROWTH');
+        expect(createArgs.targetBillingInterval).toBe('MONTHLY');
+        expect(createArgs.totalAmount).toBe(90); // full monthly-GROWTH price, not the ~50%-remaining prorated amount
+        expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+        expect(result).toEqual({ subscription: expect.objectContaining({ id: 10 }), payment: expect.objectContaining({ id: 50 }), bankTransfer: config.bankTransfer });
+      });
+
+      test('interval-changing upgrade is priced at the full new-interval price, same as production', async () => {
+        tenantModel.findById.mockResolvedValue({ id: 1, sandbox: true });
+        subscriptionModel.findActiveByTenantId.mockResolvedValue({
+          id: 10, tenant_id: 1, tier: 'STARTER', pending_tier: null, billing_interval: 'MONTHLY',
+        });
+        paymentModel.create.mockResolvedValue({ id: 51, subscription_id: 10, purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' });
+
+        await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+
+        const [createArgs] = paymentModel.create.mock.calls[0];
+        expect(createArgs.targetTier).toBe('GROWTH');
+        expect(createArgs.targetBillingInterval).toBe('YEARLY');
+        expect(createArgs.totalAmount).toBe(900); // full yearly-GROWTH price
+      });
+    });
   });
 
   describe('applyTierChangeIfLinked', () => {
@@ -293,6 +437,30 @@ describe('SubscriptionService', () => {
       });
       expect(result).toEqual({ id: 10, tier: 'GROWTH' });
     });
+
+    test('a payment with target_billing_interval set schedules the change for period-end instead of applying it now', async () => {
+      const periodEnd = new Date('2026-08-01T00:00:00Z');
+      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
+        id: 31, subscription_id: 10, purpose: 'TIER_CHANGE', status: 'VERIFIED',
+        target_tier: 'STARTER', target_billing_interval: 'YEARLY',
+      });
+      subscriptionModel.findById.mockResolvedValue({
+        id: 10, tenant_id: 1, tier: 'GROWTH', billing_interval: 'MONTHLY', current_period_end: periodEnd,
+      });
+      subscriptionModel.scheduleDowngrade.mockResolvedValue({ id: 10, tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: 'YEARLY' });
+
+      const result = await subscriptionService.applyTierChangeIfLinked(999);
+
+      expect(subscriptionModel.scheduleDowngrade).toHaveBeenCalledWith(10, 'STARTER', 'YEARLY');
+      expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+      expect(tenantModel.updateTier).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGE_SCHEDULED', {
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER',
+        fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY',
+        effectiveAt: periodEnd, paymentId: 31,
+      });
+      expect(result).toEqual({ id: 10, tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: 'YEARLY' });
+    });
   });
 
   describe('applyScheduledTierChanges', () => {
@@ -300,18 +468,18 @@ describe('SubscriptionService', () => {
       const periodEnd1 = new Date('2026-06-15T00:00:00Z');
       const periodEnd2 = new Date('2026-06-20T00:00:00Z');
       subscriptionModel.findDuePendingDowngrades.mockResolvedValue([
-        { id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd1 },
-        { id: 11, tenant_id: 2, tier: 'BUSINESS', pending_tier: 'GROWTH', billing_interval: 'YEARLY', current_period_end: periodEnd2 },
+        { id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: null, billing_interval: 'MONTHLY', current_period_end: periodEnd1 },
+        { id: 11, tenant_id: 2, tier: 'BUSINESS', pending_tier: 'GROWTH', pending_billing_interval: null, billing_interval: 'YEARLY', current_period_end: periodEnd2 },
       ]);
 
       const result = await subscriptionService.applyScheduledTierChanges();
 
-      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER');
-      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(11, 'GROWTH');
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER', null);
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(11, 'GROWTH', null);
       expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
       expect(tenantModel.updateTier).toHaveBeenCalledWith(2, 'GROWTH', 1000);
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
-        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER',
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER', fromBillingInterval: 'MONTHLY', toBillingInterval: 'MONTHLY',
       });
 
       // Rolled forward from the OLD current_period_end, not "now" — +1 month for
@@ -336,6 +504,35 @@ describe('SubscriptionService', () => {
 
       expect(result).toEqual({ applied: 0 });
       expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+    });
+
+    test('a due paid interval change rolls the period forward using the NEW interval and stamps the funding payment', async () => {
+      const periodEnd = new Date('2026-06-15T00:00:00Z');
+      subscriptionModel.findDuePendingDowngrades.mockResolvedValue([
+        { id: 10, tenant_id: 1, tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: 'YEARLY', billing_interval: 'MONTHLY', current_period_end: periodEnd },
+      ]);
+      paymentModel.findBySubscriptionId.mockResolvedValue([
+        { id: 50, purpose: 'TIER_CHANGE', status: 'VERIFIED', invoice_document_id: 900, period_start: null },
+      ]);
+
+      const result = await subscriptionService.applyScheduledTierChanges();
+
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER', 'YEARLY');
+
+      const call10 = subscriptionModel.updateStatus.mock.calls.find((c) => c[0] === 10);
+      expect(call10[2].current_period_start).toEqual(periodEnd);
+      // Rolled forward using the NEW (YEARLY) interval, not the old MONTHLY one.
+      expect(call10[2].current_period_end.getFullYear()).toBe(periodEnd.getFullYear() + 1);
+
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(50, 'VERIFIED', {
+        period_start: call10[2].current_period_start,
+        period_end: call10[2].current_period_end,
+      });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
+        subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER',
+        fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY',
+      });
+      expect(result).toEqual({ applied: 1 });
     });
   });
 
@@ -463,12 +660,16 @@ describe('SubscriptionService', () => {
   });
 
   describe('submitPaymentProof', () => {
-    const proof = { buffer: Buffer.from('test'), filename: 'receipt.pdf', mimeType: 'application/pdf' };
+    const files = [{ buffer: Buffer.from('test'), filename: 'receipt.pdf', mimeType: 'application/pdf' }];
+
+    beforeEach(() => {
+      paymentProofModel.countActiveByPaymentId.mockResolvedValue(0);
+    });
 
     test('rejects when the payment does not exist', async () => {
       paymentModel.findById.mockResolvedValue(null);
 
-      await expect(subscriptionService.submitPaymentProof(20, 1, proof))
+      await expect(subscriptionService.submitPaymentProof(20, 1, files))
         .rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     });
 
@@ -476,7 +677,7 @@ describe('SubscriptionService', () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 2 });
 
-      await expect(subscriptionService.submitPaymentProof(20, 1, proof))
+      await expect(subscriptionService.submitPaymentProof(20, 1, files))
         .rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
     });
 
@@ -484,51 +685,79 @@ describe('SubscriptionService', () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'VERIFIED' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
 
-      await expect(subscriptionService.submitPaymentProof(20, 1, proof))
+      await expect(subscriptionService.submitPaymentProof(20, 1, files))
         .rejects.toMatchObject({ statusCode: 409 });
     });
 
-    test('allows re-submitting after REJECTED and clears the old rejection_reason', async () => {
-      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'REJECTED', rejection_reason: 'Transfer not reflected yet' });
+    test('rejects when the cumulative active file count would exceed the limit', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentProofModel.countActiveByPaymentId.mockResolvedValue(10);
+
+      await expect(subscriptionService.submitPaymentProof(20, 1, files))
+        .rejects.toMatchObject({ statusCode: 400, code: 'PROOF_FILE_LIMIT_REACHED' });
+      expect(paymentProofModel.createMany).not.toHaveBeenCalled();
+    });
+
+    test('allows re-submitting after REJECTED, adds new files without touching old ones, and clears the old rejection_reason_code', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND' });
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentProofModel.createMany.mockResolvedValue([{ id: 2, payment_id: 20, filename: files[0].filename, mime_type: files[0].mimeType, active: true, created_at: new Date() }]);
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
 
-      await subscriptionService.submitPaymentProof(20, 1, proof);
+      await subscriptionService.submitPaymentProof(20, 1, files);
 
+      expect(paymentProofModel.createMany).toHaveBeenCalledWith(20, files);
       expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REPORTED', {
         reported_at: expect.any(Date),
-        proof_file: proof.buffer,
-        proof_filename: proof.filename,
-        proof_mime_type: proof.mimeType,
-        rejection_reason: null,
+        rejection_reason_code: null,
       });
     });
 
-    test('stores the proof and moves the payment to REPORTED', async () => {
+    test('stores the files and moves the payment to REPORTED', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentProofModel.createMany.mockResolvedValue([
+        { id: 1, payment_id: 20, filename: 'receipt.pdf', mime_type: 'application/pdf', active: true, created_at: new Date('2026-06-01') },
+      ]);
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
 
-      const result = await subscriptionService.submitPaymentProof(20, 1, proof);
+      const result = await subscriptionService.submitPaymentProof(20, 1, files);
 
-      expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REPORTED', {
-        reported_at: expect.any(Date),
-        proof_file: proof.buffer,
-        proof_filename: proof.filename,
-        proof_mime_type: proof.mimeType,
-        rejection_reason: null,
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REPORTED', { paymentId: 20, proofCount: 1 });
+      expect(result).toEqual({
+        payment: { id: 20, status: 'REPORTED' },
+        proofs: [{ id: 1, filename: 'receipt.pdf', mimeType: 'application/pdf', active: true, createdAt: new Date('2026-06-01') }],
       });
-      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REPORTED', { paymentId: 20 });
-      expect(result).toEqual({ id: 20, status: 'REPORTED' });
+    });
+
+    test('accepts multiple files in one submission', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
+      subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      const multiFiles = [
+        { buffer: Buffer.from('a'), filename: 'front.pdf', mimeType: 'application/pdf' },
+        { buffer: Buffer.from('b'), filename: 'back.pdf', mimeType: 'application/pdf' },
+      ];
+      paymentProofModel.createMany.mockResolvedValue([
+        { id: 1, payment_id: 20, filename: 'front.pdf', mime_type: 'application/pdf', active: true, created_at: new Date() },
+        { id: 2, payment_id: 20, filename: 'back.pdf', mime_type: 'application/pdf', active: true, created_at: new Date() },
+      ]);
+      paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
+
+      const result = await subscriptionService.submitPaymentProof(20, 1, multiFiles);
+
+      expect(paymentProofModel.createMany).toHaveBeenCalledWith(20, multiFiles);
+      expect(result.proofs).toHaveLength(2);
     });
 
     test('notifies the operator (fire-and-forget) with the tenant that owns the payment', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
+      paymentProofModel.createMany.mockResolvedValue([]);
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
       tenantModel.findById.mockResolvedValue({ id: 1, email: 'tenant@example.com' });
 
-      await subscriptionService.submitPaymentProof(20, 1, proof);
+      await subscriptionService.submitPaymentProof(20, 1, files);
 
       expect(emailService.sendPaymentProofSubmitted).toHaveBeenCalledWith(
         { id: 20, status: 'REPORTED' },
@@ -538,21 +767,114 @@ describe('SubscriptionService', () => {
     });
   });
 
-  describe('getPaymentProof', () => {
-    test('rejects when no proof was uploaded', async () => {
-      paymentModel.findById.mockResolvedValue({ id: 20, proof_file: null });
+  describe('getPaymentProofFile (admin)', () => {
+    test('rejects when the proof does not exist', async () => {
+      paymentProofModel.findByIdAndPaymentId.mockResolvedValue(null);
 
-      await expect(subscriptionService.getPaymentProof(20)).rejects.toMatchObject({ statusCode: 404 });
+      await expect(subscriptionService.getPaymentProofFile(20, 1)).rejects.toMatchObject({ statusCode: 404 });
     });
 
-    test('returns the stored file', async () => {
-      paymentModel.findById.mockResolvedValue({
-        id: 20, proof_file: Buffer.from('x'), proof_filename: 'receipt.pdf', proof_mime_type: 'application/pdf',
+    test('returns an inactive (soft-deleted) file too — admin sees full history', async () => {
+      paymentProofModel.findByIdAndPaymentId.mockResolvedValue({
+        id: 1, payment_id: 20, file: Buffer.from('x'), filename: 'receipt.pdf', mime_type: 'application/pdf', active: false,
       });
 
-      const result = await subscriptionService.getPaymentProof(20);
+      const result = await subscriptionService.getPaymentProofFile(20, 1);
 
       expect(result).toEqual({ buffer: Buffer.from('x'), filename: 'receipt.pdf', mimeType: 'application/pdf' });
+    });
+  });
+
+  describe('getPaymentProofFileForTenant', () => {
+    test('rejects when the payment does not belong to the tenant', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(null);
+
+      await expect(subscriptionService.getPaymentProofFileForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    test('rejects (404) an inactive (deleted) file — tenant loses access once deleted', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, subscription_id: 10 });
+      paymentProofModel.findByIdAndPaymentId.mockResolvedValue({ id: 1, active: false });
+
+      await expect(subscriptionService.getPaymentProofFileForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    test('returns an active file', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, subscription_id: 10 });
+      paymentProofModel.findByIdAndPaymentId.mockResolvedValue({
+        id: 1, file: Buffer.from('x'), filename: 'receipt.pdf', mime_type: 'application/pdf', active: true,
+      });
+
+      const result = await subscriptionService.getPaymentProofFileForTenant(20, 1, 1);
+
+      expect(result).toEqual({ buffer: Buffer.from('x'), filename: 'receipt.pdf', mimeType: 'application/pdf' });
+    });
+  });
+
+  describe('listPaymentProofsForTenant', () => {
+    test('rejects when the payment does not belong to the tenant', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(null);
+
+      await expect(subscriptionService.listPaymentProofsForTenant(20, 1)).rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    });
+
+    test('returns only active proofs, formatted', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20 });
+      paymentProofModel.findActiveByPaymentId.mockResolvedValue([
+        { id: 1, filename: 'a.pdf', mime_type: 'application/pdf', active: true, created_at: new Date('2026-06-01') },
+      ]);
+
+      const result = await subscriptionService.listPaymentProofsForTenant(20, 1);
+
+      expect(result).toEqual([{ id: 1, filename: 'a.pdf', mimeType: 'application/pdf', active: true, createdAt: new Date('2026-06-01') }]);
+    });
+  });
+
+  describe('listPaymentProofsForAdmin', () => {
+    test('returns every proof including inactive ones', async () => {
+      paymentProofModel.findAllByPaymentId.mockResolvedValue([
+        { id: 1, filename: 'a.pdf', mime_type: 'application/pdf', active: true, created_at: new Date() },
+        { id: 2, filename: 'b.pdf', mime_type: 'application/pdf', active: false, created_at: new Date() },
+      ]);
+
+      const result = await subscriptionService.listPaymentProofsForAdmin(20);
+
+      expect(result).toHaveLength(2);
+      expect(result[1].active).toBe(false);
+    });
+  });
+
+  describe('deletePaymentProofForTenant', () => {
+    test('rejects when the payment does not belong to the tenant', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(null);
+
+      await expect(subscriptionService.deletePaymentProofForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 404, code: 'PAYMENT_NOT_FOUND' });
+    });
+
+    test('rejects once the payment is VERIFIED', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, status: 'VERIFIED' });
+
+      await expect(subscriptionService.deletePaymentProofForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 409 });
+      expect(paymentProofModel.softDelete).not.toHaveBeenCalled();
+    });
+
+    test('rejects when the proof does not exist for this payment', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, status: 'PENDING' });
+      paymentProofModel.softDelete.mockResolvedValue(null);
+
+      await expect(subscriptionService.deletePaymentProofForTenant(20, 1, 1)).rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    test('soft-deletes the proof and returns it formatted', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: 20, status: 'PENDING' });
+      paymentProofModel.softDelete.mockResolvedValue({
+        id: 1, filename: 'a.pdf', mime_type: 'application/pdf', active: false, created_at: new Date('2026-06-01'),
+      });
+
+      const result = await subscriptionService.deletePaymentProofForTenant(20, 1, 1);
+
+      expect(paymentProofModel.softDelete).toHaveBeenCalledWith(1, 20);
+      expect(result).toEqual({ id: 1, filename: 'a.pdf', mimeType: 'application/pdf', active: false, createdAt: new Date('2026-06-01') });
     });
   });
 
@@ -582,15 +904,15 @@ describe('SubscriptionService', () => {
       );
     });
 
-    test('REJECTED leaves the subscription untouched and stores the rejection reason', async () => {
+    test('REJECTED leaves the subscription untouched and stores the rejection reason code', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10 });
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REJECTED' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' });
 
-      const result = await subscriptionService.reviewPayment(20, 'REJECTED', 'Transfer not reflected in our account yet');
+      const result = await subscriptionService.reviewPayment(20, 'REJECTED', 'TRANSFER_NOT_FOUND');
 
       expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REJECTED', {
-        rejection_reason: 'Transfer not reflected in our account yet',
+        rejection_reason_code: 'TRANSFER_NOT_FOUND',
       });
       expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REJECTED', { paymentId: 20 });
@@ -601,6 +923,18 @@ describe('SubscriptionService', () => {
       expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(
         { id: 20, status: 'REJECTED' }, { id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' }, 'REJECTED',
       );
+    });
+
+    test('rejects REJECTED decision with a missing rejectionReasonCode', async () => {
+      await expect(subscriptionService.reviewPayment(20, 'REJECTED'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_REJECTION_REASON' });
+      expect(paymentModel.findById).not.toHaveBeenCalled();
+    });
+
+    test('rejects REJECTED decision with an unrecognized rejectionReasonCode', async () => {
+      await expect(subscriptionService.reviewPayment(20, 'REJECTED', 'NOT_A_REASON'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_REJECTION_REASON' });
+      expect(paymentModel.findById).not.toHaveBeenCalled();
     });
 
     test('rejects when the payment does not exist', async () => {
@@ -690,6 +1024,14 @@ describe('SubscriptionService', () => {
 
     beforeEach(() => {
       paymentModel.findBySubscriptionId.mockResolvedValue([]);
+      // Explicit, not implicit via jest.clearAllMocks() (which only clears call
+      // history, not mockResolvedValue implementations) — without this, a truthy
+      // value left behind by an unrelated test earlier in the run (e.g.
+      // requestTierChange's "upgrade payment already in flight" case) can leak in
+      // under randomized test ordering and silently steer linkInvoice into the
+      // wrong branch.
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
+      paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue(null);
     });
 
     test('rejects when the subscription does not exist', async () => {
@@ -805,16 +1147,110 @@ describe('SubscriptionService', () => {
       });
       expect(result).toEqual({ id: 10, status: 'ACTIVE' });
     });
+
+    describe('sandbox documents', () => {
+      test('a pending TIER_CHANGE payment applies immediately (correct target tier/interval), never touching invoice_document_id', async () => {
+        const periodStart = new Date('2026-06-01T00:00:00Z');
+        const periodEnd = new Date('2026-07-01T00:00:00Z');
+        subscriptionModel.findById.mockResolvedValue({
+          id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY',
+          current_period_start: periodStart, current_period_end: periodEnd,
+        });
+        documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'AUTHORIZED', sandbox: true });
+        paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({
+          id: 30, subscription_id: 10, status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'YEARLY',
+        });
+        subscriptionModel.applyTierChange.mockResolvedValue({ id: 10, tier: 'GROWTH', billing_interval: 'YEARLY' });
+
+        const result = await subscriptionService.linkInvoice(10, accessKey);
+
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'GROWTH', 'YEARLY');
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
+        expect(paymentModel.updateStatus).toHaveBeenCalledWith(30, 'VERIFIED', {
+          period_start: periodStart, period_end: periodEnd,
+        });
+        expect(paymentModel.updateStatus).not.toHaveBeenCalledWith(30, expect.anything(), expect.objectContaining({ invoice_document_id: expect.anything() }));
+        expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', expect.objectContaining({
+          subscriptionId: 10, fromTier: 'STARTER', toTier: 'GROWTH',
+          fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY', paymentId: 30,
+        }));
+        expect(result).toEqual({ id: 10, tier: 'GROWTH', billing_interval: 'YEARLY' });
+      });
+
+      test('a pending RENEWAL payment extends the period immediately from the OLD current_period_end', async () => {
+        const oldPeriodEnd = new Date('2026-07-01T00:00:00Z');
+        subscriptionModel.findById.mockResolvedValue({
+          id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: oldPeriodEnd,
+        });
+        documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'AUTHORIZED', sandbox: true });
+        paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
+        paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue({
+          id: 40, subscription_id: 10, status: 'VERIFIED',
+        });
+        subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'ACTIVE' });
+
+        const result = await subscriptionService.linkInvoice(10, accessKey);
+
+        expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(10, 'ACTIVE', {
+          current_period_start: oldPeriodEnd,
+          current_period_end: expect.any(Date),
+        });
+        expect(paymentModel.updateStatus).toHaveBeenCalledWith(40, 'VERIFIED', {
+          period_start: oldPeriodEnd, period_end: expect.any(Date),
+        });
+        expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'SUBSCRIPTION_RENEWED', expect.objectContaining({ subscriptionId: 10 }));
+        expect(result).toEqual({ id: 10, status: 'ACTIVE' });
+      });
+
+      test('no pending TIER_CHANGE/RENEWAL: falls back to initial activation using the subscription\'s own tier', async () => {
+        subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY' });
+        documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'AUTHORIZED', sandbox: true });
+        paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
+        paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue(null);
+        subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'ACTIVE' });
+
+        const result = await subscriptionService.linkInvoice(10, accessKey);
+
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
+        expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'SUBSCRIPTION_ACTIVATED', expect.objectContaining({ subscriptionId: 10 }));
+        expect(result).toEqual({ id: 10, status: 'ACTIVE' });
+      });
+
+      test('not yet AUTHORIZED: a pending TIER_CHANGE payment leaves the subscription untouched', async () => {
+        subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER' });
+        documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'RECEIVED', sandbox: true });
+        paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({
+          id: 30, subscription_id: 10, status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: null,
+        });
+
+        const result = await subscriptionService.linkInvoice(10, accessKey);
+
+        expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+        expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+        expect(result).toEqual({ id: 10, tenant_id: 1, tier: 'STARTER' });
+      });
+
+      test('not yet AUTHORIZED, no pending payment: moves to INVOICE_PROCESSING', async () => {
+        subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, tier: 'STARTER' });
+        documentModel.findByAccessKey.mockResolvedValue({ id: 999, status: 'RECEIVED', sandbox: true });
+        subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'INVOICE_PROCESSING' });
+
+        const result = await subscriptionService.linkInvoice(10, accessKey);
+
+        expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(10, 'INVOICE_PROCESSING', {});
+        expect(result).toEqual({ id: 10, status: 'INVOICE_PROCESSING' });
+      });
+    });
   });
 
   describe('getStatusForTenant', () => {
-    test('returns each subscription with its payments nested, proof_file stripped', async () => {
+    test('returns each subscription with its payments nested (proof files live behind the dedicated proofs endpoints, not inline here)', async () => {
       subscriptionModel.findByTenantId.mockResolvedValue([
         { id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING' },
       ]);
       paymentModel.findBySubscriptionId.mockResolvedValue([
-        { id: 20, status: 'REJECTED', rejection_reason: 'Transfer not reflected yet', proof_file: Buffer.from('x'), proof_filename: 'old.pdf' },
-        { id: 21, status: 'VERIFIED', proof_file: Buffer.from('y'), proof_filename: 'new.pdf' },
+        { id: 20, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND' },
+        { id: 21, status: 'VERIFIED' },
       ]);
 
       const result = await subscriptionService.getStatusForTenant(1);
@@ -825,8 +1261,8 @@ describe('SubscriptionService', () => {
         {
           id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING',
           payments: [
-            { id: 20, status: 'REJECTED', rejection_reason: 'Transfer not reflected yet', proof_filename: 'old.pdf' },
-            { id: 21, status: 'VERIFIED', proof_filename: 'new.pdf' },
+            { id: 20, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND' },
+            { id: 21, status: 'VERIFIED' },
           ],
         },
       ]);

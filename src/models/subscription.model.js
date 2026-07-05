@@ -58,23 +58,34 @@ async function findActiveByTenantId(tenantId) {
   return rows[0] || null;
 }
 
-// Records a downgrade request without touching the active tier/quota — applied
-// later, at current_period_end, by applyScheduledTierChanges().
-async function scheduleDowngrade(id, pendingTier) {
+// Records a pending change (tier and/or billing interval) without touching
+// the active tier/interval/quota — applied later, at current_period_end, by
+// applyScheduledTierChanges(). pendingBillingInterval is null for a plain
+// free tier downgrade (interval unchanged); set when a paid interval switch
+// (see applyTierChangeIfLinked) is being scheduled for period-end instead of
+// applied immediately.
+async function scheduleDowngrade(id, pendingTier, pendingBillingInterval = null) {
   const { rows } = await db.query(
-    'UPDATE subscriptions SET pending_tier = $2 WHERE id = $1 RETURNING *',
-    [id, pendingTier]
+    'UPDATE subscriptions SET pending_tier = $2, pending_billing_interval = $3 WHERE id = $1 RETURNING *',
+    [id, pendingTier, pendingBillingInterval]
   );
   return rows[0] || null;
 }
 
-// Flips the active tier immediately and clears any scheduled pending_tier.
-// Used both by the upgrade-on-invoice-authorization path and by the
-// downgrade-at-period-end job — in both cases the tier change is final.
-async function applyTierChange(id, tier) {
+// Flips the active tier (and optionally billing interval) immediately and
+// clears any scheduled pending_tier/pending_billing_interval. Used both by
+// the upgrade-on-invoice-authorization path and by the
+// downgrade-at-period-end job — in both cases the change is final.
+// billingInterval is only passed when it needs to change; COALESCE leaves it
+// untouched otherwise (e.g. a tier-only upgrade never changes interval).
+async function applyTierChange(id, tier, billingInterval = null) {
   const { rows } = await db.query(
-    'UPDATE subscriptions SET tier = $2, pending_tier = NULL WHERE id = $1 RETURNING *',
-    [id, tier]
+    `UPDATE subscriptions
+     SET tier = $2, billing_interval = COALESCE($3, billing_interval),
+         pending_tier = NULL, pending_billing_interval = NULL
+     WHERE id = $1
+     RETURNING *`,
+    [id, tier, billingInterval]
   );
   return rows[0] || null;
 }

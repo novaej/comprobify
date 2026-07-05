@@ -4,11 +4,13 @@ const controller = require('../controllers/api-key.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
+const requireNotSuspended = require('../middleware/require-not-suspended');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 
 const router = Router();
 
 router.use(authenticate);
+router.use(requireNotSuspended);
 
 const createValidator = [
   body('label')

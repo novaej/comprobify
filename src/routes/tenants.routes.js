@@ -4,6 +4,7 @@ const controller = require('../controllers/tenant.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
+const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireMatchingEnvironment = require('../middleware/require-matching-environment');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_LANGUAGES } = require('../locales');
@@ -56,12 +57,15 @@ const acceptAgreementsValidator = [
     .withMessage('termsVersion is required and must be max 50 characters'),
 ];
 
+// A SUSPENDED tenant may still view their own account status, agreement
+// status/history, and event log — all reads below stay reachable.
 router.get('/me', readLimiter, requireMatchingEnvironment, asyncHandler(controller.getMe));
-router.patch('/language', updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
-router.post('/promote', writeLimiter, promoteValidator, validateRequest, asyncHandler(controller.promote));
+router.patch('/language', requireNotSuspended, updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
+router.post('/promote', writeLimiter, requireNotSuspended, promoteValidator, validateRequest, asyncHandler(controller.promote));
 router.get('/agreements', readLimiter, asyncHandler(controller.getAgreementStatus));
-router.post('/agreements', writeLimiter, acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
+router.post('/agreements', writeLimiter, requireNotSuspended, acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
 router.get('/agreements/history', readLimiter, asyncHandler(controller.listTenantAgreements));
 router.get('/agreements/:type', readLimiter, asyncHandler(controller.getTenantAgreement));
+router.get('/events', readLimiter, asyncHandler(controller.getEvents));
 
 module.exports = router;

@@ -7,6 +7,11 @@ const changeTier = [
   body('tier')
     .isIn(PAID_TIERS)
     .withMessage(`tier must be one of: ${PAID_TIERS.join(', ')}`),
+
+  body('billingInterval')
+    .optional()
+    .isIn(['MONTHLY', 'YEARLY'])
+    .withMessage('billingInterval must be one of: MONTHLY, YEARLY'),
 ];
 
 const createSubscription = [

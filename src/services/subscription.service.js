@@ -1,5 +1,6 @@
 const subscriptionModel = require('../models/subscription.model');
 const paymentModel = require('../models/payment.model');
+const paymentProofModel = require('../models/payment-proof.model');
 const documentModel = require('../models/document.model');
 const tenantModel = require('../models/tenant.model');
 const tenantEventModel = require('../models/tenant-event.model');
@@ -7,6 +8,7 @@ const notificationService = require('./notification.service');
 const emailService = require('./email.service');
 const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
+const RejectionReasons = require('../constants/rejection-reasons');
 const config = require('../config');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
@@ -16,6 +18,11 @@ const ErrorCodes = require('../constants/error-codes');
 const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 const BILLING_INTERVALS = ['MONTHLY', 'YEARLY'];
 const DECISIONS = ['VERIFIED', 'REJECTED'];
+
+// Per-request file count is enforced by multer (payments.routes.js); this is
+// the cumulative cap across every upload attempt for one payment, so repeated
+// resubmission can't grow the file list unboundedly.
+const MAX_ACTIVE_PROOFS_PER_PAYMENT = 10;
 
 // Splits an IVA-inclusive all-in total into base imponible + IVA so each
 // payment row carries a full audit trail of the tax breakdown at creation time.
@@ -32,14 +39,6 @@ function breakdownAmount(totalAmount) {
 // with no verified renewal before it's downgraded to FREE. See processDueRenewals.
 const RENEWAL_REMINDER_DAYS = 7;
 const RENEWAL_GRACE_DAYS = 7;
-
-// Never echo the raw file bytes back in a JSON response — the caller just sent it
-// (submitPaymentProof) or doesn't need it (reviewPayment). GET .../proof streams it.
-function omitProofFile(payment) {
-  if (!payment) return payment;
-  const { proof_file, ...rest } = payment;
-  return rest;
-}
 
 // Shared period math for activation, renewal, and the free period-rollover a
 // downgrade gets. Always advances from a fixed anchor date (never "now") so
@@ -73,7 +72,8 @@ async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
   if (!BILLING_INTERVALS.includes(billingInterval)) {
     throw new AppError(
       `Invalid billingInterval '${billingInterval}'. Valid values: ${BILLING_INTERVALS.join(', ')}`,
-      400
+      400,
+      ErrorCodes.INVALID_BILLING_INTERVAL
     );
   }
 
@@ -123,20 +123,36 @@ async function createSubscriptionForTenant(tenantId, tier, billingInterval = 'MO
   return createSubscription(tenantId, tier, billingInterval);
 }
 
-// Tenant-initiated tier change on an already-ACTIVE subscription. Upgrades take
-// effect immediately once a prorated payment is verified and its self-billed
-// invoice authorizes (see applyTierChangeIfLinked); downgrades are scheduled
-// and applied at current_period_end (see applyScheduledTierChanges) — no
-// payment is owed for a downgrade since the current period is already paid
-// for at the higher tier. No automated billing gateway exists yet
-// (NEXT_STEPS.md #9), so this rides the same manual proof/review pipeline as
-// createSubscription rather than charging anything automatically.
-async function requestTierChange(tenantId, tier) {
+// Tenant-initiated tier and/or billing-interval change on an already-ACTIVE
+// subscription. Same-interval upgrades take effect immediately once a
+// prorated payment is verified and its self-billed invoice authorizes (see
+// applyTierChangeIfLinked); same-interval downgrades are scheduled and
+// applied at current_period_end (see applyScheduledTierChanges) — no payment
+// is owed since the current period is already paid for at the higher tier.
+//
+// Any change to billing_interval (regardless of whether the tier goes up,
+// down, or stays the same) is always deferred to current_period_end and
+// billed at the new tier+interval's full sticker price — mismatched cadences
+// (e.g. monthly -> yearly) can't be neatly prorated against each other, so
+// the current period just runs out as already paid for, and the new cadence
+// starts its own fresh, fully-paid period.
+//
+// No automated billing gateway exists yet (NEXT_STEPS.md #9), so this rides
+// the same manual proof/review pipeline as createSubscription rather than
+// charging anything automatically.
+async function requestTierChange(tenantId, tier, billingInterval) {
   if (!PAID_TIERS.includes(tier)) {
     throw new AppError(
       `Invalid tier '${tier}'. Valid paid tiers: ${PAID_TIERS.join(', ')}`,
       400,
       ErrorCodes.INVALID_TIER
+    );
+  }
+  if (billingInterval !== undefined && !BILLING_INTERVALS.includes(billingInterval)) {
+    throw new AppError(
+      `Invalid billingInterval '${billingInterval}'. Valid values: ${BILLING_INTERVALS.join(', ')}`,
+      400,
+      ErrorCodes.INVALID_BILLING_INTERVAL
     );
   }
 
@@ -152,8 +168,17 @@ async function requestTierChange(tenantId, tier) {
     );
   }
 
-  if (tier === subscription.tier) {
-    throw new AppError(`Tenant is already on the '${tier}' tier`, 400, ErrorCodes.TIER_CHANGE_NO_OP);
+  // billingInterval omitted means "keep the current interval" — this makes
+  // every tier-only caller behave exactly as before.
+  const targetInterval = billingInterval || subscription.billing_interval;
+  const intervalChanged = targetInterval !== subscription.billing_interval;
+
+  if (tier === subscription.tier && !intervalChanged) {
+    throw new AppError(
+      `Tenant is already on the '${tier}' tier at ${targetInterval} billing`,
+      400,
+      ErrorCodes.TIER_CHANGE_NO_OP
+    );
   }
 
   if (subscription.pending_tier === 'FREE') {
@@ -164,21 +189,33 @@ async function requestTierChange(tenantId, tier) {
   }
   if (subscription.pending_tier) {
     throw new ConflictError(
-      `A downgrade to '${subscription.pending_tier}' is already scheduled for this subscription`,
+      `A plan change to '${subscription.pending_tier}'${subscription.pending_billing_interval ? ` (${subscription.pending_billing_interval})` : ''} is already scheduled for this subscription`,
       ErrorCodes.TIER_CHANGE_ALREADY_PENDING
     );
   }
   const pendingPayment = await paymentModel.findPendingTierChangeBySubscriptionId(subscription.id);
   if (pendingPayment) {
     throw new ConflictError(
-      `An upgrade to '${pendingPayment.target_tier}' is already in progress for this subscription`,
+      `A plan change to '${pendingPayment.target_tier}'${pendingPayment.target_billing_interval ? ` (${pendingPayment.target_billing_interval})` : ''} is already in progress for this subscription`,
       ErrorCodes.TIER_CHANGE_ALREADY_PENDING
     );
   }
 
-  const isUpgrade = TIERS[tier].priceMonthlyUsd > TIERS[subscription.tier].priceMonthlyUsd;
+  const isTierUpgrade = TIERS[tier].priceMonthlyUsd > TIERS[subscription.tier].priceMonthlyUsd;
+  const isTierDowngrade = TIERS[tier].priceMonthlyUsd < TIERS[subscription.tier].priceMonthlyUsd;
 
-  if (!isUpgrade) {
+  // Sandbox subscriptions have no meaningful current_period_end — it's fully
+  // discarded the moment the tenant promotes (resetPeriodOnPromotion resets
+  // it to "now" at that point, regardless of what was there before) — so
+  // there's nothing to prorate against or defer a change to. See
+  // requestSandboxTierChange.
+  if (tenant.sandbox) {
+    return requestSandboxTierChange(tenant, subscription, tier, targetInterval, isTierDowngrade);
+  }
+
+  // Same-interval downgrade: free, scheduled at period end — unchanged from
+  // the tier-only design.
+  if (isTierDowngrade && !intervalChanged) {
     const updated = await subscriptionModel.scheduleDowngrade(subscription.id, tier);
     await tenantEventModel.create(tenant.id, 'TIER_CHANGE_SCHEDULED', {
       subscriptionId: subscription.id,
@@ -189,31 +226,62 @@ async function requestTierChange(tenantId, tier) {
     return { subscription: updated, effectiveAt: subscription.current_period_end };
   }
 
-  const priceField = subscription.billing_interval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
-  const periodStart = new Date(subscription.current_period_start).getTime();
-  const periodEnd = new Date(subscription.current_period_end).getTime();
-  const totalMs = periodEnd - periodStart;
-  const remainingMs = Math.min(Math.max(periodEnd - Date.now(), 0), totalMs);
-  const remainingFraction = totalMs > 0 ? remainingMs / totalMs : 0;
-  const proratedTotal = Math.round((TIERS[tier][priceField] - TIERS[subscription.tier][priceField]) * remainingFraction * 100) / 100;
+  // Same-interval upgrade: immediate, prorated against the remaining value
+  // of the current period — unchanged from the tier-only design.
+  if (isTierUpgrade && !intervalChanged) {
+    const priceField = subscription.billing_interval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
+    const periodStart = new Date(subscription.current_period_start).getTime();
+    const periodEnd = new Date(subscription.current_period_end).getTime();
+    const totalMs = periodEnd - periodStart;
+    const remainingMs = Math.min(Math.max(periodEnd - Date.now(), 0), totalMs);
+    const remainingFraction = totalMs > 0 ? remainingMs / totalMs : 0;
+    const proratedTotal = Math.round((TIERS[tier][priceField] - TIERS[subscription.tier][priceField]) * remainingFraction * 100) / 100;
 
-  // With ~no time left in the current period, the prorated amount can round
-  // to $0 — asking for proof of a $0 transfer isn't something a tenant can
-  // actually do. Apply the upgrade immediately instead of routing it through
-  // the payment/proof pipeline; there's nothing to collect.
-  if (proratedTotal <= 0) {
-    const updated = await subscriptionModel.applyTierChange(subscription.id, tier);
-    await tenantModel.updateTier(tenant.id, tier, TIERS[tier].documentQuota);
-    await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
+    // With ~no time left in the current period, the prorated amount can round
+    // to $0 — asking for proof of a $0 transfer isn't something a tenant can
+    // actually do. Apply the upgrade immediately instead of routing it through
+    // the payment/proof pipeline; there's nothing to collect.
+    if (proratedTotal <= 0) {
+      const updated = await subscriptionModel.applyTierChange(subscription.id, tier);
+      await tenantModel.updateTier(tenant.id, tier, TIERS[tier].documentQuota);
+      await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
+        subscriptionId: subscription.id,
+        fromTier: subscription.tier,
+        toTier: tier,
+        totalAmount: 0,
+      });
+      return { subscription: updated, payment: null, amount: 0 };
+    }
+
+    const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
+    const payment = await paymentModel.create({
+      subscriptionId: subscription.id,
+      amount: baseAmount,
+      ivaRate: IVA_RATE,
+      ivaAmount,
+      totalAmount,
+      purpose: 'TIER_CHANGE',
+      targetTier: tier,
+    });
+
+    await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
       subscriptionId: subscription.id,
       fromTier: subscription.tier,
       toTier: tier,
-      totalAmount: 0,
+      totalAmount,
     });
-    return { subscription: updated, payment: null, amount: 0 };
+
+    return { subscription, payment, bankTransfer: config.bankTransfer };
   }
 
-  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
+  // Any billing-interval change (tier same, up, or down) — deferred to
+  // current_period_end, paid in full at the new tier+interval's sticker
+  // price. No cross-interval proration: the current period is already paid
+  // for under the old cadence, and the new cadence starts its own fresh,
+  // fully-paid period.
+  const priceField = targetInterval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
+  const fullPrice = TIERS[tier][priceField];
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
     amount: baseAmount,
@@ -222,13 +290,71 @@ async function requestTierChange(tenantId, tier) {
     totalAmount,
     purpose: 'TIER_CHANGE',
     targetTier: tier,
+    targetBillingInterval: targetInterval,
   });
 
   await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
     subscriptionId: subscription.id,
     fromTier: subscription.tier,
     toTier: tier,
+    fromBillingInterval: subscription.billing_interval,
+    toBillingInterval: targetInterval,
     totalAmount,
+    effectiveAt: subscription.current_period_end,
+  });
+
+  return { subscription, payment, bankTransfer: config.bankTransfer, effectiveAt: subscription.current_period_end };
+}
+
+// Sandbox variant of requestTierChange's pricing/application logic. Every
+// sandbox tier/interval change applies immediately (see linkSandboxDocument,
+// which is where a paid change actually lands once its self-billed invoice
+// authorizes) and is priced at the target plan's FULL sticker price — never
+// prorated. Proration only makes sense against a real, running billing
+// period; a sandbox current_period_end is thrown away entirely at promotion,
+// so crediting "remaining time" in it doesn't reflect anything the tenant
+// will actually owe once real billing starts. Downgrades still owe nothing
+// (that principle is about "you already paid for this," not period math),
+// but apply immediately rather than being scheduled for a period boundary
+// that's about to be discarded anyway.
+async function requestSandboxTierChange(tenant, subscription, tier, targetInterval, isTierDowngrade) {
+  if (isTierDowngrade) {
+    const updated = await subscriptionModel.applyTierChange(subscription.id, tier, targetInterval);
+    await tenantModel.updateTier(tenant.id, tier, TIERS[tier].documentQuota);
+    await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: tier,
+      fromBillingInterval: subscription.billing_interval,
+      toBillingInterval: targetInterval,
+      totalAmount: 0,
+      note: 'sandbox — applied immediately, no charge',
+    });
+    return { subscription: updated, payment: null, amount: 0 };
+  }
+
+  const priceField = targetInterval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
+  const fullPrice = TIERS[tier][priceField];
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
+  const payment = await paymentModel.create({
+    subscriptionId: subscription.id,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
+    purpose: 'TIER_CHANGE',
+    targetTier: tier,
+    targetBillingInterval: targetInterval,
+  });
+
+  await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
+    subscriptionId: subscription.id,
+    fromTier: subscription.tier,
+    toTier: tier,
+    fromBillingInterval: subscription.billing_interval,
+    toBillingInterval: targetInterval,
+    totalAmount,
+    note: 'sandbox — full price, applies immediately once the self-billed invoice authorizes',
   });
 
   return { subscription, payment, bankTransfer: config.bankTransfer };
@@ -267,14 +393,14 @@ async function scheduleCancellation(tenantId) {
   }
   if (subscription.pending_tier) {
     throw new ConflictError(
-      `A downgrade to '${subscription.pending_tier}' is already scheduled — cancel it or wait for it to apply before cancelling`,
+      `A plan change to '${subscription.pending_tier}'${subscription.pending_billing_interval ? ` (${subscription.pending_billing_interval})` : ''} is already scheduled — cancel it or wait for it to apply before cancelling`,
       ErrorCodes.TIER_CHANGE_ALREADY_PENDING
     );
   }
   const pendingPayment = await paymentModel.findPendingTierChangeBySubscriptionId(subscription.id);
   if (pendingPayment) {
     throw new ConflictError(
-      `An upgrade to '${pendingPayment.target_tier}' is already in progress — wait for it to complete before cancelling`,
+      `A plan change to '${pendingPayment.target_tier}'${pendingPayment.target_billing_interval ? ` (${pendingPayment.target_billing_interval})` : ''} is already in progress — wait for it to complete before cancelling`,
       ErrorCodes.TIER_CHANGE_ALREADY_PENDING
     );
   }
@@ -289,7 +415,21 @@ async function scheduleCancellation(tenantId) {
   return { subscription: updated, effectiveAt: subscription.current_period_end };
 }
 
-async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeType }) {
+function formatPaymentProof(row) {
+  return {
+    id: row.id,
+    filename: row.filename,
+    mimeType: row.mime_type,
+    active: row.active,
+    createdAt: row.created_at,
+  };
+}
+
+// files: array of { buffer, filename, mimeType } — one submission attempt can
+// carry multiple files (limit enforced by multer in payments.routes.js).
+// Every file is kept forever (soft-deletable, but never overwritten) — see
+// payment-proof.model.js and db/migrations/069_payment_proofs.sql.
+async function submitPaymentProof(paymentId, tenantId, files) {
   const payment = await paymentModel.findById(paymentId);
   if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
 
@@ -302,43 +442,90 @@ async function submitPaymentProof(paymentId, tenantId, { buffer, filename, mimeT
     throw new ConflictError('Payment has already been verified and can no longer accept new proof');
   }
 
+  const activeCount = await paymentProofModel.countActiveByPaymentId(paymentId);
+  if (activeCount + files.length > MAX_ACTIVE_PROOFS_PER_PAYMENT) {
+    throw new AppError(
+      `This payment already has ${activeCount} proof file(s); at most ${MAX_ACTIVE_PROOFS_PER_PAYMENT} are allowed in total. Delete an old one before uploading more.`,
+      400,
+      ErrorCodes.PROOF_FILE_LIMIT_REACHED
+    );
+  }
+
+  const createdProofs = await paymentProofModel.createMany(paymentId, files);
+
   // A REJECTED payment can be re-submitted (e.g. the transfer hadn't reflected in
-  // the bank yet) — clear the old rejection_reason since it's being re-addressed.
+  // the bank yet) — clear the old rejection_reason_code since it's being re-addressed.
+  // The files themselves are never overwritten — createMany above only adds rows.
   const updated = await paymentModel.updateStatus(paymentId, 'REPORTED', {
     reported_at: new Date(),
-    proof_file: buffer,
-    proof_filename: filename,
-    proof_mime_type: mimeType,
-    rejection_reason: null,
+    rejection_reason_code: null,
   });
 
-  await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REPORTED', { paymentId });
+  await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REPORTED', { paymentId, proofCount: files.length });
 
   // Fire-and-forget: let the operator know there's a proof to review. No-op
   // (resolves { sent: false }) if ADMIN_NOTIFICATION_EMAIL isn't configured.
   const tenant = await tenantModel.findById(tenantId);
   fireAndForget(emailService.sendPaymentProofSubmitted(updated, subscription, tenant), 'Payment proof submitted email');
 
-  return omitProofFile(updated);
+  return { payment: updated, proofs: createdProofs.map(formatPaymentProof) };
 }
 
-async function getPaymentProof(paymentId) {
-  const payment = await paymentModel.findById(paymentId);
-  if (!payment || !payment.proof_file) throw new NotFoundError('Payment proof');
-  return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
+// Admin: any proof file regardless of active state, for full audit visibility.
+async function getPaymentProofFile(paymentId, proofId) {
+  const proof = await paymentProofModel.findByIdAndPaymentId(proofId, paymentId);
+  if (!proof) throw new NotFoundError('Payment proof');
+  return { buffer: proof.file, filename: proof.filename, mimeType: proof.mime_type };
 }
 
-// Tenant-scoped variant: verifies the payment belongs to the requesting tenant
-// before returning the proof bytes, so tenants can't access each other's files.
-async function getPaymentProofForTenant(paymentId, tenantId) {
+// Tenant-scoped variant: verifies the payment belongs to the requesting tenant,
+// and only serves an active (non-deleted) file — a file the tenant deleted
+// disappears from their own access, same as their list view.
+async function getPaymentProofFileForTenant(paymentId, proofId, tenantId) {
   const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
-  if (!payment || !payment.proof_file) throw new NotFoundError('Payment proof');
-  return { buffer: payment.proof_file, filename: payment.proof_filename, mimeType: payment.proof_mime_type };
+  if (!payment) throw new NotFoundError('Payment proof');
+  const proof = await paymentProofModel.findByIdAndPaymentId(proofId, paymentId);
+  if (!proof || !proof.active) throw new NotFoundError('Payment proof');
+  return { buffer: proof.file, filename: proof.filename, mimeType: proof.mime_type };
 }
 
-async function reviewPayment(paymentId, decision, rejectionReason = null) {
+async function listPaymentProofsForTenant(paymentId, tenantId) {
+  const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
+  if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
+  const proofs = await paymentProofModel.findActiveByPaymentId(paymentId);
+  return proofs.map(formatPaymentProof);
+}
+
+// Admin: every file ever uploaded for this payment, active or not, so the
+// operator can see the full history across rejections/resubmissions.
+async function listPaymentProofsForAdmin(paymentId) {
+  const proofs = await paymentProofModel.findAllByPaymentId(paymentId);
+  return proofs.map(formatPaymentProof);
+}
+
+async function deletePaymentProofForTenant(paymentId, proofId, tenantId) {
+  const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
+  if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
+
+  if (payment.status === 'VERIFIED') {
+    throw new ConflictError('Payment has already been verified and its proof files can no longer be changed');
+  }
+
+  const deleted = await paymentProofModel.softDelete(proofId, paymentId);
+  if (!deleted) throw new NotFoundError('Payment proof');
+  return formatPaymentProof(deleted);
+}
+
+async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   if (!DECISIONS.includes(decision)) {
     throw new AppError(`Invalid decision '${decision}'. Valid values: ${DECISIONS.join(', ')}`, 400);
+  }
+  if (decision === 'REJECTED' && !Object.values(RejectionReasons).includes(rejectionReasonCode)) {
+    throw new AppError(
+      `Invalid rejectionReasonCode '${rejectionReasonCode}'. Valid values: ${Object.values(RejectionReasons).join(', ')}`,
+      400,
+      ErrorCodes.INVALID_REJECTION_REASON
+    );
   }
 
   const payment = await paymentModel.findById(paymentId);
@@ -346,7 +533,7 @@ async function reviewPayment(paymentId, decision, rejectionReason = null) {
 
   const extraFields = decision === 'VERIFIED'
     ? { verified_at: new Date() }
-    : { rejection_reason: rejectionReason };
+    : { rejection_reason_code: rejectionReasonCode };
   const updatedPayment = await paymentModel.updateStatus(paymentId, decision, extraFields);
 
   const subscription = await subscriptionModel.findById(payment.subscription_id);
@@ -365,7 +552,7 @@ async function reviewPayment(paymentId, decision, rejectionReason = null) {
   fireAndForget(notificationService.createPaymentReviewed(updatedPayment, updatedSubscription, decision), 'Payment reviewed notification');
   fireAndForget(emailService.sendPaymentReviewed(updatedPayment, updatedSubscription, decision), 'Payment reviewed email');
 
-  return { payment: omitProofFile(updatedPayment), subscription: updatedSubscription };
+  return { payment: updatedPayment, subscription: updatedSubscription };
 }
 
 async function linkInvoice(subscriptionId, accessKey) {
@@ -379,40 +566,25 @@ async function linkInvoice(subscriptionId, accessKey) {
   const document = await documentModel.findByAccessKey(accessKey);
   if (!document) throw new NotFoundError('Document');
 
-  // Sandbox documents cannot be stored in invoice_document_id — the FK on
-  // subscriptions references public.documents only. For sandbox testing, activate
-  // directly if the document is already AUTHORIZED rather than waiting for the
-  // authorization webhook (which fires for public documents, not sandbox ones).
+  // Purpose detection runs BEFORE the sandbox/production fork so both paths
+  // route TIER_CHANGE/RENEWAL payments correctly — a sandbox self-billed
+  // invoice can fund any of the three purposes, not just the initial
+  // activation (see linkSandboxDocument's comment for why sandbox needs its
+  // own application path rather than reusing applyTierChangeIfLinked/
+  // applyRenewalIfLinked/activateIfLinked).
+  const pendingTierChange = await paymentModel.findPendingTierChangeBySubscriptionId(subscriptionId);
+  const pendingRenewal = !pendingTierChange
+    ? await paymentModel.findPendingRenewalBySubscriptionId(subscriptionId)
+    : null;
+
   if (document.sandbox) {
-    await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
-      subscriptionId, accessKey, note: 'sandbox document — no FK stored',
-    });
-    if (document.status === 'AUTHORIZED') {
-      const periodStart = new Date();
-      const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
-      const activated = await subscriptionModel.updateStatus(subscriptionId, 'ACTIVE', {
-        current_period_start: periodStart,
-        current_period_end: periodEnd,
-      });
-      const payments = await paymentModel.findBySubscriptionId(subscriptionId);
-      const funding = payments.find((p) => p.status === 'VERIFIED' && !p.period_start);
-      if (funding) {
-        await paymentModel.updateStatus(funding.id, funding.status, { period_start: periodStart, period_end: periodEnd });
-      }
-      await tenantModel.updateTier(subscription.tenant_id, subscription.tier, TIERS[subscription.tier].documentQuota);
-      await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
-        subscriptionId, note: 'sandbox invoice',
-      });
-      return activated;
-    }
-    return subscriptionModel.updateStatus(subscriptionId, 'INVOICE_PROCESSING', {});
+    return linkSandboxDocument(subscription, document, pendingTierChange, pendingRenewal);
   }
 
   // A VERIFIED, unlinked TIER_CHANGE payment means this is an upgrade's
   // self-billed invoice, not the subscription's original activation invoice —
   // link it to the payment instead so the subscription's own
   // invoice_document_id (already spent on activation) is left untouched.
-  const pendingTierChange = await paymentModel.findPendingTierChangeBySubscriptionId(subscriptionId);
   if (pendingTierChange && pendingTierChange.status === 'VERIFIED') {
     await paymentModel.updateStatus(pendingTierChange.id, 'VERIFIED', { invoice_document_id: document.id });
     await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
@@ -430,7 +602,6 @@ async function linkInvoice(subscriptionId, accessKey) {
   // Same idea, but for a renewal payment opened by processDueRenewals ahead of
   // current_period_end — link to the payment, not the subscription's own
   // invoice_document_id (already spent on initial activation).
-  const pendingRenewal = await paymentModel.findPendingRenewalBySubscriptionId(subscriptionId);
   if (pendingRenewal && pendingRenewal.status === 'VERIFIED') {
     await paymentModel.updateStatus(pendingRenewal.id, 'VERIFIED', { invoice_document_id: document.id });
     await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
@@ -461,6 +632,81 @@ async function linkInvoice(subscriptionId, accessKey) {
   }
 
   return updated;
+}
+
+// Sandbox documents cannot be stored in invoice_document_id — the FK on both
+// subscriptions and payments references public.documents only, and
+// sandbox.documents is a fully independent id sequence that can (and will)
+// collide with public.documents ids. So this applies whatever payment is
+// pending directly, without ever writing invoice_document_id, and — unlike
+// the production applyTierChangeIfLinked — always IMMEDIATELY: a sandbox
+// current_period_end is thrown away entirely at promotion
+// (resetPeriodOnPromotion), so there's nothing meaningful to defer a change
+// to (see requestSandboxTierChange, which already priced this payment at the
+// full sticker price for exactly this reason).
+async function linkSandboxDocument(subscription, document, pendingTierChange, pendingRenewal) {
+  const pendingPayment = pendingTierChange || pendingRenewal;
+  await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
+    subscriptionId: subscription.id, documentId: document.id,
+    paymentId: pendingPayment?.id ?? null, note: 'sandbox document — no FK stored',
+  });
+
+  if (document.status !== 'AUTHORIZED') {
+    return pendingPayment ? subscription : subscriptionModel.updateStatus(subscription.id, 'INVOICE_PROCESSING', {});
+  }
+
+  if (pendingTierChange && pendingTierChange.status === 'VERIFIED') {
+    const updated = await subscriptionModel.applyTierChange(
+      subscription.id, pendingTierChange.target_tier, pendingTierChange.target_billing_interval
+    );
+    await tenantModel.updateTier(subscription.tenant_id, pendingTierChange.target_tier, TIERS[pendingTierChange.target_tier].documentQuota);
+    await paymentModel.updateStatus(pendingTierChange.id, pendingTierChange.status, {
+      period_start: subscription.current_period_start,
+      period_end: subscription.current_period_end,
+    });
+    await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: pendingTierChange.target_tier,
+      fromBillingInterval: subscription.billing_interval,
+      toBillingInterval: pendingTierChange.target_billing_interval,
+      paymentId: pendingTierChange.id,
+      note: 'sandbox invoice — applied immediately',
+    });
+    return updated;
+  }
+
+  if (pendingRenewal && pendingRenewal.status === 'VERIFIED') {
+    const periodStart = new Date(subscription.current_period_end);
+    const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+    const updated = await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
+      current_period_start: periodStart,
+      current_period_end: periodEnd,
+    });
+    await paymentModel.updateStatus(pendingRenewal.id, pendingRenewal.status, { period_start: periodStart, period_end: periodEnd });
+    await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_RENEWED', {
+      subscriptionId: subscription.id, tier: subscription.tier, periodStart, periodEnd, note: 'sandbox invoice',
+    });
+    return updated;
+  }
+
+  // No pending TIER_CHANGE/RENEWAL — this is the subscription's initial activation.
+  const periodStart = new Date();
+  const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+  const activated = await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
+    current_period_start: periodStart,
+    current_period_end: periodEnd,
+  });
+  const payments = await paymentModel.findBySubscriptionId(subscription.id);
+  const funding = payments.find((p) => p.status === 'VERIFIED' && !p.period_start);
+  if (funding) {
+    await paymentModel.updateStatus(funding.id, funding.status, { period_start: periodStart, period_end: periodEnd });
+  }
+  await tenantModel.updateTier(subscription.tenant_id, subscription.tier, TIERS[subscription.tier].documentQuota);
+  await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
+    subscriptionId: subscription.id, note: 'sandbox invoice',
+  });
+  return activated;
 }
 
 async function activateIfLinked(documentId) {
@@ -499,8 +745,8 @@ async function activateIfLinked(documentId) {
   return updated;
 }
 
-// Mirrors activateIfLinked, but for an upgrade's TIER_CHANGE payment rather
-// than a subscription's initial activation. No-op for the vast majority of
+// Mirrors activateIfLinked, but for a TIER_CHANGE payment rather than a
+// subscription's initial activation. No-op for the vast majority of
 // authorized documents, which aren't linked to any tier-change payment.
 async function applyTierChangeIfLinked(documentId) {
   const payment = await paymentModel.findByInvoiceDocumentId(documentId);
@@ -510,6 +756,31 @@ async function applyTierChangeIfLinked(documentId) {
 
   const subscription = await subscriptionModel.findById(payment.subscription_id);
   if (!subscription) return null;
+
+  // A billing-interval change can't neatly prorate mid-cycle — now that it's
+  // paid in full for the new interval, defer it to current_period_end (same
+  // as a free downgrade) instead of applying it now. Tier-only changes (no
+  // interval change) keep applying immediately, taking over the remainder of
+  // the current cycle.
+  if (payment.target_billing_interval) {
+    const updated = await subscriptionModel.scheduleDowngrade(
+      subscription.id,
+      payment.target_tier,
+      payment.target_billing_interval
+    );
+
+    await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGE_SCHEDULED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: payment.target_tier,
+      fromBillingInterval: subscription.billing_interval,
+      toBillingInterval: payment.target_billing_interval,
+      effectiveAt: subscription.current_period_end,
+      paymentId: payment.id,
+    });
+
+    return updated;
+  }
 
   const updated = await subscriptionModel.applyTierChange(subscription.id, payment.target_tier);
 
@@ -593,19 +864,40 @@ async function applyScheduledTierChanges() {
         fromTier: subscription.tier,
       });
     } else {
+      // pending_billing_interval is only set for a paid interval switch (see
+      // applyTierChangeIfLinked); a plain free tier downgrade leaves it null
+      // and the period keeps the subscription's existing cadence.
+      const newInterval = subscription.pending_billing_interval || subscription.billing_interval;
       const periodStart = new Date(subscription.current_period_end);
-      const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
+      const periodEnd = addBillingPeriod(periodStart, newInterval);
 
-      await subscriptionModel.applyTierChange(subscription.id, subscription.pending_tier);
+      await subscriptionModel.applyTierChange(subscription.id, subscription.pending_tier, subscription.pending_billing_interval);
       await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
         current_period_start: periodStart,
         current_period_end: periodEnd,
       });
       await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier, TIERS[subscription.pending_tier].documentQuota);
+
+      // If this pending change was funded by a paid TIER_CHANGE payment (an
+      // interval switch — free tier-only downgrades have no such payment),
+      // stamp the new period onto it for per-cycle payment history, same as
+      // activateIfLinked/applyRenewalIfLinked do for their own funding payment.
+      if (subscription.pending_billing_interval) {
+        const payments = await paymentModel.findBySubscriptionId(subscription.id);
+        const funding = payments.find((p) =>
+          p.purpose === 'TIER_CHANGE' && p.status === 'VERIFIED' && p.invoice_document_id && !p.period_start
+        );
+        if (funding) {
+          await paymentModel.updateStatus(funding.id, funding.status, { period_start: periodStart, period_end: periodEnd });
+        }
+      }
+
       await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
         subscriptionId: subscription.id,
         fromTier: subscription.tier,
         toTier: subscription.pending_tier,
+        fromBillingInterval: subscription.billing_interval,
+        toBillingInterval: newInterval,
       });
     }
   }
@@ -688,8 +980,9 @@ async function listByTenant(tenantId) {
 // Cross-tenant review queue for the admin panel — every payment in the given
 // status (default REPORTED: proof submitted, awaiting a decision), with the
 // tenant's business identity attached so the admin doesn't need a second
-// lookup per row. proof_file is never included; GET /admin/payments/:id/proof
-// streams it separately (same omitProofFile pattern as everywhere else here).
+// lookup per row. Proof files themselves never appear here — GET
+// /admin/payments/:id/proofs (list) and .../proofs/:proofId (download)
+// stream them separately.
 async function listPendingPayments(status = 'REPORTED') {
   const payments = await paymentModel.findAllByStatus(status);
   const tenantIds = [...new Set(payments.map((p) => p.tenant_id))];
@@ -699,7 +992,7 @@ async function listPendingPayments(status = 'REPORTED') {
   return payments.map((payment) => {
     const tenant = tenantsById.get(payment.tenant_id);
     return {
-      ...omitProofFile(payment),
+      ...payment,
       tenant: tenant ? { id: tenant.id, email: tenant.email } : null,
     };
   });
@@ -707,14 +1000,14 @@ async function listPendingPayments(status = 'REPORTED') {
 
 // Tenant-facing read: full subscription history with each one's payments nested,
 // newest first. No notification exists when a review/activation happens — this
-// (polled) is how a tenant finds out. proof_file is never included; the file
-// itself stays behind the dedicated proof-download flow (admin-only).
+// (polled) is how a tenant finds out. Proof files themselves never appear here —
+// the dedicated GET .../proofs / .../proofs/:proofId endpoints handle those.
 async function getStatusForTenant(tenantId) {
   const subscriptions = await subscriptionModel.findByTenantId(tenantId);
   const withPayments = await Promise.all(
     subscriptions.map(async (subscription) => ({
       ...subscription,
-      payments: (await paymentModel.findBySubscriptionId(subscription.id)).map(omitProofFile),
+      payments: await paymentModel.findBySubscriptionId(subscription.id),
     }))
   );
   return withPayments;
@@ -726,8 +1019,11 @@ module.exports = {
   requestTierChange,
   scheduleCancellation,
   submitPaymentProof,
-  getPaymentProof,
-  getPaymentProofForTenant,
+  getPaymentProofFile,
+  getPaymentProofFileForTenant,
+  listPaymentProofsForTenant,
+  listPaymentProofsForAdmin,
+  deletePaymentProofForTenant,
   reviewPayment,
   linkInvoice,
   activateIfLinked,
