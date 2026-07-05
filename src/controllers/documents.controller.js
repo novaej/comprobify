@@ -69,6 +69,11 @@ const getEvents = async (req, res) => {
   res.json({ ok: true, events });
 };
 
+const getSriResponses = async (req, res) => {
+  const sriResponses = await documentQuery.getSriResponses(req.params.accessKey, req.issuer);
+  res.json({ ok: true, sriResponses });
+};
+
 const list = async (req, res) => {
   const result = await documentQuery.list(req.issuer, req.query);
   res.json({ ok: true, ...result });
@@ -79,4 +84,4 @@ const getStats = async (req, res) => {
   res.json({ ok: true, stats });
 };
 
-module.exports = { create, getByAccessKey, getCreditNotes, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, list, getStats };
+module.exports = { create, getByAccessKey, getCreditNotes, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, getSriResponses, list, getStats };

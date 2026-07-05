@@ -11,9 +11,10 @@ async function create({ documentId, operationType, status, messages, rawResponse
   return rows[0];
 }
 
-async function findByDocumentId(documentId) {
+async function findByDocumentId(documentId, sandbox = false) {
+  const table = sandbox ? 'sandbox.sri_responses' : 'sri_responses';
   const { rows } = await db.query(
-    'SELECT * FROM sri_responses WHERE document_id = $1 ORDER BY created_at DESC',
+    `SELECT * FROM ${table} WHERE document_id = $1 ORDER BY created_at DESC`,
     [documentId]
   );
   return rows;
