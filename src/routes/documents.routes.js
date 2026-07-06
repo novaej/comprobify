@@ -27,6 +27,7 @@ router.get('/:accessKey/ride', readLimiter, accessKeyParam, validateRequest, asy
 router.get('/:accessKey/xml', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getXml));
 router.get('/:accessKey/events', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getEvents));
 router.get('/:accessKey/credit-notes', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getCreditNotes));
+router.get('/:accessKey/sri-responses', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getSriResponses));
 
 // Write endpoints — all blocked while SUSPENDED.
 router.post('/', writeLimiter, requireNotSuspended, extractIdempotencyKey, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.create));

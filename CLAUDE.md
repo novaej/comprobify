@@ -199,6 +199,7 @@ POST /:key/rebuild              → SIGNED  (from RETURNED or NOT_AUTHORIZED)
 GET  /:key/ride                 → application/pdf  (AUTHORIZED only)
 GET  /:key/xml                  → application/xml  (authorization XML or signed XML)
 GET  /:key/events               → audit trail for the document
+GET  /:key/sri-responses        → raw SRI reception/authorization call outcomes (operationType, status, messages) for this document
 GET  /:key/credit-notes         → sum of AUTHORIZED credit notes issued against this document + remaining balance
 POST /email-retry               → batch retry all PENDING/FAILED emails
 POST /:key/email-retry          → retry single email (?force=true to resend SENT)
@@ -322,7 +323,7 @@ Pushing the tag triggers `release-staging.yml`, which fast-forwards `staging` to
 | `src/services/document-transmission.service.js` | SRI send + authorization check + fire-and-forget email |
 | `src/services/document-rebuild.service.js` | Rebuild from RETURNED/NOT_AUTHORIZED |
 | `src/services/document-email.service.js` | Batch and single email retry |
-| `src/services/document-query.service.js` | Read-only document lookups. `list()` converts the `from`/`to` query filters from the API's DD/MM/YYYY contract to `YYYY-MM-DD` (via `moment`) before they reach `document.model.js` — `issue_date` is a `DATE` column and the validator only checks the DD/MM/YYYY regex, it does not convert the value. `getCreditNotes()` reconstructs the document's own `NNN-NNN-NNNNNNNNN` number and sums `AUTHORIZED` credit notes referencing it — see Credit Note Balance Lookup above |
+| `src/services/document-query.service.js` | Read-only document lookups. `list()` converts the `from`/`to` query filters from the API's DD/MM/YYYY contract to `YYYY-MM-DD` (via `moment`) before they reach `document.model.js` — `issue_date` is a `DATE` column and the validator only checks the DD/MM/YYYY regex, it does not convert the value. `getCreditNotes()` reconstructs the document's own `NNN-NNN-NNNNNNNNN` number and sums `AUTHORIZED` credit notes referencing it — see Credit Note Balance Lookup above. `getSriResponses()` maps `sri_responses` rows to `{ operationType, status, messages, createdAt }`, dropping `raw_response` |
 | `src/services/email.service.js` | `sendInvoiceAuthorized` (RIDE PDF + XML on authorization, returns `{ sent, messageId }`), `sendVerificationEmail`, `sendPaymentProofSubmitted` (operator-facing, no-op if `ADMIN_NOTIFICATION_EMAIL` unset), `sendPaymentReviewed`, `sendSubscriptionRenewalDue`, `sendSubscriptionExpired` (tenant-facing, localized via `tenant.preferred_language`) |
 | `src/services/email/index.js` | Email provider factory (`EMAIL_PROVIDER` env var) |
 | `src/services/email/providers/mailgun.provider.js` | Mailgun SDK wrapper; returns `{ messageId }` (angle brackets stripped) |
@@ -336,6 +337,7 @@ Pushing the tag triggers `release-staging.yml`, which fast-forwards `staging` to
 | `src/services/email/templates/subscription-expired.js` | Localised (`render(subscription, language)`) — strings from `email.subscriptionExpired` |
 | `src/services/ride.service.js` | RIDE PDF generation — on-demand, not persisted |
 | `src/services/sri.service.js` | SRI SOAP integration + retry logic |
+| `src/models/sri-response.model.js` | `create({ ..., sandbox })` and `findByDocumentId(documentId, sandbox)` — both schema-select between `sri_responses`/`sandbox.sri_responses` since the table has no RLS; read back via `GET /:accessKey/sri-responses` |
 | `src/services/xml-validator.service.js` | XSD pre-validation via xmllint (async) |
 | `src/services/sequential.service.js` | FOR UPDATE sequential locking |
 | `src/presenters/document.presenter.js` | `formatDocument()` — shared response shape |

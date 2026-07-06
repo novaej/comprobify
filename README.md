@@ -72,6 +72,7 @@ GET /:key/xml   →  Authorization XML (application/xml)
 | `GET` | `/v1/documents/:accessKey/ride` | Download RIDE PDF for an AUTHORIZED document |
 | `GET` | `/v1/documents/:accessKey/xml` | Download authorization XML (or signed XML if not yet authorized) |
 | `GET` | `/v1/documents/:accessKey/events` | Full audit trail for the document |
+| `GET` | `/v1/documents/:accessKey/sri-responses` | Raw SRI reception/authorization call outcomes for the document |
 | `POST` | `/v1/documents/email-retry` | Batch retry all PENDING/FAILED emails (max 100) |
 | `POST` | `/v1/documents/:accessKey/email-retry` | Retry email for one document (`?force=true` to resend already-sent) |
 | `POST` | `/v1/admin/issuers` | Create issuer (P12 upload or branch copy) |

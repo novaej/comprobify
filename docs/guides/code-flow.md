@@ -743,6 +743,12 @@ GET /v1/documents/:key/events
               └── documentEventModel.findByDocumentId(document.id)
               → [{ id, eventType, fromStatus, toStatus, detail, createdAt }, ...]
 
+GET /v1/documents/:key/sri-responses
+  └── authenticate → req.issuer
+        └── documentQuery.getSriResponses(accessKey, issuer)
+              └── sriResponseModel.findByDocumentId(document.id, issuer.sandbox)
+              → [{ operationType, status, messages, createdAt }, ...]   (raw_response dropped)
+
 GET /v1/documents/:key/ride
   └── authenticate → req.issuer
         └── rideService.generate

@@ -106,6 +106,7 @@ export default defineConfig({
               { text: 'Get RIDE (PDF)', link: '/endpoints/get-ride' },
               { text: 'Get XML', link: '/endpoints/get-xml' },
               { text: 'Get Events', link: '/endpoints/get-events' },
+              { text: 'Get SRI Responses', link: '/endpoints/get-sri-responses' },
               { text: 'Get Credit Notes', link: '/endpoints/get-credit-notes' },
               { text: 'Retry Emails (Batch)', link: '/endpoints/retry-emails' },
               { text: 'Retry Email (Single)', link: '/endpoints/retry-single-email' },

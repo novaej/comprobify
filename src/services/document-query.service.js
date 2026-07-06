@@ -1,6 +1,7 @@
 const moment = require('moment');
 const documentModel = require('../models/document.model');
 const documentEventModel = require('../models/document-event.model');
+const sriResponseModel = require('../models/sri-response.model');
 const catalogModel = require('../models/catalog.model');
 const NotFoundError = require('../errors/not-found-error');
 const { formatDocument } = require('../presenters/document.presenter');
@@ -66,6 +67,20 @@ async function getEvents(accessKey, issuer) {
   }));
 }
 
+async function getSriResponses(accessKey, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+  const rows = await sriResponseModel.findByDocumentId(document.id, issuer.sandbox);
+  return rows.map(r => ({
+    operationType: r.operation_type,
+    status: r.status,
+    messages: r.messages,
+    createdAt: r.created_at,
+  }));
+}
+
 async function list(issuer, filters = {}) {
   // The API contract takes from/to as DD/MM/YYYY (validated by listDocumentsQuery), but
   // issue_date is a DATE column — convert to an unambiguous ISO date before it reaches the model.
@@ -90,4 +105,4 @@ async function getStats(issuer) {
   return { thisMonth: { byType: formattedByType }, needsAttention };
 }
 
-module.exports = { getByAccessKey, getCreditNotes, getXml, getEvents, list, getStats };
+module.exports = { getByAccessKey, getCreditNotes, getXml, getEvents, getSriResponses, list, getStats };

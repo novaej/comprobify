@@ -1,9 +1,11 @@
 jest.mock('../../../src/models/document.model');
 jest.mock('../../../src/models/document-event.model');
+jest.mock('../../../src/models/sri-response.model');
 jest.mock('../../../src/models/catalog.model');
 
 const documentModel = require('../../../src/models/document.model');
 const documentEventModel = require('../../../src/models/document-event.model');
+const sriResponseModel = require('../../../src/models/sri-response.model');
 const catalogModel = require('../../../src/models/catalog.model');
 const documentQueryService = require('../../../src/services/document-query.service');
 
@@ -98,6 +100,51 @@ describe('DocumentQueryService', () => {
       documentEventModel.findByDocumentId.mockResolvedValue([]);
 
       const result = await documentQueryService.getEvents(accessKey, mockIssuer);
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getSriResponses', () => {
+    test('throws NotFoundError when the document does not exist', async () => {
+      documentModel.findByAccessKey.mockResolvedValue(null);
+
+      await expect(documentQueryService.getSriResponses(accessKey, mockIssuer))
+        .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+      expect(sriResponseModel.findByDocumentId).not.toHaveBeenCalled();
+    });
+
+    test('passes the issuer sandbox flag through and maps rows to the camelCase response shape', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({ id: 10 });
+      const createdAt = new Date('2026-01-15T10:00:00Z');
+      sriResponseModel.findByDocumentId.mockResolvedValue([
+        {
+          operation_type: 'AUTHORIZATION',
+          status: 'NO_AUTORIZADO',
+          messages: [{ identifier: '45', message: 'RUC no existe', additionalInfo: null, type: 'ERROR' }],
+          raw_response: '<raw/>',
+          created_at: createdAt,
+        },
+      ]);
+
+      const result = await documentQueryService.getSriResponses(accessKey, mockIssuer);
+
+      expect(sriResponseModel.findByDocumentId).toHaveBeenCalledWith(10, false);
+      expect(result).toEqual([
+        {
+          operationType: 'AUTHORIZATION',
+          status: 'NO_AUTORIZADO',
+          messages: [{ identifier: '45', message: 'RUC no existe', additionalInfo: null, type: 'ERROR' }],
+          createdAt,
+        },
+      ]);
+    });
+
+    test('returns an empty array when the document has no SRI responses', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({ id: 10 });
+      sriResponseModel.findByDocumentId.mockResolvedValue([]);
+
+      const result = await documentQueryService.getSriResponses(accessKey, mockIssuer);
 
       expect(result).toEqual([]);
     });

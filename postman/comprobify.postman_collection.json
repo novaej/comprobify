@@ -1980,6 +1980,32 @@
           }
         },
         {
+          "name": "Get SRI Responses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Issuer-Id",
+                "value": "{{issuer_id}}",
+                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/sri-responses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "{{access_key}}",
+                "sri-responses"
+              ]
+            },
+            "description": "Returns the raw SRI reception/authorization call outcomes recorded for this document (operationType, status, messages, createdAt), newest first. The raw SOAP response body is not included."
+          }
+        },
+        {
           "name": "Get Credit Notes",
           "request": {
             "method": "GET",
