@@ -21,13 +21,13 @@ Production platform decisions and the real cost baseline behind the subscription
 
 ---
 
-## Why Render Cron Job instead of cron-job.org for production
+## Why Render Cron Job instead of cron-job.org
 
 cron-job.org is free but is a third-party dependency with no SLA, calling a Bearer-protected admin endpoint that drives tenant-facing notification and certificate-alert state. A Render Cron Job runs in the same account as the API, is billed per actual execution-second (not a flat monthly reservation), and is auditable in Render's own logs alongside the web service.
 
 Render Cron Jobs scale by simply creating more Cron Job services — there's no fixed per-job fee, only the compute-seconds each run consumes. A job that runs for a few seconds every few minutes costs close to nothing, so adding a second or third scheduled job later is cheap.
 
-**Staging is unaffected** — it keeps cron-job.org. Only production switches.
+**Staging now uses Render Cron Jobs too**, for the same reasons — it previously ran the notifications job through cron-job.org, but both environments follow the same pattern today (see `docs/deployment.md`'s "Scheduled jobs" section). The incremental cost is negligible either way, so this line item is effectively the same regardless of which environment.
 
 ---
 
