@@ -2,6 +2,8 @@ node_modules
 .env
 .env.*
 docs
+!docs/agreements
 *.md
+!docs/agreements/*.md
 .git
 .gitignore
