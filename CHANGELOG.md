@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-07-06
+
 ### Changed
 - **A `SUSPENDED` tenant can now still view — but not use — the Service.** Previously `authenticate` middleware rejected every request outright for a suspended tenant, reads included. The suspension check moved to a new `src/middleware/require-not-suspended.js`, applied selectively: a suspended tenant can still list/download their own existing documents (RIDE, XML), view their subscription and payment-proof history, and see their account status/agreements/event log — all read-only, nothing that "uses" the Service further. Every write stays blocked, plus one read that isn't purely passive: `GET /:accessKey/authorize` makes a live SRI call and can fire the authorization email, so it's excluded from the exception. Routers with no exception (`issuers`, `api-keys`, `catalogs`, `notifications`, `webhook-endpoints`) keep the same blanket block as before, just moved one middleware over.
 
