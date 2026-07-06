@@ -60,7 +60,11 @@ Certificate expiry checks and webhook retry processing are handled by a single a
 POST /v1/admin/jobs/notifications
 ```
 
-This endpoint is called by **cron-job.org** (one job per environment — staging and production) on a 5-minute interval via an authenticated HTTP POST. It:
+This endpoint is called by **cron-job.org** (one job per environment — staging and production) on a 5-minute interval via an authenticated HTTP POST.
+
+> **Update:** both environments have since moved to a Render Cron Job — see `docs/deployment.md`'s "Scheduled jobs" section for the current setup. Kept here as the original decision record.
+
+It:
 
 1. Runs certificate expiry checks for **every non-suspended tenant**.
 2. Processes the webhook retry queue.

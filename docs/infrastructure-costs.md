@@ -12,7 +12,7 @@ Production platform decisions and the real cost baseline behind the subscription
 | API database | Neon (own project, `public` + `sandbox` schemas) | Production Postgres |
 | Frontend | Vercel (Pro) | comprobify-web (Next.js) |
 | Frontend database | Neon (separate project, same paid Neon account) | comprobify-web's own data — kept on a direct Neon project rather than Vercel's Postgres marketplace integration |
-| Scheduled jobs | Render Cron Job | Replaces cron-job.org for production — see below |
+| Scheduled jobs | Render Cron Job | Used by both staging and production — see below |
 | Email | Mailgun (Foundation, 50k sends) | Transactional email + delivery webhooks |
 | Error monitoring | Sentry | 5xx tracking |
 | Rate-limit store | Redis (Essentials) | Required once the API runs more than one instance — see `NEXT_STEPS.md` #8 |
