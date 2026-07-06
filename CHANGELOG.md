@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-07-06
+
 ### Fixed
 - **`POST /v1/admin/agreements`** (Publish Agreement) no longer throws an unhandled `ENOENT` in deployed environments. `.dockerignore` excluded `docs` and `*.md` wholesale, so the Markdown source files `agreement.service.js`'s `publish()` reads at runtime never made it into the built Docker image. Added `!docs/agreements` / `!docs/agreements/*.md` negation patterns so that directory's files are copied into the image while every other `docs/` file and root-level Markdown stays excluded, unchanged.
 
