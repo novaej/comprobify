@@ -74,6 +74,12 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
     seqMap[entry.issuerId][entry.documentType] = parseInt(entry.sequential, 10);
   }
 
+  // Check for any existing subscription before touching keys — an in-flight
+  // subscription (PENDING_PAYMENT, PAYMENT_RECEIVED, INVOICE_PROCESSING, ACTIVE)
+  // must be detected here so we never attempt createSubscription after key
+  // revocation has already committed (which would leave the tenant with no valid key).
+  const existingSubscription = await subscriptionModel.findActiveOrPendingByTenantId(tenantId);
+
   const issuers = await issuerModel.findAllByTenantId(tenantId);
   for (const issuer of issuers) {
     const docTypes = await issuerDocumentTypeModel.findActiveByIssuerId(issuer.id);
@@ -94,24 +100,19 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
 
   await tenantModel.promote(tenantId);
 
-  // A subscription started while still in sandbox (POST /v1/subscriptions, see
-  // subscriptionService.createSubscriptionForTenant) may already be ACTIVE by the
-  // time promotion happens — nothing left to select, just surface what's running.
-  const activeSubscription = await subscriptionModel.findActiveByTenantId(tenantId);
-
   // Reset the billing period to start at promotion time rather than at the
   // moment the subscription was activated in sandbox. The paid period should
   // count production usage, not sandbox testing time.
-  if (activeSubscription) {
-    await subscriptionService.resetPeriodOnPromotion(activeSubscription.id);
+  if (existingSubscription && existingSubscription.status === 'ACTIVE') {
+    await subscriptionService.resetPeriodOnPromotion(existingSubscription.id);
   }
 
   // Promotion itself never waits on payment — production access is granted on FREE
   // immediately. Requesting a paid tier here only kicks off the subscription pipeline
   // in the background; the tier/quota upgrade only lands once it's paid and authorized.
   let billing = null;
-  if (activeSubscription) {
-    billing = { subscription: activeSubscription };
+  if (existingSubscription) {
+    billing = { subscription: existingSubscription };
   } else if (tier && tier !== 'FREE') {
     billing = await subscriptionService.createSubscription(tenantId, tier, billingInterval);
   }
