@@ -49,7 +49,7 @@
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-68" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#24292e;align=left;spacingLeft=10;fontSize=10;" value="&lt;b&gt;GitHub Actions&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;release-staging.yml — tag vX.Y.Z  →  fast-forward staging branch&lt;br/&gt;deploy-staging.yml — push to staging  →  Render deploy hook&lt;br/&gt;docs.yml — push to main  →  wrangler deploy to Cloudflare Pages" vertex="1">
           <mxGeometry height="110" width="320" x="520" y="535" as="geometry" />
         </mxCell>
-        <mxCell id="cron-job-org-node" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;cron-job.org&lt;/b&gt;&lt;br/&gt;POST /v1/admin/jobs/notifications&lt;br/&gt;every 12 h (staging)" vertex="1">
+        <mxCell id="render-cron-node" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Render Cron Job&lt;/b&gt;&lt;br/&gt;/v1/admin/jobs/notifications (5 min)&lt;br/&gt;/v1/admin/jobs/subscriptions (daily)" vertex="1">
           <mxGeometry height="60" width="160" x="60" y="330" as="geometry" />
         </mxCell>
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-69" edge="1" parent="1" source="iyyHeRbHeA1ESX64Fu_m-58" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="iyyHeRbHeA1ESX64Fu_m-59" value="HTTPS">
@@ -118,7 +118,7 @@
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-80" edge="1" parent="1" source="iyyHeRbHeA1ESX64Fu_m-68" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="iyyHeRbHeA1ESX64Fu_m-65" value="wrangler deploy (docs)">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="cron-job-org-edge" edge="1" parent="1" source="cron-job-org-node" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;" target="iyyHeRbHeA1ESX64Fu_m-60" value="scheduled POST (Bearer auth)">
+        <mxCell id="render-cron-edge" edge="1" parent="1" source="render-cron-node" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;" target="iyyHeRbHeA1ESX64Fu_m-60" value="scheduled POST (Bearer auth)">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="140" y="270" />

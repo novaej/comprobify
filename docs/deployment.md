@@ -174,7 +174,7 @@ To enable production once it's provisioned:
 4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
 5. In `deploy-production.yml`: uncomment the `push: branches: [production]` trigger and remove the `if: false` guard on the `deploy` job
 6. Add branch protection to `production` (restrict who can push to the automation only; no force pushes) — see GitHub repository setup below
-7. Create a Render Cron Job in the same workspace to `POST /v1/admin/jobs/notifications` every 5 minutes with `Authorization: Bearer <ADMIN_SECRET>` — see "Render Cron Job setup (production)" under Scheduled jobs below
+7. Create the two Render Cron Jobs in the same workspace (`POST /v1/admin/jobs/notifications` every 5 minutes, `POST /v1/admin/jobs/subscriptions` daily), both with `Authorization: Bearer <ADMIN_SECRET>` — see "Render Cron Job setup" under Scheduled jobs below
 
 ---
 
@@ -229,7 +229,9 @@ The endpoint always returns `200 OK` with `{ "ok": true }` for recognised events
 
 ## Scheduled jobs
 
-The API has one scheduled job that must be triggered externally — it is not self-scheduled. **Staging** uses [cron-job.org](https://cron-job.org) (external, free). **Production** uses a **Render Cron Job** instead, so the scheduler lives in the same account as the API and is billed per execution-second rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale.
+The API has two scheduled jobs that must be triggered externally — neither is self-scheduled. Both **staging** and **production** use a **Render Cron Job**, in the same workspace as the matching web service, so the scheduler is billed per execution-second and its logs sit alongside the API's own rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale.
+
+> Staging previously used [cron-job.org](https://cron-job.org) for the notifications job. It has been replaced by a Render Cron Job for the same reason production uses one, so both environments now follow the same pattern.
 
 ### `POST /v1/admin/jobs/notifications`
 
@@ -238,34 +240,43 @@ Runs two tasks on every call:
 1. **Certificate expiry checks** — inspects `cert_expiry` for every active issuer across all non-suspended tenants and upserts `CERT_EXPIRING` / `CERT_EXPIRED` alerts. Auto-dismisses alerts when a certificate is renewed (> 30 days remaining).
 2. **Webhook retry queue** — retries all webhook deliveries in `RETRYING` status whose `next_retry_at` has passed.
 
-The job is **idempotent** — running it multiple times within the same minute is safe.
+The job is **idempotent** — running it multiple times within the same minute is safe. Needs minute-level freshness, hence the 5-minute cadence.
 
-### cron-job.org setup (staging only)
+### `POST /v1/admin/jobs/subscriptions`
+
+Runs `subscriptionService.applyScheduledTierChanges()` then `subscriptionService.processDueRenewals()`, in that order (**must not** be reversed — see CLAUDE.md Common Mistake #27):
+
+1. **Scheduled tier/interval changes** — applies any due downgrade or paid interval change (`pending_tier`/`pending_billing_interval` past `current_period_end`), rolling the period forward.
+2. **Renewals** — opens renewal-due reminders (~7 days before `current_period_end`), and expires subscriptions to FREE if unpaid ~7 days past `current_period_end`.
+
+Also idempotent. Daily cadence is enough — nothing here needs minute-level freshness the way the notifications job does.
+
+### Render Cron Job setup
+
+In the Render dashboard: **New → Cron Job**, connected to the same repo/branch as the corresponding web service (`comprobify-staging` or `comprobify-production`). Render auto-detects the project's `Dockerfile`, which has `node` but not `curl` — so the command is `node scripts/run-admin-job.js <path>` rather than a raw `curl` invocation. This also sidesteps the Docker Command field's lack of shell/quoting support: it just splits on whitespace, so any command with embedded quoted strings (e.g. a `curl` call with an `Authorization` header value containing a space) gets silently truncated at the first space — that's the cause if a run fails with a `SyntaxError`/truncated command.
+
+Create one Cron Job per row below, per environment:
+
+| Job | Schedule | Command |
+|---|---|---|
+| Notifications | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/notifications` |
+| Subscriptions | `0 6 * * *` (daily) | `node scripts/run-admin-job.js /v1/admin/jobs/subscriptions` |
+
+For each Cron Job:
 
 | Setting | Value |
 |---|---|
-| **Method** | `POST` |
-| **URL** | `https://api-staging.comprobify.com/v1/admin/jobs/notifications` |
-| **Schedule** | Every 5 minutes |
-| **Header** | `Authorization: Bearer <ADMIN_SECRET>` |
-| **Expected response** | `200 OK` with JSON body |
-
-### Render Cron Job setup (production)
-
-In the Render dashboard: **New → Cron Job**, in the same workspace as `comprobify-production`.
-
-| Setting | Value |
-|---|---|
-| **Schedule** | `*/5 * * * *` (every 5 minutes) |
-| **Command** | `curl -sf -X POST https://api.comprobify.com/v1/admin/jobs/notifications -H "Authorization: Bearer $ADMIN_SECRET"` |
-| **Environment variable** | `ADMIN_SECRET` — same value as the `comprobify-production` web service, set as a Cron Job env var (not hardcoded in the command) |
-| **Runtime** | Minimal image (e.g. `curlimages/curl` or the same Docker image, since it just needs `curl`) |
+| **Environment variable** | `ADMIN_SECRET` — same value as the matching web service |
+| **Environment variable** | `API_BASE_URL` — `https://api-staging.comprobify.com` (staging) or `https://api.comprobify.com` (production) |
+| **Instance Type** | Starter (cheapest) — the run finishes in a few seconds regardless of tier |
 
 Additional scheduled jobs later are just additional Cron Job services — each is billed only for the seconds it actually runs, with no fixed monthly fee per job.
 
 > The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
 
-### Response shape
+### Response shapes
+
+Notifications job:
 
 ```json
 {
@@ -280,7 +291,18 @@ Additional scheduled jobs later are just additional Cron Job services — each i
 }
 ```
 
-Monitor the cron-job.org execution log for non-200 responses. A sustained failure usually means the `ADMIN_SECRET` has rotated or the service is down.
+Subscriptions job:
+
+```json
+{
+  "ok": true,
+  "applied": 2,
+  "remindersSent": 5,
+  "expired": 1
+}
+```
+
+Monitor each Cron Job's execution log in the Render dashboard for non-zero exit codes (`curl -f` makes a non-2xx HTTP response fail the run). A sustained failure usually means the `ADMIN_SECRET` has rotated or the web service is down.
 
 ---
 

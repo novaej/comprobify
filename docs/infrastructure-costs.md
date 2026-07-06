@@ -12,7 +12,7 @@ Production platform decisions and the real cost baseline behind the subscription
 | API database | Neon (own project, `public` + `sandbox` schemas) | Production Postgres |
 | Frontend | Vercel (Pro) | comprobify-web (Next.js) |
 | Frontend database | Neon (separate project, same paid Neon account) | comprobify-web's own data — kept on a direct Neon project rather than Vercel's Postgres marketplace integration |
-| Scheduled jobs | Render Cron Job | Replaces cron-job.org for production — see below |
+| Scheduled jobs | Render Cron Job | Used by both staging and production — see below |
 | Email | Mailgun (Foundation, 50k sends) | Transactional email + delivery webhooks |
 | Error monitoring | Sentry | 5xx tracking |
 | Rate-limit store | Redis (Essentials) | Required once the API runs more than one instance — see `NEXT_STEPS.md` #8 |
@@ -21,13 +21,13 @@ Production platform decisions and the real cost baseline behind the subscription
 
 ---
 
-## Why Render Cron Job instead of cron-job.org for production
+## Why Render Cron Job instead of cron-job.org
 
 cron-job.org is free but is a third-party dependency with no SLA, calling a Bearer-protected admin endpoint that drives tenant-facing notification and certificate-alert state. A Render Cron Job runs in the same account as the API, is billed per actual execution-second (not a flat monthly reservation), and is auditable in Render's own logs alongside the web service.
 
 Render Cron Jobs scale by simply creating more Cron Job services — there's no fixed per-job fee, only the compute-seconds each run consumes. A job that runs for a few seconds every few minutes costs close to nothing, so adding a second or third scheduled job later is cheap.
 
-**Staging is unaffected** — it keeps cron-job.org. Only production switches.
+**Staging now uses Render Cron Jobs too**, for the same reasons — it previously ran the notifications job through cron-job.org, but both environments follow the same pattern today (see `docs/deployment.md`'s "Scheduled jobs" section). The incremental cost is negligible either way, so this line item is effectively the same regardless of which environment.
 
 ---
 
