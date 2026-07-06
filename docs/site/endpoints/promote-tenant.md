@@ -35,12 +35,12 @@ All fields are optional. An empty body `{}` is valid.
 | `initialSequentials[].issuerId` | integer | Yes (per entry) | Numeric issuer id (from `GET /v1/issuers`) |
 | `initialSequentials[].documentType` | string | Yes (per entry) | Document type code, e.g. `"01"` |
 | `initialSequentials[].sequential` | integer | Yes (per entry) | Next sequential number to issue (≥ 1) |
-| `tier` | string | No | `STARTER`, `GROWTH`, or `BUSINESS` — see [Get Tiers](get-tiers.md). Omit to stay on FREE in production; promotion never waits on payment either way. Ignored if the tenant already has an `ACTIVE` subscription (see below). |
+| `tier` | string | No | `STARTER`, `GROWTH`, or `BUSINESS` — see [Get Tiers](get-tiers.md). Omit to stay on FREE in production; promotion never waits on payment either way. Ignored if the tenant already has a subscription in progress (see below). |
 | `billingInterval` | string | No | `MONTHLY` (default) or `YEARLY` (2 months free). Ignored if `tier` is omitted or if it's ignored per the above. |
 
 Requesting a `tier` here starts the subscription/payment pipeline (same as the admin-driven path) — see [Submit Payment Proof](submit-payment-proof.md) for what happens next. The tier/quota upgrade itself only lands once that subscription is paid and its self-billed invoice is SRI-authorized; it does not happen as part of this call.
 
-If the tenant already started a subscription before promoting — via [`POST /v1/subscriptions`](create-subscription.md), which works while still in sandbox — and it's already `ACTIVE` by the time this call happens, there's nothing left to select: `tier`/`billingInterval` are ignored entirely, and the response surfaces that existing subscription instead of starting a new one.
+If the tenant already started a subscription before promoting — via [`POST /v1/subscriptions`](create-subscription.md), which works while still in sandbox — and it's still in progress by the time this call happens (any status other than `CANCELLED`/`EXPIRED`: `PENDING_PAYMENT`, `PAYMENT_RECEIVED`, `INVOICE_PROCESSING`, or `ACTIVE`), there's nothing left to select: `tier`/`billingInterval` are ignored entirely, and the response surfaces that existing subscription instead of starting a new one. This is a hard block, not just a courtesy — it prevents a second subscription/payment from being opened while one is already awaiting proof, review, or invoice authorization.
 
 ## Response
 
@@ -61,7 +61,7 @@ If the tenant already started a subscription before promoting — via [`POST /v1
 
 `apiKeys` contains one entry per sandbox key that was active at the time of promotion. **Store all tokens immediately — they are shown only once.** Distribute each token to the integration that previously used the sandbox key with the same label.
 
-`subscription`, `payment`, and `bankTransfer` are only present if `tier` was supplied and a new subscription was started. If the tenant already had an `ACTIVE` subscription going into this call, only `subscription` is present (no `payment`/`bankTransfer` — nothing new was created). Use `bankTransfer` to show the tenant where to send the SPI transfer, then submit proof of it — see [Submit Payment Proof](submit-payment-proof.md).
+`subscription`, `payment`, and `bankTransfer` are only present if `tier` was supplied and a new subscription was started. If the tenant already had a subscription in progress going into this call (any status other than `CANCELLED`/`EXPIRED`), only `subscription` is present (no `payment`/`bankTransfer` — nothing new was created). Use `bankTransfer` to show the tenant where to send the SPI transfer, then submit proof of it — see [Submit Payment Proof](submit-payment-proof.md).
 
 Sandbox keys are revoked automatically during promotion. If you had no sandbox keys, `apiKeys` will be an empty array — mint production keys via [`POST /v1/keys`](api-keys.md#mint-a-key).
 
@@ -76,4 +76,3 @@ Sandbox keys are revoked automatically during promotion. If you had no sandbox k
 | `403` | `FORBIDDEN` | Tenant email not yet verified (status `PENDING_VERIFICATION`) |
 | `403` | `AGREEMENT_ACCEPTANCE_REQUIRED` | One or more agreements have not been accepted — call `GET /v1/tenants/agreements` to see which ones, view them at `GET /v1/tenants/agreements/:type`, then accept via `POST /v1/tenants/agreements` |
 | `409` | `CONFLICT` | Tenant is already in production |
-| `409` | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | A `tier` was requested but the tenant already has a subscription in progress |

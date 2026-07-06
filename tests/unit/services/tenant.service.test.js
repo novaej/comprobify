@@ -33,7 +33,7 @@ describe('TenantService', () => {
       issuerModel.findAllByTenantId.mockResolvedValue([]);
       apiKeyModel.findActiveByTenantId.mockResolvedValue([]);
       tenantModel.promote.mockResolvedValue({ id: 1, sandbox: false });
-      subscriptionModel.findActiveByTenantId.mockResolvedValue(null);
+      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
     });
 
     test('rejects when the tenant does not exist', async () => {
@@ -87,12 +87,23 @@ describe('TenantService', () => {
 
     test('when an ACTIVE subscription already exists (started while in sandbox), skips tier selection entirely and surfaces it', async () => {
       tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: true });
-      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH', status: 'ACTIVE' });
+      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH', status: 'ACTIVE' });
 
       const result = await tenantService.promote(1, [], 'STARTER', 'MONTHLY');
 
       expect(subscriptionService.createSubscription).not.toHaveBeenCalled();
       expect(result).toEqual({ apiKeys: [], subscription: { id: 10, tier: 'GROWTH', status: 'ACTIVE' } });
+    });
+
+    test('when a PENDING_PAYMENT subscription already exists, skips tier selection and does not reset its period', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: true });
+      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue({ id: 11, tier: 'STARTER', status: 'PENDING_PAYMENT' });
+
+      const result = await tenantService.promote(1, [], 'GROWTH', 'MONTHLY');
+
+      expect(subscriptionService.createSubscription).not.toHaveBeenCalled();
+      expect(subscriptionService.resetPeriodOnPromotion).not.toHaveBeenCalled();
+      expect(result).toEqual({ apiKeys: [], subscription: { id: 11, tier: 'STARTER', status: 'PENDING_PAYMENT' } });
     });
 
     test('rotates sandbox API keys to production, preserving labels', async () => {
