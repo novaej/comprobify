@@ -12,7 +12,7 @@ const markdownRenderer = new MarkdownIt();
 
 const AGREEMENT_TYPES = ['TERMS', 'PRIVACY', 'DPA'];
 
-// Spanish-only — docs/legal/*.md source is Spanish, same as the documents
+// Spanish-only — docs/agreements/*.md source is Spanish, same as the documents
 // themselves (no locale system involved here, unlike email/notifications).
 const DOCUMENT_TYPE_TITLES = {
   TERMS: 'Términos de Servicio',
@@ -20,12 +20,12 @@ const DOCUMENT_TYPE_TITLES = {
   DPA: 'Acuerdo de Procesamiento de Datos',
 };
 
-// Maps each document type to its canonical source file in docs/legal/.
+// Maps each document type to its canonical source file in docs/agreements/.
 // POST /v1/admin/agreements reads from here — no content in the body.
 const AGREEMENT_FILE_MAP = {
-  TERMS:   path.join(process.cwd(), 'docs/legal/terms-of-service.md'),
-  PRIVACY: path.join(process.cwd(), 'docs/legal/privacy-policy.md'),
-  DPA:     path.join(process.cwd(), 'docs/legal/data-processing-agreement.md'),
+  TERMS:   path.join(process.cwd(), 'docs/agreements/terms-of-service.md'),
+  PRIVACY: path.join(process.cwd(), 'docs/agreements/privacy-policy.md'),
+  DPA:     path.join(process.cwd(), 'docs/agreements/data-processing-agreement.md'),
 };
 
 function sha256Hex(value) {
@@ -42,7 +42,7 @@ function formatDate(date) {
 }
 
 // Strips the draft-header blockquote (the "> BORRADOR PARA REVISIÓN..." block
-// at the top of each docs/legal/*.md file) so it never reaches published content.
+// at the top of each docs/agreements/*.md file) so it never reaches published content.
 // Everything up to and including the first blank line before the title is removed.
 function stripDraftHeader(markdown) {
   return markdown.replace(/^(?:>.*\n|\n)+/, '').trim();
@@ -144,7 +144,7 @@ async function getCurrentHtml(documentType, values = {}) {
 // this is a "have questions before you accept" prompt, not a legal-identity
 // contact point. OPERATOR_EMAIL stays reserved for the operator's identity
 // baked into the template content itself (data controller contact, account
-// termination requests — see docs/legal/*.md's {{operador.email}} tokens).
+// termination requests — see docs/agreements/*.md's {{operador.email}} tokens).
 function buildDisclaimer(version) {
   const email = config.adminNotificationEmail || '';
   const contact = email

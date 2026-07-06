@@ -2931,7 +2931,7 @@
               "mode": "raw",
               "raw": "{\n  \"documentType\": \"TERMS\",\n  \"version\": \"2026-07-01\"\n}"
             },
-            "description": "Reads content from docs/legal/*.md on the server — no markdown in the body. Only documentType and version are required."
+            "description": "Reads content from docs/agreements/*.md on the server — no markdown in the body. Only documentType and version are required."
           }
         },
         {
@@ -2976,7 +2976,7 @@
               "mode": "raw",
               "raw": "{\n  \"documentType\": \"PRIVACY\",\n  \"version\": \"2026-07-01\"\n}"
             },
-            "description": "Reads content from docs/legal/*.md on the server — no markdown in the body. Only documentType and version are required."
+            "description": "Reads content from docs/agreements/*.md on the server — no markdown in the body. Only documentType and version are required."
           }
         },
         {
@@ -3021,7 +3021,7 @@
               "mode": "raw",
               "raw": "{\n  \"documentType\": \"DPA\",\n  \"version\": \"2026-07-01\"\n}"
             },
-            "description": "Reads content from docs/legal/*.md on the server — no markdown in the body. Only documentType and version are required."
+            "description": "Reads content from docs/agreements/*.md on the server — no markdown in the body. Only documentType and version are required."
           }
         },
         {

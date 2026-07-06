@@ -47,7 +47,7 @@ Run from the **Admin** folder of the **internal** collection:
 2. **Publish Agreement (PRIVACY)** — same, `"documentType": "PRIVACY"`
 3. **Publish Agreement (DPA)** — same, `"documentType": "DPA"`
 
-**No markdown content in the body.** The server reads directly from `docs/legal/terms-of-service.md`, `docs/legal/privacy-policy.md`, and `docs/legal/data-processing-agreement.md` on the filesystem. Make sure those files are present and correct before publishing.
+**No markdown content in the body.** The server reads directly from `docs/agreements/terms-of-service.md`, `docs/agreements/privacy-policy.md`, and `docs/agreements/data-processing-agreement.md` on the filesystem. Make sure those files are present and correct before publishing.
 
 Use the same `version` string for all three types published together — this is the "bundle version" tenants must accept.
 
@@ -304,7 +304,7 @@ Use `comprobify-internal.postman_collection.json`. Set `base_url` and `admin_sec
 
 **`POST /v1/admin/agreements`** — run three times, once per document type.
 
-The Admin folder has three separate requests already named **Publish Agreement (TERMS)**, **(PRIVACY)**, **(DPA)**. The server reads the agreement text directly from `docs/legal/` on the filesystem — no markdown in the body. Make sure the files are up to date before publishing.
+The Admin folder has three separate requests already named **Publish Agreement (TERMS)**, **(PRIVACY)**, **(DPA)**. The server reads the agreement text directly from `docs/agreements/` on the filesystem — no markdown in the body. Make sure the files are up to date before publishing.
 
 ✓ Test script captures `agreement_version` from the TERMS publish response.
 
