@@ -227,6 +227,29 @@ The endpoint always returns `200 OK` with `{ "ok": true }` for recognised events
 
 ---
 
+## Cloudflare configuration
+
+### Email Obfuscation must be off on API subdomains
+
+`GET /v1/tenants/agreements/:type` serves personalized agreement HTML (with the tenant's actual name/RUC and the `{{soporte.email}}`/`{{operador.email}}` contact addresses already baked into the stored snapshot — see ADR-018 / CLAUDE.md "Legal documents and tenant acceptance"). If the API subdomain is Cloudflare-proxied with Email Obfuscation enabled zone-wide, Cloudflare rewrites every email address in that HTML into a `<span data-cfemail="...">` placeholder and injects a relative `/cdn-cgi/l/email-protection` decode script. The frontend (comprobify-web) fetches this HTML server-side in a Next.js route handler and proxies it to the browser — the decode script then 404s because it's a relative path resolved against the *frontend's* domain, not the API's, so every obfuscated address renders as `[email protected]` instead of the real one.
+
+Fix: a Cloudflare **Configuration Rule** scoped to just the API hostnames, with Email Obfuscation turned off:
+
+| Setting | Value |
+|---|---|
+| Zone | `comprobify.com` |
+| Rule name | Disable Email Obfuscation - App subdomains |
+| Expression | `(http.host eq "api.comprobify.com") or (http.host eq "api-staging.comprobify.com")` |
+| Action | Email Obfuscation → **Off** |
+
+This leaves Email Obfuscation active on the marketing site (`comprobify.com`, `staging.comprobify.com`), where it's still useful, and only disables it on the API hostnames that actually serve HTML with real embedded email addresses.
+
+`app.comprobify.com` / `app-staging.comprobify.com` (the frontend) are proxied through Vercel, not Cloudflare, so this rule doesn't need to — and can't — cover them.
+
+> Applies to any Cloudflare-proxied API hostname serving `GET /v1/agreements/:type` or `GET /v1/tenants/agreements/:type` HTML. If a new API hostname is added later (e.g. a second staging environment), add it to this rule's expression too, or its agreement pages will silently break the same way.
+
+---
+
 ## Scheduled jobs
 
 The API has two scheduled jobs that must be triggered externally — neither is self-scheduled. Both **staging** and **production** use a **Render Cron Job**, in the same workspace as the matching web service, so the scheduler is billed per execution-second and its logs sit alongside the API's own rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale.
@@ -394,6 +417,7 @@ WHERE schema_name IN ('public', 'sandbox');
 - [ ] Add custom domain in Render → service → Settings → Custom Domains (e.g. `api-staging.comprobify.com`)
 - [ ] Add CNAME record in Cloudflare DNS: type `CNAME`, name `staging-api`, target = Render hostname, **proxy off (gray cloud)** initially
 - [ ] Wait for Render to verify the domain and issue the TLS cert, then optionally enable Cloudflare proxy (orange cloud) — set Cloudflare SSL/TLS mode to **Full (strict)**
+- [ ] If enabling the Cloudflare proxy, also add a Configuration Rule disabling Email Obfuscation for this hostname — see "Cloudflare configuration" below
 - [ ] Update `APP_BASE_URL` in Render env vars to the custom domain URL
 - [ ] Update `STAGING_API_BASE_URL` GitHub environment secret to match
 
