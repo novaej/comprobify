@@ -2,21 +2,21 @@ const db = require('../config/database');
 
 // Bulk inserts one row per uploaded file for a single submission attempt.
 // Mirrors document-line-item.model.js's bulkCreate multi-row-insert pattern.
-async function createMany(paymentId, files) {
+async function createMany(paymentId, files, referenceNumber) {
   if (!files || files.length === 0) return [];
 
-  const COLS_PER_ROW = 4;
+  const COLS_PER_ROW = 5;
   const values = [];
   const placeholders = [];
 
   files.forEach((file, i) => {
     const offset = i * COLS_PER_ROW;
-    placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`);
-    values.push(paymentId, file.buffer, file.filename, file.mimeType);
+    placeholders.push(`($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5})`);
+    values.push(paymentId, file.buffer, file.filename, file.mimeType, referenceNumber);
   });
 
   const { rows } = await db.query(
-    `INSERT INTO payment_proofs (payment_id, file, filename, mime_type)
+    `INSERT INTO payment_proofs (payment_id, file, filename, mime_type, reference_number)
      VALUES ${placeholders.join(', ')}
      RETURNING *`,
     values

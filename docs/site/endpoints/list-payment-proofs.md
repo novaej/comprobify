@@ -30,6 +30,7 @@ The payment must belong to a subscription owned by your tenant.
       "id": 42,
       "filename": "receipt.pdf",
       "mimeType": "application/pdf",
+      "referenceNumber": "SPI-20260628-00931",
       "active": true,
       "createdAt": "2026-06-28T23:14:03.087Z"
     },
@@ -37,6 +38,7 @@ The payment must belong to a subscription owned by your tenant.
       "id": 43,
       "filename": "bank-statement.png",
       "mimeType": "image/png",
+      "referenceNumber": "SPI-20260628-00931",
       "active": true,
       "createdAt": "2026-06-29T10:02:11.400Z"
     }
@@ -44,7 +46,7 @@ The payment must belong to a subscription owned by your tenant.
 }
 ```
 
-Only `active: true` files are returned here — a file you've [deleted](delete-payment-proof.md) drops out of this list (though it isn't gone from your provider's view; see that page). Use a proof's `id` with [Download Payment Proof](download-payment-proof.md) to fetch the actual file.
+Only `active: true` files are returned here — a file you've [deleted](delete-payment-proof.md) drops out of this list (though it isn't gone from your provider's view; see that page). Use a proof's `id` with [Download Payment Proof](download-payment-proof.md) to fetch the actual file. `referenceNumber` is the bank transfer reference you supplied when uploading — every file from the same [submission](submit-payment-proof.md) shares the same value; a later resubmission (e.g. after a rejection) can carry a different one if you sent a new transfer.
 
 ## Errors
 
