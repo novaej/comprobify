@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`PATCH /v1/payments/:id/proof` now requires a `referenceNumber` field** — the bank's own SPI transfer reference/confirmation number, max 50 characters, stored per file row (`payment_proofs.reference_number`, migration 071) so it's visible in both the tenant's own proof listing and the admin listing/review view, and included in the operator-facing "proof submitted" email for cross-referencing against the bank statement. Docs also now note that entering the payment's `id` as the transfer's own description/reference at the bank (optional, not every bank supports it) is the fastest way for the operator to match a transfer to a payment, since no other order number is generated.
+
 ## [0.7.1] — 2026-07-06
 
 ### Fixed

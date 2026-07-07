@@ -23,6 +23,9 @@ After requesting a paid tier — either via [`POST /v1/subscriptions`](create-su
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `proof` | file (repeat the field for more than one) | Yes | PNG, JPEG, GIF, or PDF. Max 2 MB per file, up to 5 files per request. |
+| `referenceNumber` | string | Yes | The reference/confirmation number your bank gave you for the SPI transfer. Max 50 characters. Applied to every file in this request — if you're resubmitting after a rejection with a new transfer, send the new transfer's reference number. |
+
+> **Tip:** when you make the SPI transfer itself, put this payment's `payment.id` in the transfer's own description/reference field at your bank (e.g. "Comprobify payment 18") — we don't generate any other order number, so this is the easiest way for your provider to match the transfer to your payment when they review it. Not all banks support a description field, so this isn't required, but it's the single most useful thing you can do to speed up review.
 
 ## Response
 
@@ -47,6 +50,7 @@ After requesting a paid tier — either via [`POST /v1/subscriptions`](create-su
       "id": 42,
       "filename": "receipt.pdf",
       "mimeType": "application/pdf",
+      "referenceNumber": "SPI-20260628-00931",
       "active": true,
       "createdAt": "2026-06-28T23:14:03.087Z"
     }
@@ -67,6 +71,7 @@ You'll get a `PAYMENT_VERIFIED` or `PAYMENT_REJECTED` notification and email as 
 | Status | Code | When |
 |---|---|---|
 | `400` | `INVALID_FILE_UPLOAD` | No file was sent, a file isn't PNG/JPEG/GIF/PDF, or a file exceeds 2 MB |
+| `400` | `VALIDATION_FAILED` | `referenceNumber` was missing, blank, or over 50 characters |
 | `400` | `PROOF_FILE_LIMIT_REACHED` | This payment already has the maximum number of active proof files (10 total, across every upload attempt) — delete one first via [Delete Payment Proof](delete-payment-proof.md) |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `404` | `PAYMENT_NOT_FOUND` | Payment doesn't exist, or belongs to a different tenant |

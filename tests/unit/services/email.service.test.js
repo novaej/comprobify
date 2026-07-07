@@ -202,9 +202,9 @@ describe('EmailService', () => {
         html: '<p>html body</p>',
       });
 
-      const result = await emailService.sendPaymentProofSubmitted(payment, subscription, tenant);
+      const result = await emailService.sendPaymentProofSubmitted(payment, subscription, tenant, 'REF-123');
 
-      expect(paymentProofSubmittedTemplate.render).toHaveBeenCalledWith(payment, subscription, tenant);
+      expect(paymentProofSubmittedTemplate.render).toHaveBeenCalledWith(payment, subscription, tenant, 'REF-123');
       expect(mockSend).toHaveBeenCalledWith({
         from: 'Comprobify <noreply@comprobify.test>',
         to: 'ops@comprobify.test',

@@ -702,12 +702,12 @@ describe('SubscriptionService', () => {
     test('allows re-submitting after REJECTED, adds new files without touching old ones, and clears the old rejection_reason_code', async () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'REJECTED', rejection_reason_code: 'TRANSFER_NOT_FOUND' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
-      paymentProofModel.createMany.mockResolvedValue([{ id: 2, payment_id: 20, filename: files[0].filename, mime_type: files[0].mimeType, active: true, created_at: new Date() }]);
+      paymentProofModel.createMany.mockResolvedValue([{ id: 2, payment_id: 20, filename: files[0].filename, mime_type: files[0].mimeType, reference_number: 'REF-123', active: true, created_at: new Date() }]);
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
 
-      await subscriptionService.submitPaymentProof(20, 1, files);
+      await subscriptionService.submitPaymentProof(20, 1, files, 'REF-123');
 
-      expect(paymentProofModel.createMany).toHaveBeenCalledWith(20, files);
+      expect(paymentProofModel.createMany).toHaveBeenCalledWith(20, files, 'REF-123');
       expect(paymentModel.updateStatus).toHaveBeenCalledWith(20, 'REPORTED', {
         reported_at: expect.any(Date),
         rejection_reason_code: null,
@@ -718,16 +718,16 @@ describe('SubscriptionService', () => {
       paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, status: 'PENDING' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1 });
       paymentProofModel.createMany.mockResolvedValue([
-        { id: 1, payment_id: 20, filename: 'receipt.pdf', mime_type: 'application/pdf', active: true, created_at: new Date('2026-06-01') },
+        { id: 1, payment_id: 20, filename: 'receipt.pdf', mime_type: 'application/pdf', reference_number: 'REF-123', active: true, created_at: new Date('2026-06-01') },
       ]);
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
 
-      const result = await subscriptionService.submitPaymentProof(20, 1, files);
+      const result = await subscriptionService.submitPaymentProof(20, 1, files, 'REF-123');
 
-      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REPORTED', { paymentId: 20, proofCount: 1 });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'PAYMENT_REPORTED', { paymentId: 20, proofCount: 1, referenceNumber: 'REF-123' });
       expect(result).toEqual({
         payment: { id: 20, status: 'REPORTED' },
-        proofs: [{ id: 1, filename: 'receipt.pdf', mimeType: 'application/pdf', active: true, createdAt: new Date('2026-06-01') }],
+        proofs: [{ id: 1, filename: 'receipt.pdf', mimeType: 'application/pdf', referenceNumber: 'REF-123', active: true, createdAt: new Date('2026-06-01') }],
       });
     });
 
@@ -744,9 +744,9 @@ describe('SubscriptionService', () => {
       ]);
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
 
-      const result = await subscriptionService.submitPaymentProof(20, 1, multiFiles);
+      const result = await subscriptionService.submitPaymentProof(20, 1, multiFiles, 'REF-123');
 
-      expect(paymentProofModel.createMany).toHaveBeenCalledWith(20, multiFiles);
+      expect(paymentProofModel.createMany).toHaveBeenCalledWith(20, multiFiles, 'REF-123');
       expect(result.proofs).toHaveLength(2);
     });
 
@@ -757,12 +757,13 @@ describe('SubscriptionService', () => {
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'REPORTED' });
       tenantModel.findById.mockResolvedValue({ id: 1, email: 'tenant@example.com' });
 
-      await subscriptionService.submitPaymentProof(20, 1, files);
+      await subscriptionService.submitPaymentProof(20, 1, files, 'REF-123');
 
       expect(emailService.sendPaymentProofSubmitted).toHaveBeenCalledWith(
         { id: 20, status: 'REPORTED' },
         { id: 10, tenant_id: 1 },
         { id: 1, email: 'tenant@example.com' },
+        'REF-123',
       );
     });
   });

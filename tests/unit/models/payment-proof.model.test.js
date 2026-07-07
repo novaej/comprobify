@@ -33,13 +33,13 @@ describe('PaymentProofModel', () => {
         { buffer: Buffer.from('b'), filename: 'back.pdf', mimeType: 'application/pdf' },
       ];
 
-      const result = await paymentProofModel.createMany(20, files);
+      const result = await paymentProofModel.createMany(20, files, 'REF-123');
 
       const [sql, params] = db.query.mock.calls[0];
-      expect(sql).toContain('($1, $2, $3, $4), ($5, $6, $7, $8)');
+      expect(sql).toContain('($1, $2, $3, $4, $5), ($6, $7, $8, $9, $10)');
       expect(params).toEqual([
-        20, files[0].buffer, 'front.pdf', 'application/pdf',
-        20, files[1].buffer, 'back.pdf', 'application/pdf',
+        20, files[0].buffer, 'front.pdf', 'application/pdf', 'REF-123',
+        20, files[1].buffer, 'back.pdf', 'application/pdf', 'REF-123',
       ]);
       expect(result).toHaveLength(2);
     });

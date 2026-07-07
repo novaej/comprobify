@@ -7,14 +7,16 @@ describe('payment-proof-submitted template', () => {
     const payment = { id: 5, purpose: 'INITIAL', amount: 17.39, total_amount: 20 };
     const subscription = { id: 4, tier: 'STARTER', billing_interval: 'MONTHLY' };
 
-    const { text, html } = render(payment, subscription, tenant);
+    const { text, html } = render(payment, subscription, tenant, 'REF-123');
 
     expect(text).toContain('Tier:              STARTER');
     expect(text).toContain('Billing Frequency: MONTHLY');
     expect(text).toContain('Amount:            $20.00');
+    expect(text).toContain('Reference Number:  REF-123');
     expect(html).toContain('STARTER');
     expect(html).toContain('MONTHLY');
     expect(html).toContain('$20.00');
+    expect(html).toContain('REF-123');
   });
 
   test('TIER_CHANGE: uses the payment\'s target_tier/target_billing_interval, not the subscription\'s current values', () => {

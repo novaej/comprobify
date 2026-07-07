@@ -11,6 +11,7 @@ const submitProof = async (req, res) => {
     parseInt(req.params.id, 10),
     req.tenant.id,
     files,
+    req.body.referenceNumber,
   );
   res.json({ ok: true, payment, proofs });
 };

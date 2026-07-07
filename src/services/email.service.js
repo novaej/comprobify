@@ -109,12 +109,12 @@ async function sendVerificationEmail(email, token, redirectUrl = null, language 
  * @param {object} tenant       - DB row from tenants table
  * @returns {Promise<{ sent: boolean, reason?: string }>}
  */
-async function sendPaymentProofSubmitted(payment, subscription, tenant) {
+async function sendPaymentProofSubmitted(payment, subscription, tenant, referenceNumber) {
   if (!config.adminNotificationEmail) {
     return { sent: false, reason: 'no_admin_email' };
   }
 
-  const rendered = paymentProofSubmittedTemplate.render(payment, subscription, tenant);
+  const rendered = paymentProofSubmittedTemplate.render(payment, subscription, tenant, referenceNumber);
   const { subject } = rendered;
   const { text, html } = applyStagingBanner(rendered, 'en');
   const provider = emailFactory.getProvider();

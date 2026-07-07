@@ -420,6 +420,7 @@ function formatPaymentProof(row) {
     id: row.id,
     filename: row.filename,
     mimeType: row.mime_type,
+    referenceNumber: row.reference_number,
     active: row.active,
     createdAt: row.created_at,
   };
@@ -429,7 +430,10 @@ function formatPaymentProof(row) {
 // carry multiple files (limit enforced by multer in payments.routes.js).
 // Every file is kept forever (soft-deletable, but never overwritten) — see
 // payment-proof.model.js and db/migrations/069_payment_proofs.sql.
-async function submitPaymentProof(paymentId, tenantId, files) {
+// referenceNumber is the bank's SPI transfer reference — required per
+// submission attempt, stored on every file row created by that attempt
+// (see db/migrations/071_payment_proof_reference_number.sql).
+async function submitPaymentProof(paymentId, tenantId, files, referenceNumber) {
   const payment = await paymentModel.findById(paymentId);
   if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
 
@@ -451,7 +455,7 @@ async function submitPaymentProof(paymentId, tenantId, files) {
     );
   }
 
-  const createdProofs = await paymentProofModel.createMany(paymentId, files);
+  const createdProofs = await paymentProofModel.createMany(paymentId, files, referenceNumber);
 
   // A REJECTED payment can be re-submitted (e.g. the transfer hadn't reflected in
   // the bank yet) — clear the old rejection_reason_code since it's being re-addressed.
@@ -461,12 +465,12 @@ async function submitPaymentProof(paymentId, tenantId, files) {
     rejection_reason_code: null,
   });
 
-  await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REPORTED', { paymentId, proofCount: files.length });
+  await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REPORTED', { paymentId, proofCount: files.length, referenceNumber });
 
   // Fire-and-forget: let the operator know there's a proof to review. No-op
   // (resolves { sent: false }) if ADMIN_NOTIFICATION_EMAIL isn't configured.
   const tenant = await tenantModel.findById(tenantId);
-  fireAndForget(emailService.sendPaymentProofSubmitted(updated, subscription, tenant), 'Payment proof submitted email');
+  fireAndForget(emailService.sendPaymentProofSubmitted(updated, subscription, tenant, referenceNumber), 'Payment proof submitted email');
 
   return { payment: updated, proofs: createdProofs.map(formatPaymentProof) };
 }
