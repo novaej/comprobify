@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-07-07
+
+### Fixed
+- **`POST /v1/webhooks` no longer rejects every request with `400 Unknown subscription tier`.** `webhook-endpoint.controller.js` read `req.tenant.subscription_tier` (snake_case), but `authenticate` middleware populates `req.tenant` with camelCase fields only — the tier lookup always resolved to `undefined`, so webhook endpoint registration was completely broken for all tenants. Now reads `req.tenant.subscriptionTier`.
+
 ## [0.7.2] — 2026-07-07
 
 ### Added
