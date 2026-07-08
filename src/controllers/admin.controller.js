@@ -161,6 +161,7 @@ const publishAgreement = async (req, res) => {
   const document = await agreementService.publish(
     req.body.documentType,
     req.body.version,
+    req.body.contentMarkdown ?? null,
   );
   res.status(201).json({
     ok: true,
@@ -176,6 +177,21 @@ const activateAgreement = async (req, res) => {
 const listAgreementVersions = async (req, res) => {
   const versions = await agreementService.listVersionsByType(req.params.type);
   res.json({ ok: true, versions });
+};
+
+const getAgreementVersion = async (req, res) => {
+  const document = await agreementService.getById(parseInt(req.params.id, 10));
+  res.json({
+    ok: true,
+    document: {
+      id: document.id,
+      documentType: document.document_type,
+      version: document.version,
+      contentMarkdown: document.content_markdown,
+      isCurrent: document.is_current,
+      createdAt: document.created_at,
+    },
+  });
 };
 
 // Jobs
@@ -226,5 +242,5 @@ module.exports = {
   runSubscriptionJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments,
-  publishAgreement, activateAgreement, listAgreementVersions, generateTenantAgreements,
+  publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion, generateTenantAgreements,
 };

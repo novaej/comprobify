@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Admin agreement documents can now be edited without a file change or redeploy.** `POST /v1/admin/agreements` accepts an optional `contentMarkdown` body field — when present it's published directly to the DB instead of being read from `docs/agreements/*.md`, going through the same `stripDraftHeader()`/`substitutePlaceholders()` pipeline either way so `{{token}}` resolution and rendered styling are unaffected. New `GET /v1/admin/agreements/versions/:id` fetches one version's full `contentMarkdown` by its row id (a global primary key, not scoped per `document_type`) so a UI or Postman can pull existing content into an editor before resubmitting. No migration needed — `agreements` already retains one immutable row per published version (`is_current` flag), so every edit is a new, restorable version; `PATCH /v1/admin/agreements/:id/activate` (already existing) rolls back to any prior version. Deliberately does not write admin-submitted content back to the filesystem — Render's container filesystem is ephemeral and rebuilt from the git image on every deploy, so a file write would silently vanish on the next unrelated deploy.
+
 ## [0.7.3] — 2026-07-07
 
 ### Fixed

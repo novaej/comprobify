@@ -43,6 +43,7 @@ router.get('/payments/:id/proofs/:proofId',     v.getPaymentProof,    validateRe
 
 // Agreements
 router.post('/agreements', v.publishAgreement, validateRequest, asyncHandler(controller.publishAgreement));
+router.get('/agreements/versions/:id', v.getAgreementVersion, validateRequest, asyncHandler(controller.getAgreementVersion));
 router.get('/agreements/:type/versions', v.listAgreementVersions, validateRequest, asyncHandler(controller.listAgreementVersions));
 router.patch('/agreements/:id/activate', v.activateAgreement, validateRequest, asyncHandler(controller.activateAgreement));
 router.post('/tenants/:id/agreements', v.verifyTenant, validateRequest, asyncHandler(controller.generateTenantAgreements));

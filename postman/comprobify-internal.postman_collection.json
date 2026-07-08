@@ -78,6 +78,12 @@
       "type": "string"
     },
     {
+      "key": "agreement_id",
+      "value": "",
+      "description": "Row id of a published agreement version — copy from a Publish Agreement or List Agreement Versions response. Used by Get Agreement Version and Activate Agreement Version.",
+      "type": "string"
+    },
+    {
       "key": "verification_token",
       "value": "",
       "description": "Email verification token — copy from the verification email link (?token=...)",
@@ -2898,7 +2904,7 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('Status 201', () => pm.response.to.have.status(201));",
-                  "if (r.document?.version) { pm.collectionVariables.set('agreement_version', r.document.version); console.log('Published TERMS v', r.document.version); }"
+                  "if (r.document?.version) { pm.collectionVariables.set('agreement_version', r.document.version); pm.collectionVariables.set('agreement_id', r.document.id); console.log('Published TERMS v', r.document.version, '(id', r.document.id + ')'); }"
                 ],
                 "type": "text/javascript"
               }
@@ -2931,7 +2937,7 @@
               "mode": "raw",
               "raw": "{\n  \"documentType\": \"TERMS\",\n  \"version\": \"2026-07-01\"\n}"
             },
-            "description": "Reads content from docs/agreements/*.md on the server — no markdown in the body. Only documentType and version are required."
+            "description": "documentType and version are required. If contentMarkdown is omitted (as here), content is read from docs/agreements/*.md on the server. Pass an optional contentMarkdown string in the body instead to publish edited content directly, without touching the filesystem or redeploying — see 'Publish Agreement (Edited Content)' below."
           }
         },
         {
@@ -2976,7 +2982,7 @@
               "mode": "raw",
               "raw": "{\n  \"documentType\": \"PRIVACY\",\n  \"version\": \"2026-07-01\"\n}"
             },
-            "description": "Reads content from docs/agreements/*.md on the server — no markdown in the body. Only documentType and version are required."
+            "description": "documentType and version are required. If contentMarkdown is omitted (as here), content is read from docs/agreements/*.md on the server. Pass an optional contentMarkdown string in the body instead to publish edited content directly, without touching the filesystem or redeploying."
           }
         },
         {
@@ -3021,7 +3027,169 @@
               "mode": "raw",
               "raw": "{\n  \"documentType\": \"DPA\",\n  \"version\": \"2026-07-01\"\n}"
             },
-            "description": "Reads content from docs/agreements/*.md on the server — no markdown in the body. Only documentType and version are required."
+            "description": "documentType and version are required. If contentMarkdown is omitted (as here), content is read from docs/agreements/*.md on the server. Pass an optional contentMarkdown string in the body instead to publish edited content directly, without touching the filesystem or redeploying."
+          }
+        },
+        {
+          "name": "Publish Agreement (Edited Content)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.document?.version) { pm.collectionVariables.set('agreement_version', r.document.version); pm.collectionVariables.set('agreement_id', r.document.id); console.log('Published', r.document.documentType, 'v', r.document.version, '(id', r.document.id + ') from inline content'); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/agreements",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "agreements"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"TERMS\",\n  \"version\": \"2026-07-08b\",\n  \"contentMarkdown\": \"# Terminos de Servicio — Comprobify\\n\\nTexto editado directamente por un administrador, sin pasar por docs/agreements/*.md.\\n\"\n}"
+            },
+            "description": "Publishes a new version from contentMarkdown supplied in the body instead of reading docs/agreements/*.md. This is the admin-edit path: fetch an existing version's raw markdown with 'Get Agreement Version (by id)', edit it, then resubmit here. The new row becomes the current version immediately; the previous version is preserved and can be restored with 'Activate Agreement Version (Rollback)'."
+          }
+        },
+        {
+          "name": "List Agreement Versions (TERMS)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.versions?.length) console.log(r.versions.length, 'version(s) found for TERMS — most recent id', r.versions[0].id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/agreements/TERMS/versions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "agreements",
+                "TERMS",
+                "versions"
+              ]
+            },
+            "description": "Lists every published version of TERMS (id, version, isCurrent, createdAt — no content_markdown, to keep the list lightweight). Swap TERMS for PRIVACY or DPA in the path to list the other types. Copy an id into agreement_id to fetch its full content next."
+          }
+        },
+        {
+          "name": "Get Agreement Version (by id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.document) console.log('Fetched', r.document.documentType, 'v', r.document.version, '— content length', r.document.contentMarkdown?.length);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/agreements/versions/{{agreement_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "agreements",
+                "versions",
+                "{{agreement_id}}"
+              ]
+            },
+            "description": "Fetches one specific version's full contentMarkdown by its row id (no documentType needed in the path — id is a global primary key). Use this to pull existing content into an editor before tweaking it and resubmitting via 'Publish Agreement (Edited Content)'."
+          }
+        },
+        {
+          "name": "Activate Agreement Version (Rollback)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.document) console.log('Now current for', r.document.documentType + ':', 'v', r.document.version);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/agreements/{{agreement_id}}/activate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "agreements",
+                "{{agreement_id}}",
+                "activate"
+              ]
+            },
+            "description": "Re-activates a previously published version as current for its document_type — e.g. to undo a bad edit without republishing. Does not delete or alter any other version; every row from every publish attempt is retained."
           }
         },
         {
