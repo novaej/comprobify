@@ -11,7 +11,7 @@ async function create(req, res) {
   const { url, eventTypes = [] } = req.body;
   const { endpoint, secret } = await webhookEndpointService.create(
     req.tenant.id,
-    req.tenant.subscription_tier,
+    req.tenant.subscriptionTier,
     url,
     eventTypes,
   );
