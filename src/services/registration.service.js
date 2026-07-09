@@ -105,7 +105,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
         verificationTokenExpiresAt,
         verificationRedirectUrl: fields.verificationRedirectUrl || null,
         preferredLanguage: fields.language || 'es',
-        agreementVersion: fields.termsVersion,
+        legalVersion: fields.termsVersion,
       }, client);
       quotaRow = await tenantQuotaService.initializeForTenant(tenant.id, tier.documentQuota, client);
       await client.query('COMMIT');

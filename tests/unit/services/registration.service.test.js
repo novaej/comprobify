@@ -220,7 +220,7 @@ describe('RegistrationService', () => {
         email: baseFields.email,
         subscriptionTier: 'FREE',
         status: 'PENDING_VERIFICATION',
-        agreementVersion: baseFields.termsVersion,
+        legalVersion: baseFields.termsVersion,
       }), mockClient);
       expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith(2, 5, mockClient);
       expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
