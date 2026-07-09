@@ -1,8 +1,10 @@
 const crypto = require('crypto');
+const db = require('../config/database');
 const tenantModel = require('../models/tenant.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const sequentialService = require('./sequential.service');
+const tenantQuotaService = require('./tenant-quota.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
 const emailService = require('./email.service');
@@ -20,14 +22,14 @@ function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-function formatTenant(row) {
+function formatTenant(row, quotaRow = null) {
   return {
     id: row.id,
     email: row.email,
     subscriptionTier: row.subscription_tier,
     status: row.status,
-    documentQuota: row.document_quota,
-    documentCount: row.document_count,
+    documentQuota: quotaRow?.document_quota ?? null,
+    documentCount: quotaRow?.document_count ?? null,
     createdAt: row.created_at,
     agreementAcceptedAt: row.agreement_accepted_at,
     agreementVersion: row.agreement_version,
@@ -52,8 +54,9 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
       label: 'Recovery sandbox key',
       environment: 'sandbox',
     });
+    const existingQuota = await tenantQuotaService.getCurrentForTenant(existing.id);
     return {
-      tenant: formatTenant(existing),
+      tenant: formatTenant(existing, existingQuota),
       issuer: {
         id: issuer.id,
         ruc: issuer.ruc,
@@ -89,19 +92,29 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
 
   const tier = TIERS.FREE;
 
-  let tenant, issuer, plainToken;
+  let tenant, issuer, plainToken, quotaRow;
   try {
-    tenant = await tenantModel.create({
-      email: fields.email,
-      subscriptionTier: 'FREE',
-      status: TenantStatus.PENDING_VERIFICATION,
-      documentQuota: tier.documentQuota,
-      verificationToken,
-      verificationTokenExpiresAt,
-      verificationRedirectUrl: fields.verificationRedirectUrl || null,
-      preferredLanguage: fields.language || 'es',
-      agreementVersion: fields.termsVersion,
-    });
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      tenant = await tenantModel.create({
+        email: fields.email,
+        subscriptionTier: 'FREE',
+        status: TenantStatus.PENDING_VERIFICATION,
+        verificationToken,
+        verificationTokenExpiresAt,
+        verificationRedirectUrl: fields.verificationRedirectUrl || null,
+        preferredLanguage: fields.language || 'es',
+        agreementVersion: fields.termsVersion,
+      }, client);
+      quotaRow = await tenantQuotaService.initializeForTenant(tenant.id, tier.documentQuota, client);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
 
     issuer = await issuerModel.create({
       tenantId: tenant.id,
@@ -176,7 +189,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   }
 
   return {
-    tenant: formatTenant(tenant),
+    tenant: formatTenant(tenant, quotaRow),
     issuer: {
       id: issuer.id,
       ruc: issuer.ruc,

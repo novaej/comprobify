@@ -1,24 +1,35 @@
+jest.mock('../../../src/config/database');
 jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/issuer.model');
 jest.mock('../../../src/models/api-key.model');
 jest.mock('../../../src/models/issuer-document-type.model');
 jest.mock('../../../src/models/tenant-event.model');
 jest.mock('../../../src/services/sequential.service');
+jest.mock('../../../src/services/tenant-quota.service');
 jest.mock('../../../src/services/crypto.service');
 jest.mock('../../../src/services/certificate.service');
 
 const crypto = require('crypto');
+const db = require('../../../src/config/database');
 const tenantModel = require('../../../src/models/tenant.model');
 const issuerModel = require('../../../src/models/issuer.model');
 const apiKeyModel = require('../../../src/models/api-key.model');
 const issuerDocumentTypeModel = require('../../../src/models/issuer-document-type.model');
 const tenantEventModel = require('../../../src/models/tenant-event.model');
 const sequentialService = require('../../../src/services/sequential.service');
+const tenantQuotaService = require('../../../src/services/tenant-quota.service');
 const cryptoService = require('../../../src/services/crypto.service');
 const certificateService = require('../../../src/services/certificate.service');
 const adminService = require('../../../src/services/admin.service');
 
 describe('AdminService', () => {
+  let mockClient;
+
+  beforeEach(() => {
+    mockClient = { query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() };
+    db.getClient.mockResolvedValue(mockClient);
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -36,14 +47,17 @@ describe('AdminService', () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       tenantModel.create.mockResolvedValue({
         id: 1, email: 'a@b.com', subscription_tier: 'FREE', status: 'ACTIVE',
-        document_quota: 5, document_count: 0, created_at: new Date('2026-01-01'),
+        created_at: new Date('2026-01-01'),
       });
+      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
 
       const result = await adminService.createTenant({ email: 'a@b.com' });
 
       expect(tenantModel.create).toHaveBeenCalledWith({
-        email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE', documentQuota: 5,
-      });
+        email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE',
+      }, mockClient);
+      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith(1, 5, mockClient);
+      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
       expect(result).toEqual({
         id: 1, email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE',
         documentQuota: 5, documentCount: 0, createdAt: new Date('2026-01-01'),
@@ -54,14 +68,16 @@ describe('AdminService', () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       tenantModel.create.mockResolvedValue({
         id: 2, email: 'b@c.com', subscription_tier: 'GROWTH', status: 'ACTIVE',
-        document_quota: 1000, document_count: 0, created_at: new Date('2026-01-01'),
+        created_at: new Date('2026-01-01'),
       });
+      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 1000, document_count: 0 });
 
       await adminService.createTenant({ email: 'b@c.com', subscriptionTier: 'GROWTH' });
 
       expect(tenantModel.create).toHaveBeenCalledWith({
-        email: 'b@c.com', subscriptionTier: 'GROWTH', status: 'ACTIVE', documentQuota: 1000,
-      });
+        email: 'b@c.com', subscriptionTier: 'GROWTH', status: 'ACTIVE',
+      }, mockClient);
+      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith(2, 1000, mockClient);
     });
 
     // NOTE: unlike updateTenantTier, createTenant does not validate the supplied
@@ -80,11 +96,15 @@ describe('AdminService', () => {
   describe('listTenants', () => {
     test('returns all tenants formatted', async () => {
       tenantModel.findAll.mockResolvedValue([
-        { id: 1, email: 'a@b.com', subscription_tier: 'FREE', status: 'ACTIVE', document_quota: 5, document_count: 1, created_at: new Date('2026-01-01') },
+        { id: 1, email: 'a@b.com', subscription_tier: 'FREE', status: 'ACTIVE', created_at: new Date('2026-01-01') },
       ]);
+      tenantQuotaService.getCurrentForTenants.mockResolvedValue(
+        new Map([[1, { document_quota: 5, document_count: 1 }]])
+      );
 
       const result = await adminService.listTenants();
 
+      expect(tenantQuotaService.getCurrentForTenants).toHaveBeenCalledWith([1]);
       expect(result).toEqual([
         { id: 1, email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE', documentQuota: 5, documentCount: 1, createdAt: new Date('2026-01-01') },
       ]);
@@ -110,14 +130,17 @@ describe('AdminService', () => {
       tenantModel.findById.mockResolvedValue({ id: 1, subscription_tier: 'STARTER' });
       tenantModel.updateTier.mockResolvedValue({
         id: 1, email: 'a@b.com', subscription_tier: 'GROWTH', status: 'ACTIVE',
-        document_quota: 1000, document_count: 0, created_at: new Date('2026-01-01'),
+        created_at: new Date('2026-01-01'),
       });
+      tenantQuotaService.setCap.mockResolvedValue({ document_quota: 1000, document_count: 0 });
 
       const result = await adminService.updateTenantTier(1, 'GROWTH');
 
-      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'GROWTH');
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', { from: 'STARTER', to: 'GROWTH' });
       expect(result.subscriptionTier).toBe('GROWTH');
+      expect(result.documentQuota).toBe(1000);
     });
   });
 
@@ -140,8 +163,9 @@ describe('AdminService', () => {
       tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE' });
       tenantModel.updateStatus.mockResolvedValue({
         id: 1, email: 'a@b.com', subscription_tier: 'FREE', status: 'SUSPENDED',
-        document_quota: 5, document_count: 0, created_at: new Date('2026-01-01'),
+        created_at: new Date('2026-01-01'),
       });
+      tenantQuotaService.getCurrentForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
 
       const result = await adminService.updateTenantStatus(1, 'SUSPENDED');
 
@@ -161,8 +185,9 @@ describe('AdminService', () => {
     test('activates the tenant and returns the formatted result', async () => {
       tenantModel.activate.mockResolvedValue({
         id: 1, email: 'a@b.com', subscription_tier: 'FREE', status: 'ACTIVE',
-        document_quota: 5, document_count: 0, created_at: new Date('2026-01-01'),
+        created_at: new Date('2026-01-01'),
       });
+      tenantQuotaService.getCurrentForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
 
       const result = await adminService.verifyTenant(1);
 

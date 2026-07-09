@@ -190,21 +190,22 @@ The manual subscription/payment pipeline this depends on (`subscriptions`/`payme
 
 ---
 
-## 10. Overage Billing (Monthly Quota Reset + Per-Tenant Overage Toggle)
+## 10. Overage Billing (Per-Tenant Toggle + Charging)
 
-**Priority: Low — depends on the payment gateway integration (#9) landing first**
+**Priority: Low — depends on the payment gateway integration (#9)**
 
-Two things have to exist before `overagePerDocumentUsd` (`subscription-tiers.js`) means anything: a *monthly* cycle for quota to reset against, and a gateway to actually charge through. The gateway still doesn't exist. A recurring *billing* cycle now does (`subscriptions.current_period_start/end`, see CLAUDE.md's "Recurring renewals" entry and ADR-017's addendum) — but it's deliberately the wrong cycle to reset quota against, since it follows `billing_interval` (MONTHLY or YEARLY) while every tier's `documentQuota` is meant to be a monthly figure regardless of how the tenant pays. Reusing it would mean a YEARLY subscriber's quota only resets once a year (12x less usage than a MONTHLY subscriber on the same tier), which isn't the intent anywhere it's documented. So `tenants.document_count` still never resets anywhere in the codebase — it's a lifetime counter, not a monthly one, despite every doc describing quotas as "documents/month." And exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`) — there is no path today that lets a tenant continue past quota and get billed the difference.
+The monthly quota reset this item used to require now exists: `tenant_quotas` (migration 073) decouples usage tracking from `tenants` entirely — one row per tenant per period (`period_start`/`period_end`, `document_quota`, `document_count`), with its own `is_current` flag mirroring `agreements`' per-type versioning. `POST /v1/admin/jobs/quota` (`tenant-quota.service.js`'s `resetDuePeriods()`) rolls over every period whose `period_end` has passed, on its own clock — independent of `subscriptions.billing_interval` for exactly the reason this item originally called out (a YEARLY subscriber must still get quota refreshed monthly, not yearly). `document-creation.service.js`'s atomic quota gate now increments/checks against the tenant's current `tenant_quotas` row instead of `tenants.document_count`/`document_quota` (both columns dropped). See CLAUDE.md's "Document quota enforcement" entry for the full design.
+
+What's left is exactly the overage-billing half, still blocked on the payment gateway (#9) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
 
 **What:**
-1. **Monthly reset, on its own clock — not `current_period_end`** — give quota an actual billing-period concept independent of `billing_interval` (e.g. a scheduled job, or a `tenants.quota_period_start` column checked at request time, advanced by exactly one calendar month every time regardless of whether the tenant pays monthly or yearly) that zeroes `document_count` at the start of each cycle, so "N documents/month" is true rather than aspirational
-2. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
-3. **Overage charging** — when `overage_enabled = true` and quota is exceeded, allow creation to continue, track the extra count for the cycle, and bill it as one line item (`overage_count × overagePerDocumentUsd`) through the payment gateway at cycle end — not a per-document charge; most gateways don't support micro-charging per invoice
-4. Expose the toggle (e.g. `PATCH /v1/tenants/overage`) and surface current-cycle overage usage somewhere the tenant can see it before the bill arrives, so it's never a surprise
+1. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
+2. **Overage charging** — when `overage_enabled = true` and quota is exceeded, allow creation to continue, track the extra count for the cycle, and bill it as one line item (`overage_count × overagePerDocumentUsd`) through the payment gateway at cycle end — not a per-document charge; most gateways don't support micro-charging per invoice
+3. Expose the toggle (e.g. `PATCH /v1/tenants/overage`) and surface current-cycle overage usage somewhere the tenant can see it before the bill arrives, so it's never a surprise
 
-**Why defer:** pointless without a gateway to charge through, and the monthly reset is a prerequisite most of this depends on regardless of billing.
+**Why defer:** pointless without a gateway to charge through.
 
-**Effort:** Medium-High — migration for the reset/toggle/counter, a scheduled job for the reset, a new tenant-facing endpoint, and the actual charge integration once the gateway exists.
+**Effort:** Medium — a new tenant-facing endpoint, the toggle/counter, and the actual charge integration once the gateway exists.
 
 ---
 

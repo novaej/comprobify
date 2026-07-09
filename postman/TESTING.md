@@ -510,8 +510,9 @@ Skips the `ACTIVE` status check that the tenant-facing promote requires. Returns
 |---|---|
 | `POST /v1/admin/jobs/notifications` | Cert expiry checks + webhook retry queue (normally every 5 min by external cron) |
 | `POST /v1/admin/jobs/subscriptions` | Scheduled downgrades + renewal reminders + expired subscription cleanup (normally daily) |
+| `POST /v1/admin/jobs/quota` | Resets `tenant_quotas` periods whose `period_end` has passed (normally daily, just after Subscriptions) |
 
-Both are idempotent — safe to run manually at any time for testing.
+All three are idempotent — safe to run manually at any time for testing.
 
 ---
 

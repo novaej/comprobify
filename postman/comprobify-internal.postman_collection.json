@@ -3233,6 +3233,26 @@
           }
         },
         {
+          "name": "Run Quota Jobs",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/jobs/quota",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "jobs",
+                "quota"
+              ]
+            },
+            "description": "Rolls over every tenant's document-quota period (`tenant_quotas`) whose `period_end` has passed — resets `document_count` to 0 for a new monthly cycle, sizing the new cap from the tenant's current `subscriptionTier`. Anchored to the OLD `period_end`, never \"now,\" so a late-running job never drifts the cycle forward.\n\nIndependent of the billing cycle (`subscriptions.current_period_end`/`billing_interval`) on purpose — a YEARLY subscriber still needs their document quota refreshed every month, not once a year.\n\nDesigned to be called by an external scheduler on a daily cadence. Recommended to run after Run Subscription Jobs in the same tick so a same-day tier change is reflected in the rolled-over cap, though a one-day-stale cap self-corrects on the next cycle regardless.\n\nResponse includes `quotaPeriodsReset` (count from this run)."
+          }
+        },
+        {
           "name": "Create Subscription",
           "request": {
             "method": "POST",

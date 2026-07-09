@@ -174,7 +174,7 @@ To enable production once it's provisioned:
 4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
 5. In `deploy-production.yml`: uncomment the `push: branches: [production]` trigger and remove the `if: false` guard on the `deploy` job
 6. Add branch protection to `production` (restrict who can push to the automation only; no force pushes) — see GitHub repository setup below
-7. Create the two Render Cron Jobs in the same workspace (`POST /v1/admin/jobs/notifications` every 5 minutes, `POST /v1/admin/jobs/subscriptions` daily), both with `Authorization: Bearer <ADMIN_SECRET>` — see "Render Cron Job setup" under Scheduled jobs below
+7. Create the three Render Cron Jobs in the same workspace (`POST /v1/admin/jobs/notifications` every 5 minutes, `POST /v1/admin/jobs/subscriptions` and `POST /v1/admin/jobs/quota` daily), all with `Authorization: Bearer <ADMIN_SECRET>` — see "Render Cron Job setup" under Scheduled jobs below
 
 ---
 
@@ -252,7 +252,7 @@ This leaves Email Obfuscation active on the marketing site (`comprobify.com`, `s
 
 ## Scheduled jobs
 
-The API has two scheduled jobs that must be triggered externally — neither is self-scheduled. Both **staging** and **production** use a **Render Cron Job**, in the same workspace as the matching web service, so the scheduler is billed per execution-second and its logs sit alongside the API's own rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale.
+The API has three scheduled jobs that must be triggered externally — none is self-scheduled. Both **staging** and **production** use a **Render Cron Job**, in the same workspace as the matching web service, so the scheduler is billed per execution-second and its logs sit alongside the API's own rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale.
 
 > Staging previously used [cron-job.org](https://cron-job.org) for the notifications job. It has been replaced by a Render Cron Job for the same reason production uses one, so both environments now follow the same pattern.
 
@@ -274,6 +274,14 @@ Runs `subscriptionService.applyScheduledTierChanges()` then `subscriptionService
 
 Also idempotent. Daily cadence is enough — nothing here needs minute-level freshness the way the notifications job does.
 
+### `POST /v1/admin/jobs/quota`
+
+Runs `tenantQuotaService.resetDuePeriods()` — rolls over every tenant's document-quota period (`tenant_quotas`) whose `period_end` has passed: resets `document_count` to 0 and sizes the new cap from the tenant's current `subscription_tier`. Anchored to the OLD `period_end`, never "now," so a late-running job never drifts the cycle forward.
+
+Independent of the billing cycle (`subscriptions.current_period_end`/`billing_interval`) on purpose — a YEARLY subscriber still needs their document quota refreshed every month, not once a year. See CLAUDE.md's "Document quota enforcement" entry for the full design.
+
+Idempotent. Daily cadence is enough. Recommended to run after the subscriptions job in the same tick so a same-day tier change is reflected in the rolled-over cap, though this isn't a hard ordering requirement — a one-day-stale cap self-corrects on the next cycle.
+
 ### Render Cron Job setup
 
 In the Render dashboard: **New → Cron Job**, connected to the same repo/branch as the corresponding web service (`comprobify-staging` or `comprobify-production`). Render auto-detects the project's `Dockerfile`, which has `node` but not `curl` — so the command is `node scripts/run-admin-job.js <path>` rather than a raw `curl` invocation. This also sidesteps the Docker Command field's lack of shell/quoting support: it just splits on whitespace, so any command with embedded quoted strings (e.g. a `curl` call with an `Authorization` header value containing a space) gets silently truncated at the first space — that's the cause if a run fails with a `SyntaxError`/truncated command.
@@ -284,6 +292,7 @@ Create one Cron Job per row below, per environment:
 |---|---|---|
 | Notifications | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/notifications` |
 | Subscriptions | `0 6 * * *` (daily) | `node scripts/run-admin-job.js /v1/admin/jobs/subscriptions` |
+| Quota | `10 6 * * *` (daily, just after Subscriptions) | `node scripts/run-admin-job.js /v1/admin/jobs/quota` |
 
 For each Cron Job:
 
@@ -322,6 +331,15 @@ Subscriptions job:
   "applied": 2,
   "remindersSent": 5,
   "expired": 1
+}
+```
+
+Quota job:
+
+```json
+{
+  "ok": true,
+  "quotaPeriodsReset": 4
 }
 ```
 

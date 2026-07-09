@@ -4,6 +4,7 @@ const paymentProofModel = require('../models/payment-proof.model');
 const documentModel = require('../models/document.model');
 const tenantModel = require('../models/tenant.model');
 const tenantEventModel = require('../models/tenant-event.model');
+const tenantQuotaService = require('./tenant-quota.service');
 const notificationService = require('./notification.service');
 const emailService = require('./email.service');
 const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
@@ -243,7 +244,8 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     // the payment/proof pipeline; there's nothing to collect.
     if (proratedTotal <= 0) {
       const updated = await subscriptionModel.applyTierChange(subscription.id, tier);
-      await tenantModel.updateTier(tenant.id, tier, TIERS[tier].documentQuota);
+      await tenantModel.updateTier(tenant.id, tier);
+      await tenantQuotaService.setCap(tenant.id, tier);
       await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
         subscriptionId: subscription.id,
         fromTier: subscription.tier,
@@ -320,7 +322,8 @@ async function requestTierChange(tenantId, tier, billingInterval) {
 async function requestSandboxTierChange(tenant, subscription, tier, targetInterval, isTierDowngrade) {
   if (isTierDowngrade) {
     const updated = await subscriptionModel.applyTierChange(subscription.id, tier, targetInterval);
-    await tenantModel.updateTier(tenant.id, tier, TIERS[tier].documentQuota);
+    await tenantModel.updateTier(tenant.id, tier);
+    await tenantQuotaService.setCap(tenant.id, tier);
     await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
       subscriptionId: subscription.id,
       fromTier: subscription.tier,
@@ -672,7 +675,8 @@ async function linkSandboxDocument(subscription, document, pendingTierChange, pe
     const updated = await subscriptionModel.applyTierChange(
       subscription.id, pendingTierChange.target_tier, pendingTierChange.target_billing_interval
     );
-    await tenantModel.updateTier(subscription.tenant_id, pendingTierChange.target_tier, TIERS[pendingTierChange.target_tier].documentQuota);
+    await tenantModel.updateTier(subscription.tenant_id, pendingTierChange.target_tier);
+    await tenantQuotaService.setCap(subscription.tenant_id, pendingTierChange.target_tier);
     await paymentModel.updateStatus(pendingTierChange.id, pendingTierChange.status, {
       period_start: subscription.current_period_start,
       period_end: subscription.current_period_end,
@@ -715,7 +719,8 @@ async function linkSandboxDocument(subscription, document, pendingTierChange, pe
   if (funding) {
     await paymentModel.updateStatus(funding.id, funding.status, { period_start: periodStart, period_end: periodEnd });
   }
-  await tenantModel.updateTier(subscription.tenant_id, subscription.tier, TIERS[subscription.tier].documentQuota);
+  await tenantModel.updateTier(subscription.tenant_id, subscription.tier);
+  await tenantQuotaService.setCap(subscription.tenant_id, subscription.tier);
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
     subscriptionId: subscription.id, note: 'sandbox invoice',
   });
@@ -749,7 +754,8 @@ async function activateIfLinked(documentId) {
     });
   }
 
-  await tenantModel.updateTier(subscription.tenant_id, subscription.tier, TIERS[subscription.tier].documentQuota);
+  await tenantModel.updateTier(subscription.tenant_id, subscription.tier);
+  await tenantQuotaService.setCap(subscription.tenant_id, subscription.tier);
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
     subscriptionId: subscription.id,
     tier: subscription.tier,
@@ -797,7 +803,8 @@ async function applyTierChangeIfLinked(documentId) {
 
   const updated = await subscriptionModel.applyTierChange(subscription.id, payment.target_tier);
 
-  await tenantModel.updateTier(subscription.tenant_id, payment.target_tier, TIERS[payment.target_tier].documentQuota);
+  await tenantModel.updateTier(subscription.tenant_id, payment.target_tier);
+  await tenantQuotaService.setCap(subscription.tenant_id, payment.target_tier);
 
   // The upgrade takes over the remainder of the same billing cycle — the
   // subscription's period dates don't change, only the tier does — so stamp
@@ -871,7 +878,8 @@ async function applyScheduledTierChanges() {
     if (subscription.pending_tier === 'FREE') {
       await subscriptionModel.applyTierChange(subscription.id, 'FREE');
       await subscriptionModel.updateStatus(subscription.id, 'CANCELLED', { canceled_at: new Date() });
-      await tenantModel.updateTier(subscription.tenant_id, 'FREE', TIERS['FREE'].documentQuota);
+      await tenantModel.updateTier(subscription.tenant_id, 'FREE');
+      await tenantQuotaService.setCap(subscription.tenant_id, 'FREE');
       await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_CANCELLED', {
         subscriptionId: subscription.id,
         fromTier: subscription.tier,
@@ -889,7 +897,8 @@ async function applyScheduledTierChanges() {
         current_period_start: periodStart,
         current_period_end: periodEnd,
       });
-      await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier, TIERS[subscription.pending_tier].documentQuota);
+      await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier);
+      await tenantQuotaService.setCap(subscription.tenant_id, subscription.pending_tier);
 
       // If this pending change was funded by a paid TIER_CHANGE payment (an
       // interval switch — free tier-only downgrades have no such payment),
@@ -962,7 +971,8 @@ async function createRenewalReminder(subscription) {
 }
 
 async function expireSubscription(subscription) {
-  await tenantModel.updateTier(subscription.tenant_id, 'FREE', TIERS.FREE.documentQuota);
+  await tenantModel.updateTier(subscription.tenant_id, 'FREE');
+  await tenantQuotaService.setCap(subscription.tenant_id, 'FREE');
   const updated = await subscriptionModel.updateStatus(subscription.id, 'EXPIRED');
 
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_EXPIRED', {

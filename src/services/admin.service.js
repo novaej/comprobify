@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const db = require('../config/database');
 const tenantModel = require('../models/tenant.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
@@ -6,6 +7,7 @@ const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const tenantEventModel = require('../models/tenant-event.model');
 const { formatTenantEvent } = require('../presenters/tenant-event.presenter');
 const sequentialService = require('./sequential.service');
+const tenantQuotaService = require('./tenant-quota.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
 const AppError = require('../errors/app-error');
@@ -19,14 +21,14 @@ function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-function formatTenant(row) {
+function formatTenant(row, quotaRow = null) {
   return {
     id: row.id,
     email: row.email,
     subscriptionTier: row.subscription_tier,
     status: row.status,
-    documentQuota: row.document_quota,
-    documentCount: row.document_count,
+    documentQuota: quotaRow?.document_quota ?? null,
+    documentCount: quotaRow?.document_count ?? null,
     createdAt: row.created_at,
   };
 }
@@ -57,18 +59,32 @@ async function createTenant(fields) {
   if (!TIERS[tier]) {
     throw new AppError(`Unknown subscription tier: '${tier}'. Valid tiers: ${Object.keys(TIERS).join(', ')}`, 400, ErrorCodes.INVALID_TIER);
   }
-  const row = await tenantModel.create({
-    email: fields.email,
-    subscriptionTier: tier,
-    status: TenantStatus.ACTIVE,
-    documentQuota: TIERS[tier]?.documentQuota ?? TIERS.FREE.documentQuota,
-  });
-  return formatTenant(row);
+  const documentQuota = TIERS[tier]?.documentQuota ?? TIERS.FREE.documentQuota;
+
+  const client = await db.getClient();
+  let row, quotaRow;
+  try {
+    await client.query('BEGIN');
+    row = await tenantModel.create({
+      email: fields.email,
+      subscriptionTier: tier,
+      status: TenantStatus.ACTIVE,
+    }, client);
+    quotaRow = await tenantQuotaService.initializeForTenant(row.id, documentQuota, client);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  return formatTenant(row, quotaRow);
 }
 
 async function listTenants() {
   const rows = await tenantModel.findAll();
-  return rows.map(formatTenant);
+  const quotaMap = await tenantQuotaService.getCurrentForTenants(rows.map((r) => r.id));
+  return rows.map((row) => formatTenant(row, quotaMap.get(row.id)));
 }
 
 async function updateTenantTier(id, tier) {
@@ -78,9 +94,10 @@ async function updateTenantTier(id, tier) {
   const previous = await tenantModel.findById(id);
   if (!previous) throw new NotFoundError('Tenant');
 
-  const row = await tenantModel.updateTier(id, tier, TIERS[tier].documentQuota);
+  const row = await tenantModel.updateTier(id, tier);
+  const quotaRow = await tenantQuotaService.setCap(id, tier);
   await tenantEventModel.create(id, 'TIER_CHANGED', { from: previous.subscription_tier, to: tier });
-  return formatTenant(row);
+  return formatTenant(row, quotaRow);
 }
 
 async function updateTenantStatus(id, status) {
@@ -92,14 +109,16 @@ async function updateTenantStatus(id, status) {
   if (!previous) throw new NotFoundError('Tenant');
 
   const row = await tenantModel.updateStatus(id, status);
+  const quotaRow = await tenantQuotaService.getCurrentForTenant(id);
   await tenantEventModel.create(id, 'STATUS_CHANGED', { from: previous.status, to: status });
-  return formatTenant(row);
+  return formatTenant(row, quotaRow);
 }
 
 async function verifyTenant(id) {
   const row = await tenantModel.activate(id);
   if (!row) throw new NotFoundError('Tenant');
-  return formatTenant(row);
+  const quotaRow = await tenantQuotaService.getCurrentForTenant(id);
+  return formatTenant(row, quotaRow);
 }
 
 async function listTenantEvents(id) {

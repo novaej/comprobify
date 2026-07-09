@@ -2,12 +2,16 @@ const db = require('../config/database');
 const TenantStatus = require('../constants/tenant-status');
 const EmailStatus = require('../constants/email-status');
 
-async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, documentQuota = 5, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es', legalVersion = null }) {
-  const { rows } = await db.query(
-    `INSERT INTO tenants (email, subscription_tier, status, document_quota, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language, agreement_accepted_at, agreement_version)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $9::TEXT IS NULL THEN NULL ELSE NOW() END, $9)
+// Accepts an optional external transaction client so the caller can wrap
+// this INSERT and the tenant's first tenant_quotas row in one transaction —
+// see registration.service.js / admin.service.js.
+async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es', legalVersion = null }, client = null) {
+  const conn = client || db;
+  const { rows } = await conn.query(
+    `INSERT INTO tenants (email, subscription_tier, status, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language, agreement_accepted_at, agreement_version)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8::TEXT IS NULL THEN NULL ELSE NOW() END, $8)
      RETURNING *`,
-    [email, subscriptionTier, status, documentQuota, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage, legalVersion]
+    [email, subscriptionTier, status, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage, legalVersion]
   );
   return rows[0];
 }
@@ -58,10 +62,10 @@ async function activate(id) {
   return rows[0] || null;
 }
 
-async function updateTier(id, tier, documentQuota) {
+async function updateTier(id, tier) {
   const { rows } = await db.query(
-    `UPDATE tenants SET subscription_tier = $1, document_quota = $2, updated_at = NOW() WHERE id = $3 RETURNING *`,
-    [tier, documentQuota, id]
+    `UPDATE tenants SET subscription_tier = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+    [tier, id]
   );
   return rows[0] || null;
 }

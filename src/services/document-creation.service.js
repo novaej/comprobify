@@ -6,6 +6,7 @@ const documentModel = require('../models/document.model');
 const documentLineItemModel = require('../models/document-line-item.model');
 const documentEventModel = require('../models/document-event.model');
 const sequentialService = require('./sequential.service');
+const tenantQuotaService = require('./tenant-quota.service');
 const accessKeyService = require('./access-key.service');
 const signingService = require('./signing.service');
 const xmlValidator = require('./xml-validator.service');
@@ -14,7 +15,6 @@ const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const ValidationError = require('../errors/validation-error');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
-const QuotaExceededError = require('../errors/quota-exceeded-error');
 const ErrorCodes = require('../constants/error-codes');
 const DocumentStatus = require('../constants/document-status');
 const EventType = require('../constants/event-type');
@@ -62,18 +62,11 @@ async function create(body, idempotencyKey = null, issuer) {
     await client.query('BEGIN');
     await db.setIssuerContext(client, issuer.id, issuer.sandbox);
 
-    // Atomically increment invoice count — rolls back with the transaction if anything fails.
-    // Sandbox documents don't consume quota — only production usage counts against it.
+    // Atomically increment invoice count against the tenant's current quota
+    // period — rolls back with the transaction if anything fails. Sandbox
+    // documents don't consume quota — only production usage counts against it.
     if (!issuer.sandbox) {
-      const quotaResult = await client.query(
-        `UPDATE tenants SET document_count = document_count + 1, updated_at = NOW()
-         WHERE id = $1 AND document_count < document_quota
-         RETURNING id`,
-        [issuer.tenant_id]
-      );
-      if (quotaResult.rows.length === 0) {
-        throw new QuotaExceededError();
-      }
+      await tenantQuotaService.consumeOne(client, issuer.tenant_id);
     }
 
     // Get next sequential within this transaction (FOR UPDATE, not yet committed)
