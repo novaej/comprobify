@@ -1,7 +1,7 @@
 const db = require('../config/database');
 
 const MUTABLE_EXTRA_COLUMNS = new Set([
-  'invoice_document_id',
+  'initial_invoice_document_id',
   'current_period_start',
   'current_period_end',
   'canceled_at',
@@ -34,9 +34,9 @@ async function findActiveOrPendingByTenantId(tenantId) {
   return rows[0] || null;
 }
 
-async function findByInvoiceDocumentId(documentId) {
+async function findByInitialInvoiceDocumentId(documentId) {
   const { rows } = await db.query(
-    'SELECT * FROM subscriptions WHERE invoice_document_id = $1',
+    'SELECT * FROM subscriptions WHERE initial_invoice_document_id = $1',
     [documentId]
   );
   return rows[0] || null;
@@ -167,7 +167,7 @@ module.exports = {
   create,
   findById,
   findActiveOrPendingByTenantId,
-  findByInvoiceDocumentId,
+  findByInitialInvoiceDocumentId,
   findByTenantId,
   findActiveByTenantId,
   scheduleDowngrade,
