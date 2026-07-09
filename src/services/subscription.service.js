@@ -543,8 +543,17 @@ async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   const subscription = await subscriptionModel.findById(payment.subscription_id);
   if (!subscription) throw new NotFoundError('Subscription', ErrorCodes.SUBSCRIPTION_NOT_FOUND);
 
+  // PAYMENT_RECEIVED is a step in the INITIAL activation flow only
+  // (PENDING_PAYMENT -> ... -> PAYMENT_RECEIVED -> INVOICE_PROCESSING -> ACTIVE).
+  // A TIER_CHANGE/RENEWAL payment's subscription is already ACTIVE by the time
+  // its payment is reviewed (both are only opened for an ACTIVE subscription)
+  // and nothing downstream ever restores ACTIVE for the immediate-apply tier
+  // path — demoting it here would leave the subscription permanently stuck at
+  // PAYMENT_RECEIVED even after the tier change has fully applied, which also
+  // silently blocks findActiveByTenantId-gated flows (further tier changes,
+  // renewal reminders, expiry) from ever finding it again.
   let updatedSubscription = subscription;
-  if (decision === 'VERIFIED') {
+  if (decision === 'VERIFIED' && payment.purpose === 'INITIAL') {
     updatedSubscription = await subscriptionModel.updateStatus(subscription.id, 'PAYMENT_RECEIVED');
   }
 

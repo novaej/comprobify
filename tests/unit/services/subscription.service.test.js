@@ -885,8 +885,8 @@ describe('SubscriptionService', () => {
       expect(paymentModel.findById).not.toHaveBeenCalled();
     });
 
-    test('VERIFIED moves the linked subscription to PAYMENT_RECEIVED', async () => {
-      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10 });
+    test('VERIFIED moves the linked subscription to PAYMENT_RECEIVED for an INITIAL payment', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, purpose: 'INITIAL' });
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'VERIFIED' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' });
       subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'PAYMENT_RECEIVED' });
@@ -903,6 +903,28 @@ describe('SubscriptionService', () => {
       expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(
         { id: 20, status: 'VERIFIED' }, { id: 10, status: 'PAYMENT_RECEIVED' }, 'VERIFIED',
       );
+    });
+
+    test('VERIFIED leaves an already-ACTIVE subscription untouched for a TIER_CHANGE payment', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 21, subscription_id: 11, purpose: 'TIER_CHANGE' });
+      paymentModel.updateStatus.mockResolvedValue({ id: 21, status: 'VERIFIED' });
+      subscriptionModel.findById.mockResolvedValue({ id: 11, tenant_id: 1, status: 'ACTIVE' });
+
+      const result = await subscriptionService.reviewPayment(21, 'VERIFIED');
+
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(result.subscription).toEqual({ id: 11, tenant_id: 1, status: 'ACTIVE' });
+    });
+
+    test('VERIFIED leaves an already-ACTIVE subscription untouched for a RENEWAL payment', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 22, subscription_id: 12, purpose: 'RENEWAL' });
+      paymentModel.updateStatus.mockResolvedValue({ id: 22, status: 'VERIFIED' });
+      subscriptionModel.findById.mockResolvedValue({ id: 12, tenant_id: 1, status: 'ACTIVE' });
+
+      const result = await subscriptionService.reviewPayment(22, 'VERIFIED');
+
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(result.subscription).toEqual({ id: 12, tenant_id: 1, status: 'ACTIVE' });
     });
 
     test('REJECTED leaves the subscription untouched and stores the rejection reason code', async () => {

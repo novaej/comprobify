@@ -102,6 +102,11 @@ async function findDuePendingDowngrades() {
 // now, with no scheduled downgrade (that period transition is handled for free
 // by findDuePendingDowngrades/applyScheduledTierChanges instead) and no renewal
 // payment already open for this period (avoids re-creating one on every job run).
+// "already open" is period_start IS NULL, not invoice_document_id IS NULL — a
+// sandbox-linked renewal invoice never sets invoice_document_id (see
+// linkSandboxDocument), so that check would never stop matching a sandbox
+// renewal that already applied, permanently suppressing the next reminder.
+// Mirrors the same fix in payment.model.js's findPendingRenewalBySubscriptionId.
 async function findDueForRenewalReminder(reminderDays) {
   const { rows } = await db.query(
     `SELECT * FROM subscriptions s
@@ -112,7 +117,7 @@ async function findDueForRenewalReminder(reminderDays) {
        AND NOT EXISTS (
          SELECT 1 FROM payments p
          WHERE p.subscription_id = s.id AND p.purpose = 'RENEWAL'
-           AND p.invoice_document_id IS NULL
+           AND p.period_start IS NULL
            AND p.status IN ('PENDING', 'REPORTED', 'VERIFIED')
        )`,
     [reminderDays]
