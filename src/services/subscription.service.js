@@ -543,8 +543,17 @@ async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   const subscription = await subscriptionModel.findById(payment.subscription_id);
   if (!subscription) throw new NotFoundError('Subscription', ErrorCodes.SUBSCRIPTION_NOT_FOUND);
 
+  // PAYMENT_RECEIVED is a step in the INITIAL activation flow only
+  // (PENDING_PAYMENT -> ... -> PAYMENT_RECEIVED -> INVOICE_PROCESSING -> ACTIVE).
+  // A TIER_CHANGE/RENEWAL payment's subscription is already ACTIVE by the time
+  // its payment is reviewed (both are only opened for an ACTIVE subscription)
+  // and nothing downstream ever restores ACTIVE for the immediate-apply tier
+  // path — demoting it here would leave the subscription permanently stuck at
+  // PAYMENT_RECEIVED even after the tier change has fully applied, which also
+  // silently blocks findActiveByTenantId-gated flows (further tier changes,
+  // renewal reminders, expiry) from ever finding it again.
   let updatedSubscription = subscription;
-  if (decision === 'VERIFIED') {
+  if (decision === 'VERIFIED' && payment.purpose === 'INITIAL') {
     updatedSubscription = await subscriptionModel.updateStatus(subscription.id, 'PAYMENT_RECEIVED');
   }
 
@@ -588,7 +597,7 @@ async function linkInvoice(subscriptionId, accessKey) {
   // A VERIFIED, unlinked TIER_CHANGE payment means this is an upgrade's
   // self-billed invoice, not the subscription's original activation invoice —
   // link it to the payment instead so the subscription's own
-  // invoice_document_id (already spent on activation) is left untouched.
+  // initial_invoice_document_id (already spent on activation) is left untouched.
   if (pendingTierChange && pendingTierChange.status === 'VERIFIED') {
     await paymentModel.updateStatus(pendingTierChange.id, 'VERIFIED', { invoice_document_id: document.id });
     await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
@@ -605,7 +614,7 @@ async function linkInvoice(subscriptionId, accessKey) {
 
   // Same idea, but for a renewal payment opened by processDueRenewals ahead of
   // current_period_end — link to the payment, not the subscription's own
-  // invoice_document_id (already spent on initial activation).
+  // initial_invoice_document_id (already spent on initial activation).
   if (pendingRenewal && pendingRenewal.status === 'VERIFIED') {
     await paymentModel.updateStatus(pendingRenewal.id, 'VERIFIED', { invoice_document_id: document.id });
     await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
@@ -621,7 +630,7 @@ async function linkInvoice(subscriptionId, accessKey) {
   }
 
   let updated = await subscriptionModel.updateStatus(subscriptionId, 'INVOICE_PROCESSING', {
-    invoice_document_id: document.id,
+    initial_invoice_document_id: document.id,
   });
 
   await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', { subscriptionId, documentId: document.id });
@@ -638,11 +647,11 @@ async function linkInvoice(subscriptionId, accessKey) {
   return updated;
 }
 
-// Sandbox documents cannot be stored in invoice_document_id — the FK on both
-// subscriptions and payments references public.documents only, and
+// Sandbox documents cannot be stored in subscriptions.initial_invoice_document_id
+// or payments.invoice_document_id — both FKs reference public.documents only, and
 // sandbox.documents is a fully independent id sequence that can (and will)
 // collide with public.documents ids. So this applies whatever payment is
-// pending directly, without ever writing invoice_document_id, and — unlike
+// pending directly, without ever writing either FK, and — unlike
 // the production applyTierChangeIfLinked — always IMMEDIATELY: a sandbox
 // current_period_end is thrown away entirely at promotion
 // (resetPeriodOnPromotion), so there's nothing meaningful to defer a change
@@ -714,7 +723,7 @@ async function linkSandboxDocument(subscription, document, pendingTierChange, pe
 }
 
 async function activateIfLinked(documentId) {
-  const subscription = await subscriptionModel.findByInvoiceDocumentId(documentId);
+  const subscription = await subscriptionModel.findByInitialInvoiceDocumentId(documentId);
   if (!subscription || subscription.status !== 'INVOICE_PROCESSING') {
     return null;
   }

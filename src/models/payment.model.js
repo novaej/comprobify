@@ -56,7 +56,11 @@ async function findByInvoiceDocumentId(documentId) {
 // not yet decided) but accepts any status for the same endpoint to reuse.
 async function findAllByStatus(status = 'REPORTED') {
   const { rows } = await db.query(
-    `SELECT p.*, s.tenant_id, s.tier, s.billing_interval
+    `SELECT p.*, s.tenant_id, s.tier, s.billing_interval,
+       COALESCE(
+         (SELECT access_key FROM public.documents  WHERE id = p.invoice_document_id),
+         (SELECT access_key FROM sandbox.documents WHERE id = p.invoice_document_id)
+       ) AS invoice_access_key
      FROM payments p
      JOIN subscriptions s ON s.id = p.subscription_id
      WHERE p.status = $1
@@ -67,14 +71,18 @@ async function findAllByStatus(status = 'REPORTED') {
 }
 
 // Finds an in-flight (not yet rejected/refunded) tier-change payment for a
-// subscription that hasn't had its invoice linked yet — used both to block a
-// second concurrent tier-change request and, once VERIFIED, to find the
-// payment linkInvoice should attach the self-billed invoice to.
+// subscription that hasn't been applied yet — used both to block a second
+// concurrent tier-change request and, once VERIFIED, to find the payment
+// linkInvoice should attach the self-billed invoice to. period_start IS NULL
+// is the applied/unapplied signal, not invoice_document_id — a sandbox
+// document never gets invoice_document_id stored (see linkSandboxDocument),
+// but period_start IS always stamped once the payment has been applied, in
+// both environments.
 async function findPendingTierChangeBySubscriptionId(subscriptionId) {
   const { rows } = await db.query(
     `SELECT * FROM payments
      WHERE subscription_id = $1 AND purpose = 'TIER_CHANGE'
-       AND invoice_document_id IS NULL
+       AND period_start IS NULL
        AND status IN ('PENDING', 'REPORTED', 'VERIFIED')
      ORDER BY created_at DESC
      LIMIT 1`,
@@ -86,12 +94,13 @@ async function findPendingTierChangeBySubscriptionId(subscriptionId) {
 // Mirrors findPendingTierChangeBySubscriptionId, but for a renewal payment —
 // used both to avoid creating a second renewal payment for the same upcoming
 // period (processDueRenewals) and to find the payment linkInvoice should
-// attach the self-billed invoice to once VERIFIED.
+// attach the self-billed invoice to once VERIFIED. See the comment above for
+// why period_start, not invoice_document_id, is the applied/unapplied signal.
 async function findPendingRenewalBySubscriptionId(subscriptionId) {
   const { rows } = await db.query(
     `SELECT * FROM payments
      WHERE subscription_id = $1 AND purpose = 'RENEWAL'
-       AND invoice_document_id IS NULL
+       AND period_start IS NULL
        AND status IN ('PENDING', 'REPORTED', 'VERIFIED')
      ORDER BY created_at DESC
      LIMIT 1`,

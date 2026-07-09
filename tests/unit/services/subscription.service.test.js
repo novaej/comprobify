@@ -885,8 +885,8 @@ describe('SubscriptionService', () => {
       expect(paymentModel.findById).not.toHaveBeenCalled();
     });
 
-    test('VERIFIED moves the linked subscription to PAYMENT_RECEIVED', async () => {
-      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10 });
+    test('VERIFIED moves the linked subscription to PAYMENT_RECEIVED for an INITIAL payment', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 20, subscription_id: 10, purpose: 'INITIAL' });
       paymentModel.updateStatus.mockResolvedValue({ id: 20, status: 'VERIFIED' });
       subscriptionModel.findById.mockResolvedValue({ id: 10, tenant_id: 1, status: 'PENDING_PAYMENT' });
       subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'PAYMENT_RECEIVED' });
@@ -903,6 +903,28 @@ describe('SubscriptionService', () => {
       expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(
         { id: 20, status: 'VERIFIED' }, { id: 10, status: 'PAYMENT_RECEIVED' }, 'VERIFIED',
       );
+    });
+
+    test('VERIFIED leaves an already-ACTIVE subscription untouched for a TIER_CHANGE payment', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 21, subscription_id: 11, purpose: 'TIER_CHANGE' });
+      paymentModel.updateStatus.mockResolvedValue({ id: 21, status: 'VERIFIED' });
+      subscriptionModel.findById.mockResolvedValue({ id: 11, tenant_id: 1, status: 'ACTIVE' });
+
+      const result = await subscriptionService.reviewPayment(21, 'VERIFIED');
+
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(result.subscription).toEqual({ id: 11, tenant_id: 1, status: 'ACTIVE' });
+    });
+
+    test('VERIFIED leaves an already-ACTIVE subscription untouched for a RENEWAL payment', async () => {
+      paymentModel.findById.mockResolvedValue({ id: 22, subscription_id: 12, purpose: 'RENEWAL' });
+      paymentModel.updateStatus.mockResolvedValue({ id: 22, status: 'VERIFIED' });
+      subscriptionModel.findById.mockResolvedValue({ id: 12, tenant_id: 1, status: 'ACTIVE' });
+
+      const result = await subscriptionService.reviewPayment(22, 'VERIFIED');
+
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(result.subscription).toEqual({ id: 12, tenant_id: 1, status: 'ACTIVE' });
     });
 
     test('REJECTED leaves the subscription untouched and stores the rejection reason code', async () => {
@@ -952,7 +974,7 @@ describe('SubscriptionService', () => {
     });
 
     test('is a no-op when no subscription is linked to the document', async () => {
-      subscriptionModel.findByInvoiceDocumentId.mockResolvedValue(null);
+      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue(null);
 
       const result = await subscriptionService.activateIfLinked(999);
 
@@ -961,7 +983,7 @@ describe('SubscriptionService', () => {
     });
 
     test('is a no-op when the linked subscription is not awaiting invoice processing', async () => {
-      subscriptionModel.findByInvoiceDocumentId.mockResolvedValue({ id: 10, status: 'CANCELLED' });
+      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({ id: 10, status: 'CANCELLED' });
 
       const result = await subscriptionService.activateIfLinked(999);
 
@@ -970,7 +992,7 @@ describe('SubscriptionService', () => {
     });
 
     test('activates the subscription and grants the tier when authorized (MONTHLY, +1 month)', async () => {
-      subscriptionModel.findByInvoiceDocumentId.mockResolvedValue({
+      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
         id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
       });
       subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'ACTIVE' });
@@ -991,7 +1013,7 @@ describe('SubscriptionService', () => {
     });
 
     test('uses a +1 year period when billing_interval is YEARLY', async () => {
-      subscriptionModel.findByInvoiceDocumentId.mockResolvedValue({
+      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
         id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'YEARLY',
       });
       subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'ACTIVE' });
@@ -1003,7 +1025,7 @@ describe('SubscriptionService', () => {
     });
 
     test('stamps period_start/period_end onto the verified payment that funded this cycle', async () => {
-      subscriptionModel.findByInvoiceDocumentId.mockResolvedValue({
+      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
         id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
       });
       subscriptionModel.updateStatus.mockResolvedValue({ id: 10, status: 'ACTIVE' });
@@ -1058,7 +1080,7 @@ describe('SubscriptionService', () => {
       const result = await subscriptionService.linkInvoice(10, accessKey);
 
       expect(documentModel.findByAccessKey).toHaveBeenCalledWith(accessKey);
-      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(10, 'INVOICE_PROCESSING', { invoice_document_id: 999 });
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(10, 'INVOICE_PROCESSING', { initial_invoice_document_id: 999 });
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'INVOICE_LINKED', { subscriptionId: 10, documentId: 999 });
       expect(result).toEqual({ id: 10, status: 'INVOICE_PROCESSING' });
     });
@@ -1069,7 +1091,7 @@ describe('SubscriptionService', () => {
       subscriptionModel.updateStatus
         .mockResolvedValueOnce({ id: 10, status: 'INVOICE_PROCESSING' }) // the link itself
         .mockResolvedValueOnce({ id: 10, status: 'ACTIVE' });           // inside activateIfLinked
-      subscriptionModel.findByInvoiceDocumentId.mockResolvedValue({
+      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
         id: 10, tenant_id: 1, tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
       });
 

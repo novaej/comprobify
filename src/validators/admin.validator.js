@@ -247,6 +247,16 @@ const publishAgreement = [
     .notEmpty()
     .isLength({ max: 50 })
     .withMessage('version is required and must be max 50 characters'),
+
+  body('contentMarkdown')
+    .optional()
+    .isString()
+    .isLength({ min: 1, max: 200000 })
+    .withMessage('contentMarkdown must be a non-empty string up to 200000 characters'),
+];
+
+const getAgreementVersion = [
+  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
 ];
 
 module.exports = {
@@ -254,6 +264,7 @@ module.exports = {
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments, publishAgreement,
+  getAgreementVersion,
   activateAgreement: [param('id').isInt({ min: 1 }).withMessage('id must be a positive integer')],
   listAgreementVersions: [param('type').isIn(agreementService.AGREEMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],
 };

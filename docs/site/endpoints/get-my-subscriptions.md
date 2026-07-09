@@ -28,7 +28,7 @@ A payment review (verified/rejected) and the renewal reminder/expiry both fire a
       "tier": "STARTER",
       "billing_interval": "MONTHLY",
       "status": "PENDING_PAYMENT",
-      "invoice_document_id": null,
+      "initial_invoice_document_id": null,
       "current_period_start": null,
       "current_period_end": null,
       "created_at": "2026-06-29T04:45:40.225Z",

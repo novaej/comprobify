@@ -48,11 +48,14 @@ function stripDraftHeader(markdown) {
   return markdown.replace(/^(?:>.*\n|\n)+/, '').trim();
 }
 
-// Reads the source file for documentType, strips the draft header, substitutes
+// Reads the source file for documentType (or uses rawMarkdown when an admin
+// supplies edited content directly — see POST /v1/admin/agreements), strips
+// the draft header (only meaningful for the git-authored file, a no-op shape
+// for admin-supplied content since it never carries that banner), substitutes
 // operator identity tokens from config, and publishes to the database.
 // Throws if any OPERATOR_* env var is missing — empty identity in a legal
 // document is always wrong so we catch it early rather than publishing silently.
-async function publish(documentType, version) {
+async function publish(documentType, version, rawMarkdown = null) {
   const { nombre, ruc, email } = config.operator;
   if (!nombre || !ruc || !email) {
     throw new AppError(
@@ -62,9 +65,14 @@ async function publish(documentType, version) {
     );
   }
 
-  const filePath = AGREEMENT_FILE_MAP[documentType];
-  const raw = fs.readFileSync(filePath, 'utf8');
-  const stripped = stripDraftHeader(raw);
+  let stripped;
+  if (rawMarkdown != null) {
+    stripped = stripDraftHeader(rawMarkdown);
+  } else {
+    const filePath = AGREEMENT_FILE_MAP[documentType];
+    const raw = fs.readFileSync(filePath, 'utf8');
+    stripped = stripDraftHeader(raw);
+  }
   // Operator identity is the same across all tenants — substitute it at
   // publish time so it's baked into the stored template. Tenant-specific
   // tokens ({{cliente.*}}) are resolved later in tenant-agreement.service.js
@@ -105,6 +113,16 @@ async function listVersionsByType(documentType) {
 
 async function getCurrent(documentType) {
   const doc = await agreementModel.findCurrentByType(documentType);
+  if (!doc) throw new NotFoundError('Legal document', ErrorCodes.AGREEMENT_NOT_FOUND);
+  return doc;
+}
+
+// Fetches one specific version's full row (including content_markdown) by its
+// own id — id is a global primary key, not scoped per document_type, so no
+// type is needed to disambiguate. Used by the admin "edit an existing version"
+// flow to pull raw markdown into a UI before resubmitting via publish().
+async function getById(id) {
+  const doc = await agreementModel.findById(id);
   if (!doc) throw new NotFoundError('Legal document', ErrorCodes.AGREEMENT_NOT_FOUND);
   return doc;
 }
@@ -247,6 +265,7 @@ module.exports = {
   activateVersion,
   listVersionsByType,
   getCurrent,
+  getById,
   listCurrent,
   renderHtml,
   getCurrentHtml,
