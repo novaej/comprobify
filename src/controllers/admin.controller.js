@@ -3,6 +3,7 @@ const notificationSchedulerService = require('../services/notification-scheduler
 const subscriptionService = require('../services/subscription.service');
 const agreementService = require('../services/agreement.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
+const rideService = require('../services/ride.service');
 const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
@@ -236,6 +237,13 @@ const runSubscriptionJobs = async (req, res) => {
   res.json({ ok: true, ...tierChanges, ...renewals });
 };
 
+const getDocumentRide = async (req, res) => {
+  const buffer = await rideService.generate(req.params.accessKey);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="RIDE-${req.params.accessKey}.pdf"`);
+  res.send(buffer);
+};
+
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
@@ -243,4 +251,5 @@ module.exports = {
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments,
   publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion, generateTenantAgreements,
+  getDocumentRide,
 };
