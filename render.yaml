@@ -10,30 +10,39 @@
 # Services are declared at the ROOT level (not nested under a `projects`/
 # `environments` block) specifically because Render's own docs guarantee:
 # "Services in this top-level list keep their currently assigned environment
-# (if any) after each sync." The 3 jobs below already live in the Staging
-# environment of the Comprobify project in the dashboard — matching them by
-# exact `name:` here adopts them in place, with no risk of Render creating a
-# second Comprobify project/environment or moving them out of their current
-# grouping.
+# (if any) after each sync." Confirmed: adopting a pre-existing resource by
+# exact name preserves its environment placement. Confirmed the OPPOSITE
+# too: a brand-new resource (no prior assignment) does NOT get auto-placed
+# into an existing Project/Environment — it lands ungrouped, and needs one
+# manual "move into Staging" step per resource in the dashboard after
+# Render creates it.
+#
+# ADMIN_SECRET is intentionally NOT declared anywhere in this file. Render's
+# envVarGroups do not support `sync: false` — a secret placed there via YAML
+# is silently dropped (confirmed: it never appeared in the group, no error,
+# no prompt). Instead, ADMIN_SECRET was added directly to the
+# comprobify-cron-staging group by hand, in the Render dashboard, outside
+# Blueprint management entirely. This is a live test of whether a group
+# variable NOT declared in render.yaml survives a Blueprint sync (we know
+# whole *resources* absent from the YAML are never deleted on sync — this
+# checks whether that same guarantee extends to individual keys within a
+# group). If it survives: every current and future cron job referencing
+# this group inherits it with zero dashboard steps, ever. If a sync wipes
+# it: fall back to declaring `key: ADMIN_SECRET` + `sync: false` directly on
+# each service below instead (safe, but needs one manual value entry per
+# service, present and future).
 #
 # Production cron jobs aren't declared yet — the production web service,
 # branch, and secrets don't exist yet either (see docs/deployment.md's
-# "Production status"). Once provisioned: add a `comprobify-cron-production`
-# envVarGroup and three more `branch: production` services below. Since
-# those will be brand-new resources with no prior environment assignment,
-# they'll likely need one manual step in the dashboard afterward to place
-# them into the Production environment of the Comprobify project (drag/
-# assign, same as moving any other service between environments) — verify
-# this once you get there, since new-resource placement isn't guaranteed by
-# the same "keeps its current assignment" rule that applies to adoption.
+# "Production status").
 
 envVarGroups:
   - name: comprobify-cron-staging
     envVars:
-      - key: ADMIN_SECRET
-        sync: false
       - key: API_BASE_URL
         value: https://api-staging.comprobify.com
+      # ADMIN_SECRET is deliberately absent here — see note above. It exists
+      # in this group in the Render dashboard, set by hand, not via this file.
 
 services:
   - name: comprobify-staging-notifications
