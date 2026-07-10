@@ -169,7 +169,7 @@ The production pipeline is **written but disabled** — `release-production.yml`
 
 To enable production once it's provisioned:
 1. Create the `production` branch (fast-forwarded only by the automation, same invariant as `staging`)
-2. Provision the `comprobify-production` Render web service + a paid Postgres instance (for backups/PITR), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
+2. Provision the `comprobify-production` Render web service + a production **Neon** Postgres project (own project, `public` + `sandbox` schemas — see `docs/infrastructure-costs.md`'s "Stack" table for the full production platform decision), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
 3. Add `RENDER_DEPLOY_HOOK_URL` as a secret on the `production` GitHub environment (and `STAGING_API_BASE_URL` / `ADMIN_SECRET` if mirroring the notification scheduler too)
 4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
 5. In `deploy-production.yml`: uncomment the `push: branches: [production]` trigger and remove the `if: false` guard on the `deploy` job
@@ -397,7 +397,7 @@ Note `release-staging.yml` / `release-production.yml` don't need extra secrets �
 ### 5. Render
 
 - `comprobify-staging` web service already exists, linked to the `staging` branch via deploy hook
-- When ready: create `comprobify-production` (its own web service + paid Postgres instance for backups/PITR), with independent env vars and secrets from staging — see "Production status" above
+- When ready: create `comprobify-production` (its own web service + a production Neon Postgres project — see `docs/infrastructure-costs.md`), with independent env vars and secrets from staging — see "Production status" above
 - Migrations run automatically at startup via `app.js` — no separate deploy step needed
 
 ---
@@ -602,6 +602,16 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [ ] Webhook endpoint (`/v1/mailgun/webhook`) reachable on the public HTTPS URL
 - [ ] Log aggregation configured — the API logs to stdout
 - [ ] `SENTRY_DSN` set on staging and production so unexpected `5xx` errors are reported (left unset locally so development never sends events)
+
+### Rotating secrets (e.g. after a suspected compromise)
+
+Not all three of `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials are equally safe to rotate — one of them can cause a real outage if done naively.
+
+**`ADMIN_SECRET`** — safe, mechanical. It's only ever compared as a bearer token (`authenticate-admin.js`), never used to encrypt anything at rest. Update the value on the `comprobify-production` (or `-staging`) web service, and update the same value in the `comprobify-cron-production`/`comprobify-cron-staging` env var group in Render (one place per environment now, thanks to the group-based setup — every cron job inherits it, nothing to update per-service). No GitHub Actions secret currently holds a copy (confirmed — nothing in `.github/workflows/*.yml` references it). Old value stops working the moment the new one is saved; brief window where a leaked old secret and the new one might both be "in flight" during the update, but no data-level risk either way.
+
+**DB credentials** — also low-risk. Rotate the password/role at the provider (Neon), update `DB_*` env vars on the web service, restart. No stored data depends on the credential value itself, only on being able to authenticate — a connection-level concern, not a data-level one.
+
+**`ENCRYPTION_KEY` — dangerous, requires a real migration, do not just swap the env var.** This key is the only thing standing between `issuers.encrypted_private_key` (AES-256-GCM, `crypto.service.js`) and being unreadable garbage. Changing the env var value alone, without re-encrypting existing rows first, permanently breaks every existing issuer's ability to sign documents — a full outage for every already-onboarded tenant, not a gradual degradation. Correct rotation requires: decrypt every `issuers.encrypted_private_key` with the OLD key, re-encrypt with the NEW key, write it back, *then* cut the env var over — ideally as one script run before the restart, not manually. **No such script exists in this repo yet.** If `ENCRYPTION_KEY` is ever suspected compromised, that script needs to be written and tested (ideally against a copy of production data) before rotating for real — don't attempt this live for the first time during an actual incident.
 
 ---
 

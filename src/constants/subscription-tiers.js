@@ -14,7 +14,14 @@
 // discount). overagePerDocumentUsd is not enforced yet (no payment gateway —
 // NEXT_STEPS.md #9).
 
-const IVA_RATE = 0.15;
+const config = require('../config');
+
+// Sourced from config (IVA_RATE env var, defaults to the current 5% rate) —
+// re-exported here under its existing name so every consumer that already
+// does `const { TIERS, IVA_RATE } = require('.../subscription-tiers')`
+// keeps working unchanged. See src/config/index.js for why this is
+// env-driven rather than a hardcoded literal.
+const IVA_RATE = config.ivaRate;
 
 const TIERS = {
   FREE: {

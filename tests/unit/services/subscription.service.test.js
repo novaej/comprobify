@@ -209,7 +209,8 @@ describe('SubscriptionService', () => {
 
       const result = await subscriptionService.requestTierChange(1, 'GROWTH');
 
-      // GROWTH (79) - STARTER (19) = 60, ~50% of the period remains -> ~30
+      // GROWTH (90) - STARTER (20) = 70 gross, ~50% of the period remains -> ~35
+      // gross, split at the current 15% IVA rate into a ~30.43 base + ~4.57 IVA.
       const [createArgs] = paymentModel.create.mock.calls[0];
       expect(createArgs.subscriptionId).toBe(10);
       expect(createArgs.purpose).toBe('TIER_CHANGE');

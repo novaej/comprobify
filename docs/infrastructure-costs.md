@@ -72,4 +72,22 @@ Neon bills usage (CU-hours + storage) at the account level, not a flat fee per d
 
 ## Why the ceiling isn't as scary as it looks
 
-The dominant driver of the ceiling is Neon's backend compute scaling under heavy document volume — and heavy document volume is exactly what the per-invoice `overagePerDocumentUsd` rate in `src/constants/subscription-tiers.js` charges for. The same usage spike that pushes Neon's cost up also generates the overage revenue that funds it.
+The dominant driver of the ceiling is Neon's backend compute scaling under heavy document volume. `src/constants/subscription-tiers.js` defines an `overagePerDocumentUsd` rate per tier that's *intended* to let a tenant pay for usage past their quota rather than get hard-blocked, which would be the natural revenue source to offset a volume-driven cost spike — **but overage billing isn't built yet** (`NEXT_STEPS.md` #10). Today, exceeding quota just hard-blocks document creation (`QuotaExceededError`, 402) — it caps the tenant's usage, and by extension caps how much any single tenant can drive Neon's cost up, but there's no mechanism yet to actually collect the overage rate this section used to imply funds the ceiling. Reaching the ceiling in practice would mean many tenants each using their full tier allotment, not a few tenants generating unlimited overage — a real but different scenario than "usage spike pays for itself."
+
+---
+
+## Breakeven: how many paying clients cover the monthly floor/ceiling
+
+Using each paid tier's **net-of-IVA base** (what the business actually keeps — the IVA portion is collected on behalf of the tax authority and remitted, not usable revenue), assuming a single-tier client mix for simplicity:
+
+| Tier | Gross price/mo | Net base/mo (at 15% IVA) | Clients to cover floor (~$154) | Clients to cover ceiling (~$652) |
+|---|---|---|---|---|
+| STARTER | $20 | $17.39 | 9 | 38 |
+| GROWTH | $90 | $78.26 | 2 | 9 |
+| BUSINESS | $230 | $200.00 | 1 | 4 |
+
+Caveats:
+- Real client mix will blend tiers — these are single-tier scenarios to bound the range, not a prediction.
+- Excludes payment-processing fees (none currently — no gateway exists yet, `NEXT_STEPS.md` #9) and income tax on profit (a matter for the accountant, out of scope here).
+- The floor (~$154) and ceiling (~$652) figures already include the 15% ISD add-on from the tables above — re-verify that rate periodically, per the note under the ceiling table.
+- Recompute this table whenever `IVA_RATE` (now in `src/config/index.js`, see the "Config validation" section of `CLAUDE.md`) or the tier prices in `subscription-tiers.js` change.
