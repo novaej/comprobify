@@ -22,15 +22,14 @@
 # is silently dropped (confirmed: it never appeared in the group, no error,
 # no prompt). Instead, ADMIN_SECRET was added directly to the
 # comprobify-cron-staging group by hand, in the Render dashboard, outside
-# Blueprint management entirely. This is a live test of whether a group
-# variable NOT declared in render.yaml survives a Blueprint sync (we know
-# whole *resources* absent from the YAML are never deleted on sync — this
-# checks whether that same guarantee extends to individual keys within a
-# group). If it survives: every current and future cron job referencing
-# this group inherits it with zero dashboard steps, ever. If a sync wipes
-# it: fall back to declaring `key: ADMIN_SECRET` + `sync: false` directly on
-# each service below instead (safe, but needs one manual value entry per
-# service, present and future).
+# Blueprint management entirely — CONFIRMED to survive a Blueprint sync
+# (a group variable absent from render.yaml is left alone on sync, the same
+# guarantee Render's docs give for whole resources removed from the YAML,
+# now confirmed to extend to individual group keys too). Every current and
+# future cron job referencing this group inherits ADMIN_SECRET with zero
+# dashboard steps. Do not add `key: ADMIN_SECRET` to this file — it would
+# have no effect on the group (unsupported) and, if added per-service
+# instead, would be redundant with what's already set on the group.
 #
 # Production cron jobs aren't declared yet — the production web service,
 # branch, and secrets don't exist yet either (see docs/deployment.md's
@@ -42,7 +41,8 @@ envVarGroups:
       - key: API_BASE_URL
         value: https://api-staging.comprobify.com
       # ADMIN_SECRET is deliberately absent here — see note above. It exists
-      # in this group in the Render dashboard, set by hand, not via this file.
+      # in this group in the Render dashboard, set by hand, not via this
+      # file, and confirmed to survive a Blueprint sync as-is.
 
 services:
   - name: comprobify-staging-notifications
