@@ -72,9 +72,9 @@ const config = {
   // existing consumers). Kept as an env var rather than hardcoded because
   // Ecuador has changed this rate more than once — a rate change should be a
   // config update + restart, not a code change + redeploy. Defaults to the
-  // rate in effect as of this writing (5%); override with IVA_RATE if it
-  // changes (e.g. IVA_RATE=0.15 for 15%).
-  ivaRate: process.env.IVA_RATE !== undefined ? parseFloat(process.env.IVA_RATE) : 0.05,
+  // rate in effect as of this writing (15%); override with IVA_RATE if it
+  // changes (e.g. IVA_RATE=0.05 for 5%).
+  ivaRate: process.env.IVA_RATE !== undefined ? parseFloat(process.env.IVA_RATE) : 0.15,
 };
 
 module.exports = config;

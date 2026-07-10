@@ -80,11 +80,11 @@ The dominant driver of the ceiling is Neon's backend compute scaling under heavy
 
 Using each paid tier's **net-of-IVA base** (what the business actually keeps — the IVA portion is collected on behalf of the tax authority and remitted, not usable revenue), assuming a single-tier client mix for simplicity:
 
-| Tier | Gross price/mo | Net base/mo (at 5% IVA) | Clients to cover floor (~$154) | Clients to cover ceiling (~$652) |
+| Tier | Gross price/mo | Net base/mo (at 15% IVA) | Clients to cover floor (~$154) | Clients to cover ceiling (~$652) |
 |---|---|---|---|---|
-| STARTER | $20 | $19.05 | 9 | 35 |
-| GROWTH | $90 | $85.71 | 2 | 8 |
-| BUSINESS | $230 | $219.05 | 1 | 3 |
+| STARTER | $20 | $17.39 | 9 | 38 |
+| GROWTH | $90 | $78.26 | 2 | 9 |
+| BUSINESS | $230 | $200.00 | 1 | 4 |
 
 Caveats:
 - Real client mix will blend tiers — these are single-tier scenarios to bound the range, not a prediction.
