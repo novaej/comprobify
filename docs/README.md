@@ -13,6 +13,7 @@
 ### Understanding the codebase
 - [guides/code-flow.md](guides/code-flow.md) — Full request lifecycle walkthrough with architectural reasoning
 - [guides/coding-guidelines.md](guides/coding-guidelines.md) — Patterns, conventions, and how to add new features
+- [guides/testing-scheduled-jobs.md](guides/testing-scheduled-jobs.md) — SQL recipes to force each scheduled job's scenarios locally (cert expiry, webhook retries, subscription downgrades/renewals/expiry, quota rollover)
 
 ### Architecture decisions
 - [adr/README.md](adr/README.md) — ADR index, template, and guidelines
@@ -35,7 +36,8 @@ docs/
 ├── deployment.md           Production deployment guide
 ├── guides/
 │   ├── code-flow.md        Layer-by-layer request walkthrough (the "why" behind each piece)
-│   └── coding-guidelines.md  Patterns, conventions, and step-by-step feature guide
+│   ├── coding-guidelines.md  Patterns, conventions, and step-by-step feature guide
+│   └── testing-scheduled-jobs.md  SQL recipes to force each cron job's scenarios locally
 └── adr/
     ├── README.md           ADR index, template, and process
     ├── 001-layered-architecture.md
@@ -52,6 +54,9 @@ Traces a request from `app.js` through every layer down to the database and back
 
 ### `guides/coding-guidelines.md`
 Defines the conventions for adding new features: how to structure a service, how to add a new document type, SQL injection prevention rules, error handling patterns, and test structure. Includes code examples for each pattern. Reference this when building anything new.
+
+### `guides/testing-scheduled-jobs.md`
+Step-by-step SQL recipes for forcing each of the three admin-triggered jobs (notifications, subscriptions, quota) to actually have something due, since none of them find anything against fresh data. Covers certificate expiry alerts, webhook retry exhaustion, scheduled tier downgrades, renewal reminders, subscription expiry (and why it doesn't suspend the tenant), and quota period rollover — including the yearly-vs-monthly independence guarantee.
 
 ### `adr/README.md`
 Index of Architecture Decision Records — the significant design choices made during development, their context, and the alternatives that were considered. Start here to understand *why* the system is built the way it is, not just how.

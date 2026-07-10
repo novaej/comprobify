@@ -174,7 +174,7 @@ To enable production once it's provisioned:
 4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
 5. In `deploy-production.yml`: uncomment the `push: branches: [production]` trigger and remove the `if: false` guard on the `deploy` job
 6. Add branch protection to `production` (restrict who can push to the automation only; no force pushes) — see GitHub repository setup below
-7. Create the three Render Cron Jobs in the same workspace (`POST /v1/admin/jobs/notifications` every 5 minutes, `POST /v1/admin/jobs/subscriptions` and `POST /v1/admin/jobs/quota` daily), all with `Authorization: Bearer <ADMIN_SECRET>` — see "Render Cron Job setup" under Scheduled jobs below
+7. Add a `comprobify-cron-production` env var group and three `branch: production` cron services to `render.yaml` (mirroring the existing staging ones), then sync the Blueprint. As brand-new resources with no prior environment assignment, they may need one manual step afterward to move them into the Production environment of the Comprobify project in the dashboard — see "Render Cron Job setup" under Scheduled jobs below
 
 ---
 
@@ -252,7 +252,7 @@ This leaves Email Obfuscation active on the marketing site (`comprobify.com`, `s
 
 ## Scheduled jobs
 
-The API has three scheduled jobs that must be triggered externally — none is self-scheduled. Both **staging** and **production** use a **Render Cron Job**, in the same workspace as the matching web service, so the scheduler is billed per execution-second and its logs sit alongside the API's own rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale.
+The API has three scheduled jobs that must be triggered externally — none is self-scheduled. Both **staging** and **production** use a **Render Cron Job**, in the same workspace as the matching web service, so the scheduler is billed per execution-second and its logs sit alongside the API's own rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale. See `docs/guides/testing-scheduled-jobs.md` for how to exercise each job's scenarios locally by pushing dates into the past.
 
 > Staging previously used [cron-job.org](https://cron-job.org) for the notifications job. It has been replaced by a Render Cron Job for the same reason production uses one, so both environments now follow the same pattern.
 
@@ -282,11 +282,23 @@ Independent of the billing cycle (`subscriptions.current_period_end`/`billing_in
 
 Idempotent. Daily cadence is enough. Recommended to run after the subscriptions job in the same tick so a same-day tier change is reflected in the rolled-over cap, though this isn't a hard ordering requirement — a one-day-stale cap self-corrects on the next cycle.
 
-### Render Cron Job setup
+### Render Cron Job setup — managed via Blueprint (`render.yaml`)
 
-In the Render dashboard: **New → Cron Job**, connected to the same repo/branch as the corresponding web service (`comprobify-staging` or `comprobify-production`). Render auto-detects the project's `Dockerfile`, which has `node` but not `curl` — so the command is `node scripts/run-admin-job.js <path>` rather than a raw `curl` invocation. This also sidesteps the Docker Command field's lack of shell/quoting support: it just splits on whitespace, so any command with embedded quoted strings (e.g. a `curl` call with an `Authorization` header value containing a space) gets silently truncated at the first space — that's the cause if a run fails with a `SyntaxError`/truncated command.
+The three Cron Jobs are declared as code in `render.yaml` at the repo root, **not** created by hand in the dashboard. The API web services (`comprobify-staging`/`comprobify-production`) are deliberately excluded from this Blueprint and stay on the existing GitHub Actions deploy-hook pipeline above — only the cron jobs (low env-var count, low risk to manage declaratively) are in scope. Render auto-detects the project's `Dockerfile` for each service; the command runs as `node scripts/run-admin-job.js <path>` rather than a raw `curl` invocation, sidestepping the Docker Command field's lack of shell/quoting support (it splits on whitespace, so a `curl` call with a quoted `Authorization` header gets silently truncated — that's the cause if a run ever fails with a `SyntaxError`/truncated command).
 
-Create one Cron Job per row below, per environment:
+**Render project structure:** everything lives in one Render **Project** ("Comprobify"), with a **Staging** environment (the API web service + the 3 cron jobs) today, and a **Production** environment with the same shape once provisioned (see below).
+
+**Connecting the Blueprint (one-time):** In the Render dashboard, **New → Blueprint**, name it `comprobify-cron` (scoped name — this Blueprint only ever manages the cron jobs, not the web services), and connect it to this repo on the **`main`** branch. Render reads `render.yaml`, and on the initial sync prompts for a value for each `sync: false` env var (currently just `ADMIN_SECRET` in the `comprobify-cron-staging` group) — paste in the same value as the `comprobify-staging` web service's `ADMIN_SECRET`.
+
+The Blueprint's own connected branch (`main`) only controls where Render watches for changes to `render.yaml` itself (the job list/schedule/config) — it does **not** override each service's own `branch:` field below it, which independently controls what code that job actually runs. `main` is picked deliberately: config changes (adding a job, tweaking a schedule) land as soon as a PR merges, with no need to wait for a release/tag cycle, while each cron service still correctly runs from `branch: staging` (or `branch: production` later), matching whatever's actually live in that environment.
+
+**Adopting the 3 jobs that already exist:** Render matches Blueprint service entries to existing dashboard resources **by exact name** — `render.yaml`'s 3 services are named `comprobify-staging-notifications`, `comprobify-staging-subscriptions`, `comprobify-staging-quota` to match what's already in the dashboard. `render.yaml` declares them at the root `services:` level rather than nested under a `projects`/`environments` block specifically because Render's docs guarantee root-level services "keep their currently assigned environment (if any) after each sync" — so adopting them by name does **not** risk moving them out of the Staging environment or creating a second Comprobify project. (A name mismatch would instead create 3 new duplicate services, since syncing never auto-deletes anything — worth double-checking the names above against the dashboard once more before the first sync.)
+
+**Adding a new scheduled job later:** add a new `type: cron` entry to the `services` list in `render.yaml` (see the existing three for the shape), referencing the existing `comprobify-cron-staging` group via `envVars: [{ fromGroup: comprobify-cron-staging }]` so it inherits `ADMIN_SECRET`/`API_BASE_URL` automatically — no dashboard step needed at all, since the group is already populated. Push to `staging` (Auto Sync is on by default) and Render creates it.
+
+**Suspending a job individually:** unaffected by Blueprint management — select the one service's checkbox in the dashboard and click Suspend/Resume, same as any Render service.
+
+Reference table (schedules are also in `render.yaml`, this is just for readability):
 
 | Job | Schedule | Command |
 |---|---|---|
@@ -294,15 +306,7 @@ Create one Cron Job per row below, per environment:
 | Subscriptions | `0 6 * * *` (daily) | `node scripts/run-admin-job.js /v1/admin/jobs/subscriptions` |
 | Quota | `10 6 * * *` (daily, just after Subscriptions) | `node scripts/run-admin-job.js /v1/admin/jobs/quota` |
 
-For each Cron Job:
-
-| Setting | Value |
-|---|---|
-| **Environment variable** | `ADMIN_SECRET` — same value as the matching web service |
-| **Environment variable** | `API_BASE_URL` — `https://api-staging.comprobify.com` (staging) or `https://api.comprobify.com` (production) |
-| **Instance Type** | Starter (cheapest) — the run finishes in a few seconds regardless of tier |
-
-Additional scheduled jobs later are just additional Cron Job services — each is billed only for the seconds it actually runs, with no fixed monthly fee per job.
+Production cron jobs aren't declared in `render.yaml` yet — see the file's own comments; add a `comprobify-cron-production` env var group and three more `branch: production` services once the production web service/branch/secrets exist (see "Production status" above).
 
 > The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
 

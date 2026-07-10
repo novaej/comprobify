@@ -512,7 +512,7 @@ Skips the `ACTIVE` status check that the tenant-facing promote requires. Returns
 | `POST /v1/admin/jobs/subscriptions` | Scheduled downgrades + renewal reminders + expired subscription cleanup (normally daily) |
 | `POST /v1/admin/jobs/quota` | Resets `tenant_quotas` periods whose `period_end` has passed (normally daily, just after Subscriptions) |
 
-All three are idempotent — safe to run manually at any time for testing.
+All three are idempotent — safe to run manually at any time for testing. None of them will find anything due against fresh data — see `docs/guides/testing-scheduled-jobs.md` for the SQL date-manipulation recipes needed to force each scenario (cert expiry, webhook retries, scheduled downgrades, renewal reminders, expiry, quota rollover).
 
 ---
 
