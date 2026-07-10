@@ -1,20 +1,24 @@
+jest.mock('../../../src/config/database');
 jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/issuer.model');
 jest.mock('../../../src/models/api-key.model');
 jest.mock('../../../src/models/tenant-event.model');
 jest.mock('../../../src/models/issuer-document-type.model');
 jest.mock('../../../src/services/sequential.service');
+jest.mock('../../../src/services/tenant-quota.service');
 jest.mock('../../../src/services/crypto.service');
 jest.mock('../../../src/services/certificate.service');
 jest.mock('../../../src/services/email.service');
 jest.mock('../../../src/services/tenant-agreement.service');
 
+const db = require('../../../src/config/database');
 const tenantModel = require('../../../src/models/tenant.model');
 const issuerModel = require('../../../src/models/issuer.model');
 const apiKeyModel = require('../../../src/models/api-key.model');
 const tenantEventModel = require('../../../src/models/tenant-event.model');
 const issuerDocumentTypeModel = require('../../../src/models/issuer-document-type.model');
 const sequentialService = require('../../../src/services/sequential.service');
+const tenantQuotaService = require('../../../src/services/tenant-quota.service');
 const cryptoService = require('../../../src/services/crypto.service');
 const certificateService = require('../../../src/services/certificate.service');
 const emailService = require('../../../src/services/email.service');
@@ -38,7 +42,13 @@ const baseFields = {
 };
 
 describe('RegistrationService', () => {
+  let mockClient;
+
   beforeEach(() => {
+    mockClient = { query: jest.fn().mockResolvedValue({ rows: [] }), release: jest.fn() };
+    db.getClient.mockResolvedValue(mockClient);
+    tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
+    tenantQuotaService.getCurrentForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
     tenantAgreementService.validateTermsVersion.mockResolvedValue(undefined);
     tenantAgreementService.generateForTenant.mockResolvedValue(undefined);
     certificateService.parseCertificate.mockReturnValue({
@@ -96,8 +106,6 @@ describe('RegistrationService', () => {
         email: baseFields.email,
         status: 'PENDING_VERIFICATION',
         subscription_tier: 'FREE',
-        document_quota: 5,
-        document_count: 0,
       };
       const existingIssuer = {
         id: 10,
@@ -189,8 +197,6 @@ describe('RegistrationService', () => {
         email: baseFields.email,
         subscription_tier: 'FREE',
         status: 'PENDING_VERIFICATION',
-        document_quota: 5,
-        document_count: 0,
         created_at: new Date('2026-01-01T00:00:00Z'),
       };
       const createdIssuer = {
@@ -214,8 +220,9 @@ describe('RegistrationService', () => {
         email: baseFields.email,
         subscriptionTier: 'FREE',
         status: 'PENDING_VERIFICATION',
-        agreementVersion: baseFields.termsVersion,
-      }));
+        legalVersion: baseFields.termsVersion,
+      }), mockClient);
+      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith(2, 5, mockClient);
       expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
         tenantId: 2,
         ruc: baseFields.ruc,
@@ -439,8 +446,31 @@ describe('RegistrationService', () => {
         email: 'a@example.com',
         subscription_tier: 'FREE',
         status: 'ACTIVE',
-        document_quota: 5,
-        document_count: 2,
+        created_at: new Date('2026-01-01T00:00:00Z'),
+        agreement_accepted_at: null,
+        agreement_version: null,
+      };
+      const quotaRow = { document_quota: 5, document_count: 2 };
+
+      expect(registrationService.formatTenant(row, quotaRow)).toEqual({
+        id: 1,
+        email: 'a@example.com',
+        subscriptionTier: 'FREE',
+        status: 'ACTIVE',
+        documentQuota: 5,
+        documentCount: 2,
+        createdAt: row.created_at,
+        agreementAcceptedAt: null,
+        agreementVersion: null,
+      });
+    });
+
+    test('defaults quota fields to null when no quota row is available', () => {
+      const row = {
+        id: 1,
+        email: 'a@example.com',
+        subscription_tier: 'FREE',
+        status: 'ACTIVE',
         created_at: new Date('2026-01-01T00:00:00Z'),
         agreement_accepted_at: null,
         agreement_version: null,
@@ -451,8 +481,8 @@ describe('RegistrationService', () => {
         email: 'a@example.com',
         subscriptionTier: 'FREE',
         status: 'ACTIVE',
-        documentQuota: 5,
-        documentCount: 2,
+        documentQuota: null,
+        documentCount: null,
         createdAt: row.created_at,
         agreementAcceptedAt: null,
         agreementVersion: null,

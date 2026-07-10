@@ -254,7 +254,7 @@ describe('DocumentCreationService', () => {
       await documentCreationService.create(validBody, null, prodIssuer);
 
       const quotaCall = mockClient.query.mock.calls.find(
-        ([sql]) => typeof sql === 'string' && sql.includes('UPDATE tenants')
+        ([sql]) => typeof sql === 'string' && sql.includes('UPDATE tenant_quotas')
       );
       expect(quotaCall).toBeDefined();
       expect(quotaCall[1]).toEqual([prodIssuer.tenant_id]);
@@ -262,7 +262,7 @@ describe('DocumentCreationService', () => {
 
     test('throws QuotaExceededError and rolls back when the tenant has no quota left', async () => {
       mockClient.query.mockImplementation(async (sql) => {
-        if (typeof sql === 'string' && sql.includes('UPDATE tenants')) {
+        if (typeof sql === 'string' && sql.includes('UPDATE tenant_quotas')) {
           return { rows: [] };
         }
         return { rows: [{ id: 1 }] };
@@ -281,7 +281,7 @@ describe('DocumentCreationService', () => {
       await documentCreationService.create(validBody, null, sandboxIssuer);
 
       const quotaCall = mockClient.query.mock.calls.find(
-        ([sql]) => typeof sql === 'string' && sql.includes('UPDATE tenants')
+        ([sql]) => typeof sql === 'string' && sql.includes('UPDATE tenant_quotas')
       );
       expect(quotaCall).toBeUndefined();
     });

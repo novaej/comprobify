@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Triggers an admin scheduled job over HTTP. Used as the Render Cron Job
- * command for both /v1/admin/jobs/notifications and /v1/admin/jobs/subscriptions
- * so the job's logic lives in a reviewable file instead of a Docker Command
- * text box (which has no shell/quoting support and silently truncates on
- * embedded whitespace).
+ * command for /v1/admin/jobs/notifications, /v1/admin/jobs/subscriptions, and
+ * /v1/admin/jobs/quota so the job's logic lives in a reviewable file instead
+ * of a Docker Command text box (which has no shell/quoting support and
+ * silently truncates on embedded whitespace).
  *
  * Usage: node scripts/run-admin-job.js <path>
  *   e.g. node scripts/run-admin-job.js /v1/admin/jobs/notifications

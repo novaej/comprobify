@@ -1,6 +1,7 @@
 const adminService = require('../services/admin.service');
 const notificationSchedulerService = require('../services/notification-scheduler.service');
 const subscriptionService = require('../services/subscription.service');
+const tenantQuotaService = require('../services/tenant-quota.service');
 const agreementService = require('../services/agreement.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
 const rideService = require('../services/ride.service');
@@ -237,6 +238,26 @@ const runSubscriptionJobs = async (req, res) => {
   res.json({ ok: true, ...tierChanges, ...renewals });
 };
 
+/**
+ * POST /api/admin/jobs/quota
+ *
+ * Rolls over every tenant's document-quota period whose period_end has
+ * passed — resets document_count to 0 for a new monthly cycle, using the
+ * tenant's current subscription_tier to size the new cap. Independent of the
+ * billing cycle (subscriptions.current_period_end) on purpose — see
+ * CLAUDE.md's quota-enforcement entry.
+ *
+ * Designed to be called by an external scheduler on a daily cadence.
+ * Recommended to run after jobs/subscriptions in the same tick, since a
+ * same-day tier change should be reflected in the rolled-over cap — but a
+ * one-day-stale cap self-corrects on the next cycle, so this isn't a hard
+ * ordering requirement.
+ */
+const runQuotaJobs = async (req, res) => {
+  const result = await tenantQuotaService.resetDuePeriods();
+  res.json({ ok: true, ...result });
+};
+
 const getDocumentRide = async (req, res) => {
   const buffer = await rideService.generate(req.params.accessKey);
   res.setHeader('Content-Type', 'application/pdf');
@@ -247,7 +268,7 @@ const getDocumentRide = async (req, res) => {
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
-  runSubscriptionJobs,
+  runSubscriptionJobs, runQuotaJobs,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments,
   publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion, generateTenantAgreements,

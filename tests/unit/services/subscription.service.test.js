@@ -4,6 +4,7 @@ jest.mock('../../../src/models/payment-proof.model');
 jest.mock('../../../src/models/document.model');
 jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/tenant-event.model');
+jest.mock('../../../src/services/tenant-quota.service');
 jest.mock('../../../src/services/notification.service');
 jest.mock('../../../src/services/email.service');
 
@@ -13,6 +14,7 @@ const paymentProofModel = require('../../../src/models/payment-proof.model');
 const documentModel = require('../../../src/models/document.model');
 const tenantModel = require('../../../src/models/tenant.model');
 const tenantEventModel = require('../../../src/models/tenant-event.model');
+const tenantQuotaService = require('../../../src/services/tenant-quota.service');
 const notificationService = require('../../../src/services/notification.service');
 const emailService = require('../../../src/services/email.service');
 const config = require('../../../src/config');
@@ -238,7 +240,8 @@ describe('SubscriptionService', () => {
 
       expect(paymentModel.create).not.toHaveBeenCalled();
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'GROWTH');
-      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'GROWTH');
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
         subscriptionId: 10, fromTier: 'STARTER', toTier: 'GROWTH', totalAmount: 0,
       });
@@ -343,7 +346,8 @@ describe('SubscriptionService', () => {
 
         expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
         expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER', 'MONTHLY');
-        expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER');
+        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'STARTER');
         expect(paymentModel.create).not.toHaveBeenCalled();
         expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', expect.objectContaining({
           subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER', totalAmount: 0,
@@ -428,7 +432,8 @@ describe('SubscriptionService', () => {
       const result = await subscriptionService.applyTierChangeIfLinked(999);
 
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'GROWTH');
-      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'GROWTH');
       expect(paymentModel.updateStatus).toHaveBeenCalledWith(30, 'VERIFIED', {
         period_start: periodStart, period_end: periodEnd,
       });
@@ -476,8 +481,10 @@ describe('SubscriptionService', () => {
 
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'STARTER', null);
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(11, 'GROWTH', null);
-      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
-      expect(tenantModel.updateTier).toHaveBeenCalledWith(2, 'GROWTH', 1000);
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'STARTER');
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(2, 'GROWTH');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(2, 'GROWTH');
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'TIER_CHANGED', {
         subscriptionId: 10, fromTier: 'GROWTH', toTier: 'STARTER', fromBillingInterval: 'MONTHLY', toBillingInterval: 'MONTHLY',
       });
@@ -585,7 +592,8 @@ describe('SubscriptionService', () => {
 
       const result = await subscriptionService.processDueRenewals();
 
-      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'FREE', 5);
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'FREE');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'FREE');
       expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(10, 'EXPIRED');
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'SUBSCRIPTION_EXPIRED', {
         subscriptionId: 10, previousTier: 'GROWTH',
@@ -1007,7 +1015,8 @@ describe('SubscriptionService', () => {
       const monthsApart = (extra.current_period_end.getFullYear() - extra.current_period_start.getFullYear()) * 12
         + (extra.current_period_end.getMonth() - extra.current_period_start.getMonth());
       expect(monthsApart).toBe(1);
-      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'STARTER');
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'SUBSCRIPTION_ACTIVATED', { subscriptionId: 10, tier: 'STARTER' });
       expect(result).toEqual({ id: 10, status: 'ACTIVE' });
     });
@@ -1097,7 +1106,8 @@ describe('SubscriptionService', () => {
 
       const result = await subscriptionService.linkInvoice(10, accessKey);
 
-      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'STARTER');
       expect(result).toEqual({ id: 10, status: 'ACTIVE' });
     });
 
@@ -1129,7 +1139,8 @@ describe('SubscriptionService', () => {
 
       const result = await subscriptionService.linkInvoice(10, accessKey);
 
-      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'GROWTH');
       expect(result).toEqual({ id: 10, tier: 'GROWTH' });
     });
 
@@ -1188,7 +1199,8 @@ describe('SubscriptionService', () => {
         const result = await subscriptionService.linkInvoice(10, accessKey);
 
         expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(10, 'GROWTH', 'YEARLY');
-        expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH', 1000);
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'GROWTH');
+        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'GROWTH');
         expect(paymentModel.updateStatus).toHaveBeenCalledWith(30, 'VERIFIED', {
           period_start: periodStart, period_end: periodEnd,
         });
@@ -1234,7 +1246,8 @@ describe('SubscriptionService', () => {
 
         const result = await subscriptionService.linkInvoice(10, accessKey);
 
-        expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER', 200);
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(1, 'STARTER');
+        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(1, 'STARTER');
         expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'SUBSCRIPTION_ACTIVATED', expect.objectContaining({ subscriptionId: 10 }));
         expect(result).toEqual({ id: 10, status: 'ACTIVE' });
       });

@@ -6,13 +6,14 @@ async function findByKeyHash(keyHash) {
             t.subscription_tier AS tenant_subscription_tier,
             t.status            AS tenant_status,
             t.email             AS tenant_email,
-            t.document_count    AS tenant_document_count,
-            t.document_quota    AS tenant_document_quota,
+            tq.document_count   AS tenant_document_count,
+            tq.document_quota   AS tenant_document_quota,
             t.sandbox           AS tenant_sandbox,
             t.agreement_accepted_at AS tenant_agreement_accepted_at,
             t.agreement_version     AS tenant_agreement_version
      FROM api_keys ak
      JOIN tenants t ON t.id = ak.tenant_id
+     LEFT JOIN tenant_quotas tq ON tq.tenant_id = t.id AND tq.is_current = true
      WHERE ak.key_hash = $1
        AND ak.active = true`,
     [keyHash]
