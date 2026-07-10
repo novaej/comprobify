@@ -36,7 +36,10 @@ const config = {
     dsn: process.env.SENTRY_DSN || '',
   },
   // Returned in createSubscription's response so a tenant knows where to send
-  // the SPI transfer — display text only, not a secret.
+  // the SPI transfer — display text only, not a secret. Validated as
+  // required at startup (src/config/validate.js) — without these, a tenant
+  // creating a subscription gets an empty bank-transfer block with no way
+  // to actually pay.
   bankTransfer: {
     bankName:       process.env.BANK_TRANSFER_BANK_NAME       || '',
     accountType:    process.env.BANK_TRANSFER_ACCOUNT_TYPE    || '',
@@ -45,9 +48,12 @@ const config = {
     identification: process.env.BANK_TRANSFER_IDENTIFICATION  || '',
   },
   // Where the operator gets notified that a tenant uploaded payment proof and
-  // needs review. Optional — unset means that notification email is skipped
-  // (mirrors the SENTRY_DSN optional pattern), since it's an operational
-  // convenience, not something tenant-facing behavior depends on.
+  // needs review. Validated as required at startup — this was originally
+  // optional (mirroring the SENTRY_DSN pattern) on the reasoning that it's
+  // an operational convenience, not tenant-facing behavior. Reclassified as
+  // required: without it, proof submissions land with zero notification to
+  // anyone, discoverable only by manually polling the admin payments list —
+  // too easy to silently miss for something that gates real revenue.
   adminNotificationEmail: process.env.ADMIN_NOTIFICATION_EMAIL || '',
 
   // Operator identity — substituted into legal document templates at publish
@@ -60,6 +66,15 @@ const config = {
     email:    process.env.OPERATOR_EMAIL   || '',
     domicilio: process.env.OPERATOR_ADDRESS || 'Domicilio disponible previa solicitud razonable',
   },
+
+  // Ecuador's current IVA (VAT) rate, applied to subscription pricing
+  // (src/constants/subscription-tiers.js re-exports this as IVA_RATE for its
+  // existing consumers). Kept as an env var rather than hardcoded because
+  // Ecuador has changed this rate more than once — a rate change should be a
+  // config update + restart, not a code change + redeploy. Defaults to the
+  // rate in effect as of this writing (5%); override with IVA_RATE if it
+  // changes (e.g. IVA_RATE=0.15 for 15%).
+  ivaRate: process.env.IVA_RATE !== undefined ? parseFloat(process.env.IVA_RATE) : 0.05,
 };
 
 module.exports = config;

@@ -35,6 +35,14 @@ function validConfig(overrides = {}) {
       windowMs: 60000,
       maxRequests: 60,
     },
+    bankTransfer: {
+      bankName: 'Banco Pichincha',
+      accountType: 'Ahorros',
+      accountNumber: '1234567890',
+      accountHolder: 'Comprobify S.A.',
+      identification: '1792345678001',
+    },
+    adminNotificationEmail: 'admin@example.com',
     ...overrides,
   };
 }
@@ -81,6 +89,39 @@ describe('validateConfig', () => {
     test('throws listing APP_BASE_URL when it is missing', () => {
       const config = validConfig({ appBaseUrl: '' });
       expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): APP_BASE_URL');
+    });
+
+    test('throws listing each missing BANK_TRANSFER_* var', () => {
+      const config = validConfig({
+        bankTransfer: {
+          bankName: '',
+          accountType: '',
+          accountNumber: '',
+          accountHolder: '',
+          identification: '',
+        },
+      });
+      expect(() => validateConfig(config)).toThrow(
+        'Missing required environment variable(s): BANK_TRANSFER_BANK_NAME, BANK_TRANSFER_ACCOUNT_TYPE, BANK_TRANSFER_ACCOUNT_NUMBER, BANK_TRANSFER_ACCOUNT_HOLDER, BANK_TRANSFER_IDENTIFICATION'
+      );
+    });
+
+    test('throws listing only the missing bank transfer var (partial missing)', () => {
+      const config = validConfig({
+        bankTransfer: {
+          bankName: 'Banco Pichincha',
+          accountType: 'Ahorros',
+          accountNumber: '',
+          accountHolder: 'Comprobify S.A.',
+          identification: '1792345678001',
+        },
+      });
+      expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): BANK_TRANSFER_ACCOUNT_NUMBER');
+    });
+
+    test('throws listing ADMIN_NOTIFICATION_EMAIL when it is missing', () => {
+      const config = validConfig({ adminNotificationEmail: '' });
+      expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): ADMIN_NOTIFICATION_EMAIL');
     });
 
     test('throws with format error when ENCRYPTION_KEY is present but wrong length (too short)', () => {
