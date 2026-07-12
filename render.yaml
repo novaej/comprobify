@@ -48,6 +48,7 @@ services:
   - name: comprobify-staging-notifications
     type: cron
     runtime: docker
+    region: virginia
     branch: staging
     plan: starter
     schedule: "*/5 * * * *"
@@ -58,6 +59,7 @@ services:
   - name: comprobify-staging-subscriptions
     type: cron
     runtime: docker
+    region: virginia
     branch: staging
     plan: starter
     schedule: "0 6 * * *"
@@ -68,6 +70,7 @@ services:
   - name: comprobify-staging-quota
     type: cron
     runtime: docker
+    region: virginia
     branch: staging
     plan: starter
     schedule: "10 6 * * *"
