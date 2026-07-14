@@ -352,7 +352,7 @@ describe('DocumentTransmissionService', () => {
     jest.clearAllMocks();
   });
 
-  test('sendToSri rejects when status is not SIGNED', async () => {
+  test('sendToSri rejects when status is not PENDING_SEND', async () => {
     documentModel.findByAccessKey.mockResolvedValue({
       id: 1,
       status: 'AUTHORIZED',
@@ -364,7 +364,10 @@ describe('DocumentTransmissionService', () => {
   });
 
   test('sends and sets RECEIVED when SRI returns code 70', async () => {
-    const doc = { id: 1, status: 'SIGNED', signed_xml: '<xml/>' };
+    // sendToSri is only ever called (by the worker) on a PENDING_SEND
+    // document now — SIGNED -> RECEIVED is no longer a valid direct
+    // transition since the send/authorize pipeline went async-only.
+    const doc = { id: 1, status: 'PENDING_SEND', signed_xml: '<xml/>' };
     documentModel.findByAccessKey.mockResolvedValue(doc);
     sriService.sendReceipt.mockResolvedValue({
       status: 'DEVUELTA',
@@ -379,7 +382,7 @@ describe('DocumentTransmissionService', () => {
 
     expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RECEIVED', {}, mockIssuer.id, mockIssuer.sandbox);
     expect(documentEventModel.create).toHaveBeenCalledWith(
-      1, 'SENT', 'SIGNED', 'RECEIVED',
+      1, 'SENT', 'PENDING_SEND', 'RECEIVED',
       expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
       null, mockIssuer.id, mockIssuer.sandbox
     );
@@ -390,7 +393,7 @@ describe('DocumentTransmissionService', () => {
   });
 
   test('sends and sets RETURNED for non-70 DEVUELTA', async () => {
-    const doc = { id: 1, status: 'SIGNED', signed_xml: '<xml/>' };
+    const doc = { id: 1, status: 'PENDING_SEND', signed_xml: '<xml/>' };
     documentModel.findByAccessKey.mockResolvedValue(doc);
     const messages = [{ identifier: '43', message: 'SOME OTHER ERROR' }];
     sriService.sendReceipt.mockResolvedValue({
@@ -406,7 +409,7 @@ describe('DocumentTransmissionService', () => {
 
     expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RETURNED', {}, mockIssuer.id, mockIssuer.sandbox);
     expect(documentEventModel.create).toHaveBeenCalledWith(
-      1, 'SENT', 'SIGNED', 'RETURNED',
+      1, 'SENT', 'PENDING_SEND', 'RETURNED',
       { sriStatus: 'DEVUELTA' },
       null, mockIssuer.id, mockIssuer.sandbox
     );

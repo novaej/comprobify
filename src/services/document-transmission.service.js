@@ -5,6 +5,7 @@ const sriResponseModel = require('../models/sri-response.model');
 const emailService = require('./email.service');
 const notificationService = require('./notification.service');
 const subscriptionService = require('./subscription.service');
+const queueService = require('./queue.service');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
 const EmailStatus = require('../constants/email-status');
@@ -162,4 +163,66 @@ async function checkAuthorization(accessKey, issuer) {
   return formatDocument(updated);
 }
 
-module.exports = { sendToSri, checkAuthorization };
+// Queues a document for async SRI submission (NEXT_STEPS.md item 2). Moves
+// the document to PENDING_SEND — durably, in Postgres, regardless of publish
+// outcome — then attempts a broker-confirmed publish. The worker
+// (workers/sri-worker.js) is the only code that calls sendToSri() itself; if
+// the publish here fails or times out, the document simply stays
+// PENDING_SEND with no confirmed dispatch, and
+// queue-reconciliation.service.js will notice and re-publish. A publish
+// failure never fails this request — that's the whole point of using
+// Postgres as the source of truth instead of the broker.
+async function queueSend(accessKey, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+  assertTransition(document.status, DocumentStatus.PENDING_SEND);
+
+  const updated = await documentModel.updateStatus(document.id, DocumentStatus.PENDING_SEND, {}, issuer.id, issuer.sandbox);
+  await documentEventModel.create(document.id, EventType.STATUS_CHANGED, document.status, DocumentStatus.PENDING_SEND, {}, null, issuer.id, issuer.sandbox);
+
+  try {
+    await queueService.publishConfirmed(queueService.ROUTING_KEYS.send, {
+      documentId: updated.id,
+      accessKey: updated.access_key,
+      issuerId: issuer.id,
+      sandbox: issuer.sandbox,
+    });
+    await documentModel.updateStatus(updated.id, updated.status, { send_dispatch_attempted_at: new Date() }, issuer.id, issuer.sandbox);
+  } catch (err) {
+    console.warn('SRI send publish failed, will be picked up by reconciliation:', err.message);
+  }
+
+  return formatDocument(updated);
+}
+
+// Queues an authorization check (NEXT_STEPS.md item 2). Unlike queueSend,
+// this doesn't transition status itself — RECEIVED already means "awaiting
+// authorization"; only checkAuthorization() (called by the worker) decides
+// the actual outcome. If the publish fails, queue-reconciliation.service.js's
+// periodic sweep of RECEIVED documents will publish one later regardless of
+// whether a client ever calls this endpoint.
+async function queueAuthorizationCheck(accessKey, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+  assertTransition(document.status, DocumentStatus.AUTHORIZED);
+
+  try {
+    await queueService.publishConfirmed(queueService.ROUTING_KEYS.authorize, {
+      documentId: document.id,
+      accessKey: document.access_key,
+      issuerId: issuer.id,
+      sandbox: issuer.sandbox,
+    });
+    await documentModel.updateStatus(document.id, document.status, { authorize_dispatch_attempted_at: new Date() }, issuer.id, issuer.sandbox);
+  } catch (err) {
+    console.warn('SRI authorize-check publish failed, will be picked up by reconciliation:', err.message);
+  }
+
+  return formatDocument(document);
+}
+
+module.exports = { sendToSri, checkAuthorization, queueSend, queueAuthorizationCheck };

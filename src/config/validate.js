@@ -30,6 +30,15 @@ function validateConfig(cfg) {
     missing.push('APP_BASE_URL');
   }
 
+  // The document send/authorize pipeline is fully async (NEXT_STEPS.md item 2)
+  // — there is no synchronous fallback — so without this every POST /:key/send
+  // still flips the document to PENDING_SEND but nothing ever dispatches it to
+  // SRI until the next reconciliation sweep re-publishes it, silently stalling
+  // the whole invoice lifecycle.
+  if (!cfg.rabbitmq.url) {
+    missing.push('RABBITMQ_URL');
+  }
+
   // Without these, POST /v1/subscriptions succeeds but hands the tenant an
   // empty bank-transfer block with no way to actually pay — silent breakage
   // of the entire billing pipeline, not something that fails loudly on its own.

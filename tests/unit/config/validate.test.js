@@ -24,6 +24,10 @@ function validConfig(overrides = {}) {
       testBaseUrl: 'https://test.sri.gob.ec',
       prodBaseUrl: 'https://prod.sri.gob.ec',
     },
+    rabbitmq: {
+      url: 'amqps://user:pass@shared-broker.rmq.cloudamqp.com/vhost',
+      sriExchange: 'sri.direct',
+    },
     email: {
       provider: 'mailgun',
       from: 'test@example.com',
@@ -122,6 +126,11 @@ describe('validateConfig', () => {
     test('throws listing ADMIN_NOTIFICATION_EMAIL when it is missing', () => {
       const config = validConfig({ adminNotificationEmail: '' });
       expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): ADMIN_NOTIFICATION_EMAIL');
+    });
+
+    test('throws listing RABBITMQ_URL when it is missing', () => {
+      const config = validConfig({ rabbitmq: { url: '', sriExchange: 'sri.direct' } });
+      expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): RABBITMQ_URL');
     });
 
     test('throws with format error when ENCRYPTION_KEY is present but wrong length (too short)', () => {
