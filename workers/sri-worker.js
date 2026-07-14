@@ -16,6 +16,12 @@ const documentTransmissionService = require('../src/services/document-transmissi
 const issuerModel = require('../src/models/issuer.model');
 const AppError = require('../src/errors/app-error');
 
+// Must be set before the first connect() call (triggered lazily by
+// queueService.onConnect() in start(), below) — otherwise this process would
+// show up in the broker's management UI under the default 'comprobify-api'
+// name, indistinguishable from the actual API process.
+queueService.setConnectionName('comprobify-worker');
+
 // issuer.sandbox is a virtual field (see CLAUDE.md "Sandbox environment" —
 // issuers no longer have an environment column) normally set by the
 // resolveIssuer middleware from req.tenant.sandbox. The worker has no

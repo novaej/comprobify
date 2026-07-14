@@ -17,6 +17,19 @@ const ROUTING_KEYS = {
 let channel = null;
 let connectionPromise = null;
 
+// Shown as "Client provided name" in the broker's management UI (e.g.
+// CloudAMQP) — otherwise every connection looks identical (just an IP:port),
+// making it impossible to tell the API's publisher connection apart from
+// the worker's consumer connection. Defaults to the API's name since
+// document-transmission.service.js's queueSend/queueAuthorizationCheck are
+// the only other caller of connect() outside the worker; sri-worker.js
+// overrides this via setConnectionName() before triggering its own connect.
+let connectionName = 'comprobify-api';
+
+function setConnectionName(name) {
+  connectionName = name;
+}
+
 // Declares the exchange/queue/DLX topology. Idempotent (assert* calls are
 // no-ops if already declared with matching arguments) — safe to call from
 // both the publisher (API process) and the consumer (worker process),
@@ -54,6 +67,7 @@ async function declareTopology(ch) {
 function connect() {
   if (!connectionPromise) {
     connectionPromise = amqp.connect(config.rabbitmq.url, {
+      clientProperties: { connection_name: connectionName },
       recovery: {
         setup: async (model) => {
           channel = await model.createConfirmChannel();
@@ -106,4 +120,4 @@ function publishConfirmed(routingKey, payload, { timeoutMs = 3000 } = {}) {
   }));
 }
 
-module.exports = { QUEUES, ROUTING_KEYS, connect, getChannel, onConnect, publishConfirmed, declareTopology };
+module.exports = { QUEUES, ROUTING_KEYS, connect, getChannel, onConnect, publishConfirmed, declareTopology, setConnectionName };
