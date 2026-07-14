@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`POST /:key/send` and `GET /:key/authorize` are now fully asynchronous, backed by RabbitMQ.** A new standalone worker process (`workers/sri-worker.js`, started via `npm run worker`) is now the only code that calls SRI — the API only queues a message and returns immediately. Postgres stays the source of truth throughout (new `PENDING_SEND` document status, plus `send_dispatch_attempted_at`/`authorize_dispatch_attempted_at` dispatch-tracking columns on `documents`, migration 074); RabbitMQ is purely a confirmed-dispatch signal via `src/services/queue.service.js`'s `publishConfirmed()` (amqplib confirm channel), never the record. New `POST /v1/admin/jobs/queue-reconciliation` (`src/services/queue-reconciliation.service.js`) re-publishes any document whose dispatch was never confirmed or has gone stale — it never calls SRI itself, so a RabbitMQ outage degrades to reconciliation-interval latency rather than lost work or failed requests. No sync fallback exists; this is a deliberate one-way change, not a feature-flagged rollout. See [ADR-019](docs/adr/019-rabbitmq-async-sri-submission.md).
+- New required env var `RABBITMQ_URL` (validated at startup, `src/config/validate.js`), plus optional `RABBITMQ_SRI_EXCHANGE` and `QUEUE_RECONCILE_*` tuning vars — see `.example.env`.
+
+### Changed
+- **Breaking: `POST /:key/send` and `GET /:key/authorize` now return `202 Accepted` instead of `200 OK`, and no longer include the final SRI result in the response body.** Callers that previously read `sriStatus`/`status: RECEIVED`/`authorizationNumber` etc. directly from these responses must instead poll `GET /:accessKey` (or `/:accessKey/events`) for the document's eventual `RECEIVED`/`RETURNED`/`AUTHORIZED`/`NOT_AUTHORIZED` status, or rely on the existing notification/webhook system for the `AUTHORIZED` transition. A new `PENDING_SEND` status can now appear in `GET /:accessKey` responses between `SIGNED` and `RECEIVED`/`RETURNED`.
+
 ## [0.8.0] — 2026-07-10
 
 ### Added

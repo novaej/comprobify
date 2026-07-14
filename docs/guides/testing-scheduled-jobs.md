@@ -1,14 +1,15 @@
 # Testing Scheduled Jobs Locally
 
-The three admin-triggered jobs are date-driven — each one scans for rows whose timestamp has already passed. Since nothing is truly "scheduled" inside the app itself (an external cron calls these endpoints), the fastest way to exercise any of them locally is to push the relevant timestamp into the past with a direct SQL update, then call the endpoint.
+The four admin-triggered jobs are date-driven — each one scans for rows whose timestamp has already passed. Since nothing is truly "scheduled" inside the app itself (an external cron calls these endpoints), the fastest way to exercise any of them locally is to push the relevant timestamp into the past with a direct SQL update, then call the endpoint.
 
 | Job | Endpoint | Cadence | What it scans for |
 |---|---|---|---|
 | Notifications | `POST /v1/admin/jobs/notifications` | every 5 min | `issuers.cert_expiry`, `webhook_deliveries.next_retry_at` |
 | Subscriptions | `POST /v1/admin/jobs/subscriptions` | daily | `subscriptions.current_period_end`, `pending_tier` |
 | Quota | `POST /v1/admin/jobs/quota` | daily | `tenant_quotas.period_end` |
+| Queue reconciliation | `POST /v1/admin/jobs/queue-reconciliation` | every 1-5 min | `documents.send_dispatch_attempted_at`/`authorize_dispatch_attempted_at` (both `public` and `sandbox` schemas) |
 
-All three are **idempotent** — re-running them when nothing is due is always safe and a no-op.
+All four are **idempotent** — re-running them when nothing is due is always safe and a no-op. Unlike the other three, the queue reconciliation job requires an actual RabbitMQ connection (`RABBITMQ_URL`) to do anything useful — it publishes real messages, it doesn't just read/write Postgres.
 
 ## Prerequisites
 
@@ -25,11 +26,12 @@ All three are **idempotent** — re-running them when nothing is due is always s
 ## Triggering a job
 
 ```bash
-curl -X POST http://localhost:8080/v1/admin/jobs/notifications -H "X-Admin-Secret: <ADMIN_SECRET>"
-curl -X POST http://localhost:8080/v1/admin/jobs/subscriptions  -H "X-Admin-Secret: <ADMIN_SECRET>"
-curl -X POST http://localhost:8080/v1/admin/jobs/quota          -H "X-Admin-Secret: <ADMIN_SECRET>"
+curl -X POST http://localhost:8080/v1/admin/jobs/notifications        -H "X-Admin-Secret: <ADMIN_SECRET>"
+curl -X POST http://localhost:8080/v1/admin/jobs/subscriptions         -H "X-Admin-Secret: <ADMIN_SECRET>"
+curl -X POST http://localhost:8080/v1/admin/jobs/quota                 -H "X-Admin-Secret: <ADMIN_SECRET>"
+curl -X POST http://localhost:8080/v1/admin/jobs/queue-reconciliation  -H "X-Admin-Secret: <ADMIN_SECRET>"
 ```
-Or use "Run Notification Jobs" / "Run Subscription Jobs" / "Run Quota Jobs" in `postman/comprobify-internal.postman_collection.json`.
+Or use "Run Notification Jobs" / "Run Subscription Jobs" / "Run Quota Jobs" / "Run Queue Reconciliation Jobs" in `postman/comprobify-internal.postman_collection.json`.
 
 ---
 
@@ -148,7 +150,43 @@ Any tier change (upgrade, downgrade, expiry-to-FREE, admin override via `PATCH /
 
 ---
 
-## 4. Combined scenario: cancel a monthly plan, restart it next "month"
+## 4. Queue reconciliation job
+
+Requires a real RabbitMQ connection (`RABBITMQ_URL` in `.env`) — this job publishes actual messages, so watch the queue depth/message count in your broker's management UI (e.g. CloudAMQP) to confirm a re-publish happened, alongside the SQL checks below.
+
+### 4a. Stuck `PENDING_SEND` (never dispatched, or broker was down)
+```sql
+-- Simulate a document that was queued but never confirmed-dispatched — e.g. RabbitMQ
+-- was unreachable when POST /:key/send tried to publish.
+UPDATE documents SET status = 'PENDING_SEND', send_dispatch_attempted_at = NULL
+WHERE id = <DOCUMENT_ID>;
+```
+Run the reconciliation job — expect `sendRepublished` to include this document, and `send_dispatch_attempted_at` to be set afterward:
+```sql
+SELECT status, send_dispatch_attempted_at FROM documents WHERE id = <DOCUMENT_ID>;
+```
+With `workers/sri-worker.js` running (`npm run worker`), the document should shortly move to `RECEIVED`/`RETURNED` on its own — the reconciliation job itself never touches SRI.
+
+### 4b. Stale dispatch (published once, but nothing ever consumed it)
+```sql
+UPDATE documents SET status = 'PENDING_SEND', send_dispatch_attempted_at = NOW() - INTERVAL '10 minutes'
+WHERE id = <DOCUMENT_ID>;
+```
+With the default `QUEUE_RECONCILE_SEND_STALE_MINUTES=5`, this is already past the staleness threshold — the job re-publishes it the same as 4a.
+
+### 4c. `RECEIVED` document awaiting its first authorize-check
+```sql
+UPDATE documents SET status = 'RECEIVED', updated_at = NOW() - INTERVAL '10 minutes', authorize_dispatch_attempted_at = NULL
+WHERE id = <DOCUMENT_ID>;
+```
+Run the job — expect `authorizeRepublished` to include this document. This is the mechanism that replaces "poll `RECEIVED` documents older than N minutes" from the original design — the job publishes the check request, the worker's `checkAuthorization()` call does the actual SRI query.
+
+### 4d. Nothing due — confirm it's a no-op
+Run the job again immediately after 4a-4c with no further SQL changes — expect `sendRepublished: 0, authorizeRepublished: 0` (both dispatch timestamps are now fresh).
+
+---
+
+## 5. Combined scenario: cancel a monthly plan, restart it next "month"
 
 1. Run **2c** above to simulate the lapse — tier drops to FREE, tenant stays `ACTIVE`.
 2. Confirm quota records keep being created regardless — run **3a** any time during the gap; the rollover happens on schedule with whatever cap currently applies (FREE, in this case), completely unaware a subscription ever existed.

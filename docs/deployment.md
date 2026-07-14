@@ -252,7 +252,7 @@ This leaves Email Obfuscation active on the marketing site (`comprobify.com`, `s
 
 ## Scheduled jobs
 
-The API has three scheduled jobs that must be triggered externally — none is self-scheduled. Both **staging** and **production** use a **Render Cron Job**, in the same workspace as the matching web service, so the scheduler is billed per execution-second and its logs sit alongside the API's own rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale. See `docs/guides/testing-scheduled-jobs.md` for how to exercise each job's scenarios locally by pushing dates into the past.
+The API has four scheduled jobs that must be triggered externally — none is self-scheduled. Both **staging** and **production** use a **Render Cron Job**, in the same workspace as the matching web service, so the scheduler is billed per execution-second and its logs sit alongside the API's own rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale. See `docs/guides/testing-scheduled-jobs.md` for how to exercise each job's scenarios locally by pushing dates into the past.
 
 > Staging previously used [cron-job.org](https://cron-job.org) for the notifications job. It has been replaced by a Render Cron Job for the same reason production uses one, so both environments now follow the same pattern.
 
@@ -282,6 +282,19 @@ Independent of the billing cycle (`subscriptions.current_period_end`/`billing_in
 
 Idempotent. Daily cadence is enough. Recommended to run after the subscriptions job in the same tick so a same-day tier change is reflected in the rolled-over cap, though this isn't a hard ordering requirement — a one-day-stale cap self-corrects on the next cycle.
 
+### `POST /v1/admin/jobs/queue-reconciliation`
+
+Runs `queueReconciliationService.runAll()` — see ADR-019 and CLAUDE.md's "Async SRI submission via RabbitMQ" entry for the full design. Finds documents whose dispatch to RabbitMQ was never confirmed or has gone stale, and **re-publishes** a fresh message for them — it never calls SRI itself, so a RabbitMQ outage or a missed publish only ever degrades to reconciliation-interval latency, not lost work:
+
+1. **`PENDING_SEND` sweep** — re-publishes a `send` message for any document stuck in `PENDING_SEND` with no confirmed dispatch (or a stale one).
+2. **`RECEIVED` sweep** — publishes an `authorize` message for any `RECEIVED` document old enough that SRI should have finished processing it, whether or not a client ever called `GET /:key/authorize` themselves.
+
+Both sweeps run independently against `public.documents` and `sandbox.documents` (two `SELECT ... FOR UPDATE SKIP LOCKED` queries per sweep — Postgres disallows `FOR UPDATE` with `UNION`).
+
+Idempotent. Needs a **much shorter cadence than the other three jobs** — recommended every 1-5 minutes, since this is the actual recovery mechanism for a temporarily unreachable broker or a publish that timed out.
+
+**Not yet added to `render.yaml`** — unlike the three jobs above, this one isn't declared as code yet. Add it the same way ("Adding a new scheduled job later" below) once Phase 1 has been smoke-tested against the live CloudAMQP instance.
+
 ### Render Cron Job setup — managed via Blueprint (`render.yaml`)
 
 The three Cron Jobs are declared as code in `render.yaml` at the repo root, **not** created by hand in the dashboard. The API web services (`comprobify-staging`/`comprobify-production`) are deliberately excluded from this Blueprint and stay on the existing GitHub Actions deploy-hook pipeline above — only the cron jobs (low env-var count, low risk to manage declaratively) are in scope. Render auto-detects the project's `Dockerfile` for each service; the command runs as `node scripts/run-admin-job.js <path>` rather than a raw `curl` invocation, sidestepping the Docker Command field's lack of shell/quoting support (it splits on whitespace, so a `curl` call with a quoted `Authorization` header gets silently truncated — that's the cause if a run ever fails with a `SyntaxError`/truncated command).
@@ -307,6 +320,7 @@ Reference table (schedules are also in `render.yaml`, this is just for readabili
 | Notifications | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/notifications` |
 | Subscriptions | `0 6 * * *` (daily) | `node scripts/run-admin-job.js /v1/admin/jobs/subscriptions` |
 | Quota | `10 6 * * *` (daily, just after Subscriptions) | `node scripts/run-admin-job.js /v1/admin/jobs/quota` |
+| Queue reconciliation | `*/2 * * * *` (every 2 minutes, recommended) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` — not yet added to `render.yaml`, see above |
 
 Production cron jobs aren't declared in `render.yaml` yet — see the file's own comments; add a `comprobify-cron-production` env var group and three more `branch: production` services once the production web service/branch/secrets exist (see "Production status" above).
 
@@ -349,7 +363,27 @@ Quota job:
 }
 ```
 
+Queue reconciliation job:
+
+```json
+{
+  "ok": true,
+  "sendRepublished": 1,
+  "authorizeRepublished": 0
+}
+```
+
 Monitor each Cron Job's execution log in the Render dashboard for non-zero exit codes (`curl -f` makes a non-2xx HTTP response fail the run). A sustained failure usually means the `ADMIN_SECRET` has rotated or the web service is down.
+
+---
+
+## Background worker (`workers/sri-worker.js`)
+
+Unlike the four scheduled jobs above — which are short-lived cron invocations that hit an HTTP endpoint and exit — `workers/sri-worker.js` is a **long-running process** that holds a persistent connection to RabbitMQ and continuously consumes the `sri.send`/`sri.authorize` queues. It is the only code in the system that calls SRI directly (see ADR-019). It cannot be modeled as a Render Cron Job; it needs Render's **Background Worker** service type (or an equivalent persistent-process host), analogous to the existing web service but with no public port and started via `node workers/sri-worker.js` (`npm run worker`).
+
+**Not yet declared in `render.yaml`** — the three (soon four) admin jobs are `type: cron`; the worker needs a separate `type: worker` block once this is set up, deployed alongside `comprobify-staging`/`comprobify-production` rather than the cron jobs. It shares the same `RABBITMQ_URL`, `DB_*`, and SRI-related env vars as the API — no separate env var group needed beyond what the API already uses.
+
+There is no restart/health-check story documented yet for this process beyond whatever Render's Background Worker type provides by default (auto-restart on crash) — revisit once it's actually deployed and observed running for a while.
 
 ---
 
@@ -473,6 +507,7 @@ curl https://api.comprobify.com/v1/admin/tenants \
 | Node.js 18+ | LTS recommended |
 | PostgreSQL 14+ | |
 | `xmllint` | `apt install libxml2-utils` (Ubuntu/Debian) · pre-installed on Amazon Linux, macOS |
+| RabbitMQ | External broker (e.g. CloudAMQP) — required for the async SRI send/authorize pipeline. Not an npm dependency; the API and `workers/sri-worker.js` both connect to it as a client (`amqplib`). |
 
 ---
 
@@ -506,6 +541,12 @@ All variables are required unless marked optional.
 | `BANK_TRANSFER_ACCOUNT_NUMBER` | No | |
 | `BANK_TRANSFER_ACCOUNT_HOLDER` | No | |
 | `BANK_TRANSFER_IDENTIFICATION` | No | Account holder's RUC/cédula |
+| `RABBITMQ_URL` | Yes | AMQP connection string (e.g. from CloudAMQP), scoped to a dedicated vhost per environment. Required by both the API (publisher) and `workers/sri-worker.js` (consumer) — without it the async SRI send/authorize pipeline can never dispatch a queued document. See "Background worker" below. |
+| `RABBITMQ_SRI_EXCHANGE` | No | Name of the durable direct exchange used for SRI dispatch (default `sri.direct`) |
+| `QUEUE_RECONCILE_SEND_STALE_MINUTES` | No | Minutes before an unconfirmed `PENDING_SEND` dispatch is considered stale and re-published (default `5`) |
+| `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES` | No | Minimum age of a `RECEIVED` document before its first authorize-check is published (default `5`) |
+| `QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES` | No | Minutes before an unconfirmed authorize-check dispatch is considered stale and re-published (default `5`) |
+| `QUEUE_RECONCILE_BATCH_LIMIT` | No | Max rows processed per schema per reconciliation sweep (default `100`) |
 
 > **Issuer-specific config** (RUC, branch code, issue point, SRI environment, certificate) is stored per-issuer in the `issuers` database table via the Admin API. This enables multiple issuers to be configured independently without changing environment variables.
 

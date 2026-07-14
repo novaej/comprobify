@@ -1807,7 +1807,7 @@
                 "send"
               ]
             },
-            "description": "Submits the signed XML to the SRI reception service. Document moves to `RECEIVED` or `RETURNED`."
+            "description": "Queues the signed XML for submission to the SRI reception service — this is asynchronous, it does not call SRI in-request. Returns 202 with the document in PENDING_SEND status. A standalone worker process (workers/sri-worker.js) picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` or `RETURNED`. Poll Get Document or Get Events to observe that transition."
           },
           "event": [
             {
@@ -1846,7 +1846,7 @@
                 "authorize"
               ]
             },
-            "description": "Queries the SRI authorization service. Document moves to `AUTHORIZED` or `NOT_AUTHORIZED`. On authorization, an email with the RIDE PDF and XML is sent to the buyer."
+            "description": "Queues an authorization check — this is asynchronous, it does not query SRI in-request. Returns 202 immediately; `status` in the response is still `RECEIVED`. A standalone worker process picks up the queued job and calls SRI; the document eventually moves to `AUTHORIZED` (an email with the RIDE PDF and XML is sent to the buyer, and a DOCUMENT_AUTHORIZED notification/webhook fires) or `NOT_AUTHORIZED`. A periodic reconciliation job also queues this check automatically for any RECEIVED document past a short delay, whether or not this endpoint is ever called."
           },
           "event": [
             {
