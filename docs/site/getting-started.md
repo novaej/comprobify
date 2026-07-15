@@ -1,39 +1,47 @@
-# Getting Started
+# Primeros Pasos
 
-## Postman collection
+## URL base
 
-Import the full collection to test every endpoint directly from Postman — all requests are pre-configured with variables for your base URL, API key, and access key.
+```
+https://api.comprobify.com/v1
+```
+
+Todos los ejemplos de este sitio usan rutas relativas a esa base (p. ej. `POST /v1/register` significa `POST https://api.comprobify.com/v1/register`). No hay una URL base de staging publicada aquí — staging es solo para uso interno del equipo.
+
+## Colección de Postman
+
+Importa la colección completa para probar cada endpoint directamente desde Postman — todas las solicitudes vienen preconfiguradas con variables para tu URL base, tu llave API y tu clave de acceso.
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
 
-> **First time setup:** after importing, open the collection, go to **Variables**, and set `base_url` and `api_key`. After creating an invoice, copy the returned `accessKey` into the `access_key` variable.
+> **Configuración inicial:** después de importar, abre la colección, ve a **Variables**, y configura `base_url` como `https://api.comprobify.com` y `api_key` con tu llave API. Después de crear una factura, copia el `accessKey` devuelto en la variable `access_key`.
 
-You can also download the collection JSON directly: [`comprobify.postman_collection.json`](https://raw.githubusercontent.com/novaej/comprobify/main/postman/comprobify.postman_collection.json)
+También puedes descargar el JSON de la colección directamente: [`comprobify.postman_collection.json`](https://raw.githubusercontent.com/novaej/comprobify/main/postman/comprobify.postman_collection.json)
 
 ---
 
-## 1. Register
+## 1. Registro
 
-Create your account, issuer, and sandbox API key in a single call. Each RUC can only be registered once.
+Crea tu cuenta, emisor y llave API de sandbox en una sola llamada. Cada RUC solo puede registrarse una vez.
 
 ```http
 POST /v1/register
 Content-Type: multipart/form-data
 ```
 
-| Field | Description |
+| Campo | Descripción |
 |---|---|
-| `email` | Your email address — used for verification and billing |
-| `ruc` | Your 13-digit Ecuadorian tax ID (RUC) |
-| `businessName` | Legal company name as it appears on your RUC |
-| `branchCode` | 3-digit SRI branch code (e.g. `001` for the main branch) |
-| `issuePointCode` | 3-digit SRI issue point code (e.g. `001`) |
-| `emissionType` | SRI emission type: always `1` (normal) |
-| `requiredAccounting` | `true` if your company is required to keep accounting records (*obligado a llevar contabilidad*), `false` otherwise |
-| `cert` | Your `.p12` digital certificate file issued by the SRI CA (Banco Central or Security Data) |
-| `certPassword` | Password for the `.p12` file |
+| `email` | Tu dirección de correo — usada para verificación y facturación |
+| `ruc` | Tu RUC ecuatoriano de 13 dígitos |
+| `businessName` | Razón social tal como aparece en tu RUC |
+| `branchCode` | Código de sucursal SRI de 3 dígitos (p. ej. `001` para la sucursal principal) |
+| `issuePointCode` | Código de punto de emisión SRI de 3 dígitos (p. ej. `001`) |
+| `emissionType` | Tipo de emisión SRI: siempre `1` (normal) |
+| `requiredAccounting` | `true` si tu empresa está obligada a llevar contabilidad, `false` en caso contrario |
+| `cert` | Tu archivo de certificado digital `.p12` emitido por la CA del SRI (Banco Central o Security Data) |
+| `certPassword` | Contraseña del archivo `.p12` |
 
-Response:
+Respuesta:
 
 ```json
 {
@@ -50,70 +58,70 @@ Response:
 }
 ```
 
-**Store the `apiKey` — it is shown only once.**
+**Guarda el `apiKey` — se muestra solo una vez.**
 
-The account starts on the **FREE** tier (5 documents, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
+La cuenta comienza en el tier **FREE** (5 comprobantes, 1 sucursal, 1 punto de emisión, solo facturas). Todos los comprobantes se envían al ambiente de pruebas del SRI hasta que te promuevas a producción. Las pruebas en sandbox no consumen la cuota — solo los comprobantes de producción lo hacen.
 
-**Registration errors:**
+**Errores de registro:**
 
-| Status | Code | Reason |
+| Estado HTTP | Código | Razón |
 |---|---|---|
-| `409` | `CONFLICT` | Email already registered |
-| `409` | `CONFLICT` | RUC already registered |
-| `400` | `BAD_REQUEST` | Certificate is expired or invalid |
-| `429` | `TOO_MANY_REQUESTS` | More than 5 registration attempts per hour from this IP |
+| `409` | `CONFLICT` | El correo ya está registrado |
+| `409` | `CONFLICT` | El RUC ya está registrado |
+| `400` | `BAD_REQUEST` | El certificado está expirado o es inválido |
+| `429` | `TOO_MANY_REQUESTS` | Más de 5 intentos de registro por hora desde esta IP |
 
 ---
 
-## 2. Verify your email
+## 2. Verifica tu correo
 
-A verification email is sent to the address you registered with. Click the link, or call the endpoint directly with the token from the email:
+Se envía un correo de verificación a la dirección con la que te registraste. Haz clic en el enlace, o llama al endpoint directamente con el token del correo:
 
 ```http
 GET /v1/verify-email?token=<token>
 ```
 
-Email verification is required before you can promote to production. You can issue sandbox invoices immediately without verifying.
+Se requiere verificación de correo antes de poder promoverte a producción. Puedes emitir facturas de sandbox de inmediato sin verificar.
 
-> If you are integrating programmatically and email is not available, contact support to verify your account manually.
+> Si estás integrando de forma programática y el correo no está disponible, contacta a soporte para verificar tu cuenta manualmente.
 
 ---
 
-## 3. Authenticate requests
+## 3. Autentica las solicitudes
 
-Include your API key as a Bearer token on every document request:
+Incluye tu llave API como token Bearer en cada solicitud de comprobante:
 
 ```http
 Authorization: Bearer <your-api-key>
 ```
 
-The key is SHA-256 hashed on each request — the plaintext is never persisted after creation. If a key is compromised, contact support to revoke it and issue a new one.
+La llave se hashea con SHA-256 en cada solicitud — el texto plano nunca se persiste después de la creación. Si una llave se ve comprometida, contacta a soporte para revocarla y emitir una nueva.
 
 ---
 
-## Understanding API keys and branches
+## Entendiendo las llaves API y las sucursales
 
-This is the most important concept to understand before integrating.
+Este es el concepto más importante que debes entender antes de integrar.
 
-**One API key covers your entire account (all branches).** API keys are **tenant-scoped**, not issuer-scoped. One key can address any of your branches; you declare the target branch via the `X-Issuer-Id` header on each request.
+**Una sola llave API cubre toda tu cuenta (todas las sucursales).** Las llaves API están **vinculadas al tenant**, no al emisor. Una llave puede operar sobre cualquiera de tus sucursales; declaras la sucursal destino a través del encabezado `X-Issuer-Id` en cada solicitud.
 
-Your account (tenant) can have multiple issuers — each one is a unique pair of `branchCode` and `issuePointCode` (e.g., `001/001`, `001/002`, `002/001`). When you call `POST /v1/documents`, the API uses the key to identify your tenant, then uses `X-Issuer-Id` to determine:
-- Which branch and issue point to embed in the document
-- Which digital certificate to sign with
-- Which sequential number sequence to draw from
+Tu cuenta (tenant) puede tener múltiples emisores — cada uno es un par único de `branchCode` y `issuePointCode` (p. ej., `001/001`, `001/002`, `002/001`). Cuando llamas a `POST /v1/documents`, la API usa la llave para identificar tu tenant, luego usa `X-Issuer-Id` para determinar:
+- Qué sucursal y punto de emisión incrustar en el comprobante
+- Con qué certificado digital firmar
+- De qué secuencia de números secuenciales tomar el siguiente
 
-### Listing your issuers
+### Listando tus emisores
 
 ```http
 GET /v1/issuers
 Authorization: Bearer <your-api-key>
 ```
 
-Returns every issuer (branch / issue point) under your tenant with its numeric `id`. Use that `id` as the `X-Issuer-Id` header value on document requests.
+Devuelve cada emisor (sucursal / punto de emisión) bajo tu tenant con su `id` numérico. Usa ese `id` como el valor del encabezado `X-Issuer-Id` en las solicitudes de comprobantes.
 
-### Adding a new branch or issue point
+### Agregando una nueva sucursal o punto de emisión
 
-Once your email is verified, call `POST /v1/issuers` with your API key:
+Una vez que tu correo esté verificado, llama a `POST /v1/issuers` con tu llave API:
 
 ```http
 POST /v1/issuers
@@ -124,7 +132,7 @@ branchCode=002
 issuePointCode=001
 ```
 
-The new issuer inherits your RUC, business name, and digital certificate from your tenant's first existing issuer (or pass `sourceIssuerId` to pick a specific one):
+El nuevo emisor hereda tu RUC, razón social y certificado digital del primer emisor existente de tu tenant (o puedes pasar `sourceIssuerId` para elegir uno específico):
 
 ```json
 {
@@ -133,11 +141,11 @@ The new issuer inherits your RUC, business name, and digital certificate from yo
 }
 ```
 
-No new API key is minted — the key you already have covers every branch under your tenant.
+No se genera ninguna llave API nueva — la llave que ya tienes cubre cada sucursal bajo tu tenant.
 
-### Multiple named keys per tenant
+### Múltiples llaves con nombre por tenant
 
-Since one tenant-scoped key covers all your branches, you can mint additional keys via `POST /v1/keys` to track which integration is making each call (frontend, ERP, mobile app, etc.):
+Dado que una sola llave vinculada al tenant cubre todas tus sucursales, puedes generar llaves adicionales vía `POST /v1/keys` para rastrear qué integración está haciendo cada llamada (frontend, ERP, app móvil, etc.):
 
 ```http
 POST /v1/keys
@@ -147,26 +155,26 @@ Content-Type: application/json
 { "label": "ERP integration", "environment": "sandbox" }
 ```
 
-Use `GET /v1/keys` to list them and `DELETE /v1/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that the tenant has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others).
+Usa `GET /v1/keys` para listarlas y `DELETE /v1/keys/:id` para revocar una. `environment` por defecto es `sandbox`; generar una llave `production` requiere que el tenant ya se haya promovido. Todas las llaves bajo el mismo tenant pueden operar sobre el mismo conjunto de sucursales — la diferencia está en la observabilidad (qué integración hizo la llamada) y en la revocación granular (revocar una integración comprometida sin afectar a las demás).
 
-### Key lifecycle
+### Ciclo de vida de las llaves
 
-| Stage | Key environment | What to do |
+| Etapa | Ambiente de la llave | Qué hacer |
 |---|---|---|
-| After registration | Sandbox | Use for testing against the SRI test environment. |
-| After `POST /v1/tenants/promote` | Production | All sandbox keys are revoked and production mirrors are returned in the response. |
-| Adding integrations | Same tenant | Mint named keys via `POST /v1/keys` for per-integration observability. |
-| Lost key | — | Mint a replacement via `POST /v1/keys`, revoke the old one via `DELETE /v1/keys/:id`. |
+| Después del registro | Sandbox | Úsala para pruebas contra el ambiente de pruebas del SRI. |
+| Después de `POST /v1/tenants/promote` | Producción | Todas las llaves de sandbox se revocan y se devuelven sus equivalentes de producción en la respuesta. |
+| Agregando integraciones | Mismo tenant | Genera llaves con nombre vía `POST /v1/keys` para observabilidad por integración. |
+| Llave perdida | — | Genera un reemplazo vía `POST /v1/keys`, revoca la anterior vía `DELETE /v1/keys/:id`. |
 
-### Why tenant-scoped keys?
+### ¿Por qué llaves vinculadas al tenant?
 
-One key covers your whole account, so a frontend or ERP that operates on multiple branches doesn't have to juggle separate credentials. Per-integration accountability comes from named keys (`frontend-prod`, `erp`, `mobile`) rather than per-branch keys. Revoking a leaked key only affects the integration that used it; other keys keep working.
+Una sola llave cubre toda tu cuenta, así que un frontend o ERP que opera sobre múltiples sucursales no tiene que manejar credenciales separadas. La trazabilidad por integración proviene de llaves con nombre (`frontend-prod`, `erp`, `mobile`) en lugar de llaves por sucursal. Revocar una llave filtrada solo afecta a la integración que la usaba; las demás llaves siguen funcionando.
 
 ---
 
-## 4. Register a webhook endpoint (recommended)
+## 4. Registra un endpoint de webhook (recomendado)
 
-Register an HTTPS URL on your server to receive event notifications in near-real time — document authorizations, certificate alerts, and any future event types the API produces.
+Registra una URL HTTPS en tu servidor para recibir notificaciones de eventos casi en tiempo real — autorizaciones de comprobantes, alertas de certificados, y cualquier futuro tipo de evento que la API produzca.
 
 ```http
 POST /v1/webhooks
@@ -179,7 +187,7 @@ Content-Type: application/json
 }
 ```
 
-Response:
+Respuesta:
 
 ```json
 {
@@ -194,22 +202,22 @@ Response:
 }
 ```
 
-**Store the `secret` immediately — it is shown only once.** Use it to verify the `X-Comprobify-Signature` header on every incoming request.
+**Guarda el `secret` de inmediato — se muestra solo una vez.** Úsalo para verificar el encabezado `X-Comprobify-Signature` en cada solicitud entrante.
 
-Omit `eventTypes` (or pass `[]`) to subscribe to all event types. You can register up to the limit for your plan (FREE: 1, STARTER: 2, GROWTH: 5, BUSINESS: 10) and manage them via `GET / PATCH / DELETE /v1/webhooks`.
+Omite `eventTypes` (o pasa `[]`) para suscribirte a todos los tipos de evento. Puedes registrar hasta el límite de tu plan (FREE: 1, STARTER: 2, GROWTH: 5, BUSINESS: 10) y gestionarlos vía `GET / PATCH / DELETE /v1/webhooks`.
 
-> **If you cannot expose a public HTTPS URL** (local development, behind a firewall), poll `GET /v1/notifications?sinceId=<lastId>` instead. Store the highest `id` seen from each poll and pass it on the next request to efficiently catch up — see [Notifications](endpoints/notifications.md).
+> **Si no puedes exponer una URL HTTPS pública** (desarrollo local, detrás de un firewall), sondea `GET /v1/notifications?sinceId=<lastId>` en su lugar. Guarda el `id` más alto visto en cada sondeo y pásalo en la siguiente solicitud para ponerte al día de forma eficiente — consulta [Notificaciones](endpoints/notifications.md).
 
 ---
 
-## 5. Create an invoice
+## 5. Crea una factura
 
 ```http
 POST /v1/documents
 Authorization: Bearer <your-api-key>
 X-Issuer-Id: <issuer-id>
 Content-Type: application/json
-Idempotency-Key: <unique-key>   (optional but recommended)
+Idempotency-Key: <unique-key>   (opcional pero recomendado)
 
 {
   "documentType": "01",
@@ -224,41 +232,41 @@ Idempotency-Key: <unique-key>   (optional but recommended)
 }
 ```
 
-Every document endpoint (POST, GET, DELETE) requires the `X-Issuer-Id` header naming the target branch. Omit it → `400 ISSUER_ID_REQUIRED`. Pass an id belonging to another tenant → `403 ISSUER_FORBIDDEN`.
+Cada endpoint de comprobante (POST, GET, DELETE) requiere el encabezado `X-Issuer-Id` que nombra la sucursal destino. Si lo omites → `400 ISSUER_ID_REQUIRED`. Si pasas un id que pertenece a otro tenant → `403 ISSUER_FORBIDDEN`.
 
-Returns the signed document with status `SIGNED`. See [Create Invoice](endpoints/create-invoice.md) for the full schema.
+Devuelve el comprobante firmado con estado `SIGNED`. Consulta [Create Invoice](endpoints/create-invoice.md) para conocer el esquema completo.
 
 ---
 
-## 6. Send to SRI
+## 6. Envía al SRI
 
 ```http
 POST /v1/documents/:accessKey/send
 ```
 
-Submits the signed XML to the SRI. The document moves to `RECEIVED` or `RETURNED`.
+Envía el XML firmado al SRI. El comprobante pasa a `RECEIVED` o `RETURNED`.
 
-- **`RECEIVED`** — SRI accepted the document for processing. Proceed to step 7.
-- **`RETURNED`** — SRI rejected the document (invalid data, schema error, etc.). Fix the issue and [rebuild](endpoints/rebuild-invoice.md) before resending.
+- **`RECEIVED`** — El SRI aceptó el comprobante para su procesamiento. Continúa con el paso 7.
+- **`RETURNED`** — El SRI rechazó el comprobante (datos inválidos, error de esquema, etc.). Corrige el problema y [reconstruye](endpoints/rebuild-invoice.md) antes de reenviar.
 
 ---
 
-## 7. Check authorization
+## 7. Consulta la autorización
 
 ```http
 GET /v1/documents/:accessKey/authorize
 ```
 
-Queries the SRI for the authorization result.
+Consulta al SRI el resultado de la autorización.
 
-- **`AUTHORIZED`** — the invoice is legally valid. An email with the RIDE PDF and XML is sent to the buyer automatically.
-- **`NOT_AUTHORIZED`** — SRI processed the document but did not authorize it. [Rebuild](endpoints/rebuild-invoice.md) with corrected data and resend.
+- **`AUTHORIZED`** — La factura es legalmente válida. Se envía automáticamente un correo con el PDF del RIDE y el XML al comprador.
+- **`NOT_AUTHORIZED`** — El SRI procesó el comprobante pero no lo autorizó. [Reconstruye](endpoints/rebuild-invoice.md) con los datos corregidos y reenvía.
 
 ---
 
-## Going to production
+## Pasando a producción
 
-Once you have verified your email and tested your integration in sandbox:
+Una vez que hayas verificado tu correo y probado tu integración en sandbox:
 
 ```http
 POST /v1/tenants/promote
@@ -268,13 +276,13 @@ Content-Type: application/json
 {}
 ```
 
-An empty body is valid. Optionally supply `initialSequentials` to set starting sequential numbers per issuer × document type.
+Un cuerpo vacío es válido. Opcionalmente puedes proporcionar `initialSequentials` para establecer los números secuenciales iniciales por emisor y tipo de comprobante.
 
-This is **one-way** — there is no going back to sandbox. On success:
-- **All active sandbox API keys are revoked** and a production key is created for each one, preserving the same label
-- All new production tokens are returned in the response — **store them immediately, they are shown only once**
-- All branches are promoted at once — there is no per-branch promotion
-- All subsequent documents for any branch will be sent to the SRI production endpoint with `ambiente = 2`
+Esto es de **una sola dirección** — no hay vuelta atrás al sandbox. Al tener éxito:
+- **Todas las llaves API de sandbox activas se revocan** y se crea una llave de producción por cada una de ellas, conservando la misma etiqueta
+- Todos los nuevos tokens de producción se devuelven en la respuesta — **guárdalos de inmediato, se muestran solo una vez**
+- Todas las sucursales se promueven a la vez — no existe la promoción por sucursal
+- Todos los comprobantes posteriores de cualquier sucursal se enviarán al endpoint de producción del SRI con `ambiente = 2`
 
 ```json
 {
@@ -286,66 +294,66 @@ This is **one-way** — there is no going back to sandbox. On success:
 }
 ```
 
-Distribute each token to the integration that previously used the sandbox key with the same label.
+Distribuye cada token a la integración que anteriormente usaba la llave de sandbox con la misma etiqueta.
 
-> If your account status is `PENDING_VERIFICATION` (email not yet verified), this call returns `403`. Verify your email first.
+> Si el estado de tu cuenta es `PENDING_VERIFICATION` (correo aún no verificado), esta llamada devuelve `403`. Verifica tu correo primero.
 
 ---
 
-## Subscription tiers
+## Tiers de suscripción
 
-| Tier | Price/mo | Price/yr | Document quota **(per month)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
+| Plan | Precio/mes | Precio/año | Cuota de comprobantes **(por mes)** | Tipos de comprobante | Sucursales máx. | Puntos de emisión máx. por sucursal | Endpoints de webhook máx. | Límite de escritura |
 |---|---|---|---|---|---|---|---|---|
 | Free | $0 | $0 | 5 | Factura (`01`) | 1 | 1 | 1 | 10 req/min |
 | Starter | $19 | $190 | 200 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
 | Growth | $79 | $790 | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
-| Business | $199 | $1,990 | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 300 req/min |
+| Business | $199 | $1,990 | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Ilimitado | Ilimitado | 10 | 300 req/min |
 
-Yearly pricing is 2 months free vs. paying monthly — **choosing yearly only changes how often you pay, not how often your document quota resets.** The quota column is a per-month figure on every tier, whether you're billed monthly or yearly. See [Get Tiers](endpoints/get-tiers.md) for this same catalog as a public API response.
+El precio anual equivale a 2 meses gratis frente a pagar mensualmente — **elegir el pago anual solo cambia con qué frecuencia pagas, no con qué frecuencia se reinicia tu cuota de comprobantes.** La columna de cuota es una cifra mensual en cada tier, ya sea que te facturen mensual o anualmente. Consulta [Get Tiers](endpoints/get-tiers.md) para ver este mismo catálogo como una respuesta pública de la API.
 
-The document quota is shared across all branches and document types, and counts **production documents only** — sandbox/test documents never consume it. When you reach it, `POST /v1/documents` returns `402 QUOTA_EXCEEDED`. See "Upgrading to a paid plan" below.
+La cuota de comprobantes se comparte entre todas las sucursales y tipos de comprobante, y cuenta **solo los comprobantes de producción** — los comprobantes de sandbox/prueba nunca la consumen. Cuando la alcanzas, `POST /v1/documents` devuelve `402 QUOTA_EXCEEDED`. Consulta "Mejorando a un plan pagado" abajo.
 
-> **Current limitation:** the quota doesn't yet reset automatically at the start of each month — there is no monthly reset job today, so in practice it currently behaves as a one-time cumulative cap rather than a recurring monthly allowance. This is independent of [subscription renewals](#upgrading-to-a-paid-plan) (which keep your *billing* current) and is tracked separately for a future release.
+> **Limitación actual:** la cuota todavía no se reinicia automáticamente al comienzo de cada mes — hoy no existe un job de reinicio mensual, así que en la práctica actualmente se comporta como un tope acumulativo de una sola vez en lugar de una asignación mensual recurrente. Esto es independiente de las [renovaciones de suscripción](#mejorando-a-un-plan-pagado) (que mantienen tu *facturación* al día) y se rastrea por separado para una futura versión.
 
-### Upgrading to a paid plan
+### Mejorando a un plan pagado
 
-1. **Request a tier.** Two ways to do this:
-   - [`POST /v1/subscriptions`](endpoints/create-subscription.md) with `{ "tier": "STARTER" }` (or `GROWTH`/`BUSINESS`, optionally `"billingInterval": "YEARLY"`) — works even while still in sandbox, so you can start paying before you ever promote.
-   - Or call [`POST /v1/tenants/promote`](endpoints/promote-tenant.md) with the same body, to request a tier in the same call as promoting. Promotion to production happens immediately either way — you're never blocked waiting on payment.
+1. **Solicita un tier.** Dos formas de hacerlo:
+   - [`POST /v1/subscriptions`](endpoints/create-subscription.md) con `{ "tier": "STARTER" }` (o `GROWTH`/`BUSINESS`, opcionalmente `"billingInterval": "YEARLY"`) — funciona incluso mientras sigues en sandbox, así que puedes empezar a pagar antes de promoverte.
+   - O llama a [`POST /v1/tenants/promote`](endpoints/promote-tenant.md) con el mismo cuerpo, para solicitar un tier en la misma llamada que la promoción. La promoción a producción ocurre de inmediato de cualquier forma — nunca te quedas bloqueado esperando el pago.
 
-   Either way, the response includes `payment` and `bankTransfer` (bank name, account number, account holder) for the SPI transfer amount. If you already started a subscription via `POST /v1/subscriptions` and it's already `ACTIVE` by the time you promote, `promote`'s `tier`/`billingInterval` fields are ignored — it just surfaces that existing subscription instead.
-2. **Send the transfer.** If your bank lets you add a description or reference to the transfer, put this `payment.id` there (e.g. "Comprobify payment 18") — we don't generate any other order number, so this is the fastest way for your provider to match the transfer to your payment. It's optional (not every bank supports it), but worth doing when available.
-3. **Upload proof of it**: [`PATCH /v1/payments/:id/proof`](endpoints/submit-payment-proof.md) (multipart — a screenshot or PDF of the receipt, plus a required `referenceNumber` field for your bank's own transfer reference), using the `payment.id` from step 1.
-4. **Wait for review.** Your provider checks the proof against the bank and verifies or rejects it — you'll get an email either way (and a [notification](endpoints/notifications.md), fanned out to your webhooks if you have any registered), no need to poll. Once verified, they self-bill and authorize the invoice for that period; `subscriptionTier`/`documentQuota` (via [`GET /v1/tenants/me`](endpoints/tenant-me.md)) update automatically the moment that lands. [`GET /v1/subscriptions/me`](endpoints/get-my-subscriptions.md) shows the full in-between history any time.
-5. **If it's rejected**, the email explains why in plain language, and `GET /v1/subscriptions/me` shows the same reason as a stable `rejection_reason_code` (e.g. `TRANSFER_NOT_FOUND`) for your own UI to map to a message. Fix whatever it flagged and repeat steps 2–3 for the *same* `payment.id` — rejection isn't a dead end.
-6. Until verified and authorized, you're on FREE limits in production — nothing is blocked, you just don't have the higher quota yet.
+   De cualquier forma, la respuesta incluye `payment` y `bankTransfer` (nombre del banco, número de cuenta, titular de la cuenta) para el monto de la transferencia SPI. Si ya iniciaste una suscripción vía `POST /v1/subscriptions` y ya está `ACTIVE` para cuando te promuevas, los campos `tier`/`billingInterval` de `promote` se ignoran — simplemente muestra esa suscripción existente en su lugar.
+2. **Envía la transferencia.** Si tu banco te permite agregar una descripción o referencia a la transferencia, coloca ahí este `payment.id` (p. ej. "Comprobify payment 18") — no generamos ningún otro número de orden, así que esta es la forma más rápida para que tu proveedor relacione la transferencia con tu pago. Es opcional (no todos los bancos lo permiten), pero vale la pena hacerlo cuando esté disponible.
+3. **Sube el comprobante de la transferencia**: [`PATCH /v1/payments/:id/proof`](endpoints/submit-payment-proof.md) (multipart — una captura de pantalla o PDF del recibo, más un campo `referenceNumber` requerido con la referencia de transferencia propia de tu banco), usando el `payment.id` del paso 1.
+4. **Espera la revisión.** Tu proveedor verifica el comprobante contra el banco y lo aprueba o lo rechaza — recibirás un correo en cualquier caso (y una [notificación](endpoints/notifications.md), distribuida a tus webhooks si tienes alguno registrado), sin necesidad de sondear. Una vez verificado, ellos se autofacturan y autorizan el comprobante correspondiente a ese período; `subscriptionTier`/`documentQuota` (vía [`GET /v1/tenants/me`](endpoints/tenant-me.md)) se actualizan automáticamente en cuanto eso ocurre. [`GET /v1/subscriptions/me`](endpoints/get-my-subscriptions.md) muestra el historial completo intermedio en cualquier momento.
+5. **Si es rechazado**, el correo explica por qué en lenguaje sencillo, y `GET /v1/subscriptions/me` muestra la misma razón como un `rejection_reason_code` estable (p. ej. `TRANSFER_NOT_FOUND`) para que tu propia interfaz lo asocie con un mensaje. Corrige lo que se señaló y repite los pasos 2-3 para el mismo `payment.id` — un rechazo no es un callejón sin salida.
+6. Hasta que se verifique y autorice, estás en los límites de FREE en producción — nada se bloquea, simplemente todavía no tienes la cuota más alta.
 
-**Renewing.** Your subscription isn't a one-time payment — `current_period_end` is a real recurring billing date. About 7 days before it, you'll get an email (and notification) that a new `RENEWAL` payment is open, with the same bank transfer instructions as before; repeat steps 2–3 above using that payment's id. If you don't renew, your plan keeps working as-is until about 7 days *past* `current_period_end`, at which point you're automatically moved back to FREE (with an email explaining why) — you can always start a fresh subscription afterward via step 1.
+**Renovando.** Tu suscripción no es un pago único — `current_period_end` es una fecha de facturación recurrente real. Unos 7 días antes de esa fecha, recibirás un correo (y una notificación) de que hay un nuevo pago `RENEWAL` abierto, con las mismas instrucciones de transferencia bancaria que antes; repite los pasos 2-3 de arriba usando el id de ese pago. Si no renuevas, tu plan sigue funcionando tal cual hasta unos 7 días *después* de `current_period_end`, momento en el que se te mueve automáticamente de vuelta a FREE (con un correo explicando por qué) — siempre puedes iniciar una nueva suscripción después mediante el paso 1.
 
-Attempting to create a branch beyond the tier limit returns `402 BRANCH_LIMIT_REACHED` / `ISSUE_POINT_LIMIT_REACHED`. Attempting to enable a document type your plan doesn't include (e.g. credit notes on Free/Starter) returns `402 DOCUMENT_TYPE_NOT_IN_TIER` — see [Issuer Document Types](endpoints/document-types.md).
-
----
-
-## Idempotency
-
-`POST /v1/documents` accepts an optional `Idempotency-Key` header. If you retry the same request after a timeout, send the same key — the API returns the existing document instead of creating a duplicate. Use a unique key per intended invoice (e.g. a UUID), and keep it consistent across retries.
+Intentar crear una sucursal más allá del límite del tier devuelve `402 BRANCH_LIMIT_REACHED` / `ISSUE_POINT_LIMIT_REACHED`. Intentar habilitar un tipo de comprobante que tu plan no incluye (p. ej. notas de crédito en Free/Starter) devuelve `402 DOCUMENT_TYPE_NOT_IN_TIER` — consulta [Issuer Document Types](endpoints/document-types.md).
 
 ---
 
-## Rate Limiting
+## Idempotencia
 
-Requests are rate-limited per API key based on your subscription tier (see table above). When you exceed the limit, the API returns [`429 Too Many Requests`](errors/too-many-requests.md). Implement exponential backoff: wait 1s, then 2s, then 4s before retrying.
-
-`POST /v1/register` is additionally limited to **5 requests per hour per IP address**, regardless of tier.
+`POST /v1/documents` acepta un encabezado opcional `Idempotency-Key`. Si reintentas la misma solicitud después de un timeout, envía la misma llave — la API devuelve el comprobante existente en lugar de crear un duplicado. Usa una llave única por factura que pretendas crear (p. ej. un UUID), y mantenla consistente entre reintentos.
 
 ---
 
-## Document statuses
+## Límite de tasa
 
-| Status | Meaning | Next step |
+Las solicitudes tienen un límite de tasa por llave API según tu tier de suscripción (ver tabla arriba). Cuando excedes el límite, la API devuelve [`429 Too Many Requests`](errors/too-many-requests.md). Implementa retroceso exponencial: espera 1s, luego 2s, luego 4s antes de reintentar.
+
+`POST /v1/register` tiene además un límite de **5 solicitudes por hora por dirección IP**, sin importar el tier.
+
+---
+
+## Estados del comprobante
+
+| Estado | Significado | Siguiente paso |
 |---|---|---|
-| `SIGNED` | Created and signed, not yet sent to SRI | Send to SRI |
-| `RECEIVED` | Accepted by SRI for processing | Check authorization |
-| `RETURNED` | SRI rejected the document | Rebuild and resend |
-| `AUTHORIZED` | SRI authorized — legally valid | Done |
-| `NOT_AUTHORIZED` | SRI did not authorize | Rebuild and resend |
+| `SIGNED` | Creado y firmado, aún no enviado al SRI | Enviar al SRI |
+| `RECEIVED` | Aceptado por el SRI para procesamiento | Consultar autorización |
+| `RETURNED` | El SRI rechazó el comprobante | Reconstruir y reenviar |
+| `AUTHORIZED` | Autorizado por el SRI — legalmente válido | Completado |
+| `NOT_AUTHORIZED` | El SRI no lo autorizó | Reconstruir y reenviar |

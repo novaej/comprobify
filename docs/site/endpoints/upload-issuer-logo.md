@@ -1,30 +1,30 @@
-# Upload Issuer Logo
+# Subir Logo del Emisor
 
-Uploads or replaces the logo for an issuer. The logo is stored in the database and rendered automatically in the top-left corner of every RIDE PDF generated for that issuer — including PDFs sent as email attachments on authorization.
+Sube o reemplaza el logo de un emisor. El logo se almacena en la base de datos y se renderiza automáticamente en la esquina superior izquierda de cada RIDE en PDF generado para ese emisor — incluyendo los PDF enviados como adjuntos de correo al momento de la autorización.
 
 ```
 PATCH /v1/issuers/:id/logo
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id (from `GET /v1/issuers`) |
+| `id` | Id numérico del emisor (obtenido de `GET /v1/issuers`) |
 
-## Request body
+## Cuerpo de la solicitud
 
 `multipart/form-data`
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `logo` | file | Yes | Logo image. Accepted formats: **PNG** (recommended), JPEG, GIF. Max size: **500 KB**. Recommended dimensions: **600 × 170 px**. |
+| `logo` | archivo | Sí | Imagen del logo. Formatos aceptados: **PNG** (recomendado), JPEG, GIF. Tamaño máximo: **500 KB**. Dimensiones recomendadas: **600 × 170 px**. |
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -32,39 +32,39 @@ PATCH /v1/issuers/:id/logo
 { "ok": true }
 ```
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
-| `400` | `INVALID_FILE_UPLOAD` | No file provided, file exceeds 500 KB, or unsupported MIME type |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `ISSUER_FORBIDDEN` | Issuer belongs to a different tenant |
-| `404` | `ISSUER_NOT_FOUND` | Issuer not found or inactive |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `400` | `INVALID_FILE_UPLOAD` | No se proporcionó ningún archivo, el archivo supera los 500 KB, o el tipo MIME no es compatible |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
+| `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
+| `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
 
-## Notes
+## Notas
 
-- Calling this endpoint again overwrites the existing logo — there is no separate delete endpoint; to remove a logo, re-register or contact support.
-- The logo is embedded directly in the PDF at render time. No public URL is exposed.
-- The logo can also be supplied at registration time via the optional `logo` file field on `POST /v1/register`.
+- Volver a llamar a este endpoint sobrescribe el logo existente — no existe un endpoint de eliminación por separado; para quitar un logo, vuelve a registrarte o contacta a soporte.
+- El logo se incrusta directamente en el PDF al momento de renderizarlo. No se expone ninguna URL pública.
+- El logo también se puede proporcionar en el momento del registro mediante el campo opcional de archivo `logo` en `POST /v1/register`.
 
-## Logo sizing guide
+## Guía de dimensiones del logo
 
-The logo renders in the top-left cell of the RIDE PDF header, scaled to fit a **213 × 60 pt** bounding box (aspect ratio ~3.5:1). The image is scaled proportionally — it will never be stretched.
+El logo se renderiza en la celda superior izquierda del encabezado del RIDE en PDF, escalado para ajustarse a un cuadro delimitador de **213 × 60 pt** (relación de aspecto ~3.5:1). La imagen se escala proporcionalmente — nunca se estira.
 
-| | Value |
+| | Valor |
 |---|---|
-| **Recommended size** | 600 × 170 px |
-| **Maximum useful size** | 900 × 250 px (larger adds file size without visible quality gain) |
-| **Minimum size** | 213 × 60 px |
-| **Aspect ratio** | ~3.5:1 (landscape) |
-| **Recommended format** | PNG — supports transparency, lossless, ideal for logos with text or sharp edges |
-| **Accepted formats** | PNG, JPEG, GIF |
-| **Max file size** | 500 KB |
+| **Tamaño recomendado** | 600 × 170 px |
+| **Tamaño máximo útil** | 900 × 250 px (un tamaño mayor solo agrega peso al archivo sin ganancia visible de calidad) |
+| **Tamaño mínimo** | 213 × 60 px |
+| **Relación de aspecto** | ~3.5:1 (horizontal) |
+| **Formato recomendado** | PNG — admite transparencia, sin pérdida, ideal para logos con texto o bordes definidos |
+| **Formatos aceptados** | PNG, JPEG, GIF |
+| **Tamaño máximo de archivo** | 500 KB |
 
-**Tips:**
-- Use PNG with a transparent background so the logo blends naturally with the white PDF background.
-- Avoid portrait-oriented images — they will be scaled down to fit the 60 pt height and appear narrow.
-- JPEG is fine for photographic logos but may show compression artefacts on text or sharp edges.
-- GIF is accepted but limited to 256 colours and no soft transparency — not recommended for modern logos.
+**Consejos:**
+- Usa PNG con fondo transparente para que el logo se integre naturalmente con el fondo blanco del PDF.
+- Evita imágenes en orientación vertical — se escalarán hacia abajo para ajustarse a la altura de 60 pt y se verán angostas.
+- JPEG es adecuado para logos fotográficos, pero puede mostrar artefactos de compresión en texto o bordes definidos.
+- GIF es aceptado pero está limitado a 256 colores y sin transparencia suave — no se recomienda para logos modernos.

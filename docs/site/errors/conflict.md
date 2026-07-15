@@ -1,28 +1,28 @@
 # Conflict
 
-**Status:** `409 Conflict`
+**Estado HTTP:** `409 Conflict`
 
-A uniqueness or state conflict prevented the operation from completing.
+Un conflicto de unicidad o de estado impidió que la operación se completara.
 
-## Codes
+## Códigos
 
 ### `ALREADY_VERIFIED`
 
-`POST /v1/resend-verification` was called for an email address whose account is already active (email already verified). There is nothing to resend.
+Se llamó a `POST /v1/resend-verification` para una dirección de correo cuya cuenta ya está activa (correo ya verificado). No hay nada que reenviar.
 
-**What to do:** No action needed — the account is verified and can be used normally.
+**Qué hacer:** No se requiere ninguna acción — la cuenta está verificada y puede usarse con normalidad.
 
-### `CONFLICT` (fallback)
+### `CONFLICT` (respaldo)
 
-An `Idempotency-Key` header was supplied with a value that has already been used for a **different** request payload, or another uniqueness constraint was violated. Read `detail`.
+Se proporcionó un encabezado `Idempotency-Key` con un valor que ya fue usado para un payload de solicitud **diferente**, o se violó otra restricción de unicidad. Lee `detail`.
 
-**What to do:**
+**Qué hacer:**
 
-- **Idempotency key reuse** — Each `Idempotency-Key` must be unique per intended invoice. If you are retrying the **same** invoice after a failure, reuse the same key **and** the same payload — the API will return the existing document (200). If you intend to create a new invoice, generate a fresh key (e.g. a new UUID).
+- **Reutilización de llave de idempotencia** — Cada `Idempotency-Key` debe ser única por comprobante que se pretende crear. Si estás reintentando la **misma** factura después de un fallo, reutiliza la misma llave **y** el mismo payload — la API devolverá el comprobante existente (200). Si pretendes crear una factura nueva, genera una llave nueva (p. ej. un nuevo UUID).
 
-- **Other conflicts** — e.g. duplicate issuer `(branch_code, issue_point_code)` pair. Read `detail` for the specific constraint.
+- **Otros conflictos** — p. ej. un par duplicado de `(branch_code, issue_point_code)` de emisor. Lee `detail` para conocer la restricción específica.
 
-## Example responses
+## Ejemplos de respuesta
 
 ```json
 {
@@ -30,7 +30,7 @@ An `Idempotency-Key` header was supplied with a value that has already been used
   "title":    "Conflict",
   "status":   409,
   "code":     "ALREADY_VERIFIED",
-  "detail":   "This account is already verified.",
+  "detail":   "Esta cuenta ya está verificada.",
   "instance": "/v1/resend-verification"
 }
 ```
@@ -41,7 +41,7 @@ An `Idempotency-Key` header was supplied with a value that has already been used
   "title":    "Conflict",
   "status":   409,
   "code":     "CONFLICT",
-  "detail":   "Idempotency-Key reuse: the request body does not match the original request",
+  "detail":   "Reutilización de Idempotency-Key: el cuerpo de la solicitud no coincide con la solicitud original",
   "instance": "/v1/documents"
 }
 ```

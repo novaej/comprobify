@@ -1,28 +1,28 @@
-# Cancel Subscription
+# Cancelar Suscripción
 
-Schedules a cancellation at the end of the current billing period. No refund is issued — the subscription keeps running at the current tier until `current_period_end`, then the tenant is dropped to FREE and the subscription is closed.
+Programa una cancelación para el final del período de facturación actual. No se emite ningún reembolso — la suscripción sigue activa en el plan actual hasta `current_period_end`, y luego el tenant pasa a FREE y la suscripción se cierra.
 
 ```
 DELETE /v1/subscriptions
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-Requires an `ACTIVE` subscription and a production API key — sandbox tenants must [promote first](promote-tenant.md). If you want to move to a lower **paid** tier instead of cancelling entirely, use [`POST /v1/subscriptions/change-tier`](change-tier.md).
+Requiere una suscripción `ACTIVE` y una llave API de producción — los tenants en sandbox deben [promoverse primero](promote-tenant.md). Si en lugar de cancelar por completo deseas moverte a un plan **pago** inferior, usa [`POST /v1/subscriptions/change-tier`](change-tier.md).
 
-## How it works
+## Cómo funciona
 
-Calling this endpoint sets `pending_tier = 'FREE'` on your active subscription and returns immediately — it does **not** cancel access on the spot. The subscription continues as normal until `current_period_end`. The provider's daily scheduled job (`POST /v1/admin/jobs/subscriptions`) then applies the cancellation: your tier drops to FREE, your `document_quota` resets to the FREE allowance, and the subscription status becomes `CANCELLED`.
+Llamar a este endpoint establece `pending_tier = 'FREE'` en tu suscripción activa y retorna de inmediato — **no** cancela el acceso en el momento. La suscripción continúa con normalidad hasta `current_period_end`. El job programado diario del proveedor (`POST /v1/admin/jobs/subscriptions`) aplica entonces la cancelación: tu plan baja a FREE, tu `document_quota` se reinicia a la asignación de FREE, y el estado de la suscripción pasa a `CANCELLED`.
 
-There is no refund for the remaining time in the current period.
+No hay reembolso por el tiempo restante del período actual.
 
-## Request body
+## Cuerpo de la solicitud
 
-None.
+Ninguno.
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -43,21 +43,21 @@ None.
 }
 ```
 
-`effectiveAt` is the `current_period_end` at which the cancellation will be applied. Your subscription's `pending_tier` field will read `"FREE"` until then.
+`effectiveAt` es el `current_period_end` en el que se aplicará la cancelación. El campo `pending_tier` de tu suscripción mostrará `"FREE"` hasta ese momento.
 
-## What happens next
+## Qué sucede después
 
-There is no notification when the cancellation is applied — poll [`GET /v1/subscriptions/me`](get-my-subscriptions.md) to confirm the status flipped to `CANCELLED`, or [`GET /v1/tenants/me`](tenant-me.md) to confirm your tier and quota dropped to the FREE values.
+No hay ninguna notificación cuando se aplica la cancelación — consulta periódicamente [`GET /v1/subscriptions/me`](get-my-subscriptions.md) para confirmar que el estado cambió a `CANCELLED`, o [`GET /v1/tenants/me`](tenant-me.md) para confirmar que tu plan y cuota bajaron a los valores de FREE.
 
-No renewal reminder will be issued for a pending-cancellation subscription.
+No se emitirá ningún recordatorio de renovación para una suscripción con cancelación pendiente.
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `REQUIRES_PRODUCTION` | Tenant is still in sandbox — promote to production first |
-| `409` | `NO_ACTIVE_SUBSCRIPTION` | You have no `ACTIVE` subscription to cancel |
-| `409` | `CANCELLATION_ALREADY_PENDING` | A cancellation is already scheduled for this subscription |
-| `409` | `TIER_CHANGE_ALREADY_PENDING` | A paid-tier downgrade is already scheduled, or an upgrade payment is already in flight — resolve it first |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `403` | `REQUIRES_PRODUCTION` | El tenant sigue en sandbox — promuévelo a producción primero |
+| `409` | `NO_ACTIVE_SUBSCRIPTION` | No tienes ninguna suscripción `ACTIVE` para cancelar |
+| `409` | `CANCELLATION_ALREADY_PENDING` | Ya hay una cancelación programada para esta suscripción |
+| `409` | `TIER_CHANGE_ALREADY_PENDING` | Ya hay una degradación de plan pago programada, o un pago de mejora de plan ya está en curso — resuélvelo primero |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

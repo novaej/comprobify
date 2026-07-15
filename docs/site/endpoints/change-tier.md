@@ -1,39 +1,39 @@
-# Change Tier (Upgrade/Downgrade)
+# Cambiar de Plan (Mejora/Degradación)
 
-Changes the tier and/or billing interval on your existing `ACTIVE` subscription.
+Cambia el plan y/o el intervalo de facturación de tu suscripción `ACTIVE` existente.
 
 ```
 POST /v1/subscriptions/change-tier
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-Requires an `ACTIVE` subscription already in place — promote with a paid tier first (see [Promote Tenant](promote-tenant.md)) and complete that initial payment review before changing tiers. To cancel entirely and return to FREE, use [`DELETE /v1/subscriptions`](cancel-subscription.md) instead.
+Requiere que ya exista una suscripción `ACTIVE` — promociona primero con un plan pago (consulta [Promover Tenant](promote-tenant.md)) y completa esa revisión de pago inicial antes de cambiar de plan. Para cancelar por completo y volver a FREE, usa [`DELETE /v1/subscriptions`](cancel-subscription.md) en su lugar.
 
-## When to call this
+## Cuándo llamar a esto
 
-No payment gateway exists yet, so this rides the same manual proof-upload-and-review pipeline as the initial subscription rather than charging anything automatically. Which of three behaviors you get depends on whether the tier changes, the billing interval changes, or both:
+Aún no existe una pasarela de pago, así que esto se apoya en el mismo flujo manual de carga y revisión de comprobante que la suscripción inicial, en lugar de cobrar algo automáticamente. Cuál de estos tres comportamientos obtienes depende de si cambia el plan, el intervalo de facturación, o ambos:
 
-- **Same-interval upgrade** (target tier's price higher than your current one, `billingInterval` omitted or unchanged) takes effect immediately, gated on payment. The price difference is prorated by the fraction of your current billing period remaining — e.g. upgrading exactly halfway through a monthly cycle charges roughly half the price difference. The response includes a `payment` and `bankTransfer` instructions, just like the initial subscription; upload proof via [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md) (the same endpoint, no new upload flow). Your provider reviews it and links the self-billed invoice the same way as the initial activation — once SRI authorizes that invoice, your tier flips immediately and you keep the rest of the current billing period at the new tier (it doesn't restart). If the prorated amount rounds to **$0** (almost no time left in the period), the upgrade applies immediately with no payment step at all — there'd be nothing to send proof of.
-- **Same-interval downgrade** (target tier's price lower, `billingInterval` omitted or unchanged) is scheduled, not immediate, and needs no payment — you've already paid for the current period at the higher tier. Your tier and quota stay exactly as they are until `current_period_end`. The provider's scheduled job applies it automatically once that date passes.
-- **Any billing-interval change** (e.g. monthly → yearly, or vice versa — regardless of whether the tier also changes) is always **deferred to `current_period_end` and billed at the new tier+interval's full price, never prorated**. Mismatched cadences can't be neatly credited against each other, so your current period simply runs out as already paid for, and the new cadence starts its own fresh, fully-paid period. You still upload proof and go through review the same way, but the tier/interval switch only takes effect once `current_period_end` arrives — even if the tier is technically going *up*. For example, switching from monthly GROWTH to yearly STARTER charges the full yearly-STARTER price and takes effect once your current monthly GROWTH period ends, not immediately.
+- **Mejora en el mismo intervalo** (el precio del plan de destino es mayor que el actual, `billingInterval` se omite o no cambia) se aplica de inmediato, condicionada al pago. La diferencia de precio se prorratea según la fracción restante de tu período de facturación actual — por ejemplo, mejorar exactamente a la mitad de un ciclo mensual cobra aproximadamente la mitad de la diferencia de precio. La respuesta incluye un `payment` e instrucciones de `bankTransfer`, igual que la suscripción inicial; sube el comprobante mediante [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md) (el mismo endpoint, sin un flujo de carga nuevo). Tu proveedor lo revisa y vincula la factura autofacturada de la misma forma que la activación inicial — una vez que el SRI autoriza esa factura, tu plan cambia de inmediato y conservas el resto del período de facturación actual en el nuevo plan (no se reinicia). Si el monto prorrateado se redondea a **$0** (casi no queda tiempo en el período), la mejora se aplica de inmediato sin ningún paso de pago — no habría nada de qué presentar comprobante.
+- **Degradación en el mismo intervalo** (el precio del plan de destino es menor, `billingInterval` se omite o no cambia) se programa, no es inmediata, y no requiere pago — ya pagaste por el período actual en el plan superior. Tu plan y cuota se mantienen exactamente igual hasta `current_period_end`. El job programado del proveedor lo aplica automáticamente una vez que pasa esa fecha.
+- **Cualquier cambio de intervalo de facturación** (por ejemplo, mensual → anual, o viceversa — sin importar si el plan también cambia) siempre se **difiere hasta `current_period_end` y se cobra al precio completo del nuevo plan+intervalo, nunca prorrateado**. Las cadencias distintas no pueden acreditarse limpiamente entre sí, así que tu período actual simplemente se agota tal como ya fue pagado, y la nueva cadencia inicia su propio período nuevo, totalmente pagado. Igual subes el comprobante y pasas por la revisión de la misma forma, pero el cambio de plan/intervalo solo entra en vigor una vez que llega `current_period_end` — incluso si el plan técnicamente está *subiendo*. Por ejemplo, cambiar de GROWTH mensual a STARTER anual cobra el precio completo de STARTER anual y entra en vigor una vez que termina tu período actual de GROWTH mensual, no de inmediato.
 
-Only one tier/interval change can be outstanding at a time — request another before the current one resolves and you'll get `409 TIER_CHANGE_ALREADY_PENDING`.
+Solo puede haber un cambio de plan/intervalo pendiente a la vez — si solicitas otro antes de que el actual se resuelva, obtendrás `409 TIER_CHANGE_ALREADY_PENDING`.
 
-**In sandbox, all three behaviors above collapse into two simpler ones.** A sandbox subscription's billing period is discarded entirely the moment you [promote](promote-tenant.md) — there's nothing meaningful to prorate against or defer a change to. So while you're still in sandbox: a downgrade applies **immediately and for free**, and everything else (an upgrade, or any billing-interval change) is billed at the target plan's **full price, never prorated**, and applies **immediately** once its self-billed invoice authorizes — never scheduled for a period boundary. Once you promote to production, the three same-interval/interval-change behaviors described above take over as normal.
+**En sandbox, los tres comportamientos anteriores se reducen a dos más simples.** El período de facturación de una suscripción en sandbox se descarta por completo en el momento en que [promocionas](promote-tenant.md) — no hay nada significativo contra qué prorratear o a qué diferir un cambio. Entonces, mientras sigas en sandbox: una degradación se aplica **de inmediato y sin costo**, y todo lo demás (una mejora, o cualquier cambio de intervalo de facturación) se cobra al **precio completo** del plan de destino, nunca prorrateado, y se aplica **de inmediato** una vez que su factura autofacturada se autoriza — nunca se programa para el límite de un período. Una vez que promociones a producción, los tres comportamientos descritos anteriormente (mismo intervalo/cambio de intervalo) toman el control normalmente.
 
-## Request body
+## Cuerpo de la solicitud
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `tier` | string | Yes | `STARTER`, `GROWTH`, or `BUSINESS`. |
-| `billingInterval` | string | No | `MONTHLY` or `YEARLY`. Omit to keep your subscription's current interval. At least one of `tier`/`billingInterval` must actually change from your current subscription, or you'll get `400 TIER_CHANGE_NO_OP`. |
+| `tier` | string | Sí | `STARTER`, `GROWTH`, o `BUSINESS`. |
+| `billingInterval` | string | No | `MONTHLY` o `YEARLY`. Omítelo para mantener el intervalo actual de tu suscripción. Al menos uno de `tier`/`billingInterval` debe cambiar realmente respecto a tu suscripción actual, o obtendrás `400 TIER_CHANGE_NO_OP`. |
 
-## Response
+## Respuesta
 
-**201 Created** — same-interval upgrade (payment required)
+**201 Created** — mejora en el mismo intervalo (pago requerido)
 
 ```json
 {
@@ -67,7 +67,7 @@ Only one tier/interval change can be outstanding at a time — request another b
 }
 ```
 
-**201 Created** — same-interval upgrade applying immediately (prorated amount rounded to $0)
+**201 Created** — mejora en el mismo intervalo aplicándose de inmediato (monto prorrateado redondeado a $0)
 
 ```json
 {
@@ -81,7 +81,7 @@ Only one tier/interval change can be outstanding at a time — request another b
 }
 ```
 
-**201 Created** — same-interval downgrade (scheduled, no payment)
+**201 Created** — degradación en el mismo intervalo (programada, sin pago)
 
 ```json
 {
@@ -95,7 +95,7 @@ Only one tier/interval change can be outstanding at a time — request another b
 }
 ```
 
-**201 Created** — billing-interval change (deferred, full price, tier example shown is a downgrade)
+**201 Created** — cambio de intervalo de facturación (diferido, precio completo, el ejemplo de plan mostrado es una degradación)
 
 ```json
 {
@@ -129,21 +129,21 @@ Only one tier/interval change can be outstanding at a time — request another b
 }
 ```
 
-The subscription itself (`tier`/`billing_interval`) does **not** change yet in this response — it only flips once the payment is verified, the self-billed invoice is authorized, and `current_period_end` arrives.
+La suscripción en sí (`tier`/`billing_interval`) **no** cambia todavía en esta respuesta — solo cambia una vez que el pago se verifica, la factura autofacturada se autoriza, y llega `current_period_end`.
 
-## What happens next
+## Qué sucede después
 
-You'll get a `PAYMENT_VERIFIED`/`PAYMENT_REJECTED` notification and email when a payment's review completes (see [Notifications](notifications.md)) — there's still no notification for the moment a same-interval downgrade's or a billing-interval change's tier/interval actually flips, since nothing was paid or rejected at that exact moment for one to fire on. Poll [`GET /v1/subscriptions/me`](get-my-subscriptions.md) for status, [`GET /v1/tenants/me`](tenant-me.md) for just the resulting tier/quota once it lands, or [`GET /v1/tenants/events`](tenant-events.md) to see the full history of tier/interval changes over time (`TIER_CHANGE_REQUESTED` → `TIER_CHANGE_SCHEDULED` → `TIER_CHANGED`, each with `fromBillingInterval`/`toBillingInterval` in `detail`).
+Recibirás una notificación y un correo `PAYMENT_VERIFIED`/`PAYMENT_REJECTED` cuando se complete la revisión de un pago (consulta [Notifications](notifications.md)) — aún no existe notificación para el momento exacto en que el plan/intervalo de una degradación en el mismo intervalo o de un cambio de intervalo de facturación realmente cambia, ya que nada fue pagado o rechazado en ese instante exacto para dispararla. Consulta periódicamente [`GET /v1/subscriptions/me`](get-my-subscriptions.md) para conocer el estado, [`GET /v1/tenants/me`](tenant-me.md) solo para el plan/cuota resultante una vez aplicado, o [`GET /v1/tenants/events`](tenant-events.md) para ver el historial completo de cambios de plan/intervalo a lo largo del tiempo (`TIER_CHANGE_REQUESTED` → `TIER_CHANGE_SCHEDULED` → `TIER_CHANGED`, cada uno con `fromBillingInterval`/`toBillingInterval` en `detail`).
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `INVALID_TIER` | `tier` is not `STARTER`, `GROWTH`, or `BUSINESS` |
-| `400` | `INVALID_BILLING_INTERVAL` | `billingInterval` is supplied but is not `MONTHLY` or `YEARLY` |
-| `400` | `TIER_CHANGE_NO_OP` | Both `tier` and the resolved `billingInterval` match your subscription's current values |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `404` | `NOT_FOUND` | Tenant could not be resolved (should not normally happen for an authenticated request) |
-| `409` | `NO_ACTIVE_SUBSCRIPTION` | You have no `ACTIVE` subscription — promote with a paid tier and complete that payment review first |
-| `409` | `TIER_CHANGE_ALREADY_PENDING` | A change is already scheduled, or a payment is already in flight, for this subscription |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `INVALID_TIER` | `tier` no es `STARTER`, `GROWTH`, ni `BUSINESS` |
+| `400` | `INVALID_BILLING_INTERVAL` | Se proporciona `billingInterval` pero no es `MONTHLY` ni `YEARLY` |
+| `400` | `TIER_CHANGE_NO_OP` | Tanto `tier` como el `billingInterval` resuelto coinciden con los valores actuales de tu suscripción |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `404` | `NOT_FOUND` | No se pudo resolver el tenant (normalmente no debería ocurrir en una solicitud autenticada) |
+| `409` | `NO_ACTIVE_SUBSCRIPTION` | No tienes ninguna suscripción `ACTIVE` — promociona con un plan pago y completa esa revisión de pago primero |
+| `409` | `TIER_CHANGE_ALREADY_PENDING` | Ya hay un cambio programado, o un pago ya está en curso, para esta suscripción |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

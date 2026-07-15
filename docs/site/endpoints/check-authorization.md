@@ -1,26 +1,26 @@
-# Check Authorization
+# Consultar Autorización
 
-Queues an authorization check for a previously submitted document. This endpoint is asynchronous — it does not query SRI itself.
+Encola una verificación de autorización para un comprobante previamente enviado. Este endpoint es asíncrono — no consulta al SRI directamente.
 
 ```
 GET /v1/documents/:accessKey/authorize
 ```
 
-The document must be in `RECEIVED` status. A successful call queues the check and returns immediately — it does **not** wait for SRI's response. A standalone worker process picks up the queued job and calls SRI; the document eventually moves to `AUTHORIZED` (an email with the RIDE PDF and signed XML is automatically sent to the buyer's email address, and a `DOCUMENT_AUTHORIZED` notification is created — which fires a webhook to any registered endpoint subscribed to that event type, see [Webhooks](webhooks.md)) or `NOT_AUTHORIZED` (the document must be rebuilt). You don't have to call this endpoint at all to eventually see the transition — a periodic reconciliation job also queues an authorization check for any `RECEIVED` document past a short delay, so the eventual outcome and its notification/webhook still arrive even if no client ever polls.
+El comprobante debe estar en estado `RECEIVED`. Una llamada exitosa encola la verificación y retorna de inmediato — **no** espera la respuesta del SRI. Un proceso worker independiente recoge el trabajo encolado y llama al SRI; el comprobante eventualmente pasa a `AUTHORIZED` (se envía automáticamente un correo con el PDF del RIDE y el XML firmado a la dirección de correo del comprador, y se crea una notificación `DOCUMENT_AUTHORIZED` — que dispara un webhook hacia cualquier endpoint registrado y suscrito a ese tipo de evento, consulta [Webhooks](webhooks.md)) o a `NOT_AUTHORIZED` (el comprobante debe reconstruirse). No es necesario llamar a este endpoint en absoluto para eventualmente ver la transición — un job de reconciliación periódico también encola una verificación de autorización para cualquier comprobante `RECEIVED` que supere un breve retraso, así que el resultado eventual y su notificación/webhook igual llegan aunque ningún cliente lo consulte.
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `accessKey` | The 49-digit access key of the document |
+| `accessKey` | La clave de acceso de 49 dígitos del comprobante |
 
-## Response
+## Respuesta
 
-**202 Accepted** — confirms the check was queued, not the outcome.
+**202 Accepted** — confirma que la verificación fue encolada, no el resultado.
 
 ```json
 {
@@ -36,18 +36,18 @@ The document must be in `RECEIVED` status. A successful call queues the check an
 }
 ```
 
-`status` here is still `"RECEIVED"` — this response never reflects the authorization outcome. Poll `GET /v1/documents/:accessKey` afterward, or watch for the `DOCUMENT_AUTHORIZED` notification/webhook. If the document ends up `NOT_AUTHORIZED`, use [Rebuild Invoice](rebuild-invoice.md) to correct and resubmit.
+`status` aquí sigue siendo `"RECEIVED"` — esta respuesta nunca refleja el resultado de la autorización. Consulta después `GET /v1/documents/:accessKey`, o espera la notificación/webhook `DOCUMENT_AUTHORIZED`. Si el comprobante termina en `NOT_AUTHORIZED`, usa [Reconstruir Factura](rebuild-invoice.md) para corregir y reenviar.
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `BAD_REQUEST` | 400 | Document is not in `RECEIVED` status |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `ACCOUNT_SUSPENDED` | 403 | Tenant account is suspended — unlike most other document read endpoints (list, get, RIDE, XML, events, credit-notes), this one stays blocked while suspended because it still results in an SRI call and the authorization email being sent (just asynchronously now, via the worker) — this is "using" the service, not passive viewing; see the [error catalogue](../errors/index.md) |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
-| `NOT_FOUND` | 404 | Document not found |
+| `BAD_REQUEST` | 400 | El header `X-Issuer-Id` falta o está mal formado |
+| `BAD_REQUEST` | 400 | El comprobante no está en estado `RECEIVED` |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o desajuste de ambiente (llave sandbox apuntando a un tenant de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `ACCOUNT_SUSPENDED` | 403 | La cuenta del tenant está suspendida — a diferencia de la mayoría de los demás endpoints de lectura de comprobantes (listar, obtener, RIDE, XML, eventos, notas de crédito), este permanece bloqueado durante la suspensión porque de todos modos resulta en una llamada al SRI y en el envío del correo de autorización (solo que ahora de forma asíncrona, vía el worker) — esto es "usar" el servicio, no una visualización pasiva; consulta el [catálogo de errores](../errors/index.md) |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `NOT_FOUND` | 404 | Comprobante no encontrado |
 
-`SRI_SUBMISSION_FAILED` can no longer occur on this endpoint — network/SOAP failures now happen inside the asynchronous worker, after this endpoint has already responded. A failed attempt is recorded as an `ERROR` document event and the document remains eligible for another attempt via the reconciliation job.
+`SRI_SUBMISSION_FAILED` ya no puede ocurrir en este endpoint — las fallas de red/SOAP ahora ocurren dentro del worker asíncrono, después de que este endpoint ya respondió. Un intento fallido se registra como un evento de comprobante `ERROR` y el comprobante sigue siendo elegible para otro intento a través del job de reconciliación.

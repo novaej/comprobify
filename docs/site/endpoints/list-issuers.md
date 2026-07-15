@@ -1,16 +1,16 @@
-# List Issuers
+# Listar Emisores
 
-Returns all active issuers (branches / issue points) belonging to the authenticated tenant.
+Devuelve todos los emisores activos (sucursales / puntos de emisión) que pertenecen al tenant autenticado.
 
 ```
 GET /v1/issuers
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -33,22 +33,22 @@ GET /v1/issuers
 }
 ```
 
-### Issuer fields
+### Campos del emisor
 
-| Field | Description |
+| Campo | Descripción |
 |---|---|
-| `id` | Numeric issuer id — pass as `X-Issuer-Id` on document requests |
-| `ruc` | Taxpayer RUC |
-| `businessName` | Legal business name |
-| `tradeName` | Trade name (null if not set) |
-| `branchCode` | 3-digit SRI branch code |
-| `issuePointCode` | 3-digit SRI issue point code |
-| `branchAddress` | Branch address (null if not set) |
-| `certFingerprint` | Certificate fingerprint (null if no cert loaded) |
-| `certExpiry` | Certificate expiry date (null if no cert loaded) |
+| `id` | Id numérico del emisor — pásalo como `X-Issuer-Id` en las solicitudes de comprobantes |
+| `ruc` | RUC del contribuyente |
+| `businessName` | Razón social |
+| `tradeName` | Nombre comercial (null si no está definido) |
+| `branchCode` | Código de sucursal de 3 dígitos del SRI |
+| `issuePointCode` | Código de punto de emisión de 3 dígitos del SRI |
+| `branchAddress` | Dirección de la sucursal (null si no está definida) |
+| `certFingerprint` | Huella digital del certificado (null si no hay certificado cargado) |
+| `certExpiry` | Fecha de vencimiento del certificado (null si no hay certificado cargado) |
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | Missing or invalid API key |
+| `UNAUTHORIZED` | 401 | Llave API faltante o inválida |

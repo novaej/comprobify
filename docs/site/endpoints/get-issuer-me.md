@@ -1,24 +1,24 @@
-# Get Issuer
+# Consultar Emisor
 
-Returns profile information for a single issuer owned by the authenticated tenant.
+Devuelve la información de perfil de un solo emisor propiedad del tenant autenticado.
 
 ```
 GET /v1/issuers/:id
 ```
 
-> **Migrated from `GET /v1/issuers/me`** (removed in May 2026). Since API keys are tenant-scoped, "the current issuer" is no longer well-defined — you must name the issuer by id. List all of your tenant's issuers with `GET /v1/issuers`.
+> **Migrado desde `GET /v1/issuers/me`** (eliminado en mayo de 2026). Dado que las llaves API están ahora asociadas al tenant, "el emisor actual" ya no está bien definido — debes nombrar el emisor por su id. Lista todos los emisores de tu tenant con `GET /v1/issuers`.
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id (from `GET /v1/issuers`) |
+| `id` | Id numérico del emisor (obtenido de `GET /v1/issuers`) |
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -39,22 +39,22 @@ GET /v1/issuers/:id
 }
 ```
 
-| Field | Type | Description |
+| Campo | Tipo | Descripción |
 |---|---|---|
-| `id` | integer | Numeric issuer id — used as `X-Issuer-Id` on document requests |
-| `ruc` | string | 13-digit RUC (tax ID) |
-| `businessName` | string | Legal business name |
-| `tradeName` | string \| null | Trade name, if set |
-| `branchCode` | string | 3-digit SRI branch code |
-| `issuePointCode` | string | 3-digit SRI issue point code |
-| `branchAddress` | string \| null | Branch address, if set |
-| `certFingerprint` | string \| null | SHA-256 fingerprint of the signing certificate |
-| `certExpiry` | string \| null | ISO 8601 expiry timestamp of the signing certificate |
+| `id` | integer | Id numérico del emisor — usado como `X-Issuer-Id` en las solicitudes de comprobantes |
+| `ruc` | string | RUC de 13 dígitos (identificación tributaria) |
+| `businessName` | string | Razón social |
+| `tradeName` | string \| null | Nombre comercial, si está definido |
+| `branchCode` | string | Código de sucursal SRI de 3 dígitos |
+| `issuePointCode` | string | Código de punto de emisión SRI de 3 dígitos |
+| `branchAddress` | string \| null | Dirección de la sucursal, si está definida |
+| `certFingerprint` | string \| null | Huella SHA-256 del certificado de firma |
+| `certExpiry` | string \| null | Marca de tiempo ISO 8601 de expiración del certificado de firma |
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | Missing or invalid API key |
-| `FORBIDDEN` | 403 | Issuer exists but belongs to a different tenant |
-| `NOT_FOUND` | 404 | Issuer id does not exist or is inactive |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida |
+| `FORBIDDEN` | 403 | El emisor existe pero pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El id del emisor no existe o está inactivo |

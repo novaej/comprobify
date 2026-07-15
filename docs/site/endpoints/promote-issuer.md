@@ -1,5 +1,5 @@
-# Promote to Production
+# Promover a Producción
 
-> **Moved.** `POST /v1/issuers/:id/promote` has been removed. Promotion is now a tenant-level operation.
+> **Movido.** `POST /v1/issuers/:id/promote` fue eliminado. La promoción ahora es una operación a nivel de tenant.
 >
-> See **[Promote Tenant to Production](promote-tenant.md)** for the current endpoint.
+> Consulta **[Promover Tenant a Producción](promote-tenant.md)** para el endpoint actual.

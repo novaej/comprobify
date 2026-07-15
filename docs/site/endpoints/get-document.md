@@ -1,22 +1,22 @@
-# Get Document
+# Consultar Comprobante
 
-Retrieves a document by its 49-digit access key.
+Obtiene un comprobante mediante su clave de acceso de 49 dígitos.
 
 ```
 GET /v1/documents/:accessKey
 ```
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `accessKey` | The 49-digit numeric access key returned when the document was created |
+| `accessKey` | La clave de acceso numérica de 49 dígitos devuelta al crear el comprobante |
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -41,14 +41,14 @@ GET /v1/documents/:accessKey
 }
 ```
 
-`requestPayload` contains the original request body that was used to create the document. It is omitted when `null`. Use it to pre-fill the [Rebuild Invoice](rebuild-invoice.md) form after a document is rejected.
+`requestPayload` contiene el cuerpo de la solicitud original usado para crear el comprobante. Se omite cuando es `null`. Úsalo para prellenar el formulario de [Reconstruir Factura](rebuild-invoice.md) después de que un comprobante sea rechazado.
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
-| `NOT_FOUND` | 404 | No document with that access key exists for this issuer |
+| `BAD_REQUEST` | 400 | Falta el header `X-Issuer-Id` o está mal formado |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `NOT_FOUND` | 404 | No existe ningún comprobante con esa clave de acceso para este emisor |

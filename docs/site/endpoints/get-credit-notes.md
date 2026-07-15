@@ -1,24 +1,24 @@
-# Get Credit Notes Against a Document
+# Consultar Notas de Crédito de un Comprobante
 
-Returns the sum of all `AUTHORIZED` credit notes already issued against a given document, plus the remaining balance — so the caller can enforce "this credit note can't exceed the original's remaining balance."
+Devuelve la suma de todas las notas de crédito `AUTHORIZED` ya emitidas contra un comprobante dado, más el saldo restante — de modo que quien llama pueda validar que "esta nota de crédito no puede exceder el saldo restante del comprobante original."
 
 ```
 GET /v1/documents/:accessKey/credit-notes
 ```
 
-`:accessKey` is the access key of the **original document being credited** (typically an invoice), not a credit note's own key.
+`:accessKey` es la clave de acceso del **comprobante original que se está acreditando** (típicamente una factura), no la clave de una nota de crédito.
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `accessKey` | The 49-digit access key of the original document |
+| `accessKey` | La clave de acceso de 49 dígitos del comprobante original |
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -34,27 +34,27 @@ GET /v1/documents/:accessKey/credit-notes
 }
 ```
 
-| Field | Description |
+| Campo | Descripción |
 |---|---|
-| `originalDocument.accessKey` | The document's own access key (echoed back) |
-| `originalDocument.total` | The original document's total |
-| `creditedTotal` | Sum of `total` across matched credit notes, `"0.00"` if none |
+| `originalDocument.accessKey` | La clave de acceso propia del comprobante (repetida en la respuesta) |
+| `originalDocument.total` | El total del comprobante original |
+| `creditedTotal` | Suma de `total` entre las notas de crédito encontradas, `"0.00"` si no hay ninguna |
 | `remaining` | `originalDocument.total - creditedTotal` |
-| `creditNotes` | Each `AUTHORIZED` credit note referencing this document — lets the caller show "this document already has N credit note(s)" for transparency, not just the count |
+| `creditNotes` | Cada nota de crédito `AUTHORIZED` que referencia este comprobante — permite mostrar "este comprobante ya tiene N nota(s) de crédito" para mayor transparencia, no solo el conteo |
 
-Only `AUTHORIZED` credit notes count toward `creditedTotal`. Credit notes still `SIGNED`/`RECEIVED` (pending) or `RETURNED`/`NOT_AUTHORIZED` (rejected) are excluded — they were never legally issued against the original.
+Solo las notas de crédito `AUTHORIZED` cuentan para `creditedTotal`. Las notas de crédito aún en `SIGNED`/`RECEIVED` (pendientes) o `RETURNED`/`NOT_AUTHORIZED` (rechazadas) quedan excluidas — nunca fueron emitidas legalmente contra el original.
 
-::: warning Known limitation
-Two credit notes created back-to-back, before the first one authorizes, won't see each other in this sum — there's no locking against concurrent credit note creation. Treat `remaining` as a UI guard, not a hard guarantee against over-crediting.
+::: warning Limitación conocida
+Dos notas de crédito creadas una tras otra, antes de que la primera se autorice, no se verán entre sí en esta suma — no existe bloqueo contra la creación concurrente de notas de crédito. Trata `remaining` como una guía de interfaz, no como una garantía estricta contra el sobre-acreditamiento.
 :::
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `VALIDATION_FAILED` | 400 | `accessKey` is not exactly 49 digits |
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
-| `NOT_FOUND` | 404 | Document not found |
+| `VALIDATION_FAILED` | 400 | `accessKey` no tiene exactamente 49 dígitos |
+| `BAD_REQUEST` | 400 | Falta el header `X-Issuer-Id` o está mal formado |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o discrepancia de entorno |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `NOT_FOUND` | 404 | Comprobante no encontrado |

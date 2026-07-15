@@ -1,27 +1,27 @@
-# Remove Issuer
+# Eliminar Emisor
 
-Soft-deletes an issuer (sets `active = false`). No hard deletes — the row and its history remain in the database.
+Elimina (soft-delete) un emisor (establece `active = false`). No hay eliminaciones definitivas — la fila y su historial permanecen en la base de datos.
 
 ```
 DELETE /v1/issuers/:id
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id (from `GET /v1/issuers`) |
+| `id` | Id numérico del emisor (de `GET /v1/issuers`) |
 
-## Guard rails
+## Restricciones
 
-- **Cannot remove the tenant's last active issuer.** Every tenant must keep at least one.
-- **Cannot remove an issuer that has ever issued a document** — checked in both the `production` and `sandbox` schemas. Create a new issuer instead of reusing one with history.
+- **No se puede eliminar el último emisor activo del tenant.** Todo tenant debe conservar al menos uno.
+- **No se puede eliminar un emisor que alguna vez haya emitido un comprobante** — se verifica tanto en el esquema `production` como en el `sandbox`. Crea un nuevo emisor en lugar de reutilizar uno con historial.
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -29,13 +29,13 @@ DELETE /v1/issuers/:id
 { "ok": true }
 ```
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `LAST_ISSUER_CANNOT_BE_REMOVED` | This is the tenant's only remaining active issuer |
-| `400` | `ISSUER_HAS_DOCUMENTS` | The issuer has issued at least one document |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `ISSUER_FORBIDDEN` | Issuer belongs to a different tenant |
-| `404` | `ISSUER_NOT_FOUND` | Issuer not found or already inactive |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `LAST_ISSUER_CANNOT_BE_REMOVED` | Este es el único emisor activo restante del tenant |
+| `400` | `ISSUER_HAS_DOCUMENTS` | El emisor ha emitido al menos un comprobante |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
+| `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o ya inactivo |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

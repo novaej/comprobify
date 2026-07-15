@@ -1,16 +1,16 @@
-# Update Preferred Language
+# Actualizar Idioma Preferido
 
-Updates the preferred language for the authenticated tenant. The language is used for all outgoing emails (verification, and future document emails).
+Actualiza el idioma preferido para el tenant autenticado. El idioma se usa para todos los correos salientes (verificación, y futuros correos de comprobantes).
 
 ```
 PATCH /v1/tenants/language
 ```
 
-## Authentication
+## Autenticación
 
-Bearer token — API key required.
+Bearer token — se requiere llave API.
 
-## Request body
+## Cuerpo de la solicitud
 
 ```json
 {
@@ -18,11 +18,11 @@ Bearer token — API key required.
 }
 ```
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `language` | string | Yes | Language code. Supported values: `es`, `en` |
+| `language` | string | Sí | Código de idioma. Valores admitidos: `es`, `en` |
 
-## Response
+## Respuesta
 
 ```json
 {
@@ -30,18 +30,18 @@ Bearer token — API key required.
 }
 ```
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `language` is missing or not a supported value |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` | Account is suspended |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `VALIDATION_FAILED` | `language` falta o no es un valor admitido |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `403` | `FORBIDDEN` | La cuenta está suspendida |
+| `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
 
-## Notes
+## Notas
 
-- The language set at registration (`POST /v1/register`) is used as the initial value (default `es`).
-- This endpoint allows updating the language after registration without re-registering.
-- Supported languages: `es` (Spanish), `en` (English).
-- The language preference applies to all email types — currently verification emails, and document emails in a future release.
+- El idioma configurado en el registro (`POST /v1/register`) se usa como valor inicial (por defecto `es`).
+- Este endpoint permite actualizar el idioma después del registro sin necesidad de volver a registrarse.
+- Idiomas admitidos: `es` (español), `en` (inglés).
+- La preferencia de idioma aplica a todos los tipos de correo — actualmente correos de verificación, y correos de comprobantes en una futura versión.

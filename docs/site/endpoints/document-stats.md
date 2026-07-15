@@ -1,16 +1,16 @@
-# Document Stats
+# Estadísticas de Comprobantes
 
-Returns a per-type breakdown of documents issued this month plus an all-time count of documents needing attention. Intended for dashboard summaries (e.g. the comprobify-web revenue widget, computed client-side from `authorizedTotal` values).
+Devuelve un desglose por tipo de los comprobantes emitidos este mes, más un conteo histórico de comprobantes que requieren atención. Pensado para resúmenes de dashboard (por ejemplo, el widget de ingresos de comprobify-web, calculado en el cliente a partir de los valores de `authorizedTotal`).
 
 ```
 GET /v1/documents/stats
 ```
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -29,18 +29,18 @@ GET /v1/documents/stats
 }
 ```
 
-## Field rules
+## Reglas de los campos
 
-- `byType` — only document types with at least one document issued this calendar month (empty types are omitted)
-- `authorizedTotal` — sum of `total` for documents with status `AUTHORIZED`, as a decimal string (`"0.00"` if none authorized)
-- `needsAttention` — all-time count of documents with status `RETURNED` or `NOT_AUTHORIZED`
-- `type` — short code from the document type catalog: `'01'` → `FAC`, `'03'` → `LIQ`, `'04'` → `CRE`, `'05'` → `DEB`, `'06'` → `REM`, `'07'` → `RET`
+- `byType` — solo incluye los tipos de comprobante con al menos un documento emitido en el mes calendario actual (los tipos sin comprobantes se omiten)
+- `authorizedTotal` — suma de `total` de los comprobantes con estado `AUTHORIZED`, como cadena decimal (`"0.00"` si no hay ninguno autorizado)
+- `needsAttention` — conteo histórico de comprobantes con estado `RETURNED` o `NOT_AUTHORIZED`
+- `type` — código corto del catálogo de tipos de comprobante: `'01'` → `FAC`, `'03'` → `LIQ`, `'04'` → `CRE`, `'05'` → `DEB`, `'06'` → `REM`, `'07'` → `RET`
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
+| `BAD_REQUEST` | 400 | Falta el header `X-Issuer-Id` o está mal formado |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |

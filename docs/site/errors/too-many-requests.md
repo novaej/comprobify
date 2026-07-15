@@ -1,34 +1,34 @@
 # Too Many Requests
 
-**Status:** `429 Too Many Requests`
+**Estado HTTP:** `429 Too Many Requests`
 
-The request was throttled. Check the `code` field to distinguish between an API rate limit and an operation-specific cooldown.
+La solicitud fue limitada. Revisa el campo `code` para distinguir entre un límite de tasa de la API y un período de espera específico de una operación.
 
-## Codes
+## Códigos
 
 ### `RESEND_COOLDOWN`
 
-`POST /v1/resend-verification` was called again before the 60-second server-side cooldown elapsed. This per-account cooldown prevents email flooding regardless of IP.
+`POST /v1/resend-verification` fue llamado de nuevo antes de que transcurriera el período de espera de 60 segundos del lado del servidor. Este período de espera por cuenta evita la inundación de correos sin importar la IP.
 
-**What to do:** Wait 60 seconds from the previous resend request, then try again.
+**Qué hacer:** Espera 60 segundos desde la solicitud de reenvío anterior, luego vuelve a intentarlo.
 
-### `TOO_MANY_REQUESTS` — API rate limit
+### `TOO_MANY_REQUESTS` — límite de tasa de la API
 
-Your API key has exceeded the per-minute request limit.
+Tu llave API excedió el límite de solicitudes por minuto.
 
-**Limits (per API key):**
-- **Write endpoints** (POST): 60 requests / minute
-- **Read endpoints** (GET): 300 requests / minute
+**Límites (por llave API):**
+- **Endpoints de escritura** (POST): 60 solicitudes / minuto
+- **Endpoints de lectura** (GET): 300 solicitudes / minuto
 
-Rate limits are tiered. Higher subscription tiers carry higher limits — see your plan details.
+Los límites de tasa son escalonados por plan. Los planes de suscripción más altos tienen límites más altos — consulta los detalles de tu plan.
 
-**What to do:**
-1. **Wait and retry** — Rate limits reset every minute.
-2. **Implement exponential backoff** — When you receive a 429, wait 1 s, then 2 s, then 4 s, etc. before retrying.
-3. **Optimise your requests** — Batch where possible, cache read results, avoid polling in a tight loop.
-4. **Upgrade your plan** — If you consistently hit limits, a higher tier will raise them.
+**Qué hacer:**
+1. **Espera y reintenta** — Los límites de tasa se reinician cada minuto.
+2. **Implementa retroceso exponencial** — Cuando recibas un 429, espera 1 s, luego 2 s, luego 4 s, etc. antes de reintentar.
+3. **Optimiza tus solicitudes** — Agrupa cuando sea posible, guarda en caché los resultados de lectura, evita el sondeo (polling) en un ciclo cerrado.
+4. **Mejora tu plan** — Si alcanzas los límites de forma constante, un tier más alto los aumentará.
 
-## Example retry logic (JavaScript)
+## Ejemplo de lógica de reintento (JavaScript)
 
 ```javascript
 async function requestWithRetry(fn, maxRetries = 3) {
@@ -39,7 +39,7 @@ async function requestWithRetry(fn, maxRetries = 3) {
     } catch (error) {
       if (error.status === 429) {
         const waitMs = Math.pow(2, attempt) * 1000;  // 1s, 2s, 4s...
-        console.log(`Rate limited. Retrying in ${waitMs}ms...`);
+        console.log(`Límite alcanzado. Reintentando en ${waitMs}ms...`);
         await new Promise(resolve => setTimeout(resolve, waitMs));
         attempt++;
       } else {
@@ -47,11 +47,11 @@ async function requestWithRetry(fn, maxRetries = 3) {
       }
     }
   }
-  throw new Error('Max retries exceeded');
+  throw new Error('Se excedió el número máximo de reintentos');
 }
 ```
 
-## Example responses
+## Ejemplos de respuesta
 
 ```json
 {
@@ -59,7 +59,7 @@ async function requestWithRetry(fn, maxRetries = 3) {
   "title":    "Too Many Requests",
   "status":   429,
   "code":     "RESEND_COOLDOWN",
-  "detail":   "Please wait before requesting another verification email.",
+  "detail":   "Por favor espera antes de solicitar otro correo de verificación.",
   "instance": "/v1/resend-verification"
 }
 ```
@@ -70,7 +70,7 @@ async function requestWithRetry(fn, maxRetries = 3) {
   "title":    "Too Many Requests",
   "status":   429,
   "code":     "TOO_MANY_REQUESTS",
-  "detail":   "Rate limit exceeded for this API key",
+  "detail":   "Se excedió el límite de tasa para esta llave API",
   "instance": "/v1/documents"
 }
 ```

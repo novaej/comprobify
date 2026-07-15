@@ -1,41 +1,41 @@
-# Verify Email
+# Verificar Correo
 
-Activates a tenant account using the token from the verification email sent at registration. Once verified, the tenant can promote their account to production.
+Activa una cuenta de tenant usando el token del correo de verificación enviado en el registro. Una vez verificado, el tenant puede promover su cuenta a producción.
 
 ```
 GET /v1/verify-email?token=<token>
 ```
 
-## Authentication
+## Autenticación
 
-None — public endpoint. The token in the query string acts as the credential.
+Ninguna — endpoint público. El token en la cadena de consulta actúa como credencial.
 
-## Query parameters
+## Parámetros de consulta
 
-| Parameter | Type | Required | Description |
+| Parámetro | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `token` | string (64-char hex) | Yes | Verification token from the registration email |
+| `token` | string (hexadecimal de 64 caracteres) | Sí | Token de verificación del correo de registro |
 
-## Response
+## Respuesta
 
 ```json
 {
   "ok": true,
   "email": "you@example.com",
-  "message": "Email verified. You can now promote your account to production."
+  "message": "Correo verificado. Ahora puedes promover tu cuenta a producción."
 }
 ```
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `token` is missing, not hexadecimal, or not exactly 64 characters |
-| `400` | `INVALID_OR_EXPIRED_TOKEN` | Token does not match any pending tenant, or has expired |
+| `400` | `VALIDATION_FAILED` | `token` falta, no es hexadecimal, o no tiene exactamente 64 caracteres |
+| `400` | `INVALID_OR_EXPIRED_TOKEN` | El token no coincide con ningún tenant pendiente, o ha expirado |
 
-## Notes
+## Notas
 
-- Tokens expire after the configured TTL (default 24 hours). Use `POST /v1/resend-verification` to get a fresh one.
-- If `verificationRedirectUrl` was set at registration, the email link points to that URL instead of directly to this endpoint — the frontend is then responsible for calling `GET /v1/verify-email?token=<token>` with the token it receives.
-- Verification is a prerequisite for `POST /v1/tenants/promote`. Unverified tenants can use the sandbox but cannot switch to production.
-- Activating an account logs an `EMAIL_VERIFIED` event to the tenant event log.
+- Los tokens expiran después del TTL configurado (por defecto 24 horas). Usa `POST /v1/resend-verification` para obtener uno nuevo.
+- Si se configuró `verificationRedirectUrl` en el registro, el enlace del correo apunta a esa URL en lugar de directamente a este endpoint — el frontend es entonces responsable de llamar a `GET /v1/verify-email?token=<token>` con el token que recibe.
+- La verificación es un requisito previo para `POST /v1/tenants/promote`. Los tenants no verificados pueden usar el sandbox pero no pueden cambiar a producción.
+- Activar una cuenta registra un evento `EMAIL_VERIFIED` en el registro de eventos del tenant.

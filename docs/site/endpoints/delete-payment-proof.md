@@ -1,25 +1,25 @@
-# Delete Payment Proof
+# Eliminar Comprobante de Pago
 
-Removes one proof file from your own view — e.g. you uploaded the wrong file by mistake. This is a **soft** delete: your provider can still see and download it for their records, it just drops out of your own [List Payment Proofs](list-payment-proofs.md) and can no longer be [downloaded](download-payment-proof.md) through your own API key.
+Elimina un archivo de comprobante de tu propia vista — por ejemplo, si subiste el archivo equivocado por error. Esto es una eliminación **reversible** (soft delete): tu proveedor aún puede verlo y descargarlo para sus registros, simplemente desaparece de tu propia lista en [List Payment Proofs](list-payment-proofs.md) y ya no puede [descargarse](download-payment-proof.md) con tu propia llave API.
 
 ```
 DELETE /v1/payments/:id/proofs/:proofId
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-The payment must belong to a subscription owned by your tenant.
+El pago debe pertenecer a una suscripción propiedad de tu tenant.
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | The payment ID |
-| `proofId` | The proof file's `id`, from [List Payment Proofs](list-payment-proofs.md) |
+| `id` | El ID del pago |
+| `proofId` | El `id` del archivo de comprobante, obtenido de [List Payment Proofs](list-payment-proofs.md) |
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -27,16 +27,16 @@ The payment must belong to a subscription owned by your tenant.
 { "ok": true }
 ```
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `404` | `PAYMENT_NOT_FOUND` | Payment doesn't exist, or belongs to a different tenant |
-| `404` | `NOT_FOUND` | The proof doesn't belong to this payment, or is already deleted |
-| `409` | `CONFLICT` | The payment is already `VERIFIED` — its proof files can no longer be changed |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `404` | `PAYMENT_NOT_FOUND` | El pago no existe, o pertenece a un tenant diferente |
+| `404` | `NOT_FOUND` | El comprobante no pertenece a este pago, o ya fue eliminado |
+| `409` | `CONFLICT` | El pago ya está `VERIFIED` — sus archivos de comprobante ya no pueden modificarse |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
-## Notes
+## Notas
 
-- The [cumulative 10-file limit](submit-payment-proof.md) enforced on upload only counts *active* files — deleting one frees up room for another upload.
+- El [límite acumulado de 10 archivos](submit-payment-proof.md) aplicado en la carga solo cuenta archivos *activos* — eliminar uno libera espacio para otra carga.

@@ -1,18 +1,18 @@
-# Health Check
+# Verificación de Salud
 
-Returns the operational status of the API and confirms database connectivity. Use this endpoint for load balancer health checks, uptime monitoring, and container liveness probes.
+Devuelve el estado operativo de la API y confirma la conectividad con la base de datos. Usa este endpoint para health checks de balanceadores de carga, monitoreo de disponibilidad y sondas de liveness de contenedores.
 
 ```
 GET /health
 ```
 
-## Authentication
+## Autenticación
 
-None required.
+No requerida.
 
-## Response
+## Respuesta
 
-**200 OK** — API is healthy and database is reachable.
+**200 OK** — la API está saludable y la base de datos es alcanzable.
 
 ```json
 {
@@ -21,7 +21,7 @@ None required.
 }
 ```
 
-**503 Service Unavailable** — API is running but cannot reach the database.
+**503 Service Unavailable** — la API está en ejecución pero no puede alcanzar la base de datos.
 
 ```json
 {
@@ -30,13 +30,13 @@ None required.
 }
 ```
 
-| Field | Type | Description |
+| Campo | Tipo | Descripción |
 |---|---|---|
-| `status` | `string` | `"ok"` if healthy, `"error"` if the database is unreachable |
-| `uptime` | `number` | Process uptime in seconds |
+| `status` | `string` | `"ok"` si está saludable, `"error"` si la base de datos no es alcanzable |
+| `uptime` | `number` | Tiempo de actividad del proceso en segundos |
 
-## Notes
+## Notas
 
-- The endpoint always responds (even on DB failure) — it is the server process itself reporting its state.
-- A `503` response means the application is running but cannot serve requests that require the database. The process should be considered unhealthy and replaced.
-- This endpoint is intentionally excluded from rate limiting and authentication.
+- El endpoint siempre responde (incluso ante una falla de base de datos) — es el propio proceso del servidor reportando su estado.
+- Una respuesta `503` significa que la aplicación está en ejecución pero no puede atender solicitudes que requieren la base de datos. El proceso debe considerarse no saludable y ser reemplazado.
+- Este endpoint está intencionalmente excluido del límite de tasa y de la autenticación.

@@ -1,24 +1,24 @@
-# List Payment Proofs
+# Listar Comprobantes de Pago
 
-Returns the metadata (not the file bytes) for every proof file you've uploaded for a payment that's still active — i.e. hasn't been deleted.
+Devuelve los metadatos (no los bytes del archivo) de cada comprobante de pago que has subido para un pago que sigue activo — es decir, que no ha sido eliminado.
 
 ```
 GET /v1/payments/:id/proofs
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-The payment must belong to a subscription owned by your tenant.
+El pago debe pertenecer a una suscripción propiedad de tu tenant.
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | The payment ID |
+| `id` | El ID del pago |
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -46,12 +46,12 @@ The payment must belong to a subscription owned by your tenant.
 }
 ```
 
-Only `active: true` files are returned here — a file you've [deleted](delete-payment-proof.md) drops out of this list (though it isn't gone from your provider's view; see that page). Use a proof's `id` with [Download Payment Proof](download-payment-proof.md) to fetch the actual file. `referenceNumber` is the bank transfer reference you supplied when uploading — every file from the same [submission](submit-payment-proof.md) shares the same value; a later resubmission (e.g. after a rejection) can carry a different one if you sent a new transfer.
+Aquí solo se devuelven los archivos con `active: true` — un archivo que hayas [eliminado](delete-payment-proof.md) desaparece de esta lista (aunque no desaparece de la vista de tu proveedor; consulta esa página). Usa el `id` de un comprobante con [Download Payment Proof](download-payment-proof.md) para obtener el archivo real. `referenceNumber` es la referencia de la transferencia bancaria que indicaste al subirlo — todos los archivos del mismo [envío](submit-payment-proof.md) comparten el mismo valor; un reenvío posterior (por ejemplo, después de un rechazo) puede tener uno diferente si hiciste una nueva transferencia.
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `404` | `PAYMENT_NOT_FOUND` | Payment doesn't exist, or belongs to a different tenant |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `404` | `PAYMENT_NOT_FOUND` | El pago no existe, o pertenece a otro tenant |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

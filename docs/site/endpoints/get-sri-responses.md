@@ -1,22 +1,22 @@
-# Get SRI Responses
+# Consultar Respuestas del SRI
 
-Returns the raw SRI SOAP call outcomes recorded for a document — one row per reception (`POST /:accessKey/send`) or authorization (`GET /:accessKey/authorize`) attempt, in reverse chronological order (newest first).
+Devuelve los resultados sin procesar de las llamadas SOAP al SRI registradas para un comprobante — una fila por cada intento de recepción (`POST /:accessKey/send`) o autorización (`GET /:accessKey/authorize`), en orden cronológico inverso (más recientes primero).
 
 ```
 GET /v1/documents/:accessKey/sri-responses
 ```
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `accessKey` | The 49-digit access key of the document |
+| `accessKey` | La clave de acceso de 49 dígitos del comprobante |
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -42,22 +42,22 @@ GET /v1/documents/:accessKey/sri-responses
 }
 ```
 
-| Field | Description |
+| Campo | Descripción |
 |---|---|
-| `operationType` | `RECEPTION` (from `POST /:accessKey/send`) or `AUTHORIZATION` (from `GET /:accessKey/authorize`) |
-| `status` | The `estado` SRI returned for that call (e.g. `RECIBIDA`, `DEVUELTA`, `AUTORIZADO`, `NO_AUTORIZADO`) |
-| `messages` | Array of SRI observation/error messages for that call, or `null` if SRI returned none |
-| `createdAt` | When this call's response was recorded |
+| `operationType` | `RECEPTION` (de `POST /:accessKey/send`) o `AUTHORIZATION` (de `GET /:accessKey/authorize`) |
+| `status` | El `estado` que devolvió el SRI para esa llamada (por ejemplo, `RECIBIDA`, `DEVUELTA`, `AUTORIZADO`, `NO_AUTORIZADO`) |
+| `messages` | Arreglo de mensajes de observación/error del SRI para esa llamada, o `null` si el SRI no devolvió ninguno |
+| `createdAt` | Cuándo se registró la respuesta de esa llamada |
 
-The raw SOAP response body is intentionally not included — it's internal diagnostic data, not part of the API contract.
+El cuerpo de la respuesta SOAP sin procesar se excluye intencionalmente — es información de diagnóstico interno, no forma parte del contrato de la API.
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `VALIDATION_FAILED` | 400 | `accessKey` is not exactly 49 digits |
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
-| `NOT_FOUND` | 404 | Document not found |
+| `VALIDATION_FAILED` | 400 | `accessKey` no tiene exactamente 49 dígitos |
+| `BAD_REQUEST` | 400 | Falta el header `X-Issuer-Id` o está mal formado |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o discrepancia de entorno |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `NOT_FOUND` | 404 | Comprobante no encontrado |

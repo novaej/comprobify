@@ -1,43 +1,43 @@
 # Forbidden
 
-**Status:** `403 Forbidden`
+**Estado HTTP:** `403 Forbidden`
 
-The API key is valid and the resource exists, but you do not have permission to perform this operation. Every 403 error carries a specific `code` — use it to handle each case programmatically.
+La llave API es válida y el recurso existe, pero no tienes permiso para realizar esta operación. Cada error 403 lleva un `code` específico — úsalo para manejar cada caso de forma programática.
 
-## Codes
+## Códigos
 
 ### `ISSUER_FORBIDDEN`
 
-The `X-Issuer-Id` header names an issuer that exists but belongs to a different tenant. Each tenant can only operate on its own issuers.
+El encabezado `X-Issuer-Id` nombra un emisor que existe pero pertenece a otro tenant. Cada tenant solo puede operar sobre sus propios emisores.
 
-**What to do:** Call `GET /v1/issuers` with the same API key to list your tenant's issuers, then re-issue the request with a valid `X-Issuer-Id`.
+**Qué hacer:** Llama a `GET /v1/issuers` con la misma llave API para listar los emisores de tu tenant, luego reenvía la solicitud con un `X-Issuer-Id` válido.
 
 ### `ACCOUNT_SUSPENDED`
 
-The tenant account has been suspended. Every write request fails until the suspension is lifted, and so does `GET /:accessKey/authorize` (it makes a live SRI call and can send an email). A curated set of other read-only endpoints stays available so you can still see your existing data: listing/downloading your own documents (including RIDE and XML), your subscription and payment-proof history, and your account status/agreements/event log.
+La cuenta del tenant ha sido suspendida. Toda solicitud de escritura falla hasta que se levante la suspensión, y lo mismo ocurre con `GET /:accessKey/authorize` (hace una llamada en vivo al SRI y puede enviar un correo). Un conjunto seleccionado de otros endpoints de solo lectura permanece disponible para que aún puedas ver tus datos existentes: listar/descargar tus propios comprobantes (incluyendo RIDE y XML), tu historial de suscripción y comprobantes de pago, y tu estado de cuenta/acuerdos/bitácora de eventos.
 
-**What to do:** Contact support. Suspended accounts cannot self-recover, but you can keep reviewing what's already in your account while the issue is resolved.
+**Qué hacer:** Contacta a soporte. Las cuentas suspendidas no pueden recuperarse por sí solas, pero puedes seguir revisando lo que ya está en tu cuenta mientras se resuelve el problema.
 
 ### `EMAIL_VERIFICATION_REQUIRED`
 
-The operation requires email verification to have been completed. This blocks:
-- Creating additional branches (`POST /v1/issuers`)
-- Promoting to production (`POST /v1/tenants/promote`)
-- Minting new API keys (`POST /v1/keys`)
+La operación requiere que se haya completado la verificación de correo. Esto bloquea:
+- Crear sucursales adicionales (`POST /v1/issuers`)
+- Promover a producción (`POST /v1/tenants/promote`)
+- Generar nuevas llaves API (`POST /v1/keys`)
 
-**What to do:** Check the inbox for the original verification email, or request a new one via `POST /v1/resend-verification`. Then retry the original operation.
+**Qué hacer:** Revisa la bandeja de entrada en busca del correo de verificación original, o solicita uno nuevo vía `POST /v1/resend-verification`. Luego reintenta la operación original.
 
 ### `PRODUCTION_KEY_REQUIRES_PROMOTION`
 
-A production API key can only be created if the tenant has already promoted to production at least once. Before promotion, only sandbox keys can be minted.
+Una llave API de producción solo puede crearse si el tenant ya se ha promovido a producción al menos una vez. Antes de la promoción, solo se pueden generar llaves de sandbox.
 
-**What to do:** Call `POST /v1/tenants/promote` to promote the tenant to production. Production keys will be issued automatically as part of that response. Additional production keys can be minted afterwards via `POST /v1/keys`.
+**Qué hacer:** Llama a `POST /v1/tenants/promote` para promover el tenant a producción. Las llaves de producción se emitirán automáticamente como parte de esa respuesta. Se pueden generar llaves de producción adicionales después vía `POST /v1/keys`.
 
-### `FORBIDDEN` (fallback)
+### `FORBIDDEN` (respaldo)
 
-A generic 403 not covered by a specific code above. Read `detail`.
+Un 403 genérico no cubierto por un código específico de los anteriores. Lee `detail`.
 
-## Example responses
+## Ejemplos de respuesta
 
 ```json
 {
@@ -45,7 +45,7 @@ A generic 403 not covered by a specific code above. Read `detail`.
   "title":    "Forbidden",
   "status":   403,
   "code":     "ISSUER_FORBIDDEN",
-  "detail":   "Issuer does not belong to this tenant",
+  "detail":   "El emisor no pertenece a este tenant",
   "instance": "/v1/documents"
 }
 ```
@@ -56,7 +56,7 @@ A generic 403 not covered by a specific code above. Read `detail`.
   "title":    "Forbidden",
   "status":   403,
   "code":     "EMAIL_VERIFICATION_REQUIRED",
-  "detail":   "Email verification is required before creating additional branches. Check your inbox.",
+  "detail":   "Se requiere verificación de correo antes de crear sucursales adicionales. Revisa tu bandeja de entrada.",
   "instance": "/v1/issuers"
 }
 ```

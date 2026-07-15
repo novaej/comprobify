@@ -1,31 +1,31 @@
-# Create Credit Note
+# Crear Nota de Crédito
 
-Creates, validates, and signs a new electronic credit note (*nota de crédito*) referencing a previously authorized invoice.
+Crea, valida y firma una nueva nota de crédito electrónica (*nota de crédito*) que hace referencia a una factura previamente autorizada.
 
 ```
 POST /v1/documents
 ```
 
-This is the same endpoint as [Create Invoice](create-invoice.md) — the request body shape is selected by `documentType`. A credit note's body has no `payments` block and instead requires `originalDocument` (the invoice being credited) plus a `motivo` (reason).
+Este es el mismo endpoint que [Crear Factura](create-invoice.md) — la forma del cuerpo de la solicitud se selecciona según `documentType`. El cuerpo de una nota de crédito no tiene bloque `payments` y en su lugar requiere `originalDocument` (la factura que se está acreditando) más un `motivo`.
 
-The issuer must have document type `04` enabled — see [Document Types](document-types.md).
+El emisor debe tener habilitado el tipo de comprobante `04` — consulta [Document Types](document-types.md).
 
-Before submitting, check [Get Credit Notes](get-credit-notes.md) against the original document's access key to see how much of its total has already been credited — the API does not reject a credit note for exceeding the original's remaining balance, since SRI itself doesn't enforce that; it's a client-side guard.
+Antes de enviar, verifica [Get Credit Notes](get-credit-notes.md) contra la clave de acceso del documento original para ver cuánto de su total ya ha sido acreditado — la API no rechaza una nota de crédito por exceder el saldo restante del original, ya que el propio SRI no impone esa restricción; es una validación del lado del cliente.
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
 ## Headers
 
-| Header | Required | Description |
+| Header | Requerido | Descripción |
 |---|---|---|
-| `Authorization` | Yes | Bearer API key |
-| `X-Issuer-Id` | Yes | Numeric id of the issuing branch (from `GET /v1/issuers`). Identifies which branch and certificate to use. |
-| `Content-Type` | Yes | `application/json` |
-| `Idempotency-Key` | No | Unique string (max 255 chars) — see [idempotency](#idempotency) |
+| `Authorization` | Sí | Llave API tipo Bearer |
+| `X-Issuer-Id` | Sí | Id numérico de la sucursal emisora (obtenido de `GET /v1/issuers`). Identifica qué sucursal y certificado usar. |
+| `Content-Type` | Sí | `application/json` |
+| `Idempotency-Key` | No | String único (máx. 255 caracteres) — consulta [idempotencia](#idempotency) |
 
-## Request body
+## Cuerpo de la solicitud
 
 ```json
 {
@@ -69,40 +69,40 @@ Before submitting, check [Get Credit Notes](get-credit-notes.md) against the ori
 }
 ```
 
-### Field reference
+### Referencia de campos
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `documentType` | string | Yes | Must be `"04"` for this body shape |
-| `issueDate` | string | No | Date in `DD/MM/YYYY` format. Must be today's date — SRI rejects past and future dates. Defaults to today if omitted |
-| `buyer.idType` | string | Yes | 2-digit SRI identification type code (e.g. `"05"` = cedula, `"04"` = RUC) |
-| `buyer.id` | string | Yes | Buyer identification number (max 20 chars) |
-| `buyer.name` | string | Yes | Buyer full name or business name (max 300 chars) |
-| `buyer.email` | string | Yes | Buyer email — RIDE and XML are sent here on authorization |
-| `buyer.address` | string | No | Buyer address (max 300 chars) |
-| `originalDocument.documentType` | string | Yes | SRI document type code of the document being credited (e.g. `"01"` for a factura) |
-| `originalDocument.number` | string | Yes | Access-key-style number of the original document, format `NNN-NNN-NNNNNNNNN` |
-| `originalDocument.issueDate` | string | Yes | Issue date of the original document, `DD/MM/YYYY` |
-| `motivo` | string | Yes | Reason for the credit note (max 300 chars) |
-| `items` | array | Yes | At least one item required |
-| `items[].mainCode` | string | Yes | Product/service main code |
-| `items[].auxiliaryCode` | string | No | Secondary code |
-| `items[].description` | string | Yes | Description (max 300 chars) |
-| `items[].quantity` | string | Yes | Numeric quantity |
-| `items[].unitPrice` | string | Yes | Numeric unit price |
-| `items[].discount` | string | No | Numeric discount amount |
-| `items[].taxes` | array | Yes | At least one tax per item |
-| `items[].taxes[].code` | string | Yes | SRI tax type code |
-| `items[].taxes[].rateCode` | string | Yes | SRI tax rate code |
-| `items[].taxes[].rate` | string | Yes | Tax rate percentage |
-| `items[].taxes[].taxableBase` | string | Yes | Amount the tax is applied to |
-| `items[].taxes[].taxAmount` | string | Yes | Calculated tax amount |
-| `additionalInfo` | array | No | Key-value pairs included in the XML as `campoAdicional` |
+| `documentType` | string | Sí | Debe ser `"04"` para esta forma de cuerpo |
+| `issueDate` | string | No | Fecha en formato `DD/MM/YYYY`. Debe ser la fecha de hoy — el SRI rechaza fechas pasadas y futuras. Por defecto, hoy si se omite |
+| `buyer.idType` | string | Sí | Código de tipo de identificación SRI de 2 dígitos (p. ej. `"05"` = cédula, `"04"` = RUC) |
+| `buyer.id` | string | Sí | Número de identificación del comprador (máx. 20 caracteres) |
+| `buyer.name` | string | Sí | Nombre completo o razón social del comprador (máx. 300 caracteres) |
+| `buyer.email` | string | Sí | Correo del comprador — el RIDE y el XML se envían aquí al momento de la autorización |
+| `buyer.address` | string | No | Dirección del comprador (máx. 300 caracteres) |
+| `originalDocument.documentType` | string | Sí | Código de tipo de comprobante SRI del documento que se está acreditando (p. ej. `"01"` para una factura) |
+| `originalDocument.number` | string | Sí | Número tipo clave de acceso del documento original, formato `NNN-NNN-NNNNNNNNN` |
+| `originalDocument.issueDate` | string | Sí | Fecha de emisión del documento original, `DD/MM/YYYY` |
+| `motivo` | string | Sí | Motivo de la nota de crédito (máx. 300 caracteres) |
+| `items` | array | Sí | Se requiere al menos un ítem |
+| `items[].mainCode` | string | Sí | Código principal del producto/servicio |
+| `items[].auxiliaryCode` | string | No | Código secundario |
+| `items[].description` | string | Sí | Descripción (máx. 300 caracteres) |
+| `items[].quantity` | string | Sí | Cantidad numérica |
+| `items[].unitPrice` | string | Sí | Precio unitario numérico |
+| `items[].discount` | string | No | Monto numérico de descuento |
+| `items[].taxes` | array | Sí | Al menos un impuesto por ítem |
+| `items[].taxes[].code` | string | Sí | Código de tipo de impuesto SRI |
+| `items[].taxes[].rateCode` | string | Sí | Código de tarifa de impuesto SRI |
+| `items[].taxes[].rate` | string | Sí | Porcentaje de la tarifa de impuesto |
+| `items[].taxes[].taxableBase` | string | Sí | Monto sobre el cual se aplica el impuesto |
+| `items[].taxes[].taxAmount` | string | Sí | Monto de impuesto calculado |
+| `additionalInfo` | array | No | Pares clave-valor incluidos en el XML como `campoAdicional` |
 
-## Response
+## Respuesta
 
-**201 Created** — new document created.
-**200 OK** — returned when the same `Idempotency-Key` + identical payload was already processed.
+**201 Created** — nuevo comprobante creado.
+**200 OK** — se devuelve cuando el mismo `Idempotency-Key` + carga útil idéntica ya fue procesado.
 
 ```json
 {
@@ -121,22 +121,22 @@ Before submitting, check [Get Credit Notes](get-credit-notes.md) against the ori
 }
 ```
 
-## Idempotency
+## Idempotencia
 
-Include an `Idempotency-Key` header to make creation idempotent. Generate the key once per intended credit note and reuse it across retries:
+Incluye un header `Idempotency-Key` para hacer que la creación sea idempotente. Genera la clave una sola vez por nota de crédito prevista y reutilízala en los reintentos:
 
-- Same key + same payload → returns the existing document (no duplicate created)
-- Same key + different payload → `409 Conflict`
+- Misma clave + mismo payload → devuelve el comprobante existente (no se crea un duplicado)
+- Misma clave + payload diferente → `409 Conflict`
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `VALIDATION_FAILED` | 400 | Request body fails field validation |
-| `DOCUMENT_TYPE_NOT_ENABLED` | 400 | The issuer does not have document type `04` enabled — see [Document Types](document-types.md) |
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production issuer or vice versa) |
-| `FORBIDDEN` | 403 | The `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | The `X-Issuer-Id` issuer does not exist |
-| `CONFLICT` | 409 | Idempotency key reused with a different payload |
-| `INTERNAL_ERROR` | 500 | Unexpected server error |
+| `VALIDATION_FAILED` | 400 | El cuerpo de la solicitud falla la validación de campos |
+| `DOCUMENT_TYPE_NOT_ENABLED` | 400 | El emisor no tiene habilitado el tipo de comprobante `04` — consulta [Document Types](document-types.md) |
+| `BAD_REQUEST` | 400 | El header `X-Issuer-Id` falta o está mal formado |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o desajuste de ambiente (llave sandbox apuntando a un emisor de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a un tenant diferente |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `CONFLICT` | 409 | Se reutilizó la clave de idempotencia con un payload diferente |
+| `INTERNAL_ERROR` | 500 | Error inesperado del servidor |

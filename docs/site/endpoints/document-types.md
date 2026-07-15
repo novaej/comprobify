@@ -1,30 +1,30 @@
-# Issuer Document Types
+# Tipos de Comprobante del Emisor
 
-Manage which SRI document types an issuer is allowed to process. Document type eligibility is checked at invoice creation time — attempting to create a document of a disallowed type returns 400.
+Administra qué tipos de comprobante SRI puede procesar un emisor. La elegibilidad del tipo de comprobante se verifica al momento de crear la factura — intentar crear un comprobante de un tipo no permitido devuelve 400.
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-All endpoints below take the issuer id as a URL parameter and verify it belongs to your tenant before applying any change.
+Todos los endpoints a continuación reciben el id del emisor como parámetro de URL y verifican que pertenezca a tu tenant antes de aplicar cualquier cambio.
 
 ---
 
-## List document types
+## Listar tipos de comprobante
 
 ```
 GET /v1/issuers/:id/document-types
 ```
 
-Returns the active document types for the named issuer.
+Devuelve los tipos de comprobante activos para el emisor indicado.
 
-### Path parameters
+### Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id (from `GET /v1/issuers`) |
+| `id` | Id numérico del emisor (obtenido de `GET /v1/issuers`) |
 
-### Response
+### Respuesta
 
 ```json
 {
@@ -35,21 +35,21 @@ Returns the active document types for the named issuer.
 
 ---
 
-## Add a document type
+## Agregar un tipo de comprobante
 
 ```
 POST /v1/issuers/:id/document-types
 ```
 
-Enables a new document type for the issuer. If the type was previously removed, it is reactivated.
+Habilita un nuevo tipo de comprobante para el emisor. Si el tipo había sido removido previamente, se reactiva.
 
-### Path parameters
+### Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id |
+| `id` | Id numérico del emisor |
 
-### Request body
+### Cuerpo de la solicitud
 
 ```json
 {
@@ -57,13 +57,13 @@ Enables a new document type for the issuer. If the type was previously removed, 
 }
 ```
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `documentType` | string | Yes | SRI document type code (see supported types below) |
+| `documentType` | string | Sí | Código de tipo de comprobante SRI (ver tipos soportados abajo) |
 
-### Response
+### Respuesta
 
-Returns the full updated list of active document types.
+Devuelve la lista completa actualizada de tipos de comprobante activos.
 
 ```json
 {
@@ -72,35 +72,35 @@ Returns the full updated list of active document types.
 }
 ```
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `documentType` is missing or not a supported type |
-| `402` | `DOCUMENT_TYPE_NOT_IN_TIER` | The type is implemented but not included in your subscription tier — see tier limits below |
-| `403` | `FORBIDDEN` | Issuer belongs to a different tenant |
-| `404` | `NOT_FOUND` | Issuer id does not exist |
+| `400` | `VALIDATION_FAILED` | `documentType` falta o no es un tipo soportado |
+| `402` | `DOCUMENT_TYPE_NOT_IN_TIER` | El tipo está implementado pero no está incluido en tu plan de suscripción — ver los límites por plan abajo |
+| `403` | `FORBIDDEN` | El emisor pertenece a otro tenant |
+| `404` | `NOT_FOUND` | El id del emisor no existe |
 
 ---
 
-## Remove a document type
+## Remover un tipo de comprobante
 
 ```
 DELETE /v1/issuers/:id/document-types/:code
 ```
 
-Disables a document type for the issuer. The last active type cannot be removed.
+Deshabilita un tipo de comprobante para el emisor. El último tipo activo no puede removerse.
 
-### Path parameters
+### Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id |
-| `code` | Document type code to remove (e.g. `01`) |
+| `id` | Id numérico del emisor |
+| `code` | Código del tipo de comprobante a remover (por ejemplo, `01`) |
 
-### Response
+### Respuesta
 
-Returns the full updated list of active document types.
+Devuelve la lista completa actualizada de tipos de comprobante activos.
 
 ```json
 {
@@ -109,31 +109,31 @@ Returns the full updated list of active document types.
 }
 ```
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `code` is not a supported type |
-| `400` | `BAD_REQUEST` | Attempting to remove the last active document type |
-| `403` | `FORBIDDEN` | Issuer belongs to a different tenant |
-| `404` | `NOT_FOUND` | Issuer id does not exist, or the document type is not currently active for this issuer |
+| `400` | `VALIDATION_FAILED` | `code` no es un tipo soportado |
+| `400` | `BAD_REQUEST` | Se intenta remover el último tipo de comprobante activo |
+| `403` | `FORBIDDEN` | El emisor pertenece a otro tenant |
+| `404` | `NOT_FOUND` | El id del emisor no existe, o el tipo de comprobante no está actualmente activo para este emisor |
 
 ---
 
-## Supported document types
+## Tipos de comprobante soportados
 
-| Code | Description |
+| Código | Descripción |
 |---|---|
 | `01` | Factura (Invoice) |
-| `04` | Nota de Crédito (Credit Note) — see [Create Credit Note](create-credit-note.md) for the request body, which differs from an invoice's |
+| `04` | Nota de Crédito (Credit Note) — ver [Crear Nota de Crédito](create-credit-note.md) para el cuerpo de la solicitud, que difiere del de una factura |
 
-## Document type tier limits
+## Límites de tipos de comprobante por plan
 
-| Tier | Allowed types |
+| Plan | Tipos permitidos |
 |---|---|
 | Free | Factura (`01`) |
 | Starter | Factura (`01`) |
 | Growth | Factura, Nota de Crédito (`01`, `04`) |
 | Business | Factura, Nota de Crédito (`01`, `04`) |
 
-This only gates **enabling a new type** — it never revokes one already active. If you downgrade plans, document types already enabled on your issuers keep working; you just can't enable further gated types until you upgrade again.
+Esto solo restringe **habilitar un nuevo tipo** — nunca revoca uno ya activo. Si bajas de plan, los tipos de comprobante ya habilitados en tus emisores siguen funcionando; simplemente no puedes habilitar más tipos restringidos hasta que subas de plan nuevamente.

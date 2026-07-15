@@ -1,37 +1,37 @@
-# Download Payment Proof
+# Descargar Comprobante de Pago
 
-Downloads one specific proof-of-transfer file you previously uploaded for a payment.
+Descarga un archivo específico de comprobante de transferencia que subiste previamente para un pago.
 
 ```
 GET /v1/payments/:id/proofs/:proofId
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-The payment must belong to a subscription owned by your tenant, and the file must still be active — a [deleted](delete-payment-proof.md) file is no longer downloadable through this endpoint (your provider can still see and download it on their side, for audit purposes).
+El pago debe pertenecer a una suscripción de tu tenant, y el archivo debe seguir activo — un archivo [eliminado](delete-payment-proof.md) ya no se puede descargar mediante este endpoint (tu proveedor todavía puede verlo y descargarlo desde su lado, con fines de auditoría).
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | The payment ID |
-| `proofId` | The proof file's `id`, from [List Payment Proofs](list-payment-proofs.md) or the [Submit Payment Proof](submit-payment-proof.md) response |
+| `id` | El ID del pago |
+| `proofId` | El `id` del archivo de comprobante, obtenido de [Listar Comprobantes de Pago](list-payment-proofs.md) o de la respuesta de [Enviar Comprobante de Pago](submit-payment-proof.md) |
 
-## Response
+## Respuesta
 
-**200 OK** — the raw file, streamed directly.
+**200 OK** — el archivo sin procesar, transmitido directamente.
 
-| Header | Value |
+| Header | Valor |
 |---|---|
-| `Content-Type` | The MIME type of the uploaded file (`image/png`, `image/jpeg`, `image/gif`, or `application/pdf`) |
-| `Content-Disposition` | `inline; filename="<original filename>"` |
+| `Content-Type` | El tipo MIME del archivo subido (`image/png`, `image/jpeg`, `image/gif`, o `application/pdf`) |
+| `Content-Disposition` | `inline; filename="<nombre de archivo original>"` |
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `404` | `NOT_FOUND` | Payment doesn't exist, belongs to a different tenant, the proof doesn't belong to this payment, or it's been deleted |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `404` | `NOT_FOUND` | El pago no existe, pertenece a otro tenant, el comprobante no pertenece a este pago, o fue eliminado |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

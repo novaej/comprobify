@@ -1,30 +1,30 @@
-# Issuer Sequentials
+# Secuenciales del Emisor
 
-View and manually correct an issuer's sequential number counters. Sandbox and production are tracked independently (separate PostgreSQL schemas), so both are reported side by side.
+Consulta y corrige manualmente los contadores de número secuencial de un emisor. Sandbox y producción se rastrean de forma independiente (esquemas de PostgreSQL separados), por lo que ambos se reportan lado a lado.
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-Both endpoints below take the issuer id as a URL parameter and verify it belongs to your tenant before applying any change.
+Ambos endpoints a continuación reciben el id del emisor como parámetro de URL y verifican que pertenezca a tu tenant antes de aplicar cualquier cambio.
 
 ---
 
-## View current sequentials
+## Consultar los secuenciales actuales
 
 ```
 GET /v1/issuers/:id/sequentials
 ```
 
-Returns one row per active document type for the issuer, with the current counter value and the sequential each environment would produce next.
+Devuelve una fila por cada tipo de comprobante activo del emisor, con el valor actual del contador y el secuencial que produciría a continuación cada entorno.
 
-### Path parameters
+### Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id |
+| `id` | Id numérico del emisor |
 
-### Response
+### Respuesta
 
 ```json
 {
@@ -44,38 +44,38 @@ Returns one row per active document type for the issuer, with the current counte
 }
 ```
 
-A document type that has never issued a document in an environment reports `current: 0`, `next: 1`.
+Un tipo de comprobante que nunca ha emitido un comprobante en un entorno reporta `current: 0`, `next: 1`.
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `ISSUER_FORBIDDEN` | Issuer belongs to a different tenant |
-| `404` | `ISSUER_NOT_FOUND` | Issuer not found or inactive |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
+| `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
 ---
 
-## Set the next sequential
+## Establecer el siguiente secuencial
 
 ```
 PATCH /v1/issuers/:id/sequentials/:documentType
 ```
 
-Manually sets the counter for one document type in one environment, so the next document created picks up `nextSequential`. Typically used to correct a counter after migrating from another invoicing system, or to skip past a block of numbers already used outside the API.
+Establece manualmente el contador para un tipo de comprobante en un entorno, de modo que el siguiente comprobante creado tome `nextSequential`. Se usa típicamente para corregir un contador después de migrar desde otro sistema de facturación, o para saltar un bloque de números ya usados fuera de la API.
 
-The write locks the counter row (`SELECT ... FOR UPDATE`) inside the same transaction that updates it, so it cannot race against a concurrent `POST /v1/documents` call and produce a duplicate sequential.
+La escritura bloquea la fila del contador (`SELECT ... FOR UPDATE`) dentro de la misma transacción que la actualiza, por lo que no puede entrar en carrera con una llamada concurrente a `POST /v1/documents` y producir un secuencial duplicado.
 
-### Path parameters
+### Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id |
-| `documentType` | SRI document type code (e.g. `01`) |
+| `id` | Id numérico del emisor |
+| `documentType` | Código de tipo de comprobante del SRI (por ejemplo, `01`) |
 
-### Request body
+### Cuerpo de la solicitud
 
 ```json
 {
@@ -84,12 +84,12 @@ The write locks the counter row (`SELECT ... FOR UPDATE`) inside the same transa
 }
 ```
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `environment` | string | Yes | `sandbox` or `production` |
-| `nextSequential` | integer | Yes | The sequential the next document of this type/environment should receive. Must be greater than the counter's current value. |
+| `environment` | string | Sí | `sandbox` o `production` |
+| `nextSequential` | integer | Sí | El secuencial que debe recibir el siguiente comprobante de este tipo/entorno. Debe ser mayor que el valor actual del contador. |
 
-### Response
+### Respuesta
 
 **200 OK**
 
@@ -97,13 +97,13 @@ The write locks the counter row (`SELECT ... FOR UPDATE`) inside the same transa
 { "ok": true }
 ```
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `documentType` is not a supported type, `environment` is not `sandbox`/`production`, or `nextSequential` is not a positive integer |
-| `400` | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` does not exceed the counter's current value |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `ISSUER_FORBIDDEN` | Issuer belongs to a different tenant |
-| `404` | `ISSUER_NOT_FOUND` | Issuer not found or inactive |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `VALIDATION_FAILED` | `documentType` no es un tipo soportado, `environment` no es `sandbox`/`production`, o `nextSequential` no es un entero positivo |
+| `400` | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` no supera el valor actual del contador |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
+| `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

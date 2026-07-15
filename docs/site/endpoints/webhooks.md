@@ -1,6 +1,6 @@
 # Webhooks
 
-Register HTTPS callback URLs to receive event notifications in near-real time. When the API creates or updates a notification (e.g. a document is authorized, a certificate is expiring), it immediately POSTs a signed payload to every active endpoint that has subscribed to that event type.
+Registra URLs de callback HTTPS para recibir notificaciones de eventos casi en tiempo real. Cuando la API crea o actualiza una notificación (por ejemplo, un comprobante es autorizado, un certificado está por expirar), envía inmediatamente un POST con un payload firmado a cada endpoint activo que esté suscrito a ese tipo de evento.
 
 ```
 POST   /v1/webhooks
@@ -9,13 +9,13 @@ PATCH  /v1/webhooks/:id
 DELETE /v1/webhooks/:id
 ```
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` — any active key for the tenant.
+`Authorization: Bearer <api-key>` — cualquier llave activa del tenant.
 
-## Tier limits
+## Límites por plan
 
-| Tier | Max active endpoints |
+| Plan | Máximo de endpoints activos |
 |---|---|
 | FREE | 1 |
 | STARTER | 2 |
@@ -24,7 +24,7 @@ DELETE /v1/webhooks/:id
 
 ---
 
-## Webhook endpoint object
+## Objeto de endpoint de webhook
 
 ```json
 {
@@ -37,28 +37,28 @@ DELETE /v1/webhooks/:id
 }
 ```
 
-| Field | Type | Description |
+| Campo | Tipo | Descripción |
 |---|---|---|
-| `id` | integer | Stable identifier |
-| `url` | string | HTTPS URL the API POSTs events to |
-| `eventTypes` | string[] | Subscribed event types. Empty array = subscribe to **all** event types. |
-| `active` | boolean | `false` after deregistration; historical deliveries are preserved |
-| `createdAt` | string | ISO timestamp of registration |
-| `updatedAt` | string | ISO timestamp of last update |
+| `id` | integer | Identificador estable |
+| `url` | string | URL HTTPS a la que la API envía los eventos |
+| `eventTypes` | string[] | Tipos de evento suscritos. Un arreglo vacío significa suscripción a **todos** los tipos de evento. |
+| `active` | boolean | `false` después de darse de baja; los envíos históricos se conservan |
+| `createdAt` | string | Timestamp ISO del registro |
+| `updatedAt` | string | Timestamp ISO de la última actualización |
 
-> **Note:** the signing `secret` is never returned after initial registration. Store it immediately on creation.
+> **Nota:** el `secret` de firma nunca se devuelve después del registro inicial. Guárdalo inmediatamente al crearlo.
 
 ---
 
-## Register an endpoint
+## Registrar un endpoint
 
 ```
 POST /v1/webhooks
 ```
 
-Creates a new webhook endpoint and returns the signing secret. **The secret is shown exactly once** — store it immediately.
+Crea un nuevo endpoint de webhook y devuelve el secreto de firma. **El secreto se muestra exactamente una vez** — guárdalo de inmediato.
 
-### Request body
+### Cuerpo de la solicitud
 
 ```json
 {
@@ -67,12 +67,12 @@ Creates a new webhook endpoint and returns the signing secret. **The secret is s
 }
 ```
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `url` | string | Yes | Must be a valid HTTPS URL |
-| `eventTypes` | string[] | No | Event types to subscribe to. Omit or pass `[]` to receive all events. Valid values: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING` |
+| `url` | string | Sí | Debe ser una URL HTTPS válida |
+| `eventTypes` | string[] | No | Tipos de evento a los que suscribirse. Omite o pasa `[]` para recibir todos los eventos. Valores válidos: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING` |
 
-### Response
+### Respuesta
 
 **201 Created**
 
@@ -91,27 +91,27 @@ Creates a new webhook endpoint and returns the signing secret. **The secret is s
 }
 ```
 
-Store `secret` securely. It is used to verify the `X-Comprobify-Signature` header on incoming webhook requests.
+Guarda el `secret` de forma segura. Se usa para verificar el header `X-Comprobify-Signature` en las solicitudes de webhook entrantes.
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `url` is not a valid HTTPS URL, or an `eventType` is unrecognised |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `402` | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Tier limit on active endpoints reached |
+| `400` | `VALIDATION_FAILED` | `url` no es una URL HTTPS válida, o un `eventType` no es reconocido |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `402` | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Se alcanzó el límite del tier en endpoints activos |
 
 ---
 
-## List endpoints
+## Listar endpoints
 
 ```
 GET /v1/webhooks
 ```
 
-Returns all active endpoints for the tenant (signing secrets are never included).
+Devuelve todos los endpoints activos del tenant (los secretos de firma nunca se incluyen).
 
-### Response
+### Respuesta
 
 **200 OK**
 
@@ -124,15 +124,15 @@ Returns all active endpoints for the tenant (signing secrets are never included)
 
 ---
 
-## Update an endpoint
+## Actualizar un endpoint
 
 ```
 PATCH /v1/webhooks/:id
 ```
 
-Update the URL, event subscriptions, or active flag for an existing endpoint. All fields are optional — send only what you want to change.
+Actualiza la URL, las suscripciones de eventos, o el indicador `active` de un endpoint existente. Todos los campos son opcionales — envía solo lo que quieras cambiar.
 
-### Request body
+### Cuerpo de la solicitud
 
 ```json
 {
@@ -142,7 +142,7 @@ Update the URL, event subscriptions, or active flag for an existing endpoint. Al
 }
 ```
 
-### Response
+### Respuesta
 
 **200 OK**
 
@@ -153,25 +153,25 @@ Update the URL, event subscriptions, or active flag for an existing endpoint. Al
 }
 ```
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | Invalid `url`, unknown `eventType`, or non-boolean `active` |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `404` | `NOT_FOUND` | Endpoint not found or belongs to a different tenant |
+| `400` | `VALIDATION_FAILED` | `url` inválida, `eventType` desconocido, o `active` no booleano |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `404` | `NOT_FOUND` | Endpoint no encontrado o pertenece a otro tenant |
 
 ---
 
-## Deregister an endpoint
+## Dar de baja un endpoint
 
 ```
 DELETE /v1/webhooks/:id
 ```
 
-Soft-deletes the endpoint (`active = false`). The endpoint stops receiving deliveries immediately. Past delivery records are preserved in `webhook_deliveries` for audit purposes.
+Elimina el endpoint de forma lógica (`active = false`). El endpoint deja de recibir envíos inmediatamente. Los registros de envíos pasados se conservan en `webhook_deliveries` con fines de auditoría.
 
-### Response
+### Respuesta
 
 **200 OK**
 
@@ -179,18 +179,18 @@ Soft-deletes the endpoint (`active = false`). The endpoint stops receiving deliv
 { "ok": true }
 ```
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `404` | `NOT_FOUND` | Endpoint not found or belongs to a different tenant |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `404` | `NOT_FOUND` | Endpoint no encontrado o pertenece a otro tenant |
 
 ---
 
-## Receiving webhooks
+## Recepción de webhooks
 
-### Payload format
+### Formato del payload
 
 ```json
 {
@@ -202,8 +202,8 @@ Soft-deletes the endpoint (`active = false`). The endpoint stops receiving deliv
     "id":        42,
     "type":      "DOCUMENT_AUTHORIZED",
     "severity":  "INFO",
-    "title":     "Invoice authorized",
-    "message":   "Invoice 001-001-000000012 for ACME Corp was authorized by SRI.",
+    "title":     "Factura autorizada",
+    "message":   "La factura 001-001-000000012 de ACME Corp fue autorizada por el SRI.",
     "metadata":  { ... },
     "issuerId":  3,
     "readAt":    null,
@@ -213,31 +213,31 @@ Soft-deletes the endpoint (`active = false`). The endpoint stops receiving deliv
 }
 ```
 
-| Field | Description |
+| Campo | Descripción |
 |---|---|
-| `event` | The notification type (mirrors `data.type`) |
-| `deliveryId` | ID of the `webhook_deliveries` row. Use for deduplication — retried deliveries have the same `deliveryId`. |
-| `timestamp` | Unix timestamp (seconds) when the event was originally created |
-| `tenantId` | Your tenant ID |
-| `data` | Full [notification object](notifications.md#notification-object) |
+| `event` | El tipo de notificación (refleja `data.type`) |
+| `deliveryId` | ID de la fila en `webhook_deliveries`. Úsalo para deduplicación — los reintentos del mismo envío tienen el mismo `deliveryId`. |
+| `timestamp` | Timestamp Unix (segundos) de cuándo se creó originalmente el evento |
+| `tenantId` | Tu ID de tenant |
+| `data` | [Objeto de notificación](notifications.md#notification-object) completo |
 
-### Verifying signatures
+### Verificación de firmas
 
-Every request includes:
+Cada solicitud incluye:
 
 ```
 X-Comprobify-Signature: sha256=<hex>
 X-Comprobify-Timestamp: <unix seconds>
 ```
 
-To verify:
+Para verificar:
 
-1. Read the raw request body as a string (before JSON parsing).
-2. Compute `HMAC-SHA256(secret, "${timestamp}.${rawBody}")` where `secret` is your endpoint's signing secret.
-3. Compare the result with the `sha256=` portion of `X-Comprobify-Signature` using a **constant-time** comparison function.
-4. Reject the request if the signatures do not match or if `X-Comprobify-Timestamp` is more than 5 minutes in the past.
+1. Lee el cuerpo crudo de la solicitud como una cadena (antes de analizarlo como JSON).
+2. Calcula `HMAC-SHA256(secret, "${timestamp}.${rawBody}")` donde `secret` es el secreto de firma de tu endpoint.
+3. Compara el resultado con la porción `sha256=` de `X-Comprobify-Signature` usando una función de comparación de **tiempo constante**.
+4. Rechaza la solicitud si las firmas no coinciden o si `X-Comprobify-Timestamp` tiene más de 5 minutos de antigüedad.
 
-**Node.js example:**
+**Ejemplo en Node.js:**
 
 ```js
 const crypto = require('crypto');
@@ -265,23 +265,23 @@ function verifyWebhook(secret, req) {
 }
 ```
 
-### Response requirements
+### Requisitos de la respuesta
 
-Return **any 2xx status** to acknowledge receipt. Any other status (including 3xx) is treated as a failure and triggers a retry.
+Devuelve **cualquier estado 2xx** para confirmar la recepción. Cualquier otro estado (incluyendo 3xx) se trata como un fallo y dispara un reintento.
 
-Process the event **asynchronously** — respond with `200` immediately and handle the payload in a background job to avoid timeouts.
+Procesa el evento de forma **asíncrona** — responde con `200` de inmediato y maneja el payload en un job en segundo plano para evitar timeouts.
 
-### Deduplication
+### Deduplicación
 
-Use `deliveryId` to deduplicate. A retry of the same delivery has the same `deliveryId` but arrives in a new HTTP request. Your handler should be **idempotent**: processing the same `deliveryId` twice must produce the same outcome.
+Usa `deliveryId` para deduplicar. Un reintento del mismo envío tiene el mismo `deliveryId` pero llega en una nueva solicitud HTTP. Tu manejador debe ser **idempotente**: procesar el mismo `deliveryId` dos veces debe producir el mismo resultado.
 
-### Retry schedule
+### Calendario de reintentos
 
-| Attempt | Timing |
+| Intento | Momento |
 |---|---|
-| 1 | Immediately on event creation |
-| 2 | 30 seconds after attempt 1 fails |
-| 3 | 2 minutes after attempt 2 fails |
-| FAILED | After 3 failed attempts — no further retries |
+| 1 | Inmediatamente al crearse el evento |
+| 2 | 30 segundos después de que falla el intento 1 |
+| 3 | 2 minutos después de que falla el intento 2 |
+| FAILED | Después de 3 intentos fallidos — no hay más reintentos |
 
-If all retries are exhausted, use `GET /v1/notifications?sinceId=<lastId>` to catch up on missed events.
+Si se agotan todos los reintentos, usa `GET /v1/notifications?sinceId=<lastId>` para ponerte al día con los eventos perdidos.

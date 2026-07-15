@@ -1,20 +1,20 @@
-# Get Tenant Events
+# Consultar Eventos del Tenant
 
-Returns your full tenant-level audit trail — email verification, subscription, payment, and tier/billing-interval change lifecycle events — in chronological order (oldest first).
+Devuelve tu registro de auditoría completo a nivel de tenant — verificación de correo, suscripción, pago y eventos del ciclo de vida de cambios de plan/intervalo de facturación — en orden cronológico (del más antiguo al más reciente).
 
 ```
 GET /v1/tenants/events
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-## When to call this
+## Cuándo llamar a este endpoint
 
-This is the one place that shows the full sequence of changes to your subscription over time — e.g. that it started as a monthly GROWTH subscription and later changed to yearly STARTER. [`GET /v1/subscriptions/me`](get-my-subscriptions.md) and [`GET /v1/tenants/me`](tenant-me.md) only show *current* state; this endpoint shows how you got there.
+Este es el único lugar que muestra la secuencia completa de cambios en tu suscripción a lo largo del tiempo — por ejemplo, que comenzó como una suscripción GROWTH mensual y luego cambió a STARTER anual. [`GET /v1/subscriptions/me`](get-my-subscriptions.md) y [`GET /v1/tenants/me`](tenant-me.md) solo muestran el estado *actual*; este endpoint muestra cómo se llegó a él.
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -84,37 +84,37 @@ This is the one place that shows the full sequence of changes to your subscripti
 }
 ```
 
-`detail` is a free-form object specific to each `eventType` (or `null` for events with no extra context) — the fields shown above match what each event type currently carries, but treat unfamiliar fields as forward-compatible additions rather than a fixed schema.
+`detail` es un objeto de forma libre específico de cada `eventType` (o `null` para eventos sin contexto adicional) — los campos mostrados arriba coinciden con lo que cada tipo de evento lleva actualmente, pero trata los campos desconocidos como adiciones compatibles hacia adelante, no como un esquema fijo.
 
-### Event types
+### Tipos de evento
 
-| Event | Meaning |
+| Evento | Significado |
 |---|---|
-| `VERIFICATION_EMAIL_SENT` / `VERIFICATION_EMAIL_FAILED` / `VERIFICATION_EMAIL_DELIVERED` / `VERIFICATION_EMAIL_TEMP_FAILED` / `VERIFICATION_EMAIL_COMPLAINED` | Registration verification email delivery status |
-| `EMAIL_VERIFIED` | Tenant's email was verified |
-| `SUBSCRIPTION_CREATED` | A subscription was started (`POST /v1/subscriptions` or at promotion) |
-| `PAYMENT_REPORTED` | Proof of transfer was submitted for a payment |
-| `PAYMENT_VERIFIED` / `PAYMENT_REJECTED` | Provider reviewed a payment's proof |
-| `INVOICE_LINKED` | A self-billed invoice was linked to a subscription or payment |
-| `SUBSCRIPTION_ACTIVATED` | Subscription reached `ACTIVE` (first billing period opened) |
-| `TIER_CHANGE_REQUESTED` | [Change Tier](change-tier.md) created a payment (same-interval upgrade, or any billing-interval change) |
-| `TIER_CHANGE_SCHEDULED` | A tier/interval change was scheduled to apply at `current_period_end` — either a free same-interval downgrade (immediately, at request time) or a paid billing-interval change (once its payment's invoice authorizes) |
-| `TIER_CHANGED` | A tier and/or billing-interval change actually took effect |
-| `SUBSCRIPTION_CANCELLATION_SCHEDULED` | [`DELETE /v1/subscriptions`](cancel-subscription.md) scheduled an end-of-period cancellation |
-| `SUBSCRIPTION_CANCELLED` | Subscription reached `CANCELLED` (scheduled cancellation applied, or admin override) |
-| `RENEWAL_DUE` | A renewal payment was opened ahead of `current_period_end` |
-| `SUBSCRIPTION_RENEWED` | A renewal payment's invoice authorized, extending the billing period |
-| `SUBSCRIPTION_EXPIRED` | Subscription ran past its renewal grace period with no payment and was downgraded to FREE |
+| `VERIFICATION_EMAIL_SENT` / `VERIFICATION_EMAIL_FAILED` / `VERIFICATION_EMAIL_DELIVERED` / `VERIFICATION_EMAIL_TEMP_FAILED` / `VERIFICATION_EMAIL_COMPLAINED` | Estado de entrega del correo de verificación de registro |
+| `EMAIL_VERIFIED` | El correo del tenant fue verificado |
+| `SUBSCRIPTION_CREATED` | Se inició una suscripción (`POST /v1/subscriptions` o en la promoción) |
+| `PAYMENT_REPORTED` | Se envió el comprobante de transferencia para un pago |
+| `PAYMENT_VERIFIED` / `PAYMENT_REJECTED` | El proveedor revisó el comprobante de un pago |
+| `INVOICE_LINKED` | Se vinculó una factura autofacturada a una suscripción o pago |
+| `SUBSCRIPTION_ACTIVATED` | La suscripción alcanzó el estado `ACTIVE` (se abrió el primer periodo de facturación) |
+| `TIER_CHANGE_REQUESTED` | [Cambiar de Plan](change-tier.md) creó un pago (mejora en el mismo intervalo, o cualquier cambio de intervalo de facturación) |
+| `TIER_CHANGE_SCHEDULED` | Se programó un cambio de plan/intervalo para aplicarse en `current_period_end` — ya sea una degradación gratuita en el mismo intervalo (de inmediato, al momento de la solicitud) o un cambio de intervalo de facturación pagado (una vez que la factura de su pago se autoriza) |
+| `TIER_CHANGED` | Un cambio de plan y/o intervalo de facturación realmente tomó efecto |
+| `SUBSCRIPTION_CANCELLATION_SCHEDULED` | [`DELETE /v1/subscriptions`](cancel-subscription.md) programó una cancelación al final del periodo |
+| `SUBSCRIPTION_CANCELLED` | La suscripción alcanzó el estado `CANCELLED` (se aplicó la cancelación programada, o hubo intervención administrativa) |
+| `RENEWAL_DUE` | Se abrió un pago de renovación antes de `current_period_end` |
+| `SUBSCRIPTION_RENEWED` | La factura de un pago de renovación fue autorizada, extendiendo el periodo de facturación |
+| `SUBSCRIPTION_EXPIRED` | La suscripción superó su periodo de gracia de renovación sin ningún pago y fue degradada a FREE |
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `404` | `NOT_FOUND` | Tenant could not be resolved (should not normally happen for an authenticated request) |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `404` | `NOT_FOUND` | No se pudo resolver el tenant (normalmente no debería ocurrir en una solicitud autenticada) |
+| `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
 
-## Notes
+## Notas
 
-- Returns an empty array if nothing has happened yet beyond registration.
-- Not paginated — the full history is returned every time. Fine for typical tenant lifetime volume; if this ever needs pagination, `?sinceId=` (mirroring [Notifications](notifications.md)) would be the natural addition.
+- Devuelve un arreglo vacío si aún no ha ocurrido nada más allá del registro.
+- No está paginado — se devuelve el historial completo cada vez. Es suficiente para el volumen típico de vida útil de un tenant; si en algún momento se necesita paginación, `?sinceId=` (siguiendo el patrón de [Notificaciones](notifications.md)) sería la adición natural.

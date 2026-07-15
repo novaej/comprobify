@@ -1,27 +1,27 @@
-# Create Invoice
+# Crear Factura
 
-Creates, validates, and signs a new electronic invoice.
+Crea, valida y firma una nueva factura electrónica.
 
 ```
 POST /v1/documents
 ```
 
-For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-note.md) — the request body is different (no `payments` block; requires `originalDocument` + `motivo` instead).
+Para notas de crédito (`documentType: "04"`), consulta [Crear Nota de Crédito](create-credit-note.md) — el cuerpo de la solicitud es diferente (sin bloque `payments`; requiere `originalDocument` + `motivo` en su lugar).
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
 ## Headers
 
-| Header | Required | Description |
+| Header | Requerido | Descripción |
 |---|---|---|
-| `Authorization` | Yes | Bearer API key |
-| `X-Issuer-Id` | Yes | Numeric id of the issuing branch (from `GET /v1/issuers`). Identifies which branch and certificate to use. |
-| `Content-Type` | Yes | `application/json` |
-| `Idempotency-Key` | No | Unique string (max 255 chars) — see [idempotency](#idempotency) |
+| `Authorization` | Sí | Llave API tipo Bearer |
+| `X-Issuer-Id` | Sí | Id numérico de la sucursal emisora (obtenido de `GET /v1/issuers`). Identifica qué sucursal y certificado usar. |
+| `Content-Type` | Sí | `application/json` |
+| `Idempotency-Key` | No | String único (máx. 255 caracteres) — consulta [idempotencia](#idempotency) |
 
-## Request body
+## Cuerpo de la solicitud
 
 ```json
 {
@@ -67,42 +67,42 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
 }
 ```
 
-### Field reference
+### Referencia de campos
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `documentType` | string | Yes | Document type code. Use `"01"` for this body shape (factura). For `"04"` (credit note), see [Create Credit Note](create-credit-note.md) |
-| `issueDate` | string | No | Date in `DD/MM/YYYY` format. Must be today's date — SRI rejects past and future dates. Defaults to today if omitted |
-| `buyer.idType` | string | Yes | 2-digit SRI identification type code (e.g. `"05"` = cedula, `"04"` = RUC) |
-| `buyer.id` | string | Yes | Buyer identification number (max 20 chars) |
-| `buyer.name` | string | Yes | Buyer full name or business name (max 300 chars) |
-| `buyer.email` | string | Yes | Buyer email — RIDE and XML are sent here on authorization |
-| `buyer.address` | string | No | Buyer address (max 300 chars) |
-| `guiaRemision` | string | No | Delivery note number in `NNN-NNN-NNNNNNNNN` format (e.g. `001-001-000000001`) |
-| `items` | array | Yes | At least one item required |
-| `items[].mainCode` | string | Yes | Product/service main code |
-| `items[].auxiliaryCode` | string | No | Secondary code |
-| `items[].description` | string | Yes | Description (max 300 chars) |
-| `items[].quantity` | string | Yes | Numeric quantity |
-| `items[].unitPrice` | string | Yes | Numeric unit price |
-| `items[].discount` | string | No | Numeric discount amount |
-| `items[].taxes` | array | Yes | At least one tax per item |
-| `items[].taxes[].code` | string | Yes | SRI tax type code |
-| `items[].taxes[].rateCode` | string | Yes | SRI tax rate code |
-| `items[].taxes[].rate` | string | Yes | Tax rate percentage |
-| `items[].taxes[].taxableBase` | string | Yes | Amount the tax is applied to |
-| `items[].taxes[].taxAmount` | string | Yes | Calculated tax amount |
-| `payments` | array | Yes | At least one payment required |
-| `payments[].method` | string | Yes | 2-digit SRI payment method code |
-| `payments[].total` | string | Yes | Numeric payment amount |
-| `payments[].term` | number | No | Payment term length — maps to SRI `plazo` |
-| `payments[].termUnit` | string | No | Payment term unit code — maps to SRI `unidadTiempo`. Must be one of the values returned by `GET /v1/catalogs/term-units` (e.g. `"dias"`, `"meses"`) |
-| `additionalInfo` | array | No | Key-value pairs included in the XML as `campoAdicional` |
+| `documentType` | string | Sí | Código de tipo de comprobante. Usa `"01"` para esta forma de cuerpo (factura). Para `"04"` (nota de crédito), consulta [Crear Nota de Crédito](create-credit-note.md) |
+| `issueDate` | string | No | Fecha en formato `DD/MM/YYYY`. Debe ser la fecha de hoy — el SRI rechaza fechas pasadas y futuras. Por defecto, hoy si se omite |
+| `buyer.idType` | string | Sí | Código de tipo de identificación SRI de 2 dígitos (p. ej. `"05"` = cédula, `"04"` = RUC) |
+| `buyer.id` | string | Sí | Número de identificación del comprador (máx. 20 caracteres) |
+| `buyer.name` | string | Sí | Nombre completo o razón social del comprador (máx. 300 caracteres) |
+| `buyer.email` | string | Sí | Correo del comprador — el RIDE y el XML se envían aquí al momento de la autorización |
+| `buyer.address` | string | No | Dirección del comprador (máx. 300 caracteres) |
+| `guiaRemision` | string | No | Número de guía de remisión en formato `NNN-NNN-NNNNNNNNN` (p. ej. `001-001-000000001`) |
+| `items` | array | Sí | Se requiere al menos un ítem |
+| `items[].mainCode` | string | Sí | Código principal del producto/servicio |
+| `items[].auxiliaryCode` | string | No | Código secundario |
+| `items[].description` | string | Sí | Descripción (máx. 300 caracteres) |
+| `items[].quantity` | string | Sí | Cantidad numérica |
+| `items[].unitPrice` | string | Sí | Precio unitario numérico |
+| `items[].discount` | string | No | Monto numérico de descuento |
+| `items[].taxes` | array | Sí | Al menos un impuesto por ítem |
+| `items[].taxes[].code` | string | Sí | Código de tipo de impuesto SRI |
+| `items[].taxes[].rateCode` | string | Sí | Código de tarifa de impuesto SRI |
+| `items[].taxes[].rate` | string | Sí | Porcentaje de la tarifa de impuesto |
+| `items[].taxes[].taxableBase` | string | Sí | Monto sobre el cual se aplica el impuesto |
+| `items[].taxes[].taxAmount` | string | Sí | Monto de impuesto calculado |
+| `payments` | array | Sí | Se requiere al menos un pago |
+| `payments[].method` | string | Sí | Código de forma de pago SRI de 2 dígitos |
+| `payments[].total` | string | Sí | Monto numérico del pago |
+| `payments[].term` | number | No | Duración del plazo de pago — corresponde al `plazo` del SRI |
+| `payments[].termUnit` | string | No | Código de unidad del plazo de pago — corresponde al `unidadTiempo` del SRI. Debe ser uno de los valores devueltos por `GET /v1/catalogs/term-units` (p. ej. `"dias"`, `"meses"`) |
+| `additionalInfo` | array | No | Pares clave-valor incluidos en el XML como `campoAdicional` |
 
-## Response
+## Respuesta
 
-**201 Created** — new document created.
-**200 OK** — returned when the same `Idempotency-Key` + identical payload was already processed.
+**201 Created** — nuevo comprobante creado.
+**200 OK** — se devuelve cuando el mismo `Idempotency-Key` + carga útil idéntica ya fue procesado.
 
 ```json
 {
@@ -121,22 +121,22 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
 }
 ```
 
-## Idempotency
+## Idempotencia
 
-Include an `Idempotency-Key` header to make creation idempotent. Generate the key once per intended invoice and reuse it across retries:
+Incluye un header `Idempotency-Key` para hacer que la creación sea idempotente. Genera la clave una sola vez por factura prevista y reutilízala en los reintentos:
 
-- Same key + same payload → returns the existing document (no duplicate created)
-- Same key + different payload → `409 Conflict`
+- Misma clave + mismo payload → devuelve el comprobante existente (no se crea un duplicado)
+- Misma clave + payload diferente → `409 Conflict`
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `VALIDATION_FAILED` | 400 | Request body fails field validation |
-| `DOCUMENT_TYPE_NOT_ENABLED` | 400 | The issuer does not have document type `01` enabled — see [Document Types](document-types.md) |
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production issuer or vice versa) |
-| `FORBIDDEN` | 403 | The `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | The `X-Issuer-Id` issuer does not exist |
-| `CONFLICT` | 409 | Idempotency key reused with a different payload |
-| `INTERNAL_ERROR` | 500 | Unexpected server error |
+| `VALIDATION_FAILED` | 400 | El cuerpo de la solicitud falla la validación de campos |
+| `DOCUMENT_TYPE_NOT_ENABLED` | 400 | El emisor no tiene habilitado el tipo de comprobante `01` — consulta [Document Types](document-types.md) |
+| `BAD_REQUEST` | 400 | El header `X-Issuer-Id` falta o está mal formado |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o desajuste de ambiente (llave sandbox apuntando a un emisor de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a un tenant diferente |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `CONFLICT` | 409 | Se reutilizó la clave de idempotencia con un payload diferente |
+| `INTERNAL_ERROR` | 500 | Error inesperado del servidor |
