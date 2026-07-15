@@ -5,7 +5,7 @@
 // checkAuthorization() — the reconciliation job never does, it only
 // re-publishes (see src/services/queue-reconciliation.service.js).
 require('dotenv').config();
-require('../instrument');
+const Sentry = require('../instrument');
 
 const config = require('../src/config');
 const { validateCoreConfig } = require('../src/config/validate');
@@ -92,12 +92,27 @@ async function start() {
   // silently stop consuming after any connection drop.
   await queueService.onConnect((channel) => {
     registerConsumers(channel).catch((err) => {
+      // The worker is connected but NOT consuming — worse than fully down,
+      // since it looks alive. Sentry's automatic uncaught-exception capture
+      // never sees this (we're catching it ourselves), so it needs an
+      // explicit report or this failure mode is invisible everywhere except
+      // Render's console logs.
       console.error('[sri-worker] failed to register consumers:', err.message);
+      Sentry.captureException(err);
     });
   });
 }
 
-start().catch((err) => {
+start().catch(async (err) => {
+  // The worker never came up at all (bad RABBITMQ_URL, DB unreachable,
+  // etc.) — same reasoning as above: our own .catch() means Sentry's
+  // automatic capture never fires, so report explicitly before exiting.
+  // captureException() only queues the event — it doesn't send it — so
+  // process.exit() right after would race the network request and could
+  // kill the process before Sentry ever receives it. flush() waits (up to
+  // 2s) for any queued events to actually go out first.
   console.error('[sri-worker] fatal error during startup:', err);
+  Sentry.captureException(err);
+  await Sentry.flush(2000);
   process.exit(1);
 });
