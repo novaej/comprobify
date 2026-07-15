@@ -1,4 +1,4 @@
-// "Make sure a message exists, never do the work" (NEXT_STEPS.md item 2).
+// "Make sure a message exists, never do the work" (see ADR-019).
 // This never calls SRI — that's the worker's job alone
 // (workers/sri-worker.js). It only finds documents whose publish to
 // RabbitMQ was never confirmed or has gone stale, and re-publishes a fresh

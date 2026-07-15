@@ -17,7 +17,7 @@ const config = {
     testBaseUrl: process.env.SRI_TEST_BASE_URL || 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws',
     prodBaseUrl: process.env.SRI_PROD_BASE_URL || 'https://cel.sri.gob.ec/comprobantes-electronicos-ws',
   },
-  // RabbitMQ — the async SRI send/authorize pipeline (NEXT_STEPS.md item 2).
+  // RabbitMQ — the async SRI send/authorize pipeline (see ADR-019).
   // sriExchange is a single durable direct exchange; the send/authorize
   // queues bind to it with routing keys 'send'/'authorize' (queue.service.js).
   rabbitmq: {

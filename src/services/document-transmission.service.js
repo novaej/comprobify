@@ -163,7 +163,7 @@ async function checkAuthorization(accessKey, issuer) {
   return formatDocument(updated);
 }
 
-// Queues a document for async SRI submission (NEXT_STEPS.md item 2). Moves
+// Queues a document for async SRI submission (see ADR-019). Moves
 // the document to PENDING_SEND — durably, in Postgres, regardless of publish
 // outcome — then attempts a broker-confirmed publish. The worker
 // (workers/sri-worker.js) is the only code that calls sendToSri() itself; if
@@ -197,7 +197,7 @@ async function queueSend(accessKey, issuer) {
   return formatDocument(updated);
 }
 
-// Queues an authorization check (NEXT_STEPS.md item 2). Unlike queueSend,
+// Queues an authorization check (see ADR-019). Unlike queueSend,
 // this doesn't transition status itself — RECEIVED already means "awaiting
 // authorization"; only checkAuthorization() (called by the worker) decides
 // the actual outcome. If the publish fails, queue-reconciliation.service.js's

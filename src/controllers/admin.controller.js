@@ -263,7 +263,7 @@ const runQuotaJobs = async (req, res) => {
  * POST /api/admin/jobs/queue-reconciliation
  *
  * Re-publishes to RabbitMQ any document whose send/authorize-check dispatch
- * was never confirmed or has gone stale (NEXT_STEPS.md item 2) — never calls
+ * was never confirmed or has gone stale (see ADR-019) — never calls
  * SRI itself, only ensures a message exists for workers/sri-worker.js to
  * eventually pick up. See queue-reconciliation.service.js.
  *

@@ -1,5 +1,5 @@
 // Standalone RabbitMQ consumer process for the async SRI send/authorize
-// pipeline (NEXT_STEPS.md item 2). Started separately from the API
+// pipeline (see ADR-019). Started separately from the API
 // (`npm run worker`), deployed as its own Render service. This is the only
 // place that calls documentTransmissionService.sendToSri()/
 // checkAuthorization() — the reconciliation job never does, it only
@@ -8,8 +8,8 @@ require('dotenv').config();
 require('../instrument');
 
 const config = require('../src/config');
-const validateConfig = require('../src/config/validate');
-validateConfig(config);
+const { validateCoreConfig } = require('../src/config/validate');
+validateCoreConfig(config);
 
 const queueService = require('../src/services/queue.service');
 const documentTransmissionService = require('../src/services/document-transmission.service');

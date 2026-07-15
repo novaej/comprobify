@@ -24,7 +24,7 @@ const getCreditNotes = async (req, res) => {
   res.json({ ok: true, ...result });
 };
 
-// Async only (NEXT_STEPS.md item 2) — always queues and returns 202. The
+// Async only (see ADR-019) — always queues and returns 202. The
 // actual SRI call happens in workers/sri-worker.js; sendToSri/
 // checkAuthorization in document-transmission.service.js are no longer
 // called from the HTTP layer at all.
