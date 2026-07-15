@@ -280,48 +280,80 @@ Step-by-step:
 
 ---
 
-### `document-transmission.service.js` — POST /:key/send + GET /:key/authorize
+### `document-transmission.service.js` — POST /:key/send + GET /:key/authorize (async, RabbitMQ-backed — ADR-019)
 
-**`sendToSri(accessKey, issuer)`**
+`POST /:key/send` and `GET /:key/authorize` no longer call SRI inline. Each HTTP call only queues work and returns `202`; the actual SRI call happens later, in a separate consumer process. There are now two layers in this file: the **HTTP-facing queue functions** (called by `documents.controller.js`) and the **original SRI-calling functions** (unchanged, but now called only by `workers/sri-worker.js`).
+
+**`queueSend(accessKey, issuer)`** — HTTP-facing, called from the controller
 
 ```
-1. findByAccessKey(accessKey, issuer.id)   — tenant-scoped
+1. findByAccessKey(accessKey, issuer.id)
+2. assertTransition(document.status, DocumentStatus.PENDING_SEND)
+   → Throws AppError 400 if status is not SIGNED (the only valid predecessor of PENDING_SEND)
+3. documentModel.updateStatus(id, 'PENDING_SEND')   — durable in Postgres BEFORE any publish attempt
+4. documentEventModel.create('STATUS_CHANGED', SIGNED → PENDING_SEND, ...)
+5. queueService.publishConfirmed('send', { documentId, accessKey, issuerId, sandbox })
+   → On broker-confirmed publish: updateStatus({ send_dispatch_attempted_at: NOW() })
+   → On failure/timeout: log a warning and continue — the document is already PENDING_SEND regardless;
+     queue-reconciliation.service.js will re-publish it later
+6. Return formatDocument(updated)   — status is PENDING_SEND, no SRI result yet
+```
+
+**`queueAuthorizationCheck(accessKey, issuer)`** — HTTP-facing, called from the controller
+
+```
+1. findByAccessKey(accessKey, issuer.id)
+2. assertTransition(document.status, DocumentStatus.AUTHORIZED)
+   → Throws AppError 400 if status is not RECEIVED (unchanged precondition)
+3. queueService.publishConfirmed('authorize', { documentId, accessKey, issuerId, sandbox })
+   → On broker-confirmed publish: updateStatus({ authorize_dispatch_attempted_at: NOW() })
+   → On failure/timeout: log a warning and continue — queue-reconciliation.service.js also
+     independently publishes an authorize-check for any RECEIVED document past a delay threshold,
+     whether or not a client ever calls this endpoint
+4. Return formatDocument(document)   — status is still RECEIVED, no SRI result yet
+```
+
+**`sendToSri(accessKey, issuer)`** and **`checkAuthorization(accessKey, issuer)`** — unchanged internals, now called only by `workers/sri-worker.js`'s message handlers (which resolve `issuer` from the message's `issuerId`/`sandbox` via `issuerModel.findById` first, since there's no `req.issuer` in a worker process):
+
+```
+sendToSri:
+1. findByAccessKey(accessKey, issuer.id)
 2. assertTransition(document.status, DocumentStatus.RECEIVED)
-   → Throws AppError 400 if status is not SIGNED (the only valid predecessor of RECEIVED/RETURNED)
+   → now only ever called with status PENDING_SEND (the HTTP layer moved it there in step 3 above)
 3. sriService.sendReceipt(signedXml, issuer.environment)   SOAP call with retry
-   → On network throw: log ERROR event, re-throw
+   → On network throw: log ERROR event, re-throw — worker nacks (no requeue); reconciliation retries
 4. sriResponseModel.create(...)   persist raw SOAP response
 5. newStatus = result.status === 'RECIBIDA' ? RECEIVED : RETURNED
 6. documentModel.updateStatus(id, newStatus)
 7. documentEventModel.create('SENT', ...)
 8. Return formatDocument(updated)
-```
 
-**`checkAuthorization(accessKey, issuer)`**
-
-```
+checkAuthorization:
 1. findByAccessKey(accessKey, issuer.id)
-2. assertTransition(document.status, DocumentStatus.AUTHORIZED)
-   → Throws AppError 400 if status is not RECEIVED
+2. assertTransition(document.status, DocumentStatus.AUTHORIZED)   → still requires RECEIVED
 3. sriService.checkAuthorization(accessKey, issuer.environment)   SOAP call
    → unescapeXml(comprobante) decodes &lt; &gt; &amp; etc. from the SOAP envelope
-   → On network throw: log ERROR event, re-throw
+   → On network throw: log ERROR event, re-throw — same nack/reconciliation retry path
 4. sriResponseModel.create(...)
 5. [result.pending] → return current document unchanged
 6. newStatus = result.status === 'AUTORIZADO' ? AUTHORIZED : NOT_AUTHORIZED
 7. documentModel.updateStatus(id, newStatus, extraFields)
    extraFields [AUTHORIZED]: authorization_number, authorization_date, authorization_xml
 8. documentEventModel.create('STATUS_CHANGED', ...)
-9. [AUTHORIZED] emailService.sendInvoiceAuthorized(updated)  [fire-and-forget]
+9. [AUTHORIZED] emailService.sendInvoiceAuthorized(updated)  [fire-and-forget — unchanged, Phase 2 candidate]
    → On success: updateStatus({ email_status: 'SENT' }) + EMAIL_SENT event
    → On no email: updateStatus({ email_status: 'SKIPPED' })
    → On failure: updateStatus({ email_status: 'FAILED', email_error }) + EMAIL_FAILED event
 10. Return formatDocument(updated)
 ```
 
-**Why fire-and-forget for email?** The buyer notification is a convenience feature — it must not block or fail the authorization response. The document is already `AUTHORIZED` in the DB before the email is attempted. Failed sends are retried via `POST /email-retry` or `POST /:accessKey/email-retry`.
+If the worker's message handler catches a state-machine violation (`AppError` with `statusCode: 400`), it `ack`s the message as benign — that means a redelivery already processed this document (expected under RabbitMQ's at-least-once delivery), not a real failure. Any other error `nack`s with `requeue: false`; the message is never retried by RabbitMQ itself — only `POST /v1/admin/jobs/queue-reconciliation` re-publishes, and only after re-checking Postgres state first.
 
-**Why keep send and authorize as separate API calls?** SRI's offline reception API (`RecepcionComprobantesOffline`) is fire-and-accept: it validates structure and queues the document but does not authorize it immediately. Authorization requires a separate SOAP call to `AutorizacionComprobantesOffline`. The two-step split mirrors SRI's own protocol.
+**Why fire-and-forget for email?** The buyer notification is a convenience feature — it must not block or fail the worker's processing of the authorization message. The document is already `AUTHORIZED` in the DB before the email is attempted. Failed sends are retried via `POST /email-retry` or `POST /:accessKey/email-retry`.
+
+**Why keep send and authorize as separate API calls?** SRI's offline reception API (`RecepcionComprobantesOffline`) is fire-and-accept: it validates structure and queues the document but does not authorize it immediately. Authorization requires a separate SOAP call to `AutorizacionComprobantesOffline`. The two-step split mirrors SRI's own protocol — the switch to async queuing doesn't change this, it just means each of those two SOAP calls is now made by the worker instead of inline in the request.
+
+**Why does `queueAuthorizationCheck` exist at all if reconciliation calls it automatically?** The reconciliation job only checks `RECEIVED` documents *older than* a delay threshold (SRI needs processing time). A client calling `GET /:key/authorize` immediately after `POST /:key/send` completes is an explicit "check now" signal — useful for tighter client-side polling loops that don't want to wait for the reconciliation job's next sweep.
 
 ---
 
@@ -704,28 +736,66 @@ POST /v1/documents
 → 201 { ok: true, document: { accessKey, documentType, sequential, status, ... } }  (new)
 → 200 { ok: true, document: {...} }   (idempotent replay)
 
-POST /v1/documents/:key/send
+POST /v1/documents/:key/send   (async — ADR-019; no more inline SRI call)
   └── authenticate → req.issuer
-        └── documentTransmission.sendToSri(accessKey, issuer)
-              ├── assertTransition(status, RECEIVED)   [throws 400 if not SIGNED]
-              ├── sriService.sendReceipt()    fetchWithRetry → SOAP → parse estado
-              ├── sriResponseModel.create()
-              ├── documentModel.updateStatus(RECEIVED | RETURNED)
-              └── documentEventModel.create(SENT)
-
-GET /v1/documents/:key/authorize
-  └── authenticate → req.issuer
-        └── documentTransmission.checkAuthorization(accessKey, issuer)
-              ├── assertTransition(status, AUTHORIZED)  [throws 400 if not RECEIVED]
-              ├── sriService.checkAuthorization()   fetchWithRetry → SOAP → unescapeXml → parse estado
-              ├── sriResponseModel.create()
-              ├── documentModel.updateStatus(AUTHORIZED | NOT_AUTHORIZED)
+        └── documentTransmission.queueSend(accessKey, issuer)
+              ├── assertTransition(status, PENDING_SEND)   [throws 400 if not SIGNED]
+              ├── documentModel.updateStatus(PENDING_SEND)        durable BEFORE any publish attempt
               ├── documentEventModel.create(STATUS_CHANGED)
-              └── [AUTHORIZED] emailService.sendInvoiceAuthorized()  [fire-and-forget]
-                    ├── rideService.generate()     → PDF Buffer
-                    ├── Buffer.from(authorization_xml)  → XML Buffer
-                    ├── mailgunProvider.send(to, attachments)
-                    └── documentModel.updateStatus({ email_status }) + EMAIL_SENT/EMAIL_FAILED event
+              ├── queueService.publishConfirmed('send', {...})   broker-confirmed publish, 3s timeout
+              └── [confirmed] documentModel.updateStatus({ send_dispatch_attempted_at })
+                    [failed/timed out] log warning — queue-reconciliation.service.js retries later
+
+→ 202 { ok: true, document: { status: 'PENDING_SEND', ... } }   — no SRI result yet
+
+GET /v1/documents/:key/authorize   (async — ADR-019; no more inline SRI call)
+  └── authenticate → req.issuer
+        └── documentTransmission.queueAuthorizationCheck(accessKey, issuer)
+              ├── assertTransition(status, AUTHORIZED)  [throws 400 if not RECEIVED]
+              ├── queueService.publishConfirmed('authorize', {...})
+              └── [confirmed] documentModel.updateStatus({ authorize_dispatch_attempted_at })
+                    [failed/timed out] log warning — queue-reconciliation.service.js also independently
+                    publishes an authorize-check for any RECEIVED document past a delay threshold
+
+→ 202 { ok: true, document: { status: 'RECEIVED', ... } }   — no authorization result yet
+
+──────────────────────────────────────────────────────────────────────────────
+workers/sri-worker.js   (standalone process, npm run worker — NOT part of the API request cycle)
+  ├── queueService.onConnect(registerConsumers)   re-subscribes on every (re)connect
+  └── consume sri.send / sri.authorize queues
+        ├── [sri.send message]
+        │     ├── issuerModel.findById(issuerId); issuer.sandbox = message.sandbox
+        │     └── documentTransmission.sendToSri(accessKey, issuer)   — same steps as before ADR-019:
+        │           ├── assertTransition(status, RECEIVED)   [now only ever PENDING_SEND → RECEIVED/RETURNED]
+        │           ├── sriService.sendReceipt()    fetchWithRetry → SOAP → parse estado
+        │           ├── sriResponseModel.create()
+        │           ├── documentModel.updateStatus(RECEIVED | RETURNED)
+        │           └── documentEventModel.create(SENT)
+        │     ├── [state-machine violation] ack (benign — already processed by another delivery)
+        │     └── [any other error] nack(requeue: false)  — RabbitMQ never retries; reconciliation does
+        │
+        └── [sri.authorize message]
+              ├── issuerModel.findById(issuerId); issuer.sandbox = message.sandbox
+              └── documentTransmission.checkAuthorization(accessKey, issuer)   — unchanged internals:
+                    ├── assertTransition(status, AUTHORIZED)  [throws 400 if not RECEIVED]
+                    ├── sriService.checkAuthorization()   fetchWithRetry → SOAP → unescapeXml → parse estado
+                    ├── sriResponseModel.create()
+                    ├── documentModel.updateStatus(AUTHORIZED | NOT_AUTHORIZED)
+                    ├── documentEventModel.create(STATUS_CHANGED)
+                    └── [AUTHORIZED] emailService.sendInvoiceAuthorized()  [fire-and-forget]
+                          ├── rideService.generate()     → PDF Buffer
+                          ├── Buffer.from(authorization_xml)  → XML Buffer
+                          ├── mailgunProvider.send(to, attachments)
+                          └── documentModel.updateStatus({ email_status }) + EMAIL_SENT/EMAIL_FAILED event
+
+POST /v1/admin/jobs/queue-reconciliation   (external cron, every 1-5 minutes — never calls SRI itself)
+  └── queueReconciliationService.runAll()
+        ├── [per schema: public, sandbox] SELECT ... WHERE status='PENDING_SEND' AND
+        │     (send_dispatch_attempted_at IS NULL OR stale) FOR UPDATE SKIP LOCKED
+        │     → re-publish 'send' message, stamp send_dispatch_attempted_at on confirm
+        └── [per schema: public, sandbox] SELECT ... WHERE status='RECEIVED' AND old enough AND
+              (authorize_dispatch_attempted_at IS NULL OR stale) FOR UPDATE SKIP LOCKED
+              → re-publish 'authorize' message, stamp authorize_dispatch_attempted_at on confirm
 
 POST /v1/documents/:key/rebuild
   └── authenticate → req.issuer

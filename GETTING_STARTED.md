@@ -12,6 +12,7 @@ Get the API running locally from scratch.
 | npm | 9.x | bundled with Node.js |
 | PostgreSQL | 14.x | https://www.postgresql.org |
 | xmllint | any | `brew install libxml2` (macOS) · `apt install libxml2-utils` (Ubuntu) |
+| RabbitMQ | any | Docker is fastest for local dev — see step 3 below. Required: the document send/authorize pipeline is fully async. |
 
 ---
 
@@ -110,6 +111,14 @@ ENCRYPTION_KEY=             # see step 4
 
 # Admin API secret — protects /admin/* endpoints (see step 5)
 ADMIN_SECRET=               # see step 5
+
+# RabbitMQ — required. The document send/authorize pipeline is fully async:
+# POST /:key/send and GET /:key/authorize always queue and return 202;
+# workers/sri-worker.js is the only process that calls SRI. For local dev,
+# the fastest option is the official Docker image (no account needed):
+#   docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+# then RABBITMQ_URL=amqp://guest:guest@localhost:5672
+RABBITMQ_URL=
 
 # Email delivery (optional — omit to disable buyer notifications)
 EMAIL_PROVIDER=mailgun
@@ -289,7 +298,19 @@ The API is available at: **http://localhost:8080**
 
 ---
 
-## 10. Verify
+## 10. Start the worker
+
+`POST /:key/send` and `GET /:key/authorize` only queue a message — nothing calls SRI until a separate worker process consumes it. Without this running, documents will sit in `PENDING_SEND`/`RECEIVED` indefinitely.
+
+```bash
+npm run worker
+```
+
+Run this in a second terminal, alongside `npm start`. It's a standalone long-running process, not started automatically by the API.
+
+---
+
+## 11. Verify
 
 ```bash
 # Replace <token> with the Bearer token returned by POST /v1/admin/issuers
@@ -385,18 +406,30 @@ curl -s -X POST http://localhost:8080/v1/documents \
 
 ## Full lifecycle (dev/test environment)
 
+`send` and `authorize` are asynchronous — each call below only queues the work and returns `202` immediately (`status` stays `PENDING_SEND`/`RECEIVED`, not the final SRI result). Make sure `npm run worker` (step 10 above) is running in another terminal, or these will queue forever with nothing to process them. After each call, poll `GET /v1/documents/$ACCESS_KEY` until `status` reaches the value you're expecting.
+
 ```bash
 ACCESS_KEY=<accessKey from create response>
 
-# 1. Send to SRI
+# 1. Queue submission to SRI — returns 202, status: PENDING_SEND
 curl -s -X POST http://localhost:8080/v1/documents/$ACCESS_KEY/send \
   -H "Authorization: Bearer $TOKEN" \
   -H "X-Issuer-Id: $ISSUER_ID" | jq
 
-# 2. Check authorization
+# Poll until status is RECEIVED or RETURNED (the worker processes this in the background)
+curl -s http://localhost:8080/v1/documents/$ACCESS_KEY \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Issuer-Id: $ISSUER_ID" | jq '.document.status'
+
+# 2. Queue an authorization check — returns 202, status still RECEIVED
 curl -s http://localhost:8080/v1/documents/$ACCESS_KEY/authorize \
   -H "Authorization: Bearer $TOKEN" \
   -H "X-Issuer-Id: $ISSUER_ID" | jq
+
+# Poll again until status is AUTHORIZED or NOT_AUTHORIZED
+curl -s http://localhost:8080/v1/documents/$ACCESS_KEY \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Issuer-Id: $ISSUER_ID" | jq '.document.status'
 
 # 3. Download RIDE PDF
 curl -s http://localhost:8080/v1/documents/$ACCESS_KEY/ride \

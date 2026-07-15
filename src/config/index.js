@@ -17,6 +17,25 @@ const config = {
     testBaseUrl: process.env.SRI_TEST_BASE_URL || 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws',
     prodBaseUrl: process.env.SRI_PROD_BASE_URL || 'https://cel.sri.gob.ec/comprobantes-electronicos-ws',
   },
+  // RabbitMQ — the async SRI send/authorize pipeline (see ADR-019).
+  // sriExchange is a single durable direct exchange; the send/authorize
+  // queues bind to it with routing keys 'send'/'authorize' (queue.service.js).
+  rabbitmq: {
+    url: process.env.RABBITMQ_URL || '',
+    sriExchange: process.env.RABBITMQ_SRI_EXCHANGE || 'sri.direct',
+  },
+  // Thresholds for queue-reconciliation.service.js's two SKIP LOCKED sweeps
+  // (POST /v1/admin/jobs/queue-reconciliation). sendStaleMinutes/
+  // authorizeStaleMinutes gate re-publishing a document whose dispatch was
+  // never confirmed or has gone stale; authorizeCheckDelayMinutes is the
+  // minimum time a RECEIVED document must sit before its first
+  // authorize-check publish (SRI needs processing time first).
+  queueReconciliation: {
+    sendStaleMinutes: parseInt(process.env.QUEUE_RECONCILE_SEND_STALE_MINUTES, 10) || 5,
+    authorizeCheckDelayMinutes: parseInt(process.env.QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES, 10) || 5,
+    authorizeStaleMinutes: parseInt(process.env.QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES, 10) || 5,
+    batchLimit: parseInt(process.env.QUEUE_RECONCILE_BATCH_LIMIT, 10) || 100,
+  },
   email: {
     provider:                 process.env.EMAIL_PROVIDER                 || 'mailgun',
     from:                     process.env.EMAIL_FROM                     || '',

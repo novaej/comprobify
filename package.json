@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
+    "worker": "node workers/sri-worker.js",
     "migrate": "node db/migrate.js",
     "db:reset": "NODE_ENV=development node db/reset.js",
     "test": "jest",
@@ -20,6 +21,7 @@
   "license": "ISC",
   "dependencies": {
     "@sentry/node": "^10.56.0",
+    "amqplib": "^2.0.1",
     "buffer": "^6.0.3",
     "bwip-js": "^4.8.0",
     "cors": "^2.8.6",

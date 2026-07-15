@@ -2,7 +2,7 @@ require('dotenv').config();
 
 require('./instrument');
 
-const validateConfig = require('./src/config/validate');
+const { validateConfig } = require('./src/config/validate');
 const config = require('./src/config');
 const migrate = require('./db/migrate');
 

@@ -29,28 +29,29 @@ Creation and rebuild services already guard invoice-only logic (e.g. the payment
 
 ## 2. Async Worker for SRI Submission (RabbitMQ)
 
-**Priority: Medium — important for production reliability**
+**Priority: Medium — important for production reliability. Phase 1 shipped; Phase 2 remains.**
 
-`POST /:key/send` and `GET /:key/authorize` block the HTTP request while waiting for SRI's SOAP response (typically 5–30 s, can time out). This causes long-hanging requests and poor client experience under load. Separately, the codebase already has a growing list of fire-and-forget side effects (email sends, notification creation, webhook fan-out, subscription activation hooks) that are unawaited promises with only a `.catch(console.warn)` — if the process crashes mid-flight, or the call throws, that work is silently lost with no retry. Both problems share the same fix: a durable, broker-backed queue with **Postgres as the source of truth and RabbitMQ purely as the dispatcher, never the record.**
+`POST /:key/send` and `GET /:key/authorize` used to block the HTTP request while waiting for SRI's SOAP response (typically 5–30 s, can time out). Separately, the codebase has a growing list of fire-and-forget side effects (email sends, notification creation, webhook fan-out, subscription activation hooks) that are unawaited promises with only a `.catch(console.warn)` — if the process crashes mid-flight, or the call throws, that work is silently lost with no retry. Both problems share the same fix: a durable, broker-backed queue with **Postgres as the source of truth and RabbitMQ purely as the dispatcher, never the record.** See [ADR-019](docs/adr/019-rabbitmq-async-sri-submission.md) and CLAUDE.md's "Async SRI submission via RabbitMQ" entry for the full design.
 
-**Architecture:**
-- Postgres remains the only durable record of *what needs to happen* — a status column (reusing existing ones like `documents.status`/`email_status` where possible) written in the same transaction as the business change. RabbitMQ never originates state; it only carries "go process this" signals.
-- A publisher pushes a message to RabbitMQ after the transaction commits, and only marks the row dispatched (e.g. `dispatched_at = NOW()`) on a **broker-confirmed** publish (RabbitMQ publisher confirms — not just "the call didn't throw").
-- Consumers are the *only* place that does the actual work (SRI SOAP calls, sending an email, creating a notification, fanning out a webhook). No duplicate business logic in a DB-side fallback processor — that would let the two implementations drift.
-- A periodic reconciliation job (same pattern as the existing `POST /v1/admin/jobs/*` cron endpoints) finds rows stuck without a dispatch confirmation past a threshold and **re-publishes** them — it never processes them itself. A RabbitMQ outage therefore degrades to reconciliation-interval latency, not lost work or failed requests.
-- Consumers must be idempotent (check the entity's current status/state-machine position before acting, mirroring `assertTransition`) since a false-negative publisher confirm can cause a redelivery.
-- Deploy as a single shared RabbitMQ instance (not one per system) using a dedicated vhost + credentials scoped to this API, so the same broker can later host other systems (e.g. comprobify-web) without cross-contamination.
+**Architecture (as built):**
+- Postgres remains the only durable record of *what needs to happen* — `documents.status`/dispatch-tracking columns, written before any publish attempt. RabbitMQ never originates state; it only carries "go process this" signals.
+- A publisher pushes a message to RabbitMQ and only marks the row dispatched (`send_dispatch_attempted_at`/`authorize_dispatch_attempted_at`) on a **broker-confirmed** publish (`src/services/queue.service.js`'s `publishConfirmed`, amqplib confirm channel).
+- Consumers are the *only* place that does the actual work. `workers/sri-worker.js` is the only code that calls SRI. No duplicate business logic in a DB-side fallback processor.
+- `POST /v1/admin/jobs/queue-reconciliation` (`src/services/queue-reconciliation.service.js`) finds rows stuck without a dispatch confirmation past a threshold and **re-publishes** them — it never processes them itself. A RabbitMQ outage therefore degrades to reconciliation-interval latency, not lost work or failed requests.
+- The worker is idempotent (a state-machine violation on redelivery is `ack`'d as benign, not treated as a failure).
+- Deployed as a single shared CloudAMQP instance (`shared-broker`, AWS us-east-1 to match Render's `virginia` region) rather than one per system, isolated by vhost/credentials — not yet exercised with more than one vhost since the free tier only provisions one.
 
-**Phase 1 — the original blocking-request problem:**
-- `PROCESSING_MODE` env var: `sync` (current default) | `async`
-- New `PENDING_SEND` status: document queued for transmission
-- In async mode: `POST /:key/send` → sets `PENDING_SEND`, publishes to RabbitMQ, returns 202 immediately
-- RabbitMQ consumer submits to SRI → updates status (`RECEIVED`/`RETURNED`)
-- A consumer also handles `RECEIVED` documents older than N minutes to check authorization (replaces the old "worker polls" approach with a delayed/scheduled message)
-- State machine and DB trigger must be updated to allow `SIGNED → PENDING_SEND`
-- Reconciliation job re-publishes any `PENDING_SEND` (or `RECEIVED`-awaiting-authorization) row whose dispatch was never confirmed or has gone stale
+**Phase 1 — shipped:**
+- Async-only, no sync fallback — no `PROCESSING_MODE` toggle. `POST /:key/send` and `GET /:key/authorize` always queue and return `202`. (The original draft proposed a sync/async toggle as a rollback valve; dropped in favor of this codebase's "no feature flags when you can just change the code" convention — a redeploy is the rollback path if ever needed.)
+- New `PENDING_SEND` status sits between `SIGNED` and `RECEIVED`/`RETURNED` (migration `074_pending_send_status.sql` — also updates the `enforce_document_state_transition()` DB trigger, which hardcodes the transition graph independently of the JS state machine; see CLAUDE.md Common Mistake #39)
+- `workers/sri-worker.js` consumes `sri.send`/`sri.authorize` queues and calls the unchanged `sendToSri`/`checkAuthorization` functions in `document-transmission.service.js`
+- `queue-reconciliation.service.js`'s periodic sweep of `RECEIVED` documents past a delay threshold is what replaces the original "worker polls RECEIVED documents older than N minutes" idea — it publishes an authorize-check message rather than polling SRI directly
 
-**Phase 2 — migrate existing fire-and-forget side effects onto the same mechanism**, once Phase 1's publisher/consumer/reconciliation infra exists:
+**Not yet done (follow-up, not blocking):**
+- `render.yaml` now declares `comprobify-staging-queue-reconciliation` (cron) and `comprobify-staging-sri-worker` (`type: worker`) — but neither has been synced against a real Render deploy yet. The cron entry is low-risk (identical shape to the 3 already-confirmed cron jobs). The worker block's field names (`type: worker`, etc.) are unverified — if the Blueprint sync doesn't behave as expected, fall back to creating the Background Worker by hand in the dashboard first (the same recovery path originally used for the 3 cron jobs), then adjust the block to adopt it by exact name.
+- End-to-end verification against the live broker (CloudAMQP `shared-broker`) has been done manually: queuing a document, the worker consuming and calling SRI, and worker-restart recovery all confirmed working locally. Recovering a document stuck due to a **failed publish** (broker unreachable at request time, not just consumer down) via the reconciliation job has not yet been exercised end-to-end — only unit/design-level so far.
+
+**Phase 2 — migrate existing fire-and-forget side effects onto the same mechanism**, now that Phase 1's publisher/consumer/reconciliation infra exists:
 
 | Call site | Today |
 |---|---|
@@ -72,7 +73,7 @@ Each of these needs a status column (new, or reusing an existing one like `docum
 - Item 11's planned certificate-renewal audit event — a single `tenant_events` INSERT, same reasoning.
 - The admin cron batch jobs (`POST /v1/admin/jobs/notifications`, `/jobs/subscriptions`, `/jobs/quota`) — already decoupled from user-facing requests and run on their own external-cron schedule. Turning each per-tenant/per-subscription unit of work into its own queued message (for parallelism and partial-failure resilience) is a reasonable future follow-up, but is independent of Phases 1–2 and not required by them.
 
-**Effort:** High — RabbitMQ deployment (vhost + credentials), new worker process(es)/consumers, new status/dispatch-tracking columns, migration, state machine update, reconciliation job, idempotent consumers. Phase 1 alone is substantial; Phase 2 is incremental once Phase 1's infra exists.
+**Effort:** Phase 1 (shipped) was High — RabbitMQ deployment, worker process, new status/dispatch-tracking columns, migration, state machine update, reconciliation job. Phase 2 is Medium — no new infra, just moving each existing fire-and-forget call site onto the publisher/consumer/reconciliation mechanism that already exists.
 
 ---
 

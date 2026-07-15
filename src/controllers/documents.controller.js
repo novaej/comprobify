@@ -24,14 +24,18 @@ const getCreditNotes = async (req, res) => {
   res.json({ ok: true, ...result });
 };
 
+// Async only (see ADR-019) — always queues and returns 202. The
+// actual SRI call happens in workers/sri-worker.js; sendToSri/
+// checkAuthorization in document-transmission.service.js are no longer
+// called from the HTTP layer at all.
 const sendToSri = async (req, res) => {
-  const result = await documentTransmission.sendToSri(req.params.accessKey, req.issuer);
-  res.json({ ok: true, document: result });
+  const result = await documentTransmission.queueSend(req.params.accessKey, req.issuer);
+  res.status(202).json({ ok: true, document: result });
 };
 
 const checkAuthorization = async (req, res) => {
-  const result = await documentTransmission.checkAuthorization(req.params.accessKey, req.issuer);
-  res.json({ ok: true, document: result });
+  const result = await documentTransmission.queueAuthorizationCheck(req.params.accessKey, req.issuer);
+  res.status(202).json({ ok: true, document: result });
 };
 
 const rebuild = async (req, res) => {

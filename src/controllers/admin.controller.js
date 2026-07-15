@@ -2,6 +2,7 @@ const adminService = require('../services/admin.service');
 const notificationSchedulerService = require('../services/notification-scheduler.service');
 const subscriptionService = require('../services/subscription.service');
 const tenantQuotaService = require('../services/tenant-quota.service');
+const queueReconciliationService = require('../services/queue-reconciliation.service');
 const agreementService = require('../services/agreement.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
 const rideService = require('../services/ride.service');
@@ -258,6 +259,24 @@ const runQuotaJobs = async (req, res) => {
   res.json({ ok: true, ...result });
 };
 
+/**
+ * POST /api/admin/jobs/queue-reconciliation
+ *
+ * Re-publishes to RabbitMQ any document whose send/authorize-check dispatch
+ * was never confirmed or has gone stale (see ADR-019) — never calls
+ * SRI itself, only ensures a message exists for workers/sri-worker.js to
+ * eventually pick up. See queue-reconciliation.service.js.
+ *
+ * Designed to be called by an external scheduler on a short cadence (e.g.
+ * every 1-5 minutes) — this is the mechanism that recovers from a RabbitMQ
+ * outage or a missed publish, so it should run far more often than the
+ * daily/5-minute cadence of the other jobs above.
+ */
+const runQueueReconciliationJob = async (req, res) => {
+  const result = await queueReconciliationService.runAll();
+  res.json({ ok: true, ...result });
+};
+
 const getDocumentRide = async (req, res) => {
   const buffer = await rideService.generate(req.params.accessKey);
   res.setHeader('Content-Type', 'application/pdf');
@@ -268,7 +287,7 @@ const getDocumentRide = async (req, res) => {
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
-  runSubscriptionJobs, runQuotaJobs,
+  runSubscriptionJobs, runQuotaJobs, runQueueReconciliationJob,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments,
   publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion, generateTenantAgreements,

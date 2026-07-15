@@ -1,4 +1,4 @@
-const validateConfig = require('../../../src/config/validate');
+const { validateConfig, validateCoreConfig } = require('../../../src/config/validate');
 
 /**
  * Helper that returns a complete valid config object.
@@ -23,6 +23,10 @@ function validConfig(overrides = {}) {
     sri: {
       testBaseUrl: 'https://test.sri.gob.ec',
       prodBaseUrl: 'https://prod.sri.gob.ec',
+    },
+    rabbitmq: {
+      url: 'amqps://user:pass@shared-broker.rmq.cloudamqp.com/vhost',
+      sriExchange: 'sri.direct',
     },
     email: {
       provider: 'mailgun',
@@ -124,6 +128,11 @@ describe('validateConfig', () => {
       expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): ADMIN_NOTIFICATION_EMAIL');
     });
 
+    test('throws listing RABBITMQ_URL when it is missing', () => {
+      const config = validConfig({ rabbitmq: { url: '', sriExchange: 'sri.direct' } });
+      expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): RABBITMQ_URL');
+    });
+
     test('throws with format error when ENCRYPTION_KEY is present but wrong length (too short)', () => {
       const config = validConfig({ encryptionKey: 'abc' });
       expect(() => validateConfig(config)).toThrow('ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
@@ -152,7 +161,7 @@ describe('validateConfig', () => {
         },
       });
       expect(() => validateConfig(config)).toThrow(
-        'Missing required environment variable(s): MAILGUN_API_KEY, MAILGUN_DOMAIN, MAILGUN_WEBHOOK_SIGNING_KEY, EMAIL_FROM'
+        'Missing required environment variable(s): MAILGUN_API_KEY, MAILGUN_DOMAIN, EMAIL_FROM, MAILGUN_WEBHOOK_SIGNING_KEY'
       );
     });
 
@@ -237,5 +246,65 @@ describe('validateConfig', () => {
       expect(caughtError.message).toMatch(/MAILGUN_WEBHOOK_SIGNING_KEY/);
       expect(caughtError.message).toMatch(/EMAIL_FROM/);
     });
+  });
+});
+
+describe('validateCoreConfig', () => {
+  test('does not throw on a fully valid config', () => {
+    expect(() => validateCoreConfig(validConfig())).not.toThrow();
+  });
+
+  test('throws when APP_ENV is invalid', () => {
+    expect(() => validateCoreConfig(validConfig({ appEnv: 'prod' }))).toThrow(
+      'APP_ENV must be "staging" or "production"'
+    );
+  });
+
+  test('throws listing RABBITMQ_URL when missing', () => {
+    const config = validConfig({ rabbitmq: { url: '', sriExchange: 'sri.direct' } });
+    expect(() => validateCoreConfig(config)).toThrow('Missing required environment variable(s): RABBITMQ_URL');
+  });
+
+  test('throws listing MAILGUN_API_KEY/MAILGUN_DOMAIN/EMAIL_FROM when email is enabled and missing, but not MAILGUN_WEBHOOK_SIGNING_KEY', () => {
+    const config = validConfig({
+      email: {
+        provider: 'mailgun',
+        from: '',
+        mailgunApiKey: '',
+        mailgunDomain: '',
+        mailgunWebhookSigningKey: '', // API-only — must NOT appear in this error
+      },
+    });
+    expect(() => validateCoreConfig(config)).toThrow(
+      'Missing required environment variable(s): MAILGUN_API_KEY, MAILGUN_DOMAIN, EMAIL_FROM'
+    );
+  });
+
+  // These vars are only ever touched by API-only routes/services (admin
+  // auth, certificate encryption, billing, inbound webhook verification) —
+  // workers/sri-worker.js's message handlers never reach them, so
+  // validateCoreConfig must not require any of them.
+  test('does not throw when ENCRYPTION_KEY, ADMIN_SECRET, APP_BASE_URL, BANK_TRANSFER_*, ADMIN_NOTIFICATION_EMAIL, and MAILGUN_WEBHOOK_SIGNING_KEY are all missing', () => {
+    const config = validConfig({
+      encryptionKey: '',
+      adminSecret: '',
+      appBaseUrl: '',
+      bankTransfer: {
+        bankName: '',
+        accountType: '',
+        accountNumber: '',
+        accountHolder: '',
+        identification: '',
+      },
+      adminNotificationEmail: '',
+      email: {
+        provider: 'mailgun',
+        from: 'test@example.com',
+        mailgunApiKey: 'key-12345',
+        mailgunDomain: 'mg.example.com',
+        mailgunWebhookSigningKey: '',
+      },
+    });
+    expect(() => validateCoreConfig(config)).not.toThrow();
   });
 });

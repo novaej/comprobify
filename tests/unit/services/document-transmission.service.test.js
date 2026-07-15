@@ -5,6 +5,7 @@ jest.mock('../../../src/models/sri-response.model');
 jest.mock('../../../src/services/email.service');
 jest.mock('../../../src/services/notification.service');
 jest.mock('../../../src/services/subscription.service');
+jest.mock('../../../src/services/queue.service');
 
 const documentModel = require('../../../src/models/document.model');
 const documentEventModel = require('../../../src/models/document-event.model');
@@ -13,6 +14,7 @@ const sriResponseModel = require('../../../src/models/sri-response.model');
 const emailService = require('../../../src/services/email.service');
 const notificationService = require('../../../src/services/notification.service');
 const subscriptionService = require('../../../src/services/subscription.service');
+const queueService = require('../../../src/services/queue.service');
 const documentTransmission = require('../../../src/services/document-transmission.service');
 
 const ACCESS_KEY = '1234567890123456789012345678901234567890123456789';
@@ -61,7 +63,10 @@ describe('DocumentTransmissionService', () => {
     });
 
     test('logs an ERROR event and rethrows when sriService.sendReceipt throws', async () => {
-      const doc = baseDoc();
+      // sendToSri is only ever called (by the worker) on a PENDING_SEND
+      // document — SIGNED -> RECEIVED/RETURNED is no longer a valid direct
+      // transition since the send/authorize pipeline went async-only.
+      const doc = baseDoc({ status: 'PENDING_SEND' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       const sriErr = new Error('network down');
       sriService.sendReceipt.mockRejectedValue(sriErr);
@@ -69,7 +74,7 @@ describe('DocumentTransmissionService', () => {
       await expect(documentTransmission.sendToSri(ACCESS_KEY, mockIssuer)).rejects.toThrow('network down');
 
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        doc.id, 'ERROR', 'SIGNED', null,
+        doc.id, 'ERROR', 'PENDING_SEND', null,
         { operation: 'SEND', message: 'network down' },
         null, mockIssuer.id, mockIssuer.sandbox
       );
@@ -77,7 +82,7 @@ describe('DocumentTransmissionService', () => {
     });
 
     test('sets RECEIVED when SRI returns RECIBIDA', async () => {
-      const doc = baseDoc();
+      const doc = baseDoc({ status: 'PENDING_SEND' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       sriService.sendReceipt.mockResolvedValue({ status: 'RECIBIDA', messages: [], rawResponse: '<raw/>' });
       sriResponseModel.create.mockResolvedValue({});
@@ -91,7 +96,7 @@ describe('DocumentTransmissionService', () => {
       }));
       expect(documentModel.updateStatus).toHaveBeenCalledWith(doc.id, 'RECEIVED', {}, mockIssuer.id, mockIssuer.sandbox);
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        doc.id, 'SENT', 'SIGNED', 'RECEIVED', { sriStatus: 'RECIBIDA' }, null, mockIssuer.id, mockIssuer.sandbox
+        doc.id, 'SENT', 'PENDING_SEND', 'RECEIVED', { sriStatus: 'RECIBIDA' }, null, mockIssuer.id, mockIssuer.sandbox
       );
       expect(result.status).toBe('RECEIVED');
       expect(result.sriStatus).toBe('RECIBIDA');
@@ -99,7 +104,7 @@ describe('DocumentTransmissionService', () => {
     });
 
     test('sets RECEIVED (with processingRetry) when SRI returns DEVUELTA with identifier 70', async () => {
-      const doc = baseDoc();
+      const doc = baseDoc({ status: 'PENDING_SEND' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       sriService.sendReceipt.mockResolvedValue({
         status: 'DEVUELTA',
@@ -114,7 +119,7 @@ describe('DocumentTransmissionService', () => {
 
       expect(documentModel.updateStatus).toHaveBeenCalledWith(doc.id, 'RECEIVED', {}, mockIssuer.id, mockIssuer.sandbox);
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        doc.id, 'SENT', 'SIGNED', 'RECEIVED',
+        doc.id, 'SENT', 'PENDING_SEND', 'RECEIVED',
         expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
         null, mockIssuer.id, mockIssuer.sandbox
       );
@@ -122,7 +127,7 @@ describe('DocumentTransmissionService', () => {
     });
 
     test('sets RETURNED for a non-70 DEVUELTA response', async () => {
-      const doc = baseDoc();
+      const doc = baseDoc({ status: 'PENDING_SEND' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       const messages = [{ identifier: '43', message: 'SOME OTHER ERROR' }];
       sriService.sendReceipt.mockResolvedValue({ status: 'DEVUELTA', messages, rawResponse: '<raw/>' });
@@ -362,6 +367,109 @@ describe('DocumentTransmissionService', () => {
       expect(documentEventModel.create).toHaveBeenCalledWith(
         updatedDoc.id, 'EMAIL_SKIPPED', null, null, { to: updatedDoc.buyer_email }, null, updatedDoc.issuer_id, mockIssuer.sandbox
       );
+    });
+  });
+
+  describe('queueSend', () => {
+    test('throws NotFoundError when the document does not exist', async () => {
+      documentModel.findByAccessKey.mockResolvedValue(null);
+
+      await expect(documentTransmission.queueSend(ACCESS_KEY, mockIssuer))
+        .rejects.toMatchObject({ statusCode: 404 });
+      expect(queueService.publishConfirmed).not.toHaveBeenCalled();
+    });
+
+    test('throws on an invalid state transition (e.g. already PENDING_SEND)', async () => {
+      documentModel.findByAccessKey.mockResolvedValue(baseDoc({ status: 'PENDING_SEND' }));
+
+      await expect(documentTransmission.queueSend(ACCESS_KEY, mockIssuer))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_STATE_TRANSITION' });
+      expect(queueService.publishConfirmed).not.toHaveBeenCalled();
+    });
+
+    test('moves SIGNED -> PENDING_SEND, publishes, and stamps send_dispatch_attempted_at on a confirmed publish', async () => {
+      const doc = baseDoc({ status: 'SIGNED' });
+      documentModel.findByAccessKey.mockResolvedValue(doc);
+      const pendingDoc = baseDoc({ status: 'PENDING_SEND' });
+      documentModel.updateStatus.mockResolvedValue(pendingDoc);
+      documentEventModel.create.mockResolvedValue({});
+      queueService.ROUTING_KEYS = { send: 'send', authorize: 'authorize' };
+      queueService.publishConfirmed.mockResolvedValue();
+
+      const result = await documentTransmission.queueSend(ACCESS_KEY, mockIssuer);
+
+      expect(documentModel.updateStatus).toHaveBeenNthCalledWith(1, doc.id, 'PENDING_SEND', {}, mockIssuer.id, mockIssuer.sandbox);
+      expect(documentEventModel.create).toHaveBeenCalledWith(
+        doc.id, 'STATUS_CHANGED', 'SIGNED', 'PENDING_SEND', {}, null, mockIssuer.id, mockIssuer.sandbox
+      );
+      expect(queueService.publishConfirmed).toHaveBeenCalledWith('send', {
+        documentId: pendingDoc.id, accessKey: pendingDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
+      });
+      expect(documentModel.updateStatus).toHaveBeenNthCalledWith(2,
+        pendingDoc.id, 'PENDING_SEND', { send_dispatch_attempted_at: expect.any(Date) }, mockIssuer.id, mockIssuer.sandbox
+      );
+      expect(result.status).toBe('PENDING_SEND');
+    });
+
+    test('still returns the PENDING_SEND document when the publish fails (reconciliation picks it up later)', async () => {
+      const doc = baseDoc({ status: 'SIGNED' });
+      documentModel.findByAccessKey.mockResolvedValue(doc);
+      const pendingDoc = baseDoc({ status: 'PENDING_SEND' });
+      documentModel.updateStatus.mockResolvedValue(pendingDoc);
+      documentEventModel.create.mockResolvedValue({});
+      queueService.publishConfirmed.mockRejectedValue(new Error('broker unreachable'));
+
+      const result = await documentTransmission.queueSend(ACCESS_KEY, mockIssuer);
+
+      expect(result.status).toBe('PENDING_SEND');
+      // Only the SIGNED -> PENDING_SEND update happened — the dispatch
+      // timestamp was never stamped since the publish failed.
+      expect(documentModel.updateStatus).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('queueAuthorizationCheck', () => {
+    test('throws NotFoundError when the document does not exist', async () => {
+      documentModel.findByAccessKey.mockResolvedValue(null);
+
+      await expect(documentTransmission.queueAuthorizationCheck(ACCESS_KEY, mockIssuer))
+        .rejects.toMatchObject({ statusCode: 404 });
+    });
+
+    test('throws on an invalid state transition (e.g. still SIGNED)', async () => {
+      documentModel.findByAccessKey.mockResolvedValue(baseDoc({ status: 'SIGNED' }));
+
+      await expect(documentTransmission.queueAuthorizationCheck(ACCESS_KEY, mockIssuer))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_STATE_TRANSITION' });
+      expect(queueService.publishConfirmed).not.toHaveBeenCalled();
+    });
+
+    test('publishes and stamps authorize_dispatch_attempted_at without changing status', async () => {
+      const doc = baseDoc({ status: 'RECEIVED' });
+      documentModel.findByAccessKey.mockResolvedValue(doc);
+      documentModel.updateStatus.mockResolvedValue(doc);
+      queueService.publishConfirmed.mockResolvedValue();
+
+      const result = await documentTransmission.queueAuthorizationCheck(ACCESS_KEY, mockIssuer);
+
+      expect(queueService.publishConfirmed).toHaveBeenCalledWith('authorize', {
+        documentId: doc.id, accessKey: doc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
+      });
+      expect(documentModel.updateStatus).toHaveBeenCalledWith(
+        doc.id, 'RECEIVED', { authorize_dispatch_attempted_at: expect.any(Date) }, mockIssuer.id, mockIssuer.sandbox
+      );
+      expect(result.status).toBe('RECEIVED');
+    });
+
+    test('still returns the document when the publish fails (reconciliation picks it up later)', async () => {
+      const doc = baseDoc({ status: 'RECEIVED' });
+      documentModel.findByAccessKey.mockResolvedValue(doc);
+      queueService.publishConfirmed.mockRejectedValue(new Error('broker unreachable'));
+
+      const result = await documentTransmission.queueAuthorizationCheck(ACCESS_KEY, mockIssuer);
+
+      expect(result.status).toBe('RECEIVED');
+      expect(documentModel.updateStatus).not.toHaveBeenCalled();
     });
   });
 });

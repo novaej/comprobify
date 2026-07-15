@@ -3,7 +3,8 @@ const AppError = require('../errors/app-error');
 const ErrorCodes = require('./error-codes');
 
 const TRANSITIONS = Object.freeze({
-  [DocumentStatus.SIGNED]:         [DocumentStatus.RECEIVED, DocumentStatus.RETURNED],
+  [DocumentStatus.SIGNED]:         [DocumentStatus.PENDING_SEND],
+  [DocumentStatus.PENDING_SEND]:   [DocumentStatus.RECEIVED, DocumentStatus.RETURNED],
   [DocumentStatus.RECEIVED]:       [DocumentStatus.AUTHORIZED, DocumentStatus.NOT_AUTHORIZED],
   [DocumentStatus.RETURNED]:       [DocumentStatus.SIGNED],
   [DocumentStatus.NOT_AUTHORIZED]: [DocumentStatus.SIGNED],

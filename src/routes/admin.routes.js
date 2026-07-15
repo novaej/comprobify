@@ -55,5 +55,6 @@ router.post('/tenants/:id/agreements', v.verifyTenant, validateRequest, asyncHan
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));
 router.post('/jobs/subscriptions', asyncHandler(controller.runSubscriptionJobs));
 router.post('/jobs/quota', asyncHandler(controller.runQuotaJobs));
+router.post('/jobs/queue-reconciliation', asyncHandler(controller.runQueueReconciliationJob));
 
 module.exports = router;

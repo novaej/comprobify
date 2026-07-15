@@ -1608,7 +1608,7 @@
                 "send"
               ]
             },
-            "description": "Submits the signed XML to the SRI reception service. Document moves to `RECEIVED` or `RETURNED`."
+            "description": "Queues the signed XML for submission to the SRI reception service — this is asynchronous, it does not call SRI in-request. Returns 202 with the document in PENDING_SEND status. A standalone worker process (workers/sri-worker.js) picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` or `RETURNED`. Poll Get Document or Get Events to observe that transition."
           },
           "event": [
             {
@@ -1647,7 +1647,7 @@
                 "authorize"
               ]
             },
-            "description": "Queries the SRI authorization service. Document moves to `AUTHORIZED` or `NOT_AUTHORIZED`. On authorization, an email with the RIDE PDF and XML is sent to the buyer."
+            "description": "Queues an authorization check — this is asynchronous, it does not query SRI in-request. Returns 202 immediately; `status` in the response is still `RECEIVED`. A standalone worker process picks up the queued job and calls SRI; the document eventually moves to `AUTHORIZED` (an email with the RIDE PDF and XML is sent to the buyer, and a DOCUMENT_AUTHORIZED notification/webhook fires) or `NOT_AUTHORIZED`. A periodic reconciliation job also queues this check automatically for any RECEIVED document past a short delay, whether or not this endpoint is ever called."
           },
           "event": [
             {
@@ -3250,6 +3250,26 @@
               ]
             },
             "description": "Rolls over every tenant's document-quota period (`tenant_quotas`) whose `period_end` has passed — resets `document_count` to 0 for a new monthly cycle, sizing the new cap from the tenant's current `subscriptionTier`. Anchored to the OLD `period_end`, never \"now,\" so a late-running job never drifts the cycle forward.\n\nIndependent of the billing cycle (`subscriptions.current_period_end`/`billing_interval`) on purpose — a YEARLY subscriber still needs their document quota refreshed every month, not once a year.\n\nDesigned to be called by an external scheduler on a daily cadence. Recommended to run after Run Subscription Jobs in the same tick so a same-day tier change is reflected in the rolled-over cap, though a one-day-stale cap self-corrects on the next cycle regardless.\n\nResponse includes `quotaPeriodsReset` (count from this run)."
+          }
+        },
+        {
+          "name": "Run Queue Reconciliation Jobs",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/jobs/queue-reconciliation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "jobs",
+                "queue-reconciliation"
+              ]
+            },
+            "description": "Re-publishes to RabbitMQ any document whose send/authorize-check dispatch was never confirmed or has gone stale (ADR-019) — never calls SRI itself, only ensures a message exists for workers/sri-worker.js to eventually pick up.\n\nRuns two independent SELECT ... FOR UPDATE SKIP LOCKED sweeps (one per schema, public/sandbox): PENDING_SEND documents with no confirmed send dispatch, and RECEIVED documents old enough to need an authorize-check with no confirmed dispatch.\n\nDesigned to be called by an external scheduler on a short cadence (1-5 minutes) — much more frequent than the other three jobs, since this is the actual recovery mechanism for a temporarily unreachable broker or a publish that timed out.\n\nResponse includes sendRepublished and authorizeRepublished (counts from this run)."
           }
         },
         {
