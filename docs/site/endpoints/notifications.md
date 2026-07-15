@@ -1,9 +1,9 @@
-# Notifications
+# Notificaciones
 
-Tenant-level alerts surfaced to users of the system. The API produces two categories of notifications:
+Alertas a nivel de tenant que se muestran a los usuarios del sistema. La API produce dos categorías de notificaciones:
 
-- **Event-driven** — created automatically when something happens (e.g. a document is authorized by SRI).
-- **Scheduled** — created or updated by the API's own background job (e.g. certificate expiry). No consumer action required.
+- **Basadas en eventos** — creadas automáticamente cuando ocurre algo (por ejemplo, un comprobante es autorizado por el SRI).
+- **Programadas** — creadas o actualizadas por el propio job en segundo plano de la API (por ejemplo, vencimiento de certificado). No requieren acción del consumidor.
 
 ```
 GET   /v1/notifications
@@ -12,25 +12,25 @@ GET   /v1/notifications/preferences
 PATCH /v1/notifications/preferences
 ```
 
-See [Webhooks](webhooks.md) for registering callback URLs that receive notifications in near-real time. Polling this endpoint with `?sinceId=` is the fallback for consumers that cannot expose a public HTTPS callback URL.
+Consulta [Webhooks](webhooks.md) para registrar URLs de callback que reciban notificaciones casi en tiempo real. Consultar este endpoint con `?sinceId=` es el mecanismo de respaldo para consumidores que no pueden exponer una URL de callback HTTPS pública.
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` — any active key for the tenant. No `X-Issuer-Id` required by default; supply it to scope results to a specific issuer (see [Issuer filter](#issuer-filter)).
+`Authorization: Bearer <api-key>` — cualquier llave activa del tenant. No se requiere `X-Issuer-Id` por defecto; proporciónalo para acotar los resultados a un emisor específico (ver [Filtro por emisor](#filtro-por-emisor)).
 
 ---
 
-## Notification object
+## Objeto de notificación
 
-All list and single-notification responses use the same shape:
+Todas las respuestas de listado y de notificación individual usan la misma estructura:
 
 ```json
 {
   "id":        42,
   "type":      "DOCUMENT_AUTHORIZED",
   "severity":  "INFO",
-  "title":     "Invoice authorized",
-  "message":   "Invoice 001-001-000000012 for ACME Corp was authorized by SRI.",
+  "title":     "Factura autorizada",
+  "message":   "La factura 001-001-000000012 de ACME Corp fue autorizada por el SRI.",
   "metadata":  { "accessKey": "...", "sequential": "001-001-000000012", "total": "118.00" },
   "issuerId":  3,
   "readAt":    null,
@@ -39,30 +39,30 @@ All list and single-notification responses use the same shape:
 }
 ```
 
-| Field | Type | Description |
+| Campo | Tipo | Descripción |
 |---|---|---|
-| `id` | integer | Stable identifier. Use it to deduplicate across polls and track per-user read state. |
-| `type` | string | Machine-readable type code — see [Notification types](#notification-types). |
+| `id` | integer | Identificador estable. Úsalo para eliminar duplicados entre consultas y rastrear el estado de lectura por usuario. |
+| `type` | string | Código de tipo legible por máquina — ver [Tipos de notificación](#tipos-de-notificación). |
 | `severity` | string | `INFO` · `WARNING` · `ERROR` |
-| `title` | string | Short human-readable headline. |
-| `message` | string | Full human-readable description. |
-| `metadata` | object\|null | Type-specific structured data (see [Notification types](#notification-types)). |
-| `issuerId` | integer\|null | The issuer this notification concerns, or `null` for tenant-level alerts. |
-| `readAt` | string\|null | ISO timestamp when the notification was marked read, or `null` if still unread. |
-| `expiresAt` | string\|null | ISO timestamp after which the notification should be hidden, or `null` if it never expires. |
-| `createdAt` | string | ISO timestamp of creation. |
+| `title` | string | Encabezado breve y legible para humanos. |
+| `message` | string | Descripción completa y legible para humanos. |
+| `metadata` | object\|null | Datos estructurados específicos del tipo (ver [Tipos de notificación](#tipos-de-notificación)). |
+| `issuerId` | integer\|null | El emisor al que concierne esta notificación, o `null` para alertas a nivel de tenant. |
+| `readAt` | string\|null | Marca de tiempo ISO de cuando la notificación fue marcada como leída, o `null` si sigue sin leer. |
+| `expiresAt` | string\|null | Marca de tiempo ISO después de la cual la notificación debería ocultarse, o `null` si nunca expira. |
+| `createdAt` | string | Marca de tiempo ISO de creación. |
 
 ---
 
-## Notification types
+## Tipos de notificación
 
 ### `DOCUMENT_AUTHORIZED`
 
-Created automatically (fire-and-forget) inside `GET /:accessKey/authorize` when SRI confirms authorization. Multiple authorizations within a 60-second window are **aggregated into a single row** to avoid flooding the list during batch processing. The same notification `id` may have an updated `count` on successive polls within that window — the frontend should upsert by `id` rather than append.
+Creada automáticamente (fire-and-forget) dentro de `GET /:accessKey/authorize` cuando el SRI confirma la autorización. Varias autorizaciones dentro de una ventana de 60 segundos se **agregan en una sola fila** para evitar saturar la lista durante el procesamiento por lotes. La misma notificación `id` puede tener un `count` actualizado en consultas sucesivas dentro de esa ventana — el frontend debería actualizar (upsert) por `id` en lugar de agregar (append).
 
-A webhook payload is fired for each update to the aggregated row (including count increments).
+Se dispara un payload de webhook por cada actualización de la fila agregada (incluyendo los incrementos de `count`).
 
-**Severity:** `INFO`
+**Severidad:** `INFO`
 
 **Metadata:**
 
@@ -83,15 +83,15 @@ A webhook payload is fired for each update to the aggregated row (including coun
 }
 ```
 
-`documents` is capped at 50 entries when a batch is large; `count` always reflects the true total.
+`documents` se limita a 50 entradas cuando un lote es grande; `count` siempre refleja el total real.
 
 ---
 
 ### `CERT_EXPIRING`
 
-Created or updated by the API scheduler job when an issuer's certificate is within 30 days of its `notAfter` date. At most **one unread row per issuer** — the same row is updated in place on successive job runs (days remaining refreshes, severity may escalate). Auto-dismissed when the certificate is renewed and has > 30 days remaining.
+Creada o actualizada por el job programado de la API cuando el certificado de un emisor está a menos de 30 días de su fecha `notAfter`. Como máximo **una fila no leída por emisor** — la misma fila se actualiza en su lugar en ejecuciones sucesivas del job (los días restantes se actualizan, la severidad puede escalar). Se descarta automáticamente cuando el certificado se renueva y le quedan más de 30 días.
 
-**Severity:** `WARNING` (> 7 days) · `ERROR` (≤ 7 days)
+**Severidad:** `WARNING` (> 7 días) · `ERROR` (≤ 7 días)
 
 **Metadata:**
 
@@ -109,18 +109,18 @@ Created or updated by the API scheduler job when an issuer's certificate is with
 
 ### `CERT_EXPIRED`
 
-Same conditions as `CERT_EXPIRING` but for a certificate whose `notAfter` date has already passed.
+Mismas condiciones que `CERT_EXPIRING` pero para un certificado cuya fecha `notAfter` ya pasó.
 
-**Severity:** `ERROR`  
-**Metadata:** same shape as `CERT_EXPIRING`, with `daysRemaining: 0`.
+**Severidad:** `ERROR`  
+**Metadata:** misma estructura que `CERT_EXPIRING`, con `daysRemaining: 0`.
 
 ---
 
 ### `PAYMENT_VERIFIED`
 
-Created automatically (fire-and-forget) when your provider verifies a payment proof you uploaded — covers an initial subscription, a tier-change upgrade, and a renewal uniformly; only the wording differs. A matching email is sent at the same time.
+Creada automáticamente (fire-and-forget) cuando tu proveedor verifica un comprobante de pago que subiste — cubre de forma uniforme una suscripción inicial, una mejora de plan y una renovación; solo cambia el texto. Se envía un correo equivalente al mismo tiempo.
 
-**Severity:** `INFO`
+**Severidad:** `INFO`
 
 **Metadata:**
 
@@ -136,25 +136,25 @@ Created automatically (fire-and-forget) when your provider verifies a payment pr
 }
 ```
 
-`purpose` is `INITIAL`, `TIER_CHANGE`, or `RENEWAL`. For a `TIER_CHANGE` payment, `tier`/`billingInterval` are the **target** plan being purchased, not the subscription's current one — e.g. on a payment for a monthly-STARTER-to-yearly-GROWTH change, this shows `"tier": "GROWTH"`, `"billingInterval": "YEARLY"`. `amount` is the full IVA-inclusive total (what's actually transferred via SPI), not the pre-IVA base.
+`purpose` es `INITIAL`, `TIER_CHANGE`, o `RENEWAL`. Para un pago `TIER_CHANGE`, `tier`/`billingInterval` son el plan **objetivo** que se está comprando, no el actual de la suscripción — por ejemplo, en un pago por un cambio de STARTER mensual a GROWTH anual, esto muestra `"tier": "GROWTH"`, `"billingInterval": "YEARLY"`. `amount` es el total completo con IVA incluido (lo que realmente se transfiere vía SPI), no la base imponible antes de IVA.
 
 ---
 
 ### `PAYMENT_REJECTED`
 
-Same trigger as `PAYMENT_VERIFIED`, for a rejected decision instead.
+Mismo disparador que `PAYMENT_VERIFIED`, pero para una decisión de rechazo.
 
-**Severity:** `WARNING`
+**Severidad:** `WARNING`
 
-**Metadata:** same shape as `PAYMENT_VERIFIED`, with `rejectionReasonCode` populated (one of `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — re-submit proof for the same `paymentId` via [Submit Payment Proof](submit-payment-proof.md).
+**Metadata:** misma estructura que `PAYMENT_VERIFIED`, con `rejectionReasonCode` poblado (uno de `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — reenvía el comprobante para el mismo `paymentId` vía [Submit Payment Proof](submit-payment-proof.md).
 
 ---
 
 ### `SUBSCRIPTION_RENEWAL_DUE`
 
-Created automatically by the provider's scheduled job about 7 days before your subscription's `current_period_end`. A new `RENEWAL` payment is already open by the time this fires — submit proof via [Submit Payment Proof](submit-payment-proof.md) using the `paymentId` in the metadata. A matching email includes the bank transfer instructions.
+Creada automáticamente por el job programado del proveedor unos 7 días antes del `current_period_end` de tu suscripción. Ya hay un nuevo pago `RENEWAL` abierto en el momento en que se dispara esto — envía el comprobante vía [Submit Payment Proof](submit-payment-proof.md) usando el `paymentId` de la metadata. Un correo equivalente incluye las instrucciones de transferencia bancaria.
 
-**Severity:** `WARNING`
+**Severidad:** `WARNING`
 
 **Metadata:**
 
@@ -174,9 +174,9 @@ Created automatically by the provider's scheduled job about 7 days before your s
 
 ### `SUBSCRIPTION_EXPIRED`
 
-Created automatically by the same scheduled job when a subscription runs about 7 days past `current_period_end` with no renewal ever verified. By the time this fires, the tenant has already been moved to the FREE tier. A matching email explains what happened — start a new subscription any time via [Create Subscription](create-subscription.md).
+Creada automáticamente por el mismo job programado cuando una suscripción pasa unos 7 días de `current_period_end` sin que se verifique ninguna renovación. Para cuando esto se dispara, el tenant ya fue movido al plan FREE. Un correo equivalente explica lo ocurrido — inicia una nueva suscripción en cualquier momento vía [Create Subscription](create-subscription.md).
 
-**Severity:** `ERROR`
+**Severidad:** `ERROR`
 
 **Metadata:**
 
@@ -189,42 +189,42 @@ Created automatically by the same scheduled job when a subscription runs about 7
 
 ---
 
-### Reserved types
+### Tipos reservados
 
-The following types are defined in the schema and accepted by the preferences endpoint, but not yet produced by the API. They are reserved for future implementation:
+Los siguientes tipos están definidos en el esquema y son aceptados por el endpoint de preferencias, pero aún no son producidos por la API. Están reservados para implementación futura:
 
-| Type | Description |
+| Tipo | Descripción |
 |---|---|
-| `SRI_SUBMISSION_FAILED` | SRI permanently rejected a document submission |
-| `EMAIL_DELIVERY_FAILED` | Mailgun reported a permanent delivery failure |
-| `QUOTA_WARNING` | Tenant is approaching their document quota |
+| `SRI_SUBMISSION_FAILED` | El SRI rechazó permanentemente el envío de un comprobante |
+| `EMAIL_DELIVERY_FAILED` | Mailgun reportó un fallo de entrega permanente |
+| `QUOTA_WARNING` | El tenant se está acercando a su cuota de comprobantes |
 
 ---
 
-## List notifications
+## Listar notificaciones
 
 ```
 GET /v1/notifications
 ```
 
-Returns active (unexpired) notifications for the tenant, newest first. Both read and unread are included. Use `readAt` to decide what to show as new.
+Devuelve las notificaciones activas (no expiradas) del tenant, de la más reciente a la más antigua. Se incluyen tanto las leídas como las no leídas. Usa `readAt` para decidir qué mostrar como nuevo.
 
-### Query parameters
+### Parámetros de consulta
 
-| Parameter | Type | Description |
+| Parámetro | Tipo | Descripción |
 |---|---|---|
-| `sinceId` | integer | Optional. When provided, returns only notifications with `id > sinceId`. Use for efficient catch-up polling: store the highest `id` seen on each poll and pass it on the next request. |
+| `sinceId` | integer | Opcional. Cuando se proporciona, devuelve solo las notificaciones con `id > sinceId`. Úsalo para consultas de actualización incremental eficientes: guarda el `id` más alto visto en cada consulta y pásalo en la siguiente solicitud. |
 
-### Issuer filter
+### Filtro por emisor
 
-Supply `X-Issuer-Id: <id>` to restrict results to a specific issuer. When the header is present, the response includes:
+Proporciona `X-Issuer-Id: <id>` para restringir los resultados a un emisor específico. Cuando el encabezado está presente, la respuesta incluye:
 
-- Notifications whose `issuerId` matches the supplied value.
-- Tenant-level notifications (`issuerId: null`), such as future quota warnings.
+- Notificaciones cuyo `issuerId` coincide con el valor proporcionado.
+- Notificaciones a nivel de tenant (`issuerId: null`), como futuras alertas de cuota.
 
-Omit the header to receive all notifications across every issuer (useful for admin or overview pages).
+Omite el encabezado para recibir todas las notificaciones de todos los emisores (útil para páginas de administración o resumen).
 
-### Response
+### Respuesta
 
 **200 OK**
 
@@ -235,33 +235,33 @@ Omit the header to receive all notifications across every issuer (useful for adm
 }
 ```
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `ISSUER_ID_INVALID` | `X-Issuer-Id` header is present but not a valid positive integer |
-| `400` | `ISSUER_ID_INVALID` | `sinceId` is present but not a valid positive integer |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
+| `400` | `ISSUER_ID_INVALID` | El encabezado `X-Issuer-Id` está presente pero no es un entero positivo válido |
+| `400` | `ISSUER_ID_INVALID` | `sinceId` está presente pero no es un entero positivo válido |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
 
 ---
 
-## Mark as read
+## Marcar como leída
 
 ```
 POST /v1/notifications/:id/read
 ```
 
-Marks a single notification as read (`readAt` is set to now). The notification is excluded from `unreadCount` on all subsequent polls.
+Marca una sola notificación como leída (`readAt` se establece al momento actual). La notificación queda excluida de `unreadCount` en todas las consultas posteriores.
 
-**When to call:** the frontend manages per-user read state in its own database. It calls this endpoint only when **every user** with access to the notification has marked it read on their side. After this call the notification is considered globally read and will no longer appear in `unreadCount`.
+**Cuándo llamarlo:** el frontend gestiona el estado de lectura por usuario en su propia base de datos. Llama a este endpoint solo cuando **todos los usuarios** con acceso a la notificación la hayan marcado como leída de su lado. Después de esta llamada, la notificación se considera leída globalmente y ya no aparecerá en `unreadCount`.
 
-### Path parameters
+### Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric notification id |
+| `id` | Id numérico de la notificación |
 
-### Response
+### Respuesta
 
 **200 OK**
 
@@ -271,25 +271,25 @@ Marks a single notification as read (`readAt` is set to now). The notification i
 }
 ```
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `404` | `NOT_FOUND` | Notification does not exist, belongs to a different tenant, or is already read |
+| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `404` | `NOT_FOUND` | La notificación no existe, pertenece a otro tenant, o ya está leída |
 
 ---
 
-## Get preferences
+## Obtener preferencias
 
 ```
 GET /v1/notifications/preferences
 ```
 
-Returns the notification preference for every type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model).
+Devuelve la preferencia de notificación para cada tipo. Los tipos que el tenant nunca ha configurado explícitamente tienen por defecto `enabled: true` (modelo de exclusión voluntaria).
 
-### Response
+### Respuesta
 
 **200 OK**
 
@@ -312,17 +312,17 @@ Returns the notification preference for every type. Types the tenant has never e
 
 ---
 
-## Update preferences
+## Actualizar preferencias
 
 ```
 PATCH /v1/notifications/preferences
 ```
 
-Bulk-upsert one or more preferences. Send only the types you want to change; unmentioned types are unchanged.
+Actualiza en lote (upsert) una o más preferencias. Envía solo los tipos que quieres cambiar; los tipos no mencionados permanecen sin cambios.
 
-### Request body
+### Cuerpo de la solicitud
 
-An array of preference objects:
+Un arreglo de objetos de preferencia:
 
 ```json
 [
@@ -330,53 +330,55 @@ An array of preference objects:
 ]
 ```
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `type` | string | Yes | One of the valid notification types |
-| `enabled` | boolean | Yes | `true` to enable, `false` to suppress |
+| `type` | string | Sí | Uno de los tipos de notificación válidos |
+| `enabled` | boolean | Sí | `true` para habilitar, `false` para suprimir |
 
-When `enabled` is `false` for a type, the API will not create new notifications of that type for the tenant. Existing unread notifications of that type remain in the table and can still be marked as read.
+Cuando `enabled` es `false` para un tipo, la API no creará nuevas notificaciones de ese tipo para el tenant. Las notificaciones no leídas existentes de ese tipo permanecen en la tabla y aún pueden marcarse como leídas.
 
-### Response
+### Respuesta
 
-**200 OK** — same shape as `GET /v1/notifications/preferences`, reflecting the full updated state.
+**200 OK** — misma estructura que `GET /v1/notifications/preferences`, reflejando el estado completo actualizado.
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | Body is not an array, or an entry has an invalid `type` or non-boolean `enabled` |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
+| `400` | `VALIDATION_FAILED` | El cuerpo no es un arreglo, o una entrada tiene un `type` inválido o un `enabled` que no es booleano |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
 
 ---
 
-## Recommended integration pattern
+## Patrón de integración recomendado
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Consumer backend (e.g. Next.js)                                    │
+│  Backend del consumidor (por ejemplo, Next.js)                      │
 │                                                                     │
-│  Primary (near-real-time):                                          │
-│    Register a webhook endpoint → receive events via POST callback   │
-│    Verify X-Comprobify-Signature on each incoming request           │
+│  Principal (casi en tiempo real):                                   │
+│    Registra un endpoint de webhook → recibe eventos vía POST        │
+│    Verifica X-Comprobify-Signature en cada solicitud entrante       │
 │                                                                     │
-│  Fallback / catch-up:                                               │
-│    Poll GET /v1/notifications?sinceId=<lastSeenId> every 60–300s   │
-│    Store highest id seen → pass as sinceId on next poll             │
+│  Respaldo / actualización incremental:                              │
+│    Consulta GET /v1/notifications?sinceId=<lastSeenId> cada 60–300s │
+│    Guarda el id más alto visto → pásalo como sinceId en la próxima  │
+│    consulta                                                         │
 │                                                                     │
-│  When user opens notification panel:                                │
-│    Mark read in frontend DB per user                                │
-│    When all users have read → POST /v1/notifications/:id/read      │
+│  Cuando el usuario abre el panel de notificaciones:                 │
+│    Marca como leída en la BD del frontend por usuario               │
+│    Cuando todos los usuarios la han leído → POST                    │
+│    /v1/notifications/:id/read                                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Choosing a poll interval
+### Elegir un intervalo de consulta
 
-The `DOCUMENT_AUTHORIZED` notification type aggregates multiple authorizations that occur within a **60-second window** into a single row. Polling more frequently than 60 seconds would catch the row mid-aggregation — it will update again within the same window anyway, so there is no benefit to polling faster than that.
+El tipo de notificación `DOCUMENT_AUTHORIZED` agrega varias autorizaciones que ocurren dentro de una **ventana de 60 segundos** en una sola fila. Consultar con más frecuencia que cada 60 segundos capturaría la fila a mitad de la agregación — de todos modos se actualizará de nuevo dentro de la misma ventana, así que no hay beneficio en consultar más rápido que eso.
 
-| Scenario | Recommended interval |
+| Escenario | Intervalo recomendado |
 |---|---|
-| Webhooks configured (polling is fallback only) | 300 s (5 min) — any missed event is caught up on the next cycle |
-| No webhooks, polling is the only delivery mechanism | 60 s — matches the aggregation window; going lower gives no benefit |
+| Webhooks configurados (la consulta es solo respaldo) | 300 s (5 min) — cualquier evento perdido se recupera en el siguiente ciclo |
+| Sin webhooks, la consulta es el único mecanismo de entrega | 60 s — coincide con la ventana de agregación; ir más abajo no da ningún beneficio |
 
-Do not poll below 60 seconds — it will not surface new data sooner and adds unnecessary load.
+No consultes por debajo de 60 segundos — no hará que los datos nuevos aparezcan antes y añade carga innecesaria.

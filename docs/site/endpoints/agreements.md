@@ -1,16 +1,16 @@
-# Agreements
+# Acuerdos
 
-Returns the currently published agreements (Terms of Service, Privacy Policy, DPA). These are the documents a tenant accepts at signup. Use these endpoints to display the documents in your registration flow.
+Devuelve los acuerdos actualmente publicados (Términos de Servicio, Política de Privacidad, DPA). Estos son los documentos que un tenant acepta al registrarse. Usa estos endpoints para mostrar los documentos en tu flujo de registro.
 
-## List current documents
+## Listar documentos vigentes
 
 ```
 GET /v1/agreements
 ```
 
-**Authentication:** None — public endpoint, no rate limit.
+**Autenticación:** Ninguna — endpoint público, sin límite de tasa.
 
-### Response
+### Respuesta
 
 ```json
 {
@@ -23,29 +23,29 @@ GET /v1/agreements
 }
 ```
 
-The `version` string is what you pass as `termsVersion` in `POST /v1/register` (or `POST /v1/tenants/agreements`). Always read it from this response rather than hardcoding it — the server validates against whatever is currently published.
+El string `version` es lo que se pasa como `termsVersion` en `POST /v1/register` (o `POST /v1/tenants/agreements`). Léelo siempre desde esta respuesta en lugar de codificarlo de forma fija — el servidor valida contra lo que esté actualmente publicado.
 
-## Get a document
+## Obtener un documento
 
 ```
 GET /v1/agreements/:type
 ```
 
-**Authentication:** None — public endpoint, no rate limit.
+**Autenticación:** Ninguna — endpoint público, sin límite de tasa.
 
-**URL parameter:** `:type` must be one of `TERMS`, `PRIVACY`, or `DPA`.
+**Parámetro de URL:** `:type` debe ser uno de `TERMS`, `PRIVACY`, o `DPA`.
 
-Returns a complete, self-contained `text/html` page — `<!DOCTYPE html>` with its own `<head>`/`<style>` (serif typography, justified body text, a titled/bordered heading hierarchy) — formatted to look like a formal legal document on its own. Best embedded via `<iframe>` or opened as a full page; it is not meant to be injected into an existing page's DOM (e.g. via `innerHTML`), since browsers strip the `<html>`/`<head>`/`<style>` wrapper in that case and the styling would be lost.
+Devuelve una página `text/html` completa y autocontenida — `<!DOCTYPE html>` con su propio `<head>`/`<style>` (tipografía serif, texto justificado, una jerarquía de encabezados titulada/con bordes) — formateada para verse como un documento legal formal por sí sola. Se recomienda incrustarla mediante `<iframe>` o abrirla como página completa; no está pensada para inyectarse en el DOM de una página existente (por ejemplo mediante `innerHTML`), ya que los navegadores eliminan el contenedor `<html>`/`<head>`/`<style>` en ese caso y se perdería el estilo.
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `:type` is not a valid document type |
-| `404` | `AGREEMENT_NOT_FOUND` | No document of that type has been published yet |
+| `400` | `VALIDATION_FAILED` | `:type` no es un tipo de documento válido |
+| `404` | `AGREEMENT_NOT_FOUND` | Aún no se ha publicado ningún documento de ese tipo |
 
-## Notes
+## Notas
 
-- The TERMS and PRIVACY documents together make up the acceptance bundle. The DPA is incorporated by reference in the Terms of Service — there is only one checkbox in the UI, not three.
-- The `version` value from `GET /v1/agreements` is an opaque string token. The server does not interpret its format — it just checks that the version you present at acceptance time matches what was current when the user clicked accept.
-- If nothing has been published yet, `GET /v1/agreements` returns an empty array and registration does not enforce a `termsVersion` match (pre-launch fallback).
+- Los documentos TERMS y PRIVACY juntos conforman el paquete de aceptación. El DPA se incorpora por referencia dentro de los Términos de Servicio — solo hay un checkbox en la interfaz, no tres.
+- El valor `version` de `GET /v1/agreements` es un token de string opaco. El servidor no interpreta su formato — solo verifica que la versión presentada al momento de la aceptación coincida con la que estaba vigente cuando el usuario hizo clic en aceptar.
+- Si aún no se ha publicado nada, `GET /v1/agreements` devuelve un arreglo vacío y el registro no exige una coincidencia de `termsVersion` (comportamiento de respaldo previo al lanzamiento).

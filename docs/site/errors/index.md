@@ -1,8 +1,8 @@
-# Error Format
+# Formato de Errores
 
-All error responses use [RFC 7807 Problem Details](https://www.rfc-editor.org/rfc/rfc7807) with `Content-Type: application/problem+json`.
+Todas las respuestas de error usan [RFC 7807 Problem Details](https://www.rfc-editor.org/rfc/rfc7807) con `Content-Type: application/problem+json`.
 
-## Response shape
+## Estructura de la respuesta
 
 ```json
 {
@@ -10,40 +10,40 @@ All error responses use [RFC 7807 Problem Details](https://www.rfc-editor.org/rf
   "title":    "Validation Failed",
   "status":   400,
   "code":     "VALIDATION_FAILED",
-  "detail":   "Validation failed",
+  "detail":   "La validación falló",
   "instance": "/v1/documents"
 }
 ```
 
-| Field | Description |
+| Campo | Descripción |
 |---|---|
-| `type` | URL linking to the documentation page for this error type (this site) |
-| `title` | Short, stable description of the error type |
-| `status` | HTTP status code (same as the response status) |
-| `code` | Stable machine-readable key — use this for i18n and programmatic handling |
-| `detail` | Human-readable explanation of this specific occurrence |
-| `instance` | The request path that produced the error |
+| `type` | URL que enlaza a la página de documentación de este tipo de error (este sitio) |
+| `title` | Descripción corta y estable del tipo de error |
+| `status` | Código de estado HTTP (igual al estado de la respuesta) |
+| `code` | Clave estable legible por máquina — úsala para i18n y manejo programático |
+| `detail` | Explicación legible por humanos de esta ocurrencia específica |
+| `instance` | La ruta de la solicitud que produjo el error |
 
-## Using `code` for programmatic handling
+## Usar `code` para el manejo programático
 
-The `code` field is the stable key your client application should switch on. It never changes for a given situation, regardless of changes to the human-readable `detail` text.
+El campo `code` es la clave estable sobre la que tu aplicación cliente debería decidir. Nunca cambia para una situación dada, sin importar los cambios en el texto legible de `detail`.
 
 ```js
 switch (error.code) {
   case 'CERTIFICATE_EXPIRED':
-    return 'Your signing certificate has expired. Replace it in issuer settings.';
+    return 'Tu certificado de firma ha expirado. Reemplázalo en la configuración del emisor.';
   case 'RESEND_COOLDOWN':
-    return 'Please wait before requesting another email.';
+    return 'Por favor espera antes de solicitar otro correo.';
   case 'QUOTA_EXCEEDED':
-    return 'Monthly invoice limit reached. Upgrade your plan.';
+    return 'Se alcanzó el límite mensual de comprobantes. Mejora tu plan.';
   default:
     return error.detail;
 }
 ```
 
-## Validation errors
+## Errores de validación
 
-When `code` is `VALIDATION_FAILED`, an additional `errors` array lists each field that failed:
+Cuando `code` es `VALIDATION_FAILED`, un arreglo adicional `errors` lista cada campo que falló:
 
 ```json
 {
@@ -51,12 +51,12 @@ When `code` is `VALIDATION_FAILED`, an additional `errors` array lists each fiel
   "title":  "Validation Failed",
   "status": 400,
   "code":   "VALIDATION_FAILED",
-  "detail": "Validation failed",
+  "detail": "La validación falló",
   "instance": "/v1/documents",
   "errors": [
     {
       "field":   "buyer.email",
-      "message": "Buyer email is required and must be a valid email address",
+      "message": "El correo del comprador es requerido y debe ser una dirección de correo válida",
       "code":    "buyer.email",
       "value":   ""
     }
@@ -64,20 +64,20 @@ When `code` is `VALIDATION_FAILED`, an additional `errors` array lists each fiel
 }
 ```
 
-Each entry in `errors` has:
+Cada entrada en `errors` tiene:
 
-| Field | Description |
+| Campo | Descripción |
 |---|---|
-| `field` | The request body path that failed (e.g. `buyer.email`, `items[0].taxes[0].code`) |
-| `message` | English description of the failure |
-| `code` | Field path with array indices stripped — stable key for field-level localization (e.g. `items.taxes.code`) |
-| `value` | The value that was submitted |
+| `field` | La ruta del cuerpo de la solicitud que falló (p. ej. `buyer.email`, `items[0].taxes[0].code`) |
+| `message` | Descripción en inglés del fallo |
+| `code` | Ruta del campo sin los índices de arreglo — clave estable para localización a nivel de campo (p. ej. `items.taxes.code`) |
+| `value` | El valor que fue enviado |
 
-## SRI errors
+## Errores del SRI
 
-`POST /:accessKey/send` and `GET /:accessKey/authorize` are asynchronous (see [Send to SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` can no longer be returned as an HTTP response from either endpoint. A network failure now happens inside the background worker and is recorded as an `ERROR` document event instead; see [SRI Submission Failed](/errors/sri-error) for details. The shape below is kept for reference:
+`POST /:accessKey/send` y `GET /:accessKey/authorize` son asíncronos (ver [Enviar al SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` ya no puede devolverse como respuesta HTTP desde ninguno de los dos endpoints. Un fallo de red ahora ocurre dentro del worker en segundo plano y se registra como un evento de comprobante `ERROR` en su lugar; ver [Envío al SRI Fallido](/errors/sri-error) para más detalles. La estructura de abajo se mantiene como referencia:
 
-When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contains the raw messages returned by the SRI SOAP service:
+Cuando `code` es `SRI_SUBMISSION_FAILED`, un arreglo adicional `sriMessages` contiene los mensajes en bruto devueltos por el servicio SOAP del SRI:
 
 ```json
 {
@@ -85,7 +85,7 @@ When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contai
   "title":  "SRI Submission Failed",
   "status": 502,
   "code":   "SRI_SUBMISSION_FAILED",
-  "detail": "SRI rejected the document",
+  "detail": "El SRI rechazó el comprobante",
   "instance": "/v1/documents/1503.../send",
   "sriMessages": [
     {
@@ -97,98 +97,98 @@ When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contai
 }
 ```
 
-## All error codes
+## Todos los códigos de error
 
-Most errors carry a specific `code` that is more precise than the HTTP status alone. Switch on `code`, not on `status`, to handle errors programmatically.
+La mayoría de los errores llevan un `code` específico que es más preciso que solo el estado HTTP. Decide sobre `code`, no sobre `status`, para manejar los errores de forma programática.
 
 ### 400 Bad Request
 
-| Code | When |
+| Código | Cuándo ocurre |
 |---|---|
-| `VALIDATION_FAILED` | One or more request fields failed validation — see `errors[]` |
-| `CERTIFICATE_INVALID` | P12 file is corrupted or not a valid PKCS#12 archive |
-| `CERTIFICATE_PASSWORD_INVALID` | P12 password is incorrect |
-| `CERTIFICATE_KEY_NOT_FOUND` | Signing key bag not found inside the P12 |
-| `CERTIFICATE_EXPIRED` | Certificate `notAfter` date has passed |
-| `ISSUER_ID_REQUIRED` | `X-Issuer-Id` header is missing on a document endpoint |
-| `ISSUER_ID_INVALID` | `X-Issuer-Id` is not a valid positive integer |
-| `INVALID_OR_EXPIRED_TOKEN` | Email verification token is invalid or has expired |
-| `DOCUMENT_TYPE_NOT_ENABLED` | Requested document type is not active for this issuer |
-| `DOCUMENT_TYPE_NOT_SUPPORTED` | Document type code is not registered in the system |
-| `INVALID_STATE_TRANSITION` | Document operation is not valid for its current status |
-| `DOCUMENT_NOT_AUTHORIZED` | Operation (RIDE, email) requires document status `AUTHORIZED` |
-| `SELF_REVOCATION_FORBIDDEN` | Cannot revoke the API key used to authenticate this request |
-| `INVALID_FILE_UPLOAD` | Uploaded file is missing, the wrong type, or exceeds the field's size limit (e.g. a logo over 500 KB) |
-| `PROOF_FILE_LIMIT_REACHED` | Payment already has the maximum number of active proof files (10) — delete one before uploading more |
-| `VERSION_MISMATCH` | `termsVersion` in `POST /v1/register` or `POST /v1/tenants/agreements` does not match the currently published TERMS document version — re-fetch `GET /v1/agreements` and present the current version before asking the user to accept again |
-| `LAST_ISSUER_CANNOT_BE_REMOVED` | Tenant has only one active issuer left — it cannot be removed |
-| `ISSUER_HAS_DOCUMENTS` | Issuer has issued documents (in either environment) and cannot be removed |
-| `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` is not greater than the counter's current value |
-| `TIER_CHANGE_NO_OP` | Requested tier and billing interval on Change Tier both match the subscription's current values |
-| `INVALID_BILLING_INTERVAL` | `billingInterval` on Create Subscription or Change Tier is not `MONTHLY` or `YEARLY` |
-| `BAD_REQUEST` | Other malformed request (fallback — read `detail`) |
+| `VALIDATION_FAILED` | Uno o más campos de la solicitud fallaron la validación — ver `errors[]` |
+| `CERTIFICATE_INVALID` | El archivo P12 está corrupto o no es un archivo PKCS#12 válido |
+| `CERTIFICATE_PASSWORD_INVALID` | La contraseña del P12 es incorrecta |
+| `CERTIFICATE_KEY_NOT_FOUND` | No se encontró el bag de la llave de firma dentro del P12 |
+| `CERTIFICATE_EXPIRED` | La fecha `notAfter` del certificado ya pasó |
+| `ISSUER_ID_REQUIRED` | Falta el encabezado `X-Issuer-Id` en un endpoint de comprobantes |
+| `ISSUER_ID_INVALID` | `X-Issuer-Id` no es un entero positivo válido |
+| `INVALID_OR_EXPIRED_TOKEN` | El token de verificación de correo es inválido o ha expirado |
+| `DOCUMENT_TYPE_NOT_ENABLED` | El tipo de comprobante solicitado no está activo para este emisor |
+| `DOCUMENT_TYPE_NOT_SUPPORTED` | El código de tipo de comprobante no está registrado en el sistema |
+| `INVALID_STATE_TRANSITION` | La operación del comprobante no es válida para su estado actual |
+| `DOCUMENT_NOT_AUTHORIZED` | La operación (RIDE, correo) requiere que el comprobante tenga estado `AUTHORIZED` |
+| `SELF_REVOCATION_FORBIDDEN` | No se puede revocar la llave API usada para autenticar esta solicitud |
+| `INVALID_FILE_UPLOAD` | El archivo subido falta, es del tipo incorrecto, o excede el límite de tamaño del campo (p. ej. un logo de más de 500 KB) |
+| `PROOF_FILE_LIMIT_REACHED` | El pago ya tiene el número máximo de archivos de comprobante activos (10) — elimina uno antes de subir más |
+| `VERSION_MISMATCH` | `termsVersion` en `POST /v1/register` o `POST /v1/tenants/agreements` no coincide con la versión actualmente publicada del documento TERMS — vuelve a consultar `GET /v1/agreements` y presenta la versión actual antes de pedirle al usuario que acepte de nuevo |
+| `LAST_ISSUER_CANNOT_BE_REMOVED` | El tenant tiene solo un emisor activo restante — no se puede eliminar |
+| `ISSUER_HAS_DOCUMENTS` | El emisor tiene comprobantes emitidos (en cualquiera de los dos ambientes) y no se puede eliminar |
+| `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` no es mayor que el valor actual del contador |
+| `TIER_CHANGE_NO_OP` | El tier y el intervalo de facturación solicitados en Change Tier coinciden con los valores actuales de la suscripción |
+| `INVALID_BILLING_INTERVAL` | `billingInterval` en Create Subscription o Change Tier no es `MONTHLY` ni `YEARLY` |
+| `BAD_REQUEST` | Otra solicitud mal formada (respaldo — lee `detail`) |
 
 ### 401 Unauthorized
 
-| Code | When |
+| Código | Cuándo ocurre |
 |---|---|
-| `API_KEY_ENV_MISMATCH` | API key environment (`sandbox`/`production`) does not match the tenant's current environment |
-| `UNAUTHORIZED` | Missing, invalid, or revoked API key (fallback) |
+| `API_KEY_ENV_MISMATCH` | El ambiente de la llave API (`sandbox`/`production`) no coincide con el ambiente actual del tenant |
+| `UNAUTHORIZED` | Llave API faltante, inválida o revocada (respaldo) |
 
 ### 402 Payment Required
 
-| Code | When |
+| Código | Cuándo ocurre |
 |---|---|
-| `QUOTA_EXCEEDED` | Monthly document quota reached — upgrade plan |
-| `BRANCH_LIMIT_REACHED` | Tenant has reached the maximum number of branches for their plan |
-| `ISSUE_POINT_LIMIT_REACHED` | Branch has reached the maximum number of issue points for this plan |
-| `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Tenant has reached the maximum number of webhook endpoints for their plan |
-| `DOCUMENT_TYPE_NOT_IN_TIER` | Document type isn't included in the tenant's current plan — upgrade to enable it |
+| `QUOTA_EXCEEDED` | Se alcanzó la cuota mensual de comprobantes — mejora de plan |
+| `BRANCH_LIMIT_REACHED` | El tenant alcanzó el número máximo de sucursales para su plan |
+| `ISSUE_POINT_LIMIT_REACHED` | La sucursal alcanzó el número máximo de puntos de emisión para este plan |
+| `WEBHOOK_ENDPOINT_LIMIT_REACHED` | El tenant alcanzó el número máximo de endpoints de webhook para su plan |
+| `DOCUMENT_TYPE_NOT_IN_TIER` | El tipo de comprobante no está incluido en el plan actual del tenant — mejora de plan para habilitarlo |
 
 ### 403 Forbidden
 
-| Code | When |
+| Código | Cuándo ocurre |
 |---|---|
-| `ISSUER_FORBIDDEN` | `X-Issuer-Id` names an issuer that belongs to a different tenant |
-| `ACCOUNT_SUSPENDED` | Tenant account is suspended — contact support |
-| `EMAIL_VERIFICATION_REQUIRED` | Operation requires a verified email address |
-| `AGREEMENT_ACCEPTANCE_REQUIRED` | Promotion blocked — one or more agreements are still `PENDING` (check `GET /v1/tenants/agreements`, view at `GET /v1/tenants/agreements/:type`, accept via `POST /v1/tenants/agreements`) |
-| `PRODUCTION_KEY_REQUIRES_PROMOTION` | Production API key cannot be created before promoting to production |
-| `FORBIDDEN` | Other permission failure (fallback — read `detail`) |
+| `ISSUER_FORBIDDEN` | `X-Issuer-Id` nombra un emisor que pertenece a otro tenant |
+| `ACCOUNT_SUSPENDED` | La cuenta del tenant está suspendida — contacta a soporte |
+| `EMAIL_VERIFICATION_REQUIRED` | La operación requiere que la dirección de correo esté verificada |
+| `AGREEMENT_ACCEPTANCE_REQUIRED` | Promoción bloqueada — uno o más acuerdos siguen en estado `PENDING` (revisa `GET /v1/tenants/agreements`, visualízalos en `GET /v1/tenants/agreements/:type`, acéptalos vía `POST /v1/tenants/agreements`) |
+| `PRODUCTION_KEY_REQUIRES_PROMOTION` | No se puede crear una llave API de producción antes de promover a producción |
+| `FORBIDDEN` | Otro fallo de permisos (respaldo — lee `detail`) |
 
 ### 404 Not Found
 
-| Code | When |
+| Código | Cuándo ocurre |
 |---|---|
-| `ISSUER_NOT_FOUND` | Issuer ID in `X-Issuer-Id` or URL parameter does not exist |
-| `SOURCE_ISSUER_NOT_FOUND` | `sourceIssuerId` not found or belongs to a different tenant |
-| `WEBHOOK_ENDPOINT_NOT_FOUND` | Webhook endpoint not found or belongs to a different tenant |
-| `SUBSCRIPTION_NOT_FOUND` | Subscription not found |
-| `PAYMENT_NOT_FOUND` | Payment not found, or belongs to a different tenant |
-| `AGREEMENT_NOT_FOUND` | No document of the requested type (TERMS, PRIVACY, or DPA) has been published yet |
-| `NOT_FOUND` | Other resource not found (document, API key — read `detail`) |
+| `ISSUER_NOT_FOUND` | El ID de emisor en `X-Issuer-Id` o parámetro de URL no existe |
+| `SOURCE_ISSUER_NOT_FOUND` | `sourceIssuerId` no se encontró o pertenece a otro tenant |
+| `WEBHOOK_ENDPOINT_NOT_FOUND` | El endpoint de webhook no se encontró o pertenece a otro tenant |
+| `SUBSCRIPTION_NOT_FOUND` | Suscripción no encontrada |
+| `PAYMENT_NOT_FOUND` | Pago no encontrado, o pertenece a otro tenant |
+| `AGREEMENT_NOT_FOUND` | Todavía no se ha publicado ningún documento del tipo solicitado (TERMS, PRIVACY o DPA) |
+| `NOT_FOUND` | Otro recurso no encontrado (comprobante, llave API — lee `detail`) |
 
 ### 409 Conflict
 
-| Code | When |
+| Código | Cuándo ocurre |
 |---|---|
-| `ALREADY_VERIFIED` | Attempting to resend verification to an already-verified account |
-| `SUBSCRIPTION_ALREADY_IN_FLIGHT` | Tenant already has a subscription in progress (promotion with `tier`, or Admin's Create Subscription) |
-| `NO_ACTIVE_SUBSCRIPTION` | Cancel or Change Tier requested but the tenant has no `ACTIVE` subscription |
-| `TIER_CHANGE_ALREADY_PENDING` | A tier/billing-interval change is already scheduled, or its payment is already in flight, for this subscription |
-| `CANCELLATION_ALREADY_PENDING` | A cancellation (`DELETE /v1/subscriptions`) is already scheduled for this subscription |
-| `CONFLICT` | Idempotency key reused with a different payload, payment already decided, or other conflict |
+| `ALREADY_VERIFIED` | Se intentó reenviar la verificación a una cuenta ya verificada |
+| `SUBSCRIPTION_ALREADY_IN_FLIGHT` | El tenant ya tiene una suscripción en curso (promoción con `tier`, o Create Subscription del admin) |
+| `NO_ACTIVE_SUBSCRIPTION` | Se solicitó Cancel o Change Tier pero el tenant no tiene una suscripción `ACTIVE` |
+| `TIER_CHANGE_ALREADY_PENDING` | Ya hay un cambio de tier/intervalo de facturación programado, o su pago ya está en curso, para esta suscripción |
+| `CANCELLATION_ALREADY_PENDING` | Ya hay una cancelación (`DELETE /v1/subscriptions`) programada para esta suscripción |
+| `CONFLICT` | Se reutilizó una llave de idempotencia con un payload distinto, el pago ya fue decidido, u otro conflicto |
 
 ### 429 Too Many Requests
 
-| Code | When |
+| Código | Cuándo ocurre |
 |---|---|
-| `RESEND_COOLDOWN` | Resend verification requested again before the 60-second cooldown elapsed |
-| `TOO_MANY_REQUESTS` | API key rate limit exceeded |
+| `RESEND_COOLDOWN` | Se solicitó reenviar la verificación de nuevo antes de que transcurriera el período de espera de 60 segundos |
+| `TOO_MANY_REQUESTS` | Se excedió el límite de tasa de la llave API |
 
 ### 500 / 502
 
-| Code | When |
+| Código | Cuándo ocurre |
 |---|---|
-| `SRI_SUBMISSION_FAILED` | SRI SOAP service returned an error or unexpected HTTP status — no longer surfaced via any HTTP response (see [SRI errors](#sri-errors) above); now recorded as a document `ERROR` event |
-| `INTERNAL_ERROR` | Unexpected server error |
+| `SRI_SUBMISSION_FAILED` | El servicio SOAP del SRI devolvió un error o un estado HTTP inesperado — ya no se expone a través de ninguna respuesta HTTP (ver [Errores del SRI](#errores-del-sri) arriba); ahora se registra como un evento de comprobante `ERROR` |
+| `INTERNAL_ERROR` | Error inesperado del servidor |

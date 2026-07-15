@@ -1,102 +1,102 @@
 # Bad Request
 
-**Status:** `400 Bad Request`
+**Estado HTTP:** `400 Bad Request`
 
-The request is syntactically valid but cannot be processed in the current context. Every 400 error carries a specific `code` — use it to handle each case programmatically without parsing the `detail` string.
+La solicitud es sintácticamente válida pero no puede procesarse en el contexto actual. Cada error 400 lleva un `code` específico — úsalo para manejar cada caso de forma programática sin analizar la cadena de `detail`.
 
-## Codes
+## Códigos
 
 ### `CERTIFICATE_INVALID`
 
-The uploaded P12 file could not be parsed. The file may be corrupted, truncated, or not a valid PKCS#12 archive.
+El archivo P12 subido no pudo ser analizado. El archivo puede estar corrupto, truncado, o no ser un archivo PKCS#12 válido.
 
-**What to do:** Export a fresh P12 from your certificate authority and re-upload it.
+**Qué hacer:** Exporta un P12 nuevo desde tu autoridad certificadora y vuelve a subirlo.
 
 ### `CERTIFICATE_PASSWORD_INVALID`
 
-The password supplied for the P12 file is incorrect.
+La contraseña proporcionada para el archivo P12 es incorrecta.
 
-**What to do:** Verify the password and retry. Note that passwords are case-sensitive.
+**Qué hacer:** Verifica la contraseña y vuelve a intentarlo. Ten en cuenta que las contraseñas distinguen entre mayúsculas y minúsculas.
 
 ### `CERTIFICATE_KEY_NOT_FOUND`
 
-The P12 archive was parsed successfully but does not contain a recognisable signing key bag. The API supports **BANCO CENTRAL** and **SECURITY DATA** certificate formats.
+El archivo P12 fue analizado correctamente pero no contiene un bag de llave de firma reconocible. La API soporta los formatos de certificado de **BANCO CENTRAL** y **SECURITY DATA**.
 
-**What to do:** Ensure the P12 was exported from a compatible CA with the private key included.
+**Qué hacer:** Asegúrate de que el P12 fue exportado desde una CA compatible con la llave privada incluida.
 
 ### `CERTIFICATE_EXPIRED`
 
-The certificate's `notAfter` date is in the past. The `detail` field includes the exact expiry date.
+La fecha `notAfter` del certificado ya pasó. El campo `detail` incluye la fecha exacta de expiración.
 
-**What to do:** Renew the certificate with your CA, then upload the new P12 to the issuer. All new documents will use the updated certificate immediately.
+**Qué hacer:** Renueva el certificado con tu CA, luego sube el nuevo P12 al emisor. Todos los comprobantes nuevos usarán el certificado actualizado de inmediato.
 
 ### `ISSUER_ID_REQUIRED`
 
-The `X-Issuer-Id` request header is missing. Every document-creation and document-management request must specify which issuer is being targeted.
+Falta el encabezado de solicitud `X-Issuer-Id`. Toda solicitud de creación y gestión de comprobantes debe especificar a qué emisor apunta.
 
-**What to do:** Add `X-Issuer-Id: <issuer-id>` to the request. Get the IDs for your tenant's issuers with `GET /v1/issuers`.
+**Qué hacer:** Agrega `X-Issuer-Id: <issuer-id>` a la solicitud. Obtén los IDs de los emisores de tu tenant con `GET /v1/issuers`.
 
 ### `ISSUER_ID_INVALID`
 
-The `X-Issuer-Id` header value is not a valid positive integer (e.g. `abc`, `0`, `-5`).
+El valor del encabezado `X-Issuer-Id` no es un entero positivo válido (p. ej. `abc`, `0`, `-5`).
 
-**What to do:** Supply the numeric issuer ID returned by `GET /v1/issuers`.
+**Qué hacer:** Proporciona el ID numérico del emisor devuelto por `GET /v1/issuers`.
 
 ### `INVALID_OR_EXPIRED_TOKEN`
 
-The email verification token in the URL query parameter (`?token=…`) is invalid or has expired. Tokens expire after 24 hours (configurable via `VERIFICATION_TOKEN_TTL_HOURS`).
+El token de verificación de correo en el parámetro de consulta de la URL (`?token=…`) es inválido o ha expirado. Los tokens expiran después de 24 horas (configurable vía `VERIFICATION_TOKEN_TTL_HOURS`).
 
-**What to do:** Request a fresh token via `POST /v1/resend-verification`.
+**Qué hacer:** Solicita un token nuevo vía `POST /v1/resend-verification`.
 
 ### `DOCUMENT_TYPE_NOT_ENABLED`
 
-The `documentType` field in the request body specifies a document type that is not currently active for this issuer. The `detail` field lists the allowed types.
+El campo `documentType` en el cuerpo de la solicitud especifica un tipo de comprobante que actualmente no está activo para este emisor. El campo `detail` lista los tipos permitidos.
 
-**What to do:** Enable the document type via `POST /v1/issuers/:id/document-types`, or use one of the allowed types listed in `detail`.
+**Qué hacer:** Habilita el tipo de comprobante vía `POST /v1/issuers/:id/document-types`, o usa uno de los tipos permitidos listados en `detail`.
 
 ### `DOCUMENT_TYPE_NOT_SUPPORTED`
 
-The document type code is not registered in the API at all (as opposed to simply being inactive for this issuer).
+El código de tipo de comprobante no está registrado en la API en absoluto (a diferencia de simplemente estar inactivo para este emisor).
 
-**What to do:** Check the supported types with `GET /v1/issuers/:id/document-types`. Only registered types can be enabled.
+**Qué hacer:** Revisa los tipos soportados con `GET /v1/issuers/:id/document-types`. Solo los tipos registrados pueden habilitarse.
 
 ### `INVALID_STATE_TRANSITION`
 
-The requested operation is not valid for the document's current status. The `detail` field names the attempted transition.
+La operación solicitada no es válida para el estado actual del comprobante. El campo `detail` nombra la transición intentada.
 
-**What to do:** Check the document's current status with [Get Document](../endpoints/get-document.md) and only perform operations allowed for that status:
+**Qué hacer:** Revisa el estado actual del comprobante con [Get Document](../endpoints/get-document.md) y realiza únicamente las operaciones permitidas para ese estado:
 
-| Status | Allowed operations |
+| Estado | Operaciones permitidas |
 |---|---|
-| `SIGNED` | Send to SRI |
-| `RECEIVED` | Check authorization |
-| `RETURNED` | Rebuild |
-| `NOT_AUTHORIZED` | Rebuild |
-| `AUTHORIZED` | Download RIDE, download XML, retry email |
+| `SIGNED` | Enviar al SRI |
+| `RECEIVED` | Consultar autorización |
+| `RETURNED` | Reconstruir |
+| `NOT_AUTHORIZED` | Reconstruir |
+| `AUTHORIZED` | Descargar RIDE, descargar XML, reintentar correo |
 
 ### `DOCUMENT_NOT_AUTHORIZED`
 
-The operation requires the document to have status `AUTHORIZED`. This applies to RIDE generation (`GET /:key/ride`) and manual email retries.
+La operación requiere que el comprobante tenga estado `AUTHORIZED`. Esto aplica a la generación del RIDE (`GET /:key/ride`) y a los reintentos manuales de correo.
 
-**What to do:** Complete the full document lifecycle (send → authorize) first.
+**Qué hacer:** Completa primero el ciclo de vida completo del comprobante (enviar → autorizar).
 
 ### `SELF_REVOCATION_FORBIDDEN`
 
-You cannot revoke the API key that authenticated the current request.
+No puedes revocar la llave API que autenticó la solicitud actual.
 
-**What to do:** Use a different active API key to revoke this one. List your keys with `GET /v1/keys`.
+**Qué hacer:** Usa una llave API activa distinta para revocar esta. Lista tus llaves con `GET /v1/keys`.
 
 ### `INVALID_FILE_UPLOAD`
 
-A file upload (e.g. a P12 certificate or issuer logo) is missing, the wrong MIME type, or exceeds the field's size limit. The `detail` field names the specific constraint that failed — for example, a logo over 500 KB on `POST /v1/register` or `PATCH /v1/issuers/:id/logo`.
+Un archivo subido (p. ej. un certificado P12 o el logo del emisor) falta, es del tipo MIME incorrecto, o excede el límite de tamaño del campo. El campo `detail` nombra la restricción específica que falló — por ejemplo, un logo de más de 500 KB en `POST /v1/register` o `PATCH /v1/issuers/:id/logo`.
 
-**What to do:** Check the file against the limits documented on the endpoint (e.g. [Upload Issuer Logo](../endpoints/upload-issuer-logo.md)) and re-upload.
+**Qué hacer:** Verifica el archivo contra los límites documentados en el endpoint (p. ej. [Upload Issuer Logo](../endpoints/upload-issuer-logo.md)) y vuelve a subirlo.
 
-### `BAD_REQUEST` (fallback)
+### `BAD_REQUEST` (respaldo)
 
-A generic bad request not covered by a specific code above. Read the `detail` field for the reason.
+Una solicitud incorrecta genérica no cubierta por un código específico de los anteriores. Lee el campo `detail` para conocer la razón.
 
-## Example response
+## Ejemplo de respuesta
 
 ```json
 {
@@ -104,7 +104,7 @@ A generic bad request not covered by a specific code above. Read the `detail` fi
   "title":    "Bad Request",
   "status":   400,
   "code":     "CERTIFICATE_EXPIRED",
-  "detail":   "Certificate expired on 2025-03-15. Replace the P12 file on this issuer before creating documents.",
+  "detail":   "El certificado expiró el 2025-03-15. Reemplaza el archivo P12 de este emisor antes de crear comprobantes.",
   "instance": "/v1/documents"
 }
 ```

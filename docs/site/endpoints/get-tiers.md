@@ -1,16 +1,16 @@
-# Get Tiers
+# Consultar Planes
 
-Returns the full subscription tier catalog — quota, pricing (IVA-inclusive), document types, and limits for every tier including FREE.
+Devuelve el catálogo completo de planes de suscripción — cuota, precios (con IVA incluido), tipos de comprobante y límites para cada plan, incluyendo FREE.
 
 ```
 GET /v1/tiers
 ```
 
-## Authentication
+## Autenticación
 
-None. This is a public, unauthenticated endpoint with no rate limit — it's static catalog data, suitable for a pricing page.
+Ninguna. Este es un endpoint público, sin autenticación y sin límite de tasa — es información de catálogo estática, apta para una página de precios.
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -59,8 +59,8 @@ None. This is a public, unauthenticated endpoint with no rate limit — it's sta
 }
 ```
 
-All prices are in USD. `priceMonthlyUsd` and `priceYearlyUsd` are IVA-inclusive all-in amounts — the exact figure a tenant transfers via SPI. `priceMonthlyUsdBase` is the taxable base (base imponible on the SRI invoice); `priceMonthlyUsdIva` is the 15% IVA portion. `ivaRate` is exposed both at the top level and per tier so a pricing page can show the breakdown without hardcoding the tax rate.
+Todos los precios están en USD. `priceMonthlyUsd` y `priceYearlyUsd` son montos totales con IVA incluido — la cifra exacta que un tenant transfiere vía SPI. `priceMonthlyUsdBase` es la base imponible (base imponible en la factura del SRI); `priceMonthlyUsdIva` es la porción correspondiente al 15% de IVA. `ivaRate` se expone tanto a nivel general como por cada plan, de modo que una página de precios pueda mostrar el desglose sin fijar la tasa de impuesto directamente en el código.
 
-`priceYearlyUsd` is the discounted annual price (2 months free vs. paying monthly). `maxBranches`/`maxIssuePointsPerBranch` are `null` for BUSINESS, meaning unlimited. `overagePerDocumentUsd` is `null` for FREE — overage billing isn't enforced anywhere yet (no payment gateway exists), these numbers are reference only.
+`priceYearlyUsd` es el precio anual con descuento (2 meses gratis frente a pagar mensualmente). `maxBranches`/`maxIssuePointsPerBranch` son `null` para BUSINESS, lo que significa ilimitado. `overagePerDocumentUsd` es `null` para FREE — la facturación por excedente aún no se aplica en ningún lugar (no existe pasarela de pago), estas cifras son solo de referencia.
 
-To actually start a subscription for a tier, see [Promote Tenant to Production](promote-tenant.md) (self-service) or have your provider use the admin API.
+Para iniciar realmente una suscripción a un plan, consulta [Promover Tenant a Producción](promote-tenant.md) (autoservicio) o solicita a tu proveedor que use la API de administración.

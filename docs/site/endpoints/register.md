@@ -1,53 +1,53 @@
-# Register
+# Registro
 
-Self-service registration. Creates a tenant, issuer, and sandbox API key in one call. The returned API key is shown **once** — store it immediately.
+Registro por autoservicio. Crea un tenant, un emisor y una llave API de sandbox en una sola llamada. La llave API devuelta se muestra **una sola vez** — guárdala de inmediato.
 
 ```
 POST /v1/register
 ```
 
-## Authentication
+## Autenticación
 
-None — public endpoint.
+Ninguna — endpoint público.
 
-## Rate limiting
+## Límite de tasa
 
-Shared with `POST /v1/resend-verification` — 5 requests per hour per IP.
+Compartido con `POST /v1/resend-verification` — 5 solicitudes por hora por IP.
 
-## Request body
+## Cuerpo de la solicitud
 
-`multipart/form-data` (required — a P12 certificate file must be included).
+`multipart/form-data` (requerido — debe incluirse un archivo de certificado P12).
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `cert` | file | Yes | P12 certificate file from SRI |
-| `certPassword` | string | No | P12 password (omit if none) |
-| `logo` | file | No | Company logo to display in RIDE PDFs. Accepted formats: **PNG** (recommended), JPEG, GIF. Max size: **500 KB**. Recommended dimensions: **600 × 170 px** (landscape, ~3.5:1 ratio). Can be uploaded or replaced later via `PATCH /v1/issuers/:id/logo`. |
-| `email` | string | Yes | Tenant contact email — used for verification and invoice notifications |
-| `ruc` | string | Yes | 13-digit RUC |
-| `businessName` | string | Yes | Legal business name (max 300 chars) |
-| `tradeName` | string | No | Trade name |
-| `mainAddress` | string | No | Main address |
-| `branchCode` | string | Yes | 3-digit branch code, e.g. `001` |
-| `issuePointCode` | string | Yes | 3-digit issue point code, e.g. `001` |
-| `emissionType` | string | Yes | `1` (normal emission) |
-| `requiredAccounting` | boolean | Yes | Whether the business is required to keep accounting |
-| `specialTaxpayer` | string | No | Special taxpayer code |
-| `branchAddress` | string | No | Branch address |
-| `documentTypes` | array | No | Document type codes to enable (default: `["01"]`). Must be supported types. |
-| `initialSequentials` | array | No | Starting sequential numbers per document type. Any type not listed defaults to `1`. See structure below. |
-| `language` | string | No | Language for outgoing emails. Supported: `es` (default), `en`. Stored on the tenant and used for all subsequent emails including resends. |
-| `verificationRedirectUrl` | string | No | Frontend URL where the verification link in the email will point. The token is appended as `?token=<token>`. If omitted, the link goes directly to the API's verify endpoint. |
-| `termsVersion` | string | Yes | The `version` string of the currently published TERMS document (from `GET /v1/agreements`). The server validates this before accepting the registration. If no documents have been published yet, any non-empty string is accepted as-is (pre-launch fallback). |
+| `cert` | file | Sí | Archivo de certificado P12 del SRI |
+| `certPassword` | string | No | Contraseña del P12 (omitir si no tiene) |
+| `logo` | file | No | Logo de la empresa a mostrar en los PDF RIDE. Formatos aceptados: **PNG** (recomendado), JPEG, GIF. Tamaño máximo: **500 KB**. Dimensiones recomendadas: **600 × 170 px** (horizontal, relación ~3.5:1). Se puede subir o reemplazar más adelante vía `PATCH /v1/issuers/:id/logo`. |
+| `email` | string | Sí | Correo de contacto del tenant — usado para verificación y notificaciones de facturas |
+| `ruc` | string | Sí | RUC de 13 dígitos |
+| `businessName` | string | Sí | Razón social (máx. 300 caracteres) |
+| `tradeName` | string | No | Nombre comercial |
+| `mainAddress` | string | No | Dirección principal |
+| `branchCode` | string | Sí | Código de sucursal de 3 dígitos, por ejemplo `001` |
+| `issuePointCode` | string | Sí | Código de punto de emisión de 3 dígitos, por ejemplo `001` |
+| `emissionType` | string | Sí | `1` (emisión normal) |
+| `requiredAccounting` | boolean | Sí | Si el negocio está obligado a llevar contabilidad |
+| `specialTaxpayer` | string | No | Código de contribuyente especial |
+| `branchAddress` | string | No | Dirección de la sucursal |
+| `documentTypes` | array | No | Códigos de tipo de comprobante a habilitar (por defecto: `["01"]`). Deben ser tipos soportados. |
+| `initialSequentials` | array | No | Números secuenciales iniciales por tipo de comprobante. Cualquier tipo no listado tiene por defecto `1`. Ver estructura abajo. |
+| `language` | string | No | Idioma para los correos salientes. Soportados: `es` (por defecto), `en`. Se guarda en el tenant y se usa para todos los correos posteriores, incluyendo reenvíos. |
+| `verificationRedirectUrl` | string | No | URL del frontend a la que apuntará el enlace de verificación en el correo. El token se añade como `?token=<token>`. Si se omite, el enlace va directamente al endpoint de verificación de la API. |
+| `termsVersion` | string | Sí | El string `version` del documento TERMS actualmente publicado (de `GET /v1/agreements`). El servidor valida esto antes de aceptar el registro. Si aún no se ha publicado ningún documento, se acepta cualquier string no vacío tal cual (mecanismo de respaldo previo al lanzamiento). |
 
-### `initialSequentials` structure
+### Estructura de `initialSequentials`
 
-Each entry sets the first sequential number that will be issued for a given document type on this issuer. Useful when migrating from another system and you need continuity.
+Cada entrada establece el primer número secuencial que se emitirá para un tipo de comprobante dado en este emisor. Útil al migrar desde otro sistema y necesitar continuidad.
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `documentType` | string | Yes | Document type code, e.g. `"01"` |
-| `sequential` | integer | Yes | Next sequential number to issue (≥ 1) |
+| `documentType` | string | Sí | Código de tipo de comprobante, por ejemplo `"01"` |
+| `sequential` | integer | Sí | Siguiente número secuencial a emitir (≥ 1) |
 
 ```json
 {
@@ -57,27 +57,27 @@ Each entry sets the first sequential number that will be issued for a given docu
 }
 ```
 
-### `verificationRedirectUrl` behaviour
+### Comportamiento de `verificationRedirectUrl`
 
-When set, the verification email contains a link to your frontend page:
+Cuando se establece, el correo de verificación contiene un enlace a tu página del frontend:
 
 ```
 https://app.comprobify.com/verify?token=<64-char-hex>
 ```
 
-Your frontend page should display a confirmation UI and then call `GET /v1/verify-email?token=<token>` on user action.
+Tu página del frontend debería mostrar una interfaz de confirmación y luego llamar a `GET /v1/verify-email?token=<token>` cuando el usuario actúe.
 
-When omitted, the link goes directly to the API:
+Cuando se omite, el enlace va directamente a la API:
 
 ```
 https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 ```
 
-**Validation:** in production (`APP_ENV=production`) the URL must use `https`. In staging, `http` is also accepted.
+**Validación:** en producción (`APP_ENV=production`) la URL debe usar `https`. En staging, también se acepta `http`.
 
-## Response
+## Respuesta
 
-### 201 Created — new registration
+### 201 Created — registro nuevo
 
 ```json
 {
@@ -107,27 +107,27 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 }
 ```
 
-### 200 OK — email already registered (key recovery)
+### 200 OK — correo ya registrado (recuperación de llave)
 
-If the email is already registered and not suspended, the current sandbox key is revoked and a fresh one is returned. Same response shape as 201 but with `recovered: true`.
+Si el correo ya está registrado y no está suspendido, la llave de sandbox actual se revoca y se devuelve una nueva. Misma estructura de respuesta que 201 pero con `recovered: true`.
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | Missing or invalid fields, or missing P12 file or `termsVersion` |
-| `400` | `VERSION_MISMATCH` | `termsVersion` does not match the currently published TERMS version — re-fetch `GET /v1/agreements` and show the current version |
-| `400` | `BAD_REQUEST` | P12 file is corrupt or the certificate password is wrong |
-| `400` | `INVALID_FILE_UPLOAD` | Logo file exceeds 500 KB |
-| `403` | `FORBIDDEN` | The account is suspended |
-| `409` | `CONFLICT` | RUC already registered under a different email |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `VALIDATION_FAILED` | Campos faltantes o inválidos, o falta el archivo P12 o el `termsVersion` |
+| `400` | `VERSION_MISMATCH` | `termsVersion` no coincide con la versión de TERMS actualmente publicada — vuelve a consultar `GET /v1/agreements` y muestra la versión actual |
+| `400` | `BAD_REQUEST` | El archivo P12 está corrupto o la contraseña del certificado es incorrecta |
+| `400` | `INVALID_FILE_UPLOAD` | El archivo de logo excede los 500 KB |
+| `403` | `FORBIDDEN` | La cuenta está suspendida |
+| `409` | `CONFLICT` | El RUC ya está registrado bajo otro correo |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
-## Notes
+## Notas
 
-- The tenant starts in `PENDING_VERIFICATION` status. A verification email is sent immediately (fire-and-forget).
-- Unverified tenants can use sandbox but cannot promote to production.
-- The verification token expires after the configured TTL (default 24 hours). Use `POST /v1/resend-verification` to issue a fresh one.
-- The endpoint is idempotent on the email address — safe to retry if the API key was lost.
-- Fetch the current `termsVersion` from `GET /v1/agreements` immediately before showing the acceptance checkbox, not at page load — the server validates the submitted version and rejects stale ones.
-- Returning tenants whose acceptance version has drifted (e.g. after the DPA is updated) should use `GET /v1/tenants/agreements` to discover which documents need re-accepting, and `POST /v1/tenants/agreements` to record the new acceptance. See [Agreement Acceptance](agreement-acceptance.md).
+- El tenant inicia en estado `PENDING_VERIFICATION`. Se envía de inmediato un correo de verificación (fire-and-forget).
+- Los tenants no verificados pueden usar sandbox pero no pueden promoverse a producción.
+- El token de verificación expira después del TTL configurado (24 horas por defecto). Usa `POST /v1/resend-verification` para emitir uno nuevo.
+- El endpoint es idempotente respecto a la dirección de correo — es seguro reintentarlo si se perdió la llave API.
+- Obtén el `termsVersion` actual desde `GET /v1/agreements` justo antes de mostrar la casilla de aceptación, no en la carga de la página — el servidor valida la versión enviada y rechaza las versiones desactualizadas.
+- Los tenants que regresan y cuya versión de aceptación quedó desactualizada (por ejemplo, después de una actualización del DPA) deberían usar `GET /v1/tenants/agreements` para descubrir qué documentos necesitan volver a aceptarse, y `POST /v1/tenants/agreements` para registrar la nueva aceptación. Ver [Agreement Acceptance](agreement-acceptance.md).

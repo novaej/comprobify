@@ -1,16 +1,16 @@
-# Retry Emails (Batch)
+# Reintentar Correos (Lote)
 
-Retries sending the authorization email for all documents belonging to this issuer that have `email_status` of `PENDING` or `FAILED`.
+Reintenta el envío del correo de autorización para todos los comprobantes de este emisor cuyo `email_status` sea `PENDING` o `FAILED`.
 
 ```
 POST /v1/documents/email-retry
 ```
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -25,11 +25,11 @@ POST /v1/documents/email-retry
 }
 ```
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
+| `BAD_REQUEST` | 400 | El header `X-Issuer-Id` falta o tiene un formato inválido |
+| `UNAUTHORIZED` | 401 | Llave API faltante o inválida, o hay un desajuste de entorno (una llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor indicado en `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor indicado en `X-Issuer-Id` no existe |

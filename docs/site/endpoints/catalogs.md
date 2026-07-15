@@ -1,20 +1,20 @@
-# Catalogs
+# Catálogos
 
-Reference data endpoints for SRI-defined codes. All return static lookup tables used when building invoices.
+Endpoints de datos de referencia para códigos definidos por el SRI. Todos devuelven tablas de consulta estáticas usadas al construir facturas.
 
-All catalog endpoints require authentication.
+Todos los endpoints de catálogos requieren autenticación.
 
 ---
 
 ## GET /v1/catalogs/id-types
 
-Returns buyer identification types.
+Devuelve los tipos de identificación del comprador.
 
 ```
 GET /v1/catalogs/id-types
 ```
 
-**Response**
+**Respuesta**
 
 ```json
 {
@@ -33,13 +33,13 @@ GET /v1/catalogs/id-types
 
 ## GET /v1/catalogs/payment-methods
 
-Returns SRI payment method codes.
+Devuelve los códigos de forma de pago del SRI.
 
 ```
 GET /v1/catalogs/payment-methods
 ```
 
-**Response**
+**Respuesta**
 
 ```json
 {
@@ -61,13 +61,13 @@ GET /v1/catalogs/payment-methods
 
 ## GET /v1/catalogs/term-units
 
-Returns accepted payment term units (SRI `unidadTiempo`). Use together with `payments[].term` to express installment plans (`pagos a plazos`).
+Devuelve las unidades de plazo de pago aceptadas (`unidadTiempo` del SRI). Úsalo junto con `payments[].term` para expresar planes de cuotas (`pagos a plazos`).
 
 ```
 GET /v1/catalogs/term-units
 ```
 
-**Response**
+**Respuesta**
 
 ```json
 {
@@ -83,13 +83,13 @@ GET /v1/catalogs/term-units
 
 ## GET /v1/catalogs/tax-types
 
-Returns SRI tax type codes.
+Devuelve los códigos de tipo de impuesto del SRI.
 
 ```
 GET /v1/catalogs/tax-types
 ```
 
-**Response**
+**Respuesta**
 
 ```json
 {
@@ -106,13 +106,13 @@ GET /v1/catalogs/tax-types
 
 ## GET /v1/catalogs/tax-rates
 
-Returns tax rate codes grouped by tax type. Use `taxCode` + `rateCode` together when specifying taxes on invoice items.
+Devuelve los códigos de tarifa de impuesto agrupados por tipo de impuesto. Usa `taxCode` + `rateCode` juntos al especificar impuestos en los ítems de la factura.
 
 ```
 GET /v1/catalogs/tax-rates
 ```
 
-**Response**
+**Respuesta**
 
 ```json
 {
@@ -131,8 +131,8 @@ GET /v1/catalogs/tax-rates
 
 ---
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | Missing or invalid API key |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida |

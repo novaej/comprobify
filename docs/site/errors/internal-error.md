@@ -1,11 +1,11 @@
-# Internal Server Error
+# Error Interno del Servidor
 
-**Code:** `INTERNAL_ERROR`
-**Status:** `500 Internal Server Error`
+**Código:** `INTERNAL_ERROR`
+**Estado HTTP:** `500 Internal Server Error`
 
-An unexpected error occurred on the server. This is not caused by the request content.
+Ocurrió un error inesperado en el servidor. Esto no es causado por el contenido de la solicitud.
 
-## Response
+## Respuesta
 
 ```json
 {
@@ -17,10 +17,10 @@ An unexpected error occurred on the server. This is not caused by the request co
 }
 ```
 
-Note: `detail` is intentionally omitted to avoid leaking internal information.
+Nota: `detail` se omite intencionalmente para evitar filtrar información interna.
 
-## What to do
+## Qué hacer
 
-- Retry the request — transient failures often resolve on retry
-- Use the `instance` path and the time of the request to correlate with server logs
-- If the error persists, contact the API operator
+- Reintenta la solicitud — los fallos transitorios a menudo se resuelven al reintentar
+- Usa la ruta `instance` y la hora de la solicitud para correlacionar con los registros del servidor
+- Si el error persiste, contacta al operador de la API

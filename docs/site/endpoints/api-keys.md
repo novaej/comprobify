@@ -1,6 +1,6 @@
-# API Keys
+# Llaves API
 
-Tenant-facing API key management. Mint named keys for each integration (frontend, ERP, mobile app, sandbox test rig, etc.), list them, and revoke leaked or unused ones.
+Gestión de llaves API a nivel de tenant. Crea llaves nombradas para cada integración (frontend, ERP, aplicación móvil, banco de pruebas sandbox, etc.), lístalas y revoca las filtradas o sin uso.
 
 ```
 GET    /v1/keys
@@ -8,21 +8,21 @@ POST   /v1/keys
 DELETE /v1/keys/:id
 ```
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` — any active key for the tenant.
+`Authorization: Bearer <api-key>` — cualquier llave activa del tenant.
 
 ---
 
-## List keys
+## Listar llaves
 
 ```
 GET /v1/keys
 ```
 
-Returns every active key for the tenant. The plaintext token is **never** returned — only labels, environments, and ids.
+Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** se devuelve — solo etiquetas, ambientes e ids.
 
-### Response
+### Respuesta
 
 ```json
 {
@@ -50,15 +50,15 @@ Returns every active key for the tenant. The plaintext token is **never** return
 
 ---
 
-## Mint a new key
+## Crear una nueva llave
 
 ```
 POST /v1/keys
 ```
 
-Creates a new tenant-scoped key. The plaintext token is shown **once** in the response and never stored — record it immediately.
+Crea una nueva llave a nivel de tenant. El token en texto plano se muestra **una sola vez** en la respuesta y nunca se almacena — regístralo de inmediato.
 
-### Request body
+### Cuerpo de la solicitud
 
 ```json
 {
@@ -67,12 +67,12 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 }
 ```
 
-| Field | Type | Required | Default | Description |
+| Campo | Tipo | Requerido | Por defecto | Descripción |
 |---|---|---|---|---|
-| `label` | string | No | `null` | Human-readable name for the integration (max 100 chars). Highly recommended for observability. |
-| `environment` | string | No | `"sandbox"` | Either `"sandbox"` or `"production"`. Production keys can only be minted after the tenant has been promoted to production. |
+| `label` | string | No | `null` | Nombre legible para la integración (máx. 100 caracteres). Muy recomendado para fines de observabilidad. |
+| `environment` | string | No | `"sandbox"` | `"sandbox"` o `"production"`. Las llaves de producción solo pueden crearse después de que el tenant haya sido promovido a producción. |
 
-### Response
+### Respuesta
 
 **201 Created**
 
@@ -83,31 +83,31 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 }
 ```
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `label` too long or `environment` invalid |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` | Tenant email not verified, OR attempting to mint a production key before any issuer has been promoted |
+| `400` | `VALIDATION_FAILED` | `label` demasiado largo o `environment` inválido |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `403` | `FORBIDDEN` | El correo del tenant no está verificado, O se intenta crear una llave de producción antes de que algún emisor haya sido promovido |
 
 ---
 
-## Revoke a key
+## Revocar una llave
 
 ```
 DELETE /v1/keys/:id
 ```
 
-Marks the key as inactive. The key cannot be used to authenticate any future request.
+Marca la llave como inactiva. La llave no podrá usarse para autenticar ninguna solicitud futura.
 
-### Path parameters
+### Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric id of the key (from `GET /v1/keys`) |
+| `id` | Id numérico de la llave (obtenido de `GET /v1/keys`) |
 
-### Response
+### Respuesta
 
 **200 OK**
 
@@ -115,25 +115,25 @@ Marks the key as inactive. The key cannot be used to authenticate any future req
 { "ok": true }
 ```
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `BAD_REQUEST` | Attempting to revoke the same key you are using to make this request — use a different key, or coordinate with admin support |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `404` | `NOT_FOUND` | Key id does not exist or already revoked, or belongs to a different tenant |
+| `400` | `BAD_REQUEST` | Se intenta revocar la misma llave que se está usando para hacer esta solicitud — usa una llave diferente, o coordina con soporte de administración |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `404` | `NOT_FOUND` | El id de la llave no existe o ya fue revocado, o pertenece a un tenant diferente |
 
 ---
 
-## Key environment + targeted issuer
+## Ambiente de la llave + emisor de destino
 
-When a key is used on a document request, the `resolveIssuer` middleware validates that the key's `environment` matches the targeted issuer's effective environment. The `sandbox` flag lives on the **tenant** — `resolveIssuer` reads `tenant.sandbox` and rejects any key/issuer mismatch:
+Cuando una llave se usa en una solicitud de comprobante, el middleware `resolveIssuer` valida que el `environment` de la llave coincida con el ambiente efectivo del emisor de destino. El indicador `sandbox` reside en el **tenant** — `resolveIssuer` lee `tenant.sandbox` y rechaza cualquier desajuste entre llave y emisor:
 
-| Key environment | Tenant `sandbox` | Result |
+| Ambiente de la llave | `sandbox` del tenant | Resultado |
 |---|---|---|
 | `sandbox` | `true` | OK |
-| `sandbox` | `false` | `401` — sandbox key cannot address a production tenant |
-| `production` | `true` | `401` — production key cannot address a sandbox tenant |
+| `sandbox` | `false` | `401` — una llave sandbox no puede dirigirse a un tenant de producción |
+| `production` | `true` | `401` — una llave de producción no puede dirigirse a un tenant sandbox |
 | `production` | `false` | OK |
 
-This is the only safeguard preventing accidental cross-environment requests; treat the environment as part of the key's identity, like Stripe's `sk_test_…` vs `sk_live_…` convention.
+Esta es la única salvaguarda que evita solicitudes accidentales entre ambientes; trata el ambiente como parte de la identidad de la llave, similar a la convención `sk_test_…` vs `sk_live_…` de Stripe.

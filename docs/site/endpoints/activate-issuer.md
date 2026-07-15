@@ -1,29 +1,29 @@
-# Activate Issuer
+# Activar Emisor
 
-Reactivates an issuer that was previously soft-deleted via `DELETE /v1/issuers/:id`.
+Reactiva un emisor que fue previamente eliminado de forma reversible (soft-delete) mediante `DELETE /v1/issuers/:id`.
 
 ```
 PATCH /v1/issuers/:id/activate
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id of a deactivated issuer belonging to your tenant |
+| `id` | Id numérico del emisor desactivado, perteneciente a tu tenant |
 
-## Plan limits
+## Límites del plan
 
-Reactivation re-runs the same branch/issue-point checks as creating a new branch (`POST /v1/issuers`), so deactivating and reactivating an issuer cannot be used to exceed your subscription tier's limits:
+La reactivación vuelve a ejecutar las mismas validaciones de sucursal/punto de emisión que la creación de una sucursal nueva (`POST /v1/issuers`), de modo que desactivar y reactivar un emisor no puede usarse para exceder los límites de tu plan de suscripción:
 
-- If the issuer's `branchCode` has no other active issue point, reactivating counts against your tier's `maxBranches`.
-- Otherwise it counts against that branch's `maxIssuePointsPerBranch`.
+- Si el `branchCode` del emisor no tiene ningún otro punto de emisión activo, la reactivación cuenta contra el `maxBranches` de tu plan.
+- De lo contrario, cuenta contra el `maxIssuePointsPerBranch` de esa sucursal.
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -31,14 +31,14 @@ Reactivation re-runs the same branch/issue-point checks as creating a new branch
 { "ok": true }
 ```
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `402` | `BRANCH_LIMIT_REACHED` | Reactivating would exceed the tenant's plan branch limit |
-| `402` | `ISSUE_POINT_LIMIT_REACHED` | Reactivating would exceed the plan's issue-points-per-branch limit |
-| `403` | `ISSUER_FORBIDDEN` | Issuer belongs to a different tenant |
-| `404` | `ISSUER_NOT_FOUND` | Issuer id does not exist, belongs to another tenant, or is already active |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `402` | `BRANCH_LIMIT_REACHED` | La reactivación excedería el límite de sucursales del plan del tenant |
+| `402` | `ISSUE_POINT_LIMIT_REACHED` | La reactivación excedería el límite de puntos de emisión por sucursal del plan |
+| `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
+| `404` | `ISSUER_NOT_FOUND` | El id del emisor no existe, pertenece a otro tenant, o ya está activo |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

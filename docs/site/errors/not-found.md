@@ -1,32 +1,32 @@
 # Not Found
 
-**Status:** `404 Not Found`
+**Estado HTTP:** `404 Not Found`
 
-The requested resource does not exist or is not accessible to this tenant.
+El recurso solicitado no existe o no es accesible para este tenant.
 
-## Codes
+## Códigos
 
 ### `ISSUER_NOT_FOUND`
 
-The issuer ID supplied in `X-Issuer-Id` or a URL parameter (`/v1/issuers/:id/…`) does not match any active issuer.
+El ID de emisor proporcionado en `X-Issuer-Id` o en un parámetro de URL (`/v1/issuers/:id/…`) no coincide con ningún emisor activo.
 
-**What to do:** Call `GET /v1/issuers` to list your tenant's issuers and verify the ID.
+**Qué hacer:** Llama a `GET /v1/issuers` para listar los emisores de tu tenant y verificar el ID.
 
 ### `SOURCE_ISSUER_NOT_FOUND`
 
-The `sourceIssuerId` field on `POST /v1/issuers` (branch creation) does not match any issuer that belongs to this tenant.
+El campo `sourceIssuerId` en `POST /v1/issuers` (creación de sucursal) no coincide con ningún emisor que pertenezca a este tenant.
 
-**What to do:** Ensure `sourceIssuerId` is the numeric ID of one of your tenant's existing issuers, returned by `GET /v1/issuers`.
+**Qué hacer:** Asegúrate de que `sourceIssuerId` sea el ID numérico de uno de los emisores existentes de tu tenant, devuelto por `GET /v1/issuers`.
 
-### `NOT_FOUND` (fallback)
+### `NOT_FOUND` (respaldo)
 
-A generic not-found response for other resources (documents, API keys, etc.). Read `detail` for the specific resource type.
+Una respuesta genérica de no encontrado para otros recursos (comprobantes, llaves API, etc.). Lee `detail` para conocer el tipo de recurso específico.
 
-**What to do:**
-- For documents — verify the access key is exactly 49 digits and was created by an issuer belonging to this tenant
-- For API keys — verify the key ID in the URL; list active keys with `GET /v1/keys`
+**Qué hacer:**
+- Para comprobantes — verifica que la clave de acceso tenga exactamente 49 dígitos y haya sido creada por un emisor que pertenece a este tenant
+- Para llaves API — verifica el ID de la llave en la URL; lista las llaves activas con `GET /v1/keys`
 
-## Example responses
+## Ejemplos de respuesta
 
 ```json
 {
@@ -34,7 +34,7 @@ A generic not-found response for other resources (documents, API keys, etc.). Re
   "title":    "Not Found",
   "status":   404,
   "code":     "ISSUER_NOT_FOUND",
-  "detail":   "Issuer not found",
+  "detail":   "Emisor no encontrado",
   "instance": "/v1/documents"
 }
 ```
@@ -45,7 +45,7 @@ A generic not-found response for other resources (documents, API keys, etc.). Re
   "title":    "Not Found",
   "status":   404,
   "code":     "NOT_FOUND",
-  "detail":   "Document not found",
+  "detail":   "Comprobante no encontrado",
   "instance": "/v1/documents/0000000000000000000000000000000000000000000000000"
 }
 ```

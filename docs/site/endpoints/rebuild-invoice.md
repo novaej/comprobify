@@ -1,26 +1,26 @@
-# Rebuild Invoice
+# Reconstruir Factura
 
-Corrects and re-signs a rejected document. The rebuilt document keeps the same `accessKey`, `sequential`, and `issueDate` as the original — only the invoice content is replaced.
+Corrige y vuelve a firmar un comprobante rechazado. El comprobante reconstruido conserva el mismo `accessKey`, `sequential`, y `issueDate` que el original — solo se reemplaza el contenido de la factura.
 
 ```
 POST /v1/documents/:accessKey/rebuild
 ```
 
-Use this when a document is in `RETURNED` or `NOT_AUTHORIZED` status. After rebuilding, send it again with [Send to SRI](send-to-sri.md).
+Úsalo cuando un comprobante está en estado `RETURNED` o `NOT_AUTHORIZED`. Después de reconstruirlo, envíalo de nuevo con [Send to SRI](send-to-sri.md).
 
-Works for any document type — the body shape must match the document's existing `documentType`. The example below is for an invoice (`01`); for a credit note (`04`), use the [Create Credit Note](create-credit-note.md) body shape instead (no `payments`, requires `originalDocument` + `motivo`).
+Funciona para cualquier tipo de comprobante — la forma del cuerpo debe coincidir con el `documentType` existente del comprobante. El ejemplo a continuación es para una factura (`01`); para una nota de crédito (`04`), usa la forma del cuerpo de [Create Credit Note](create-credit-note.md) (sin `payments`, requiere `originalDocument` + `motivo`).
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico de `GET /v1/issuers`)
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `accessKey` | The 49-digit access key of the document to rebuild |
+| `accessKey` | La clave de acceso de 49 dígitos del comprobante a reconstruir |
 
-## Request body
+## Cuerpo de la solicitud
 
 ```json
 {
@@ -65,55 +65,55 @@ Works for any document type — the body shape must match the document's existin
 }
 ```
 
-### What is preserved from the original document
+### Qué se conserva del comprobante original
 
-The following fields are **always taken from the original document** and cannot be changed via rebuild:
+Los siguientes campos **siempre se toman del comprobante original** y no pueden cambiarse mediante la reconstrucción:
 
-| Field | Reason |
+| Campo | Razón |
 |---|---|
-| `accessKey` | SRI ties all subsequent status checks to this key |
-| `sequential` | Sequential numbers are assigned once and not recycled |
-| `issueDate` | SRI validates the date embedded in the access key |
-| `documentType` | Cannot change the type of an existing document |
+| `accessKey` | El SRI vincula todas las verificaciones de estado posteriores a esta clave |
+| `sequential` | Los números secuenciales se asignan una sola vez y no se reciclan |
+| `issueDate` | El SRI valida la fecha embebida en la clave de acceso |
+| `documentType` | No se puede cambiar el tipo de un comprobante existente |
 
-The `documentType` field is still required by validation, but must match the original document's type — the value supplied in the body is ignored at the service level.
+El campo `documentType` sigue siendo requerido por la validación, pero debe coincidir con el tipo del comprobante original — el valor proporcionado en el cuerpo se ignora a nivel de servicio.
 
-### What can be corrected
+### Qué se puede corregir
 
-All invoice content fields are replaced atomically:
+Todos los campos de contenido de la factura se reemplazan de forma atómica:
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `documentType` | string | Yes | Must match the original document type (e.g. `"01"`) |
-| `buyer.idType` | string | Yes | 2-digit SRI identification type code |
-| `buyer.id` | string | Yes | Buyer identification number (max 20 chars) |
-| `buyer.name` | string | Yes | Buyer full name or business name (max 300 chars) |
-| `buyer.email` | string | Yes | Buyer email — used when the authorization email is sent |
-| `buyer.address` | string | No | Buyer address (max 300 chars) |
-| `guiaRemision` | string | No | Delivery note number in `NNN-NNN-NNNNNNNNN` format |
-| `items` | array | Yes | Replaces all existing line items, including taxes |
-| `items[].mainCode` | string | Yes | Product/service main code |
-| `items[].auxiliaryCode` | string | No | Secondary code |
-| `items[].description` | string | Yes | Description (max 300 chars) |
-| `items[].quantity` | string | Yes | Numeric quantity |
-| `items[].unitPrice` | string | Yes | Numeric unit price |
-| `items[].discount` | string | No | Numeric discount amount |
-| `items[].taxes` | array | Yes | At least one tax per item |
-| `items[].taxes[].code` | string | Yes | SRI tax type code |
-| `items[].taxes[].rateCode` | string | Yes | SRI tax rate code |
-| `items[].taxes[].rate` | string | Yes | Tax rate percentage |
-| `items[].taxes[].taxableBase` | string | Yes | Amount the tax is applied to |
-| `items[].taxes[].taxAmount` | string | Yes | Calculated tax amount |
-| `payments` | array | Yes | Replaces all existing payment entries. Sum of `total` must equal the invoice total |
-| `payments[].method` | string | Yes | 2-digit SRI payment method code |
-| `payments[].total` | string | Yes | Numeric payment amount |
-| `payments[].term` | number | No | Payment term length |
-| `payments[].termUnit` | string | No | Payment term unit (e.g. `"dias"`, `"meses"`) |
-| `additionalInfo` | array | No | Replaces all existing `campoAdicional` entries |
+| `documentType` | string | Sí | Debe coincidir con el tipo del comprobante original (por ejemplo, `"01"`) |
+| `buyer.idType` | string | Sí | Código de tipo de identificación del SRI de 2 dígitos |
+| `buyer.id` | string | Sí | Número de identificación del comprador (máx. 20 caracteres) |
+| `buyer.name` | string | Sí | Nombre completo o razón social del comprador (máx. 300 caracteres) |
+| `buyer.email` | string | Sí | Correo del comprador — usado cuando se envía el correo de autorización |
+| `buyer.address` | string | No | Dirección del comprador (máx. 300 caracteres) |
+| `guiaRemision` | string | No | Número de guía de remisión en formato `NNN-NNN-NNNNNNNNN` |
+| `items` | array | Sí | Reemplaza todos los ítems existentes, incluyendo los impuestos |
+| `items[].mainCode` | string | Sí | Código principal del producto/servicio |
+| `items[].auxiliaryCode` | string | No | Código secundario |
+| `items[].description` | string | Sí | Descripción (máx. 300 caracteres) |
+| `items[].quantity` | string | Sí | Cantidad numérica |
+| `items[].unitPrice` | string | Sí | Precio unitario numérico |
+| `items[].discount` | string | No | Monto numérico de descuento |
+| `items[].taxes` | array | Sí | Al menos un impuesto por ítem |
+| `items[].taxes[].code` | string | Sí | Código de tipo de impuesto del SRI |
+| `items[].taxes[].rateCode` | string | Sí | Código de tarifa de impuesto del SRI |
+| `items[].taxes[].rate` | string | Sí | Porcentaje de la tarifa de impuesto |
+| `items[].taxes[].taxableBase` | string | Sí | Monto sobre el que se aplica el impuesto |
+| `items[].taxes[].taxAmount` | string | Sí | Monto de impuesto calculado |
+| `payments` | array | Sí | Reemplaza todas las formas de pago existentes. La suma de `total` debe ser igual al total de la factura |
+| `payments[].method` | string | Sí | Código de forma de pago del SRI de 2 dígitos |
+| `payments[].total` | string | Sí | Monto numérico del pago |
+| `payments[].term` | number | No | Plazo de pago |
+| `payments[].termUnit` | string | No | Unidad del plazo de pago (por ejemplo, `"dias"`, `"meses"`) |
+| `additionalInfo` | array | No | Reemplaza todas las entradas `campoAdicional` existentes |
 
-The original payload is available in the `requestPayload` field on the [Get Document](get-document.md) response — use it to pre-fill the corrected request.
+El payload original está disponible en el campo `requestPayload` de la respuesta de [Get Document](get-document.md) — úsalo para prellenar la solicitud corregida.
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -140,15 +140,15 @@ The original payload is available in the `requestPayload` field on the [Get Docu
 }
 ```
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `VALIDATION_FAILED` | 400 | Request body fails field validation |
-| `VALIDATION_FAILED` | 400 | Sum of `payments[].total` does not match the calculated invoice total |
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `INVALID_STATE_TRANSITION` | 400 | Document is not in `RETURNED` or `NOT_AUTHORIZED` status |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
-| `NOT_FOUND` | 404 | Document not found |
+| `VALIDATION_FAILED` | 400 | El cuerpo de la solicitud falla la validación de campos |
+| `VALIDATION_FAILED` | 400 | La suma de `payments[].total` no coincide con el total calculado de la factura |
+| `BAD_REQUEST` | 400 | El encabezado `X-Issuer-Id` falta o está mal formado |
+| `INVALID_STATE_TRANSITION` | 400 | El comprobante no está en estado `RETURNED` o `NOT_AUTHORIZED` |
+| `UNAUTHORIZED` | 401 | Llave API faltante o inválida, o discrepancia de entorno |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `NOT_FOUND` | 404 | Comprobante no encontrado |

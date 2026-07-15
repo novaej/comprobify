@@ -1,16 +1,16 @@
-# Get Current Tenant
+# Consultar Tenant Actual
 
-Returns identity and account details for the tenant that owns the API key used to authenticate the request. Useful for a third-party app that already has an API key (e.g. issued via `POST /v1/register` or by an admin) and needs to resolve the numeric `tenant.id` — for example, to link an existing API account in a frontend without re-entering the RUC or P12 certificate, or to match incoming webhook deliveries back to the right account.
+Devuelve la identidad y los detalles de la cuenta del tenant propietario de la llave API usada para autenticar la solicitud. Útil para una aplicación de terceros que ya tiene una llave API (por ejemplo, emitida mediante `POST /v1/register` o por un administrador) y necesita resolver el `tenant.id` numérico — por ejemplo, para vincular una cuenta API existente en un frontend sin volver a ingresar el RUC o el certificado P12, o para hacer coincidir los envíos de webhooks entrantes con la cuenta correcta.
 
 ```
 GET /v1/tenants/me
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-## Response
+## Respuesta
 
 ```json
 {
@@ -29,29 +29,29 @@ GET /v1/tenants/me
 }
 ```
 
-| Field | Description |
+| Campo | Descripción |
 |---|---|
-| `id` | Numeric tenant id. Use this to correlate webhook deliveries and other tenant-scoped resources. |
-| `email` | Tenant's registered email address. |
-| `subscriptionTier` | `FREE`, `STARTER`, `GROWTH`, or `BUSINESS`. |
-| `status` | `PENDING_VERIFICATION`, `ACTIVE`, or `SUSPENDED`. |
-| `documentCount` | Documents issued in the current billing period. |
-| `documentQuota` | Document limit for the current `subscriptionTier`. |
-| `sandbox` | `true` if the tenant is in the SRI test environment, `false` if promoted to production. |
-| `agreementAcceptedAt` | Timestamp of the most recent agreement acceptance event, or `null` for admin-created tenants. Compare against `GET /v1/tenants/agreements` to detect drift. |
-| `agreementVersion` | The TERMS document version the tenant last accepted, or `null` for admin-created tenants. |
+| `id` | Id numérico del tenant. Úsalo para correlacionar envíos de webhooks y otros recursos asociados al tenant. |
+| `email` | Correo electrónico registrado del tenant. |
+| `subscriptionTier` | `FREE`, `STARTER`, `GROWTH` o `BUSINESS`. |
+| `status` | `PENDING_VERIFICATION`, `ACTIVE` o `SUSPENDED`. |
+| `documentCount` | Comprobantes emitidos en el periodo de facturación actual. |
+| `documentQuota` | Límite de comprobantes para el `subscriptionTier` actual. |
+| `sandbox` | `true` si el tenant está en el entorno de pruebas del SRI, `false` si fue promovido a producción. |
+| `agreementAcceptedAt` | Timestamp del evento de aceptación de acuerdos más reciente, o `null` para tenants creados por un administrador. Compáralo con `GET /v1/tenants/agreements` para detectar desactualizaciones. |
+| `agreementVersion` | La versión del documento TERMS que el tenant aceptó por última vez, o `null` para tenants creados por un administrador. |
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
 
-## Notes
+## Notas
 
-- No `X-Issuer-Id` header is required — this endpoint resolves the tenant, not an issuer.
-- The response reflects exactly what the `authenticate` middleware already resolved from the API key — there is no separate database lookup, so any active key (sandbox or production) returns its tenant's current state.
-- This does not return the list of issuers (branches) — use `GET /v1/issuers` for that.
-- Unlike most authenticated endpoints, this one stays reachable even when `status` is `SUSPENDED` — it's one of a small set of read-only endpoints a suspended tenant can still use (see the `ACCOUNT_SUSPENDED` entry in the [error catalogue](../errors/index.md)). Polling this endpoint is a valid way to detect a suspension and check the account's current `status`.
-- **This is also how you find out a paid-tier upgrade completed.** After requesting a tier at [promotion](promote-tenant.md) and [submitting payment proof](submit-payment-proof.md), you'll get a [notification](notifications.md) and email the moment your provider records a decision, but final activation (once SRI authorizes the self-billed invoice) still has no notification of its own — poll this endpoint periodically; `subscriptionTier` and `documentQuota` update the moment the subscription activates. For the in-between states (pending, rejected, why) see [`GET /v1/subscriptions/me`](get-my-subscriptions.md) instead — this endpoint only shows the end result.
+- No se requiere el header `X-Issuer-Id` — este endpoint resuelve el tenant, no un emisor.
+- La respuesta refleja exactamente lo que el middleware `authenticate` ya resolvió a partir de la llave API — no hay una consulta separada a la base de datos, por lo que cualquier llave activa (sandbox o producción) devuelve el estado actual de su tenant.
+- Esto no devuelve la lista de emisores (sucursales) — usa `GET /v1/issuers` para eso.
+- A diferencia de la mayoría de los endpoints autenticados, este sigue siendo accesible incluso cuando `status` es `SUSPENDED` — es uno de un pequeño conjunto de endpoints de solo lectura que un tenant suspendido todavía puede usar (ver la entrada `ACCOUNT_SUSPENDED` en el [catálogo de errores](../errors/index.md)). Consultar este endpoint periódicamente es una forma válida de detectar una suspensión y revisar el `status` actual de la cuenta.
+- **Esta es también la forma de saber que una mejora a un plan pago se completó.** Después de solicitar un plan en la [promoción](promote-tenant.md) y [enviar el comprobante de pago](submit-payment-proof.md), recibirás una [notificación](notifications.md) y un correo en el momento en que tu proveedor registre una decisión, pero la activación final (una vez que el SRI autoriza la factura autofacturada) todavía no tiene notificación propia — consulta este endpoint periódicamente; `subscriptionTier` y `documentQuota` se actualizan en el momento en que la suscripción se activa. Para los estados intermedios (pendiente, rechazado, motivo) usa [`GET /v1/subscriptions/me`](get-my-subscriptions.md) en su lugar — este endpoint solo muestra el resultado final.

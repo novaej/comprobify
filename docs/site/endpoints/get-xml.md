@@ -1,39 +1,39 @@
-# Get XML
+# Consultar XML
 
-Downloads the document XML.
+Descarga el XML del comprobante.
 
 ```
 GET /v1/documents/:accessKey/xml
 ```
 
-- For `AUTHORIZED` documents: returns the SRI authorization XML (includes the authorization number and timestamp wrapped around the signed document).
-- For all other statuses: returns the signed XML as submitted to SRI.
+- Para comprobantes `AUTHORIZED`: devuelve el XML de autorización del SRI (incluye el número de autorización y la marca de tiempo envolviendo el documento firmado).
+- Para todos los demás estados: devuelve el XML firmado tal como fue enviado al SRI.
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `accessKey` | The 49-digit access key of the document |
+| `accessKey` | La clave de acceso de 49 dígitos del comprobante |
 
-## Response
+## Respuesta
 
-**200 OK** — XML file download.
+**200 OK** — descarga de archivo XML.
 
 ```
 Content-Type: application/xml
 Content-Disposition: attachment; filename="<accessKey>.xml"
 ```
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
-| `NOT_FOUND` | 404 | Document not found |
+| `BAD_REQUEST` | 400 | Falta el header `X-Issuer-Id` o está mal formado |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `NOT_FOUND` | 404 | Comprobante no encontrado |

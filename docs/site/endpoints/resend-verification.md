@@ -1,23 +1,23 @@
-# Resend Verification Email
+# Reenviar Correo de Verificación
 
-Resends the verification email to a registered but unverified tenant. Generates a fresh token (invalidating the previous one) and resets the expiry.
+Reenvía el correo de verificación a un tenant registrado pero no verificado. Genera un token nuevo (invalidando el anterior) y reinicia el vencimiento.
 
 ```
 POST /v1/resend-verification
 ```
 
-## Authentication
+## Autenticación
 
-None — public endpoint.
+Ninguna — endpoint público.
 
-## Rate limiting
+## Límite de tasa
 
-Two independent limits apply:
+Aplican dos límites independientes:
 
-- **IP-based:** shared with `POST /v1/register` — 5 requests per hour per IP.
-- **Per-account cooldown:** 60 seconds between resends for the same email address. Breaching this returns `429`.
+- **Basado en IP:** compartido con `POST /v1/register` — 5 solicitudes por hora por IP.
+- **Enfriamiento por cuenta:** 60 segundos entre reenvíos para el mismo correo. Si se incumple, devuelve `429`.
 
-## Request body
+## Cuerpo de la solicitud
 
 ```json
 {
@@ -26,35 +26,35 @@ Two independent limits apply:
 }
 ```
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `email` | string | Yes | Email address used at registration |
-| `verificationRedirectUrl` | string (URL) | No | If provided, overrides the redirect URL embedded in the verification link. Must be `https` in production. Omit to keep the URL set at registration. |
+| `email` | string | Sí | Correo usado en el registro |
+| `verificationRedirectUrl` | string (URL) | No | Si se proporciona, sobrescribe la URL de redirección incorporada en el enlace de verificación. Debe ser `https` en producción. Omítelo para conservar la URL establecida en el registro. |
 
-## Response
+## Respuesta
 
 ```json
 {
   "ok": true,
-  "message": "If that email is registered and unverified, a new verification email has been sent."
+  "message": "Si ese correo está registrado y no verificado, se ha enviado un nuevo correo de verificación."
 }
 ```
 
-The message is intentionally generic — the endpoint does not reveal whether the email exists in the system.
+El mensaje es intencionalmente genérico — el endpoint no revela si el correo existe en el sistema.
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `email` field is missing or invalid |
-| `409` | `CONFLICT` | The account is already verified |
-| `403` | `FORBIDDEN` | The account has been suspended |
-| `429` | `TOO_MANY_REQUESTS` | IP rate limit exceeded, or 60-second per-account cooldown not yet elapsed |
+| `400` | `VALIDATION_FAILED` | El campo `email` falta o es inválido |
+| `409` | `CONFLICT` | La cuenta ya está verificada |
+| `403` | `FORBIDDEN` | La cuenta ha sido suspendida |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa por IP, o aún no ha transcurrido el enfriamiento de 60 segundos por cuenta |
 
-## Notes
+## Notas
 
-- The old token is immediately invalidated — only the newly issued token will work.
-- The new token expires after the configured TTL (default 24 hours).
-- If `verificationRedirectUrl` is supplied, it overwrites the value stored on the tenant and is used for all subsequent verification emails including future resends. Omit the field to keep the existing URL unchanged.
-- Delivery status is tracked the same way as invoice emails: `verification_email_status` on the tenant row is updated to `SENT`, `DELIVERED`, `FAILED`, or `COMPLAINED` via the Mailgun webhook.
-- If `EMAIL_PROVIDER=none`, the token is still regenerated in the database but no email is sent.
+- El token anterior se invalida de inmediato — solo funcionará el token recién emitido.
+- El nuevo token expira después del TTL configurado (24 horas por defecto).
+- Si se proporciona `verificationRedirectUrl`, sobrescribe el valor almacenado en el tenant y se usa para todos los correos de verificación posteriores, incluyendo futuros reenvíos. Omite el campo para mantener la URL existente sin cambios.
+- El estado de entrega se rastrea de la misma forma que los correos de facturas: `verification_email_status` en la fila del tenant se actualiza a `SENT`, `DELIVERED`, `FAILED`, o `COMPLAINED` vía el webhook de Mailgun.
+- Si `EMAIL_PROVIDER=none`, el token igual se regenera en la base de datos pero no se envía ningún correo.

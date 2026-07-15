@@ -1,26 +1,26 @@
 # Unauthorized
 
-**Status:** `401 Unauthorized`
+**Estado HTTP:** `401 Unauthorized`
 
-The request did not include a valid API key, the key has been revoked, or there is an environment mismatch between the key and the tenant.
+La solicitud no incluyó una llave API válida, la llave fue revocada, o hay un desajuste de ambiente entre la llave y el tenant.
 
-## Codes
+## Códigos
 
 ### `API_KEY_ENV_MISMATCH`
 
-The API key's environment (`sandbox` or `production`) does not match the tenant's current environment. For example: using a sandbox key after the tenant has promoted to production, or using a production key against a tenant still in sandbox mode.
+El ambiente de la llave API (`sandbox` o `production`) no coincide con el ambiente actual del tenant. Por ejemplo: usar una llave de sandbox después de que el tenant se promovió a producción, o usar una llave de producción contra un tenant que sigue en modo sandbox.
 
-**What to do:** Use a key whose environment matches the tenant. List your active keys with `GET /v1/keys`. Sandbox and production keys are issued separately — sandbox keys are created at registration; production keys are issued automatically at promotion (`POST /v1/tenants/promote`) or minted manually afterwards.
+**Qué hacer:** Usa una llave cuyo ambiente coincida con el del tenant. Lista tus llaves activas con `GET /v1/keys`. Las llaves de sandbox y de producción se emiten por separado — las llaves de sandbox se crean en el registro; las llaves de producción se emiten automáticamente en la promoción (`POST /v1/tenants/promote`) o se generan manualmente después.
 
-### `UNAUTHORIZED` (fallback)
+### `UNAUTHORIZED` (respaldo)
 
-The API key is missing, malformed, invalid, or has been revoked.
+La llave API falta, está mal formada, es inválida, o ha sido revocada.
 
-**What to do:**
-- Ensure the `Authorization` header is present and formatted correctly: `Bearer <api-key>`
-- Verify the key has not been revoked — mint a new one via `POST /v1/keys` if needed
+**Qué hacer:**
+- Asegúrate de que el encabezado `Authorization` esté presente y formateado correctamente: `Bearer <api-key>`
+- Verifica que la llave no haya sido revocada — genera una nueva vía `POST /v1/keys` si es necesario
 
-## Example responses
+## Ejemplos de respuesta
 
 ```json
 {
@@ -28,7 +28,7 @@ The API key is missing, malformed, invalid, or has been revoked.
   "title":    "Unauthorized",
   "status":   401,
   "code":     "API_KEY_ENV_MISMATCH",
-  "detail":   "This API key was created for the sandbox environment. The tenant is production. Use a key created for the matching environment.",
+  "detail":   "Esta llave API fue creada para el ambiente sandbox. El tenant está en producción. Usa una llave creada para el ambiente correspondiente.",
   "instance": "/v1/documents"
 }
 ```
@@ -39,7 +39,7 @@ The API key is missing, malformed, invalid, or has been revoked.
   "title":    "Unauthorized",
   "status":   401,
   "code":     "UNAUTHORIZED",
-  "detail":   "Invalid or revoked API key",
+  "detail":   "Llave API inválida o revocada",
   "instance": "/v1/documents"
 }
 ```

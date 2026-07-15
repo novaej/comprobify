@@ -1,33 +1,33 @@
-# List Documents
+# Listar Comprobantes
 
-Retrieves a paginated list of documents for the authenticated issuer with optional filtering by status, document type, date range, sequential, and buyer name, and optional sorting.
+Obtiene una lista paginada de comprobantes del emisor autenticado, con filtros opcionales por estado, tipo de comprobante, rango de fechas, secuencial y nombre del comprador, y ordenamiento opcional.
 
 ```
 GET /v1/documents
 ```
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico de `GET /v1/issuers`)
 
-## Query parameters
+## Parámetros de consulta
 
-| Parameter | Type | Description |
+| Parámetro | Tipo | Descripción |
 |---|---|---|
-| `status` | string | Filter by status: `SIGNED`, `RECEIVED`, `RETURNED`, `AUTHORIZED`, `NOT_AUTHORIZED` (optional) |
-| `documentType` | string | Filter by document type code: `01`, `03`, `04`, `05`, `06`, `07` (optional) |
-| `from` | string | Filter by issue date >= DD/MM/YYYY format (optional) |
-| `to` | string | Filter by issue date <= DD/MM/YYYY format (optional) |
-| `sequential` | string | Filter by sequential, contains match against the zero-padded 9-digit value (e.g. `000000001`), case-insensitive (optional) |
-| `buyerName` | string | Filter by buyer name, contains match, case-insensitive (optional) |
-| `sortBy` | string | Sort by `sequential`, `buyerName`, `issueDate`, or `status` (optional). When omitted, results are sorted by creation date (newest first) — no behavior change for existing callers |
-| `sortDir` | string | `asc` or `desc` (optional). Defaults to `desc` when `sortBy` is given without `sortDir` |
-| `page` | integer | Page number, defaults to 1 (optional) |
-| `limit` | integer | Results per page, 1-100, defaults to 10 (optional) |
+| `status` | string | Filtra por estado: `SIGNED`, `RECEIVED`, `RETURNED`, `AUTHORIZED`, `NOT_AUTHORIZED` (opcional) |
+| `documentType` | string | Filtra por código de tipo de comprobante: `01`, `03`, `04`, `05`, `06`, `07` (opcional) |
+| `from` | string | Filtra por fecha de emisión >= formato DD/MM/YYYY (opcional) |
+| `to` | string | Filtra por fecha de emisión <= formato DD/MM/YYYY (opcional) |
+| `sequential` | string | Filtra por secuencial, coincidencia parcial contra el valor de 9 dígitos con ceros a la izquierda (por ejemplo, `000000001`), sin distinción entre mayúsculas y minúsculas (opcional) |
+| `buyerName` | string | Filtra por nombre del comprador, coincidencia parcial, sin distinción entre mayúsculas y minúsculas (opcional) |
+| `sortBy` | string | Ordena por `sequential`, `buyerName`, `issueDate`, o `status` (opcional). Si se omite, los resultados se ordenan por fecha de creación (más reciente primero) — sin cambios de comportamiento para los llamadores existentes |
+| `sortDir` | string | `asc` o `desc` (opcional). Por defecto `desc` cuando se indica `sortBy` sin `sortDir` |
+| `page` | integer | Número de página, por defecto 1 (opcional) |
+| `limit` | integer | Resultados por página, 1-100, por defecto 10 (opcional) |
 
-All filters combine with `AND`.
+Todos los filtros se combinan con `AND`.
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -58,12 +58,12 @@ All filters combine with `AND`.
 }
 ```
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `VALIDATION_FAILED` | 400 | Invalid query parameter (e.g., invalid status, invalid date format) |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
+| `BAD_REQUEST` | 400 | El encabezado `X-Issuer-Id` falta o está mal formado |
+| `VALIDATION_FAILED` | 400 | Parámetro de consulta inválido (por ejemplo, estado inválido, formato de fecha inválido) |
+| `UNAUTHORIZED` | 401 | Llave API faltante o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |

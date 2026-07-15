@@ -1,31 +1,31 @@
-# Renew Issuer Certificate
+# Renovar Certificado del Emisor
 
-Replaces the P12 certificate (private key + X.509 cert) stored for an issuer — for example, when the existing certificate has expired or is about to. Only that issuer's row is updated; sibling branches that previously inherited the certificate via `sourceIssuerId` keep their own copy until renewed individually.
+Reemplaza el certificado P12 (llave privada + certificado X.509) almacenado para un emisor — por ejemplo, cuando el certificado existente ha vencido o está por vencer. Solo se actualiza la fila de ese emisor; las sucursales hermanas que previamente heredaron el certificado vía `sourceIssuerId` conservan su propia copia hasta que se renueven individualmente.
 
 ```
 PATCH /v1/issuers/:id/certificate
 ```
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `id` | Numeric issuer id (from `GET /v1/issuers`) |
+| `id` | Id numérico del emisor (de `GET /v1/issuers`) |
 
-## Request body
+## Cuerpo de la solicitud
 
 `multipart/form-data`
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `cert` | file | Yes | P12/PFX certificate file issued by an authorized Ecuadorian CA (BANCO CENTRAL or SECURITY DATA). |
-| `certPassword` | string | No | Password protecting the P12 file, if any. |
+| `cert` | file | Sí | Archivo de certificado P12/PFX emitido por una entidad certificadora ecuatoriana autorizada (BANCO CENTRAL o SECURITY DATA). |
+| `certPassword` | string | No | Contraseña que protege el archivo P12, si tiene alguna. |
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -33,23 +33,23 @@ PATCH /v1/issuers/:id/certificate
 { "ok": true, "certFingerprint": "a1b2c3...", "certExpiry": "2028-06-23T00:00:00.000Z" }
 ```
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
-| `400` | `INVALID_FILE_UPLOAD` | No `cert` file provided |
-| `400` | `CERTIFICATE_INVALID` | File is not a valid PKCS#12 archive |
-| `400` | `CERTIFICATE_PASSWORD_INVALID` | Wrong `certPassword` |
-| `400` | `CERTIFICATE_KEY_NOT_FOUND` | No BANCO CENTRAL/SECURITY DATA signing key bag found in the P12 |
-| `400` | `CERTIFICATE_EXPIRED` | The uploaded certificate is itself already expired |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `ISSUER_FORBIDDEN` | Issuer belongs to a different tenant |
-| `404` | `ISSUER_NOT_FOUND` | Issuer not found or inactive |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `400` | `INVALID_FILE_UPLOAD` | No se proporcionó archivo `cert` |
+| `400` | `CERTIFICATE_INVALID` | El archivo no es un archivo PKCS#12 válido |
+| `400` | `CERTIFICATE_PASSWORD_INVALID` | `certPassword` incorrecta |
+| `400` | `CERTIFICATE_KEY_NOT_FOUND` | No se encontró ningún bag de llave de firma de BANCO CENTRAL/SECURITY DATA en el P12 |
+| `400` | `CERTIFICATE_EXPIRED` | El certificado subido ya está vencido |
+| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
+| `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
-## Notes
+## Notas
 
-- **Does not affect already-signed documents.** Each signed invoice embeds its own copy of the signing certificate inside the XML signature (`<ds:X509Certificate>`) at signing time — it is not a live reference to the issuer row. Renewing the certificate only changes what is used for *future* signing: new `POST /v1/documents` calls and any subsequent rebuilds of `RETURNED`/`NOT_AUTHORIZED` documents.
-- Renewal is scoped to the single issuer in the URL. If the same P12 covers multiple branches/issue points under the same RUC, renew each issuer row separately (or pass the same file to each).
-- An admin override exists at `PATCH /v1/admin/issuers/:id/certificate` (no tenant ownership check).
+- **No afecta a los comprobantes ya firmados.** Cada factura firmada incorpora su propia copia del certificado de firma dentro de la firma XML (`<ds:X509Certificate>`) al momento de firmar — no es una referencia en vivo a la fila del emisor. Renovar el certificado solo cambia lo que se usa para *futuras* firmas: nuevas llamadas a `POST /v1/documents` y cualquier reconstrucción posterior de comprobantes `RETURNED`/`NOT_AUTHORIZED`.
+- La renovación se limita al emisor indicado en la URL. Si el mismo P12 cubre varias sucursales/puntos de emisión bajo el mismo RUC, renueva cada fila de emisor por separado (o pasa el mismo archivo a cada una).
+- Existe una alternativa de administrador en `PATCH /v1/admin/issuers/:id/certificate` (sin verificación de propiedad del tenant).

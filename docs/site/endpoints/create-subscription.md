@@ -1,20 +1,20 @@
-# Create Subscription
+# Crear Suscripción
 
-Starts a paid subscription for the authenticated tenant.
+Inicia una suscripción pagada para el tenant autenticado.
 
 ```
 POST /v1/subscriptions
 ```
 
-Unlike requesting a `tier` on [Promote Tenant](promote-tenant.md), this works **while the tenant is still in sandbox** — you don't need to promote to production first to start paying for a tier. It also works after promotion, for a tenant that promoted on FREE and wants to upgrade later.
+A diferencia de solicitar un `tier` en [Promover Tenant](promote-tenant.md), esto funciona **mientras el tenant sigue en sandbox** — no necesitas promover a producción primero para empezar a pagar por un plan. También funciona después de la promoción, para un tenant que se promovió en FREE y desea mejorar de plan más adelante.
 
-## Authentication
+## Autenticación
 
 `Authorization: Bearer <api-key>`
 
-The tenant's email must be ACTIVE (verified) — same gate `POST /v1/tenants/promote` uses, since paying requires a verified address on file.
+El correo del tenant debe estar ACTIVE (verificado) — la misma validación que usa `POST /v1/tenants/promote`, ya que pagar requiere una dirección verificada registrada.
 
-## Request body
+## Cuerpo de la solicitud
 
 ```json
 {
@@ -23,20 +23,20 @@ The tenant's email must be ACTIVE (verified) — same gate `POST /v1/tenants/pro
 }
 ```
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `tier` | string | Yes | `STARTER`, `GROWTH`, or `BUSINESS` — see [Get Tiers](get-tiers.md) |
-| `billingInterval` | string | No | `MONTHLY` (default) or `YEARLY` (2 months free) |
+| `tier` | string | Sí | `STARTER`, `GROWTH`, o `BUSINESS` — consulta [Get Tiers](get-tiers.md) |
+| `billingInterval` | string | No | `MONTHLY` (por defecto) o `YEARLY` (2 meses gratis) |
 
-## What happens next
+## Qué sucede después
 
-Same manual proof/review pipeline as the rest of the subscription system: upload proof of the SPI transfer via [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md), the provider reviews it and links the self-billed invoice, and the tier/quota lands once that invoice is SRI-authorized. Poll [`GET /v1/subscriptions/me`](get-my-subscriptions.md) for status.
+El mismo flujo manual de comprobante/revisión que el resto del sistema de suscripciones: sube el comprobante de la transferencia SPI mediante [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md), el proveedor lo revisa y vincula la factura autofacturada, y el plan/cuota se aplican una vez que esa factura es autorizada por el SRI. Consulta periódicamente [`GET /v1/subscriptions/me`](get-my-subscriptions.md) para conocer el estado.
 
-The tier/quota grant itself does not depend on the tenant's sandbox status — it can land while still in sandbox. It only matters for production document quota enforcement, so granting it early has no effect until the tenant promotes.
+La concesión del plan/cuota en sí no depende del estado sandbox del tenant — puede aplicarse mientras sigue en sandbox. Solo importa para la aplicación de la cuota de comprobantes de producción, así que concederla anticipadamente no tiene efecto hasta que el tenant se promueva.
 
-If the subscription becomes `ACTIVE` before promotion happens, [`POST /v1/tenants/promote`](promote-tenant.md) detects it automatically and skips tier selection entirely — any `tier`/`billingInterval` passed to that call is ignored, and the response surfaces the existing subscription instead of starting a new one.
+Si la suscripción pasa a `ACTIVE` antes de que ocurra la promoción, [`POST /v1/tenants/promote`](promote-tenant.md) lo detecta automáticamente y omite por completo la selección de plan — cualquier `tier`/`billingInterval` pasado a esa llamada se ignora, y la respuesta muestra la suscripción existente en lugar de iniciar una nueva.
 
-## Response
+## Respuesta
 
 **201 Created**
 
@@ -49,14 +49,14 @@ If the subscription becomes `ACTIVE` before promotion happens, [`POST /v1/tenant
 }
 ```
 
-## Errors
+## Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `INVALID_TIER` | `tier` is not `STARTER`, `GROWTH`, or `BUSINESS` |
-| `400` | `VALIDATION_FAILED` | `billingInterval` is not a recognised value |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` (`EMAIL_VERIFICATION_REQUIRED`) | Tenant email not yet verified |
-| `404` | `NOT_FOUND` | Tenant could not be resolved (should not normally happen for an authenticated request) |
-| `409` | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | The tenant already has a subscription in progress |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `INVALID_TIER` | `tier` no es `STARTER`, `GROWTH`, ni `BUSINESS` |
+| `400` | `VALIDATION_FAILED` | `billingInterval` no es un valor reconocido |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `403` | `FORBIDDEN` (`EMAIL_VERIFICATION_REQUIRED`) | El correo del tenant aún no ha sido verificado |
+| `404` | `NOT_FOUND` | No se pudo resolver el tenant (normalmente no debería ocurrir en una solicitud autenticada) |
+| `409` | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | El tenant ya tiene una suscripción en curso |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

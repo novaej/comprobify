@@ -1,22 +1,22 @@
-# Get Events
+# Consultar Eventos
 
-Returns the full audit event history for a document in chronological order.
+Devuelve el historial completo de eventos de auditoría de un comprobante en orden cronológico.
 
 ```
 GET /v1/documents/:accessKey/events
 ```
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `accessKey` | The 49-digit access key of the document |
+| `accessKey` | La clave de acceso de 49 dígitos del comprobante |
 
-## Response
+## Respuesta
 
 **200 OK**
 
@@ -56,28 +56,28 @@ GET /v1/documents/:accessKey/events
 }
 ```
 
-### Event types
+### Tipos de evento
 
-| Event | Meaning |
+| Evento | Significado |
 |---|---|
-| `CREATED` | Document created and signed |
-| `SENT` | Submitted to SRI |
-| `STATUS_CHANGED` | SRI returned a new status |
-| `REBUILT` | Document was rebuilt after rejection |
-| `ERROR` | An error occurred during a lifecycle operation |
-| `EMAIL_SENT` | Authorization email sent to buyer |
-| `EMAIL_FAILED` | Email send was attempted and failed |
-| `EMAIL_SKIPPED` | Email was intentionally not sent (e.g. no buyer email on file) — no send was attempted |
-| `EMAIL_DELIVERED` | Mailgun confirmed delivery to the recipient's mail server |
-| `EMAIL_TEMP_FAILED` | Temporary delivery failure — Mailgun will retry |
-| `EMAIL_COMPLAINED` | Recipient marked the email as spam |
+| `CREATED` | Comprobante creado y firmado |
+| `SENT` | Enviado al SRI |
+| `STATUS_CHANGED` | El SRI devolvió un nuevo estado |
+| `REBUILT` | El comprobante fue reconstruido tras un rechazo |
+| `ERROR` | Ocurrió un error durante una operación del ciclo de vida |
+| `EMAIL_SENT` | Correo de autorización enviado al comprador |
+| `EMAIL_FAILED` | Se intentó enviar el correo y falló |
+| `EMAIL_SKIPPED` | El correo no se envió intencionalmente (por ejemplo, no hay correo del comprador registrado) — no se intentó el envío |
+| `EMAIL_DELIVERED` | Mailgun confirmó la entrega al servidor de correo del destinatario |
+| `EMAIL_TEMP_FAILED` | Falla temporal de entrega — Mailgun reintentará |
+| `EMAIL_COMPLAINED` | El destinatario marcó el correo como spam |
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
-| `NOT_FOUND` | 404 | Document not found |
+| `BAD_REQUEST` | 400 | Falta el header `X-Issuer-Id` o está mal formado |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `NOT_FOUND` | 404 | Comprobante no encontrado |

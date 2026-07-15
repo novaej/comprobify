@@ -1,20 +1,20 @@
-# Agreement Acceptance
+# Aceptación de Acuerdos
 
-Check whether the authenticated tenant needs to re-accept any agreements, and record a new acceptance when they do.
+Verifica si el tenant autenticado necesita volver a aceptar algún acuerdo, y registra una nueva aceptación cuando corresponda.
 
-Use this on login/app-load to drive a re-acceptance modal. If `needsAcceptance` is `true`, show the updated documents listed in `outdated` and call `POST /v1/tenants/agreements` when the user confirms.
+Usa esto al iniciar sesión o al cargar la aplicación para mostrar un modal de re-aceptación. Si `needsAcceptance` es `true`, muestra los documentos actualizados listados en `outdated` y llama a `POST /v1/tenants/agreements` cuando el usuario confirme.
 
-## Check status
+## Verificar estado
 
 ```
 GET /v1/tenants/agreements
 ```
 
-**Authentication:** `Authorization: Bearer <api-key>`
+**Autenticación:** `Authorization: Bearer <api-key>`
 
-### Response
+### Respuesta
 
-#### All current — no action needed
+#### Todo vigente — no se requiere ninguna acción
 
 ```json
 {
@@ -26,7 +26,7 @@ GET /v1/tenants/agreements
 }
 ```
 
-#### One or more documents updated since last acceptance
+#### Uno o más documentos actualizados desde la última aceptación
 
 ```json
 {
@@ -46,47 +46,47 @@ GET /v1/tenants/agreements
 }
 ```
 
-Each entry in `outdated` names the specific document type that changed. Use the `url` to fetch and display the updated document before asking for re-acceptance.
+Cada entrada en `outdated` indica el tipo específico de documento que cambió. Usa la `url` para obtener y mostrar el documento actualizado antes de solicitar la re-aceptación.
 
-| Field | Description |
+| Campo | Descripción |
 |---|---|
-| `needsAcceptance` | `true` if any document type has a new template version that isn't yet ACCEPTED |
-| `outdated[].documentType` | `TERMS`, `PRIVACY`, or `DPA` |
-| `outdated[].currentVersion` | Template version currently published |
-| `outdated[].acceptedVersion` | Template version the tenant last accepted, or `null` if never accepted |
-| `outdated[].status` | `PENDING` (generated, not accepted), or `NOT_GENERATED` (template published but instance not yet created) |
-| `outdated[].url` | URL to the tenant's personalized document instance (`GET /v1/tenants/agreements/:type`) |
+| `needsAcceptance` | `true` si algún tipo de documento tiene una nueva versión de plantilla que aún no ha sido ACCEPTED |
+| `outdated[].documentType` | `TERMS`, `PRIVACY`, o `DPA` |
+| `outdated[].currentVersion` | Versión de plantilla actualmente publicada |
+| `outdated[].acceptedVersion` | Versión de plantilla que el tenant aceptó por última vez, o `null` si nunca la aceptó |
+| `outdated[].status` | `PENDING` (generada, no aceptada), o `NOT_GENERATED` (plantilla publicada pero instancia aún no creada) |
+| `outdated[].url` | URL de la instancia personalizada del documento del tenant (`GET /v1/tenants/agreements/:type`) |
 
-**Calling this endpoint automatically generates any missing `PENDING` instances** for new template versions — no separate backfill call needed after the admin publishes an update.
+**Llamar a este endpoint genera automáticamente cualquier instancia `PENDING` faltante** para nuevas versiones de plantilla — no se necesita una llamada de backfill separada después de que el administrador publique una actualización.
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
-This is a read-only endpoint, so it stays reachable even if the tenant's account is `SUSPENDED` — see the `ACCOUNT_SUSPENDED` entry in the [error catalogue](../errors/index.md).
+Este es un endpoint de solo lectura, por lo que sigue siendo accesible incluso si la cuenta del tenant está `SUSPENDED` — consulta la entrada `ACCOUNT_SUSPENDED` en el [catálogo de errores](../errors/index.md).
 
-## Record acceptance
+## Registrar aceptación
 
 ```
 POST /v1/tenants/agreements
 ```
 
-**Authentication:** `Authorization: Bearer <api-key>`
+**Autenticación:** `Authorization: Bearer <api-key>`
 
-### Request body
+### Cuerpo de la solicitud
 
 ```json
 { "termsVersion": "2026-07-01" }
 ```
 
-| Field | Type | Required | Description |
+| Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `termsVersion` | string | Yes | The version string from the current TERMS document (from `GET /v1/agreements`). The server validates this against what's currently published before recording anything. |
+| `termsVersion` | string | Sí | El string de versión del documento TERMS vigente (proveniente de `GET /v1/agreements`). El servidor valida esto contra lo que está actualmente publicado antes de registrar nada. |
 
-### Response
+### Respuesta
 
 **200 OK**
 
@@ -94,19 +94,19 @@ POST /v1/tenants/agreements
 { "ok": true }
 ```
 
-Records one acceptance row per currently-published document type (TERMS, PRIVACY, DPA), capturing the IP address and user agent of the request alongside the version and content hash.
+Registra una fila de aceptación por cada tipo de documento actualmente publicado (TERMS, PRIVACY, DPA), capturando la dirección IP y el user agent de la solicitud junto con la versión y el hash del contenido.
 
-### Errors
+### Errores
 
-| Status | Code | When |
+| Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `termsVersion` missing or too long |
-| `400` | `VERSION_MISMATCH` | The submitted `termsVersion` does not match the currently published TERMS version — the document was updated between when your UI loaded and when the user clicked accept. Re-fetch `GET /v1/agreements`, show the updated content, and ask for acceptance again. |
-| `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `FORBIDDEN` | Account is suspended |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
+| `400` | `VALIDATION_FAILED` | `termsVersion` ausente o demasiado largo |
+| `400` | `VERSION_MISMATCH` | El `termsVersion` enviado no coincide con la versión de TERMS actualmente publicada — el documento se actualizó entre el momento en que tu interfaz cargó y el momento en que el usuario hizo clic en aceptar. Vuelve a consultar `GET /v1/agreements`, muestra el contenido actualizado y solicita la aceptación nuevamente. |
+| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `403` | `FORBIDDEN` | La cuenta está suspendida |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
-## Notes
+## Notas
 
-- Changes to any one of the three documents (TERMS, PRIVACY, or DPA) independently will surface as a mismatch for that type only — the other two won't appear in `outdated` unless they also changed. This means a DPA-only update triggers re-acceptance for the DPA without forcing the tenant to "re-accept" unchanged Terms or Privacy content.
-- The API key does not need `X-Issuer-Id` — this is a tenant-level operation.
+- Los cambios en cualquiera de los tres documentos (TERMS, PRIVACY o DPA) de forma independiente aparecerán como un desajuste únicamente para ese tipo — los otros dos no aparecerán en `outdated` a menos que también hayan cambiado. Esto significa que una actualización exclusiva del DPA activa la re-aceptación solo del DPA, sin forzar al tenant a "re-aceptar" contenido de Términos o Privacidad que no cambió.
+- La llave API no necesita `X-Issuer-Id` — esta es una operación a nivel de tenant.

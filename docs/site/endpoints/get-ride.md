@@ -1,39 +1,39 @@
-# Get RIDE (PDF)
+# Consultar RIDE (PDF)
 
-Downloads the RIDE (Representación Impresa del Documento Electrónico) as a PDF. Only available for authorized documents.
+Descarga el RIDE (Representación Impresa del Documento Electrónico) como PDF. Solo disponible para comprobantes autorizados.
 
 ```
 GET /v1/documents/:accessKey/ride
 ```
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `accessKey` | The 49-digit access key of an `AUTHORIZED` document |
+| `accessKey` | La clave de acceso de 49 dígitos de un comprobante `AUTHORIZED` |
 
-## Response
+## Respuesta
 
-**200 OK** — PDF file download.
+**200 OK** — descarga de archivo PDF.
 
 ```
 Content-Type: application/pdf
 Content-Disposition: attachment; filename="RIDE-<accessKey>.pdf"
 ```
 
-The PDF is generated on demand and is not stored. Each request generates a fresh copy.
+El PDF se genera bajo demanda y no se almacena. Cada solicitud genera una copia nueva.
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `BAD_REQUEST` | 400 | Document is not in `AUTHORIZED` status |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
-| `NOT_FOUND` | 404 | Document not found |
+| `BAD_REQUEST` | 400 | Falta el header `X-Issuer-Id` o está mal formado |
+| `BAD_REQUEST` | 400 | El comprobante no está en estado `AUTHORIZED` |
+| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
+| `NOT_FOUND` | 404 | Comprobante no encontrado |

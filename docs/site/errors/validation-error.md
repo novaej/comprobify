@@ -1,11 +1,11 @@
-# Validation Error
+# Error de Validación
 
-**Code:** `VALIDATION_FAILED`
-**Status:** `400 Bad Request`
+**Código:** `VALIDATION_FAILED`
+**Estado HTTP:** `400 Bad Request`
 
-One or more fields in the request body failed validation.
+Uno o más campos en el cuerpo de la solicitud fallaron la validación.
 
-## Response
+## Respuesta
 
 ```json
 {
@@ -13,18 +13,18 @@ One or more fields in the request body failed validation.
   "title":    "Validation Failed",
   "status":   400,
   "code":     "VALIDATION_FAILED",
-  "detail":   "Validation failed",
+  "detail":   "La validación falló",
   "instance": "/v1/documents",
   "errors": [
     {
       "field":   "buyer.email",
-      "message": "Buyer email is required and must be a valid email address",
+      "message": "El correo del comprador es requerido y debe ser una dirección de correo válida",
       "code":    "buyer.email",
       "value":   "not-an-email"
     },
     {
       "field":   "items[0].quantity",
-      "message": "Item quantity must be numeric",
+      "message": "La cantidad del ítem debe ser numérica",
       "code":    "items.quantity",
       "value":   "abc"
     }
@@ -32,15 +32,15 @@ One or more fields in the request body failed validation.
 }
 ```
 
-## What to do
+## Qué hacer
 
-Check the `errors` array. Each entry identifies the field that failed (`field`), what went wrong (`message`), and the value that was submitted (`value`).
+Revisa el arreglo `errors`. Cada entrada identifica el campo que falló (`field`), qué salió mal (`message`), y el valor que fue enviado (`value`).
 
-The `code` on each entry is the field path with array indices stripped — use it as a stable key for field-level localized messages in your client:
+El `code` de cada entrada es la ruta del campo sin los índices de arreglo — úsalo como clave estable para mensajes localizados a nivel de campo en tu cliente:
 
 ```js
 const fieldMessages = {
-  'buyer.email':    'Buyer email is invalid.',
-  'items.quantity': 'Quantity must be a number.',
+  'buyer.email':    'El correo del comprador es inválido.',
+  'items.quantity': 'La cantidad debe ser un número.',
 };
 ```

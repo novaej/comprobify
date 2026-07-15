@@ -1,26 +1,26 @@
-# Send to SRI
+# Enviar al SRI
 
-Queues the signed XML document for submission to the SRI SOAP service. This endpoint is asynchronous — it does not call SRI itself.
+Encola el documento XML firmado para su envío al servicio SOAP del SRI. Este endpoint es asíncrono — no llama al SRI directamente.
 
 ```
 POST /v1/documents/:accessKey/send
 ```
 
-The document must be in `SIGNED` status. A successful call immediately moves it to `PENDING_SEND` and returns — it does **not** wait for SRI. A standalone worker process picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` (SRI accepted it for processing) or `RETURNED` (SRI rejected it — rebuild required). Poll [Get Document](get-document.md) or [Get Events](get-events.md) to observe that transition, or rely on the notification/webhook system for the eventual `AUTHORIZED` outcome once you've also called [Check Authorization](check-authorization.md).
+El comprobante debe estar en estado `SIGNED`. Una llamada exitosa lo mueve inmediatamente a `PENDING_SEND` y retorna — **no** espera al SRI. Un proceso worker independiente recoge el trabajo encolado y llama al SRI; el comprobante eventualmente pasa a `RECEIVED` (el SRI lo aceptó para procesamiento) o `RETURNED` (el SRI lo rechazó — se requiere reconstrucción). Consulta [Consultar Comprobante](get-document.md) o [Consultar Eventos](get-events.md) para observar esa transición, o confía en el sistema de notificaciones/webhooks para el resultado final `AUTHORIZED` una vez que también hayas llamado a [Verificar Autorización](check-authorization.md).
 
-If RabbitMQ is briefly unreachable when you call this endpoint, the document still durably moves to `PENDING_SEND` — nothing is lost. A periodic reconciliation job re-queues anything whose dispatch was never confirmed.
+Si RabbitMQ no está disponible momentáneamente cuando llamas a este endpoint, el comprobante igual pasa de forma duradera a `PENDING_SEND` — no se pierde nada. Un job de reconciliación periódico vuelve a encolar cualquier envío cuyo despacho nunca fue confirmado.
 
-## Authentication
+## Autenticación
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
 
-## Path parameters
+## Parámetros de ruta
 
-| Parameter | Description |
+| Parámetro | Descripción |
 |---|---|
-| `accessKey` | The 49-digit access key of the document to send |
+| `accessKey` | La clave de acceso de 49 dígitos del comprobante a enviar |
 
-## Response
+## Respuesta
 
 **202 Accepted**
 
@@ -41,17 +41,17 @@ If RabbitMQ is briefly unreachable when you call this endpoint, the document sti
 }
 ```
 
-This response only confirms the document was queued — it does not reflect SRI's outcome. Check back later via `GET /v1/documents/:accessKey` to see whether the document reached `RECEIVED` or `RETURNED`. If it's `RETURNED`, correct it with [Rebuild Invoice](rebuild-invoice.md) before sending again.
+Esta respuesta solo confirma que el comprobante fue encolado — no refleja el resultado del SRI. Verifica más tarde mediante `GET /v1/documents/:accessKey` si el comprobante llegó a `RECEIVED` o `RETURNED`. Si quedó en `RETURNED`, corrígelo con [Reconstruir Comprobante](rebuild-invoice.md) antes de volver a enviarlo.
 
-## Errors
+## Errores
 
-| Code | Status | When |
+| Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `BAD_REQUEST` | 400 | `X-Issuer-Id` header missing or malformed |
-| `BAD_REQUEST` | 400 | Document is not in `SIGNED` status |
-| `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
-| `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
-| `NOT_FOUND` | 404 | Document not found |
+| `BAD_REQUEST` | 400 | El header `X-Issuer-Id` falta o tiene un formato inválido |
+| `BAD_REQUEST` | 400 | El comprobante no está en estado `SIGNED` |
+| `UNAUTHORIZED` | 401 | Llave API faltante o inválida, o hay un desajuste de entorno (una llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `FORBIDDEN` | 403 | El emisor indicado en `X-Issuer-Id` pertenece a otro tenant |
+| `NOT_FOUND` | 404 | El emisor indicado en `X-Issuer-Id` no existe |
+| `NOT_FOUND` | 404 | Comprobante no encontrado |
 
-`SRI_SUBMISSION_FAILED` can no longer occur on this endpoint — network/SOAP failures now happen inside the asynchronous worker, after this endpoint has already responded. A failed attempt is recorded as an `ERROR` document event and the document remains eligible for another attempt via the reconciliation job.
+`SRI_SUBMISSION_FAILED` ya no puede ocurrir en este endpoint — las fallas de red/SOAP ahora suceden dentro del worker asíncrono, después de que este endpoint ya respondió. Un intento fallido se registra como un evento `ERROR` del comprobante, y el comprobante permanece elegible para un nuevo intento mediante el job de reconciliación.
