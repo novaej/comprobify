@@ -73,7 +73,7 @@ When omitted, the link goes directly to the API:
 https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 ```
 
-**Validation:** in production (`APP_ENV=production`) the URL must use `https`. In staging, `http` is also accepted.
+**Validation:** in production the URL must use `https`. In other environments, `http` is also accepted.
 
 ## Response
 

@@ -6,7 +6,7 @@
 https://api.comprobify.com/v1
 ```
 
-All examples on this site use paths relative to that base (e.g. `POST /v1/register` means `POST https://api.comprobify.com/v1/register`). There is no separate staging base URL published here — staging is for internal team use only.
+All examples on this site use paths relative to that base (e.g. `POST /v1/register` means `POST https://api.comprobify.com/v1/register`).
 
 ## Postman collection
 
