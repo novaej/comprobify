@@ -1,4 +1,4 @@
-# Render Blueprint — scheduled (cron) jobs only.
+# Render Blueprint — scheduled (cron) jobs, plus the RabbitMQ worker.
 #
 # The API web services (comprobify-staging / comprobify-production) are
 # deliberately NOT declared here — they stay on the existing GitHub Actions
@@ -6,6 +6,18 @@
 # low-env-var-count cron jobs are managed as code, so a new scheduled job
 # going forward is "add a service block below + push" instead of a manual
 # Render dashboard step.
+#
+# workers/sri-worker.js (see ADR-019) is declared here
+# too, as a `type: worker` (Background Worker) service — unlike the cron jobs,
+# it's a long-running process, not a scheduled one-shot. `type: worker` is
+# Render's documented Blueprint type for this, but — unlike the cron job
+# fields below, which are confirmed against a real deploy — this block has
+# NOT yet been synced/tested against the actual Render dashboard. Verify the
+# service type and field names there before relying on this to work as
+# written; if the sync produces something unexpected, create the Background
+# Worker by hand in the dashboard first (same recovery path used originally
+# for the 3 cron jobs — see "Adopting the 3 jobs that already exist" in
+# docs/deployment.md), then adjust this block to adopt it by exact name.
 #
 # Services are declared at the ROOT level (not nested under a `projects`/
 # `environments` block) specifically because Render's own docs guarantee:
@@ -44,6 +56,24 @@ envVarGroups:
       # in this group in the Render dashboard, set by hand, not via this
       # file, and confirmed to survive a Blueprint sync as-is.
 
+  # For the worker service only. sri-worker.js runs
+  # src/config/validate.js's validateCoreConfig() at startup — a narrower
+  # check than the API's own validateConfig(), covering only what the
+  # worker's message handlers actually touch: DB_*, RABBITMQ_URL, and
+  # MAILGUN_API_KEY/MAILGUN_DOMAIN/EMAIL_FROM (the worker is what actually
+  # sends the invoice-authorized email). It deliberately does NOT need
+  # ENCRYPTION_KEY, ADMIN_SECRET, APP_BASE_URL, BANK_TRANSFER_*,
+  # ADMIN_NOTIFICATION_EMAIL, or MAILGUN_WEBHOOK_SIGNING_KEY — those only
+  # back API-only routes/services (admin auth, certificate decryption,
+  # billing, inbound webhook verification) the worker never reaches. None of
+  # the real values are declared here — same reasoning as ADMIN_SECRET
+  # above — they must be added by hand in the Render dashboard, on this
+  # group.
+  - name: comprobify-worker-staging
+    envVars:
+      - key: APP_ENV
+        value: staging
+
 services:
   - name: comprobify-staging-notifications
     type: cron
@@ -77,3 +107,30 @@ services:
     dockerCommand: node scripts/run-admin-job.js /v1/admin/jobs/quota
     envVars:
       - fromGroup: comprobify-cron-staging
+
+  # Much shorter cadence than the other three — this is the actual recovery
+  # mechanism for a temporarily unreachable broker or a publish that timed
+  # out (see ADR-019), so it needs to run far more often than daily/5-min.
+  - name: comprobify-staging-queue-reconciliation
+    type: cron
+    runtime: docker
+    region: virginia
+    branch: staging
+    plan: starter
+    schedule: "*/2 * * * *"
+    dockerCommand: node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation
+    envVars:
+      - fromGroup: comprobify-cron-staging
+
+  # Long-running RabbitMQ consumer (workers/sri-worker.js) — NOT a scheduled
+  # job. See the header comment above: this block's exact field names are
+  # unverified against a real Render sync.
+  - name: comprobify-staging-sri-worker
+    type: worker
+    runtime: docker
+    region: virginia
+    branch: staging
+    plan: starter
+    dockerCommand: node workers/sri-worker.js
+    envVars:
+      - fromGroup: comprobify-worker-staging

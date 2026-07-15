@@ -48,8 +48,8 @@ Creation and rebuild services already guard invoice-only logic (e.g. the payment
 - `queue-reconciliation.service.js`'s periodic sweep of `RECEIVED` documents past a delay threshold is what replaces the original "worker polls RECEIVED documents older than N minutes" idea — it publishes an authorize-check message rather than polling SRI directly
 
 **Not yet done (follow-up, not blocking):**
-- `render.yaml` has no `queue-reconciliation` cron entry yet and no worker service block (`workers/sri-worker.js` needs its own long-running Render service, distinct from the `type: cron` jobs) — deployment infra, not code, deliberately left for a separate pass once Phase 1 is smoke-tested against the real CloudAMQP instance
-- End-to-end verification against the live broker (queue a real document, confirm the worker processes it, confirm the reconciliation job recovers a stuck one) hasn't happened yet — everything below "Verified" in the implementation plan is unit-test-level only so far
+- `render.yaml` now declares `comprobify-staging-queue-reconciliation` (cron) and `comprobify-staging-sri-worker` (`type: worker`) — but neither has been synced against a real Render deploy yet. The cron entry is low-risk (identical shape to the 3 already-confirmed cron jobs). The worker block's field names (`type: worker`, etc.) are unverified — if the Blueprint sync doesn't behave as expected, fall back to creating the Background Worker by hand in the dashboard first (the same recovery path originally used for the 3 cron jobs), then adjust the block to adopt it by exact name.
+- End-to-end verification against the live broker (CloudAMQP `shared-broker`) has been done manually: queuing a document, the worker consuming and calling SRI, and worker-restart recovery all confirmed working locally. Recovering a document stuck due to a **failed publish** (broker unreachable at request time, not just consumer down) via the reconciliation job has not yet been exercised end-to-end — only unit/design-level so far.
 
 **Phase 2 — migrate existing fire-and-forget side effects onto the same mechanism**, now that Phase 1's publisher/consumer/reconciliation infra exists:
 

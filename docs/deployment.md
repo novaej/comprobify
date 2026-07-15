@@ -293,7 +293,7 @@ Both sweeps run independently against `public.documents` and `sandbox.documents`
 
 Idempotent. Needs a **much shorter cadence than the other three jobs** — recommended every 1-5 minutes, since this is the actual recovery mechanism for a temporarily unreachable broker or a publish that timed out.
 
-**Not yet added to `render.yaml`** — unlike the three jobs above, this one isn't declared as code yet. Add it the same way ("Adding a new scheduled job later" below) once Phase 1 has been smoke-tested against the live CloudAMQP instance.
+Declared in `render.yaml` as `comprobify-staging-queue-reconciliation`, same shape as the three jobs above, on a `*/2 * * * *` schedule — not yet synced against a real Render deploy, but low-risk since it's identical in structure to the three already-confirmed cron jobs.
 
 ### Render Cron Job setup — managed via Blueprint (`render.yaml`)
 
@@ -320,9 +320,9 @@ Reference table (schedules are also in `render.yaml`, this is just for readabili
 | Notifications | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/notifications` |
 | Subscriptions | `0 6 * * *` (daily) | `node scripts/run-admin-job.js /v1/admin/jobs/subscriptions` |
 | Quota | `10 6 * * *` (daily, just after Subscriptions) | `node scripts/run-admin-job.js /v1/admin/jobs/quota` |
-| Queue reconciliation | `*/2 * * * *` (every 2 minutes, recommended) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` — not yet added to `render.yaml`, see above |
+| Queue reconciliation | `*/2 * * * *` (every 2 minutes, recommended) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
 
-Production cron jobs aren't declared in `render.yaml` yet — see the file's own comments; add a `comprobify-cron-production` env var group and three more `branch: production` services once the production web service/branch/secrets exist (see "Production status" above).
+Production cron jobs aren't declared in `render.yaml` yet — see the file's own comments; add a `comprobify-cron-production` env var group and four more `branch: production` services (including the worker) once the production web service/branch/secrets exist (see "Production status" above).
 
 > The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
 
@@ -381,7 +381,7 @@ Monitor each Cron Job's execution log in the Render dashboard for non-zero exit 
 
 Unlike the four scheduled jobs above — which are short-lived cron invocations that hit an HTTP endpoint and exit — `workers/sri-worker.js` is a **long-running process** that holds a persistent connection to RabbitMQ and continuously consumes the `sri.send`/`sri.authorize` queues. It is the only code in the system that calls SRI directly (see ADR-019). It cannot be modeled as a Render Cron Job; it needs Render's **Background Worker** service type (or an equivalent persistent-process host), analogous to the existing web service but with no public port and started via `node workers/sri-worker.js` (`npm run worker`).
 
-**Not yet declared in `render.yaml`** — the three (soon four) admin jobs are `type: cron`; the worker needs a separate `type: worker` block once this is set up, deployed alongside `comprobify-staging`/`comprobify-production` rather than the cron jobs. It shares the same `RABBITMQ_URL`, `DB_*`, and SRI-related env vars as the API — no separate env var group needed beyond what the API already uses.
+Declared in `render.yaml` as `comprobify-staging-sri-worker`, `type: worker` — the one service block in that file not yet synced/confirmed against a real Render deploy (see the file's own header comment). It reads from a dedicated `comprobify-worker-staging` env var group, which only declares the non-secret `APP_ENV` in the YAML; every actual required secret (`DB_*`, `ENCRYPTION_KEY`, `ADMIN_SECRET`, `RABBITMQ_URL`, `MAILGUN_*`, etc. — the worker runs the exact same `validateConfig()` startup check as the API, so it needs the full set, not just DB/RabbitMQ) must be added by hand in the Render dashboard, on that group, the same way `ADMIN_SECRET` is handled for the cron jobs' group.
 
 There is no restart/health-check story documented yet for this process beyond whatever Render's Background Worker type provides by default (auto-restart on crash) — revisit once it's actually deployed and observed running for a while.
 
