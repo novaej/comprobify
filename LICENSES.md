@@ -20,19 +20,24 @@ The following packages are licensed under the MIT License:
 
 | Package | Version | Author |
 |---|---|---|
+| `amqplib` | 2.0.1 | Michael Bridgen |
 | `buffer` | 6.0.3 | Feross Aboukhadijeh |
 | `bwip-js` | 4.8.0 | Mark Warren |
 | `cors` | 2.8.6 | Troy Goode |
 | `express` | 4.22.1 | TJ Holowaychuk |
+| `express-rate-limit` | 8.3.2 | Nathan Friedly |
 | `express-validator` | 7.3.1 | Christoph Tavan |
 | `form-data` | 4.0.5 | Felix Geisendörfer |
+| `helmet` | 8.2.0 | Adam Baldwin |
 | `jest` | 30.2.0 | Meta Platforms, Inc. |
 | `mailgun.js` | 12.7.0 | Mailgun |
+| `markdown-it` | 14.2.0 | Vitaly Puzrin, Alex Kocharin |
 | `moment` | 2.30.1 | Iskren Ivov Chernev et al. |
 | `multer` | 2.1.0 | expressjs contributors |
 | `nodemon` | 3.1.14 | Remy Sharp |
 | `pdfkit` | 0.17.2 | Devon Govett |
 | `pg` | 8.19.0 | Brian Carlson |
+| `@sentry/node` | 10.56.0 | Sentry |
 | `vitepress` | 1.6.4 | Evan You |
 
 > Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
