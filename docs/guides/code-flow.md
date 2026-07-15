@@ -788,7 +788,7 @@ workers/sri-worker.js   (standalone process, npm run worker — NOT part of the 
                           ├── mailgunProvider.send(to, attachments)
                           └── documentModel.updateStatus({ email_status }) + EMAIL_SENT/EMAIL_FAILED event
 
-POST /v1/admin/jobs/queue-reconciliation   (external cron, every 1-5 minutes — never calls SRI itself)
+POST /v1/admin/jobs/queue-reconciliation   (external cron, hourly — never calls SRI itself)
   └── queueReconciliationService.runAll()
         ├── [per schema: public, sandbox] SELECT ... WHERE status='PENDING_SEND' AND
         │     (send_dispatch_attempted_at IS NULL OR stale) FOR UPDATE SKIP LOCKED

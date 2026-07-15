@@ -232,7 +232,7 @@ See **[GETTING_STARTED.md](GETTING_STARTED.md)** for full local setup instructio
 - [ ] Webhook endpoint (`/v1/mailgun/webhook`) publicly reachable via HTTPS
 - [ ] `RABBITMQ_URL` set to a dedicated vhost/credentials for this environment; without it the async send/authorize pipeline can never dispatch a queued document
 - [ ] `workers/sri-worker.js` (`npm run worker`) deployed as its own long-running process, separate from the API — it is not started by `npm start`
-- [ ] `POST /v1/admin/jobs/queue-reconciliation` scheduled on external cron (recommended every 1-5 minutes)
+- [ ] `POST /v1/admin/jobs/queue-reconciliation` scheduled on external cron (recommended hourly)
 
 ---
 
