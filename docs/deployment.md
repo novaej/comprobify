@@ -291,9 +291,9 @@ Runs `queueReconciliationService.runAll()` — see ADR-019 and CLAUDE.md's "Asyn
 
 Both sweeps run independently against `public.documents` and `sandbox.documents` (two `SELECT ... FOR UPDATE SKIP LOCKED` queries per sweep — Postgres disallows `FOR UPDATE` with `UNION`).
 
-Idempotent. Needs a **much shorter cadence than the other three jobs** — recommended every 1-5 minutes, since this is the actual recovery mechanism for a temporarily unreachable broker or a publish that timed out.
+Idempotent. Needs a **shorter cadence than the other three jobs** — hourly, since this is the recovery mechanism for a temporarily unreachable broker or a publish that timed out. Not tighter than that: CloudAMQP is a managed service that rarely fails outright, and the worker already processes anything actually queued near-instantly — this job only bounds how long a document can sit unprocessed if nothing ever queued a message for it in the first place (a stuck publish, or a `RECEIVED` document nobody polled).
 
-Declared in `render.yaml` as `comprobify-staging-queue-reconciliation`, same shape as the three jobs above, on a `*/2 * * * *` schedule — not yet synced against a real Render deploy, but low-risk since it's identical in structure to the three already-confirmed cron jobs.
+Declared in `render.yaml` as `comprobify-staging-queue-reconciliation`, same shape as the three jobs above, on a `0 * * * *` schedule — not yet synced against a real Render deploy, but low-risk since it's identical in structure to the three already-confirmed cron jobs.
 
 ### Render Cron Job setup — managed via Blueprint (`render.yaml`)
 
@@ -320,7 +320,7 @@ Reference table (schedules are also in `render.yaml`, this is just for readabili
 | Notifications | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/notifications` |
 | Subscriptions | `0 6 * * *` (daily) | `node scripts/run-admin-job.js /v1/admin/jobs/subscriptions` |
 | Quota | `10 6 * * *` (daily, just after Subscriptions) | `node scripts/run-admin-job.js /v1/admin/jobs/quota` |
-| Queue reconciliation | `*/2 * * * *` (every 2 minutes, recommended) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
+| Queue reconciliation | `0 * * * *` (hourly) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
 
 Production cron jobs aren't declared in `render.yaml` yet — see the file's own comments; add a `comprobify-cron-production` env var group and four more `branch: production` services (including the worker) once the production web service/branch/secrets exist (see "Production status" above).
 

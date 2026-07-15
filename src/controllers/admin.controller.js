@@ -267,10 +267,13 @@ const runQuotaJobs = async (req, res) => {
  * SRI itself, only ensures a message exists for workers/sri-worker.js to
  * eventually pick up. See queue-reconciliation.service.js.
  *
- * Designed to be called by an external scheduler on a short cadence (e.g.
- * every 1-5 minutes) — this is the mechanism that recovers from a RabbitMQ
- * outage or a missed publish, so it should run far more often than the
- * daily/5-minute cadence of the other jobs above.
+ * Designed to be called by an external scheduler hourly — more frequent
+ * than the daily jobs above, since this is the mechanism that recovers
+ * from a RabbitMQ outage or a missed publish, but not tighter than that:
+ * CloudAMQP is a managed broker that rarely fails outright, and the
+ * worker already processes anything actually queued near-instantly, so
+ * this cadence only bounds how long a document can sit unprocessed if
+ * nothing ever queued a message for it at all.
  */
 const runQueueReconciliationJob = async (req, res) => {
   const result = await queueReconciliationService.runAll();

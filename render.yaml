@@ -108,16 +108,20 @@ services:
     envVars:
       - fromGroup: comprobify-cron-staging
 
-  # Much shorter cadence than the other three — this is the actual recovery
-  # mechanism for a temporarily unreachable broker or a publish that timed
-  # out (see ADR-019), so it needs to run far more often than daily/5-min.
+  # Shorter cadence than the other three — this is the recovery mechanism
+  # for a temporarily unreachable broker or a publish that timed out (see
+  # ADR-019). Hourly, not every-few-minutes: CloudAMQP is a managed
+  # service that rarely fails outright, and the worker still processes
+  # anything already queued near-instantly — this cadence only bounds how
+  # long a document can sit unprocessed if nothing ever queued a message
+  # for it at all (a stuck publish, or a RECEIVED document nobody polled).
   - name: comprobify-staging-queue-reconciliation
     type: cron
     runtime: docker
     region: virginia
     branch: staging
     plan: starter
-    schedule: "*/2 * * * *"
+    schedule: "0 * * * *"
     dockerCommand: node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation
     envVars:
       - fromGroup: comprobify-cron-staging

@@ -7,7 +7,7 @@ The four admin-triggered jobs are date-driven — each one scans for rows whose 
 | Notifications | `POST /v1/admin/jobs/notifications` | every 5 min | `issuers.cert_expiry`, `webhook_deliveries.next_retry_at` |
 | Subscriptions | `POST /v1/admin/jobs/subscriptions` | daily | `subscriptions.current_period_end`, `pending_tier` |
 | Quota | `POST /v1/admin/jobs/quota` | daily | `tenant_quotas.period_end` |
-| Queue reconciliation | `POST /v1/admin/jobs/queue-reconciliation` | every 1-5 min | `documents.send_dispatch_attempted_at`/`authorize_dispatch_attempted_at` (both `public` and `sandbox` schemas) |
+| Queue reconciliation | `POST /v1/admin/jobs/queue-reconciliation` | hourly | `documents.send_dispatch_attempted_at`/`authorize_dispatch_attempted_at` (both `public` and `sandbox` schemas) |
 
 All four are **idempotent** — re-running them when nothing is due is always safe and a no-op. Unlike the other three, the queue reconciliation job requires an actual RabbitMQ connection (`RABBITMQ_URL`) to do anything useful — it publishes real messages, it doesn't just read/write Postgres.
 
