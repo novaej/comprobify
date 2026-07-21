@@ -14,7 +14,7 @@ PATCH /v1/issuers/:id/logo
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor (obtenido de `GET /v1/issuers`) |
+| `id` | UUID del emisor (obtenido de `GET /v1/issuers`) |
 
 ## Cuerpo de la solicitud
 

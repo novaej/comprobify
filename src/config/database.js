@@ -32,7 +32,7 @@ const getClient = () => pool.connect();
  *                              schema (sandbox vs public) for the request
  *
  * @param {import('pg').PoolClient} client
- * @param {number|string} issuerId
+ * @param {string} issuerId
  * @param {boolean} [sandbox=false]
  */
 const setIssuerContext = async (client, issuerId, sandbox = false) => {
@@ -47,7 +47,7 @@ const setIssuerContext = async (client, issuerId, sandbox = false) => {
  * and commits. Use this for non-transactional model queries in authenticated
  * code paths.
  *
- * @param {number|string} issuerId
+ * @param {string} issuerId
  * @param {string} text
  * @param {Array} [params]
  * @param {boolean} [sandbox=false]

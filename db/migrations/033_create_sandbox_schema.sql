@@ -22,8 +22,8 @@ CREATE SCHEMA sandbox;
 -- ─── sequential_numbers ──────────────────────────────────────────────────────
 
 CREATE TABLE sandbox.sequential_numbers (
-  id               BIGSERIAL PRIMARY KEY,
-  issuer_id        BIGINT NOT NULL REFERENCES public.issuers(id),
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  issuer_id        UUID NOT NULL REFERENCES public.issuers(id),
   branch_code      VARCHAR(3) NOT NULL,
   issue_point_code VARCHAR(3) NOT NULL,
   document_type    VARCHAR(2) NOT NULL,
@@ -35,8 +35,8 @@ CREATE TABLE sandbox.sequential_numbers (
 -- ─── documents ───────────────────────────────────────────────────────────────
 
 CREATE TABLE sandbox.documents (
-  id                  BIGSERIAL PRIMARY KEY,
-  issuer_id           BIGINT NOT NULL REFERENCES public.issuers(id),
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  issuer_id           UUID NOT NULL REFERENCES public.issuers(id),
   document_type       VARCHAR(2) NOT NULL,
   access_key          VARCHAR(49) UNIQUE NOT NULL,
   sequential          INTEGER NOT NULL,
@@ -92,8 +92,8 @@ CREATE TRIGGER trg_sandbox_document_state_transition
 -- ─── document_line_items ─────────────────────────────────────────────────────
 
 CREATE TABLE sandbox.document_line_items (
-  id           BIGSERIAL PRIMARY KEY,
-  document_id  BIGINT NOT NULL REFERENCES sandbox.documents(id),
+  id           UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  document_id  UUID NOT NULL REFERENCES sandbox.documents(id),
   main_code    VARCHAR(25) NOT NULL,
   aux_code     VARCHAR(25),
   description  VARCHAR(300) NOT NULL,
@@ -110,8 +110,8 @@ CREATE INDEX idx_sandbox_document_line_items_document_id ON sandbox.document_lin
 -- ─── document_events ─────────────────────────────────────────────────────────
 
 CREATE TABLE sandbox.document_events (
-  id          BIGSERIAL PRIMARY KEY,
-  document_id BIGINT NOT NULL REFERENCES sandbox.documents(id),
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  document_id UUID NOT NULL REFERENCES sandbox.documents(id),
   event_type  VARCHAR(30) NOT NULL,
   from_status VARCHAR(20),
   to_status   VARCHAR(20),
@@ -128,8 +128,8 @@ CREATE INDEX idx_sandbox_document_events_document_id ON sandbox.document_events(
 -- ─── sri_responses ───────────────────────────────────────────────────────────
 
 CREATE TABLE sandbox.sri_responses (
-  id             BIGSERIAL PRIMARY KEY,
-  document_id    BIGINT NOT NULL REFERENCES sandbox.documents(id),
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  document_id    UUID NOT NULL REFERENCES sandbox.documents(id),
   operation_type VARCHAR(20) NOT NULL,
   status         VARCHAR(20),
   messages       JSONB,
@@ -163,14 +163,14 @@ CREATE POLICY sandbox_documents_isolation ON sandbox.documents
   AS PERMISSIVE FOR ALL
   USING (
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
-    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
   );
 
 CREATE POLICY sandbox_sequential_numbers_isolation ON sandbox.sequential_numbers
   AS PERMISSIVE FOR ALL
   USING (
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
-    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
   );
 
 CREATE POLICY sandbox_document_line_items_isolation ON sandbox.document_line_items
@@ -179,7 +179,7 @@ CREATE POLICY sandbox_document_line_items_isolation ON sandbox.document_line_ite
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
     OR document_id IN (
       SELECT id FROM sandbox.documents
-      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
     )
   );
 
@@ -189,7 +189,7 @@ CREATE POLICY sandbox_document_events_isolation ON sandbox.document_events
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
     OR document_id IN (
       SELECT id FROM sandbox.documents
-      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
     )
   );
 
@@ -199,7 +199,7 @@ CREATE POLICY sandbox_sri_responses_isolation ON sandbox.sri_responses
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
     OR document_id IN (
       SELECT id FROM sandbox.documents
-      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
     )
   );
 

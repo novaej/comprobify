@@ -1,11 +1,11 @@
 const { render } = require('../../../../../src/services/email/templates/payment-proof-submitted');
 
 describe('payment-proof-submitted template', () => {
-  const tenant = { id: 1, email: 'tenant@example.com' };
+  const tenant = { id: '00000000-0000-0000-0000-000000000001', email: 'tenant@example.com' };
 
   test('INITIAL: uses the subscription\'s own tier and billing interval, amount from total_amount', () => {
-    const payment = { id: 5, purpose: 'INITIAL', amount: 17.39, total_amount: 20 };
-    const subscription = { id: 4, tier: 'STARTER', billing_interval: 'MONTHLY' };
+    const payment = { id: '00000000-0000-0000-0000-000000000005', purpose: 'INITIAL', amount: 17.39, total_amount: 20 };
+    const subscription = { id: '00000000-0000-0000-0000-000000000004', tier: 'STARTER', billing_interval: 'MONTHLY' };
 
     const { text, html } = render(payment, subscription, tenant, 'REF-123');
 
@@ -21,10 +21,10 @@ describe('payment-proof-submitted template', () => {
 
   test('TIER_CHANGE: uses the payment\'s target_tier/target_billing_interval, not the subscription\'s current values', () => {
     const payment = {
-      id: 5, purpose: 'TIER_CHANGE', amount: 782.61, total_amount: 900,
+      id: '00000000-0000-0000-0000-000000000005', purpose: 'TIER_CHANGE', amount: 782.61, total_amount: 900,
       target_tier: 'GROWTH', target_billing_interval: 'YEARLY',
     };
-    const subscription = { id: 4, tier: 'STARTER', billing_interval: 'MONTHLY' };
+    const subscription = { id: '00000000-0000-0000-0000-000000000004', tier: 'STARTER', billing_interval: 'MONTHLY' };
 
     const { text, html } = render(payment, subscription, tenant);
 
@@ -39,10 +39,10 @@ describe('payment-proof-submitted template', () => {
 
   test('TIER_CHANGE without a billing-interval change: falls back to the subscription\'s current interval', () => {
     const payment = {
-      id: 5, purpose: 'TIER_CHANGE', amount: 60.87, total_amount: 70,
+      id: '00000000-0000-0000-0000-000000000005', purpose: 'TIER_CHANGE', amount: 60.87, total_amount: 70,
       target_tier: 'GROWTH', target_billing_interval: null,
     };
-    const subscription = { id: 4, tier: 'STARTER', billing_interval: 'MONTHLY' };
+    const subscription = { id: '00000000-0000-0000-0000-000000000004', tier: 'STARTER', billing_interval: 'MONTHLY' };
 
     const { text } = render(payment, subscription, tenant);
 
@@ -51,14 +51,14 @@ describe('payment-proof-submitted template', () => {
   });
 
   test('still includes the actionable admin endpoint references (operator-facing, not tenant-facing)', () => {
-    const payment = { id: 5, purpose: 'INITIAL', amount: 17.39, total_amount: 20 };
-    const subscription = { id: 4, tier: 'STARTER', billing_interval: 'MONTHLY' };
+    const payment = { id: '00000000-0000-0000-0000-000000000005', purpose: 'INITIAL', amount: 17.39, total_amount: 20 };
+    const subscription = { id: '00000000-0000-0000-0000-000000000004', tier: 'STARTER', billing_interval: 'MONTHLY' };
 
     const { text, html } = render(payment, subscription, tenant);
 
-    expect(text).toContain('GET /v1/admin/payments/5/proof');
-    expect(text).toContain('PATCH /v1/admin/payments/5/review');
-    expect(html).toContain('GET /v1/admin/payments/5/proof');
-    expect(html).toContain('PATCH /v1/admin/payments/5/review');
+    expect(text).toContain('GET /v1/admin/payments/00000000-0000-0000-0000-000000000005/proof');
+    expect(text).toContain('PATCH /v1/admin/payments/00000000-0000-0000-0000-000000000005/review');
+    expect(html).toContain('GET /v1/admin/payments/00000000-0000-0000-0000-000000000005/proof');
+    expect(html).toContain('PATCH /v1/admin/payments/00000000-0000-0000-0000-000000000005/review');
   });
 });

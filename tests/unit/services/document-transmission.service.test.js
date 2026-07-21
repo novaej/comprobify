@@ -19,11 +19,11 @@ const documentTransmission = require('../../../src/services/document-transmissio
 
 const ACCESS_KEY = '1234567890123456789012345678901234567890123456789';
 
-const mockIssuer = { id: 1, sandbox: false };
+const mockIssuer = { id: '00000000-0000-0000-0000-000000000001', sandbox: false };
 
 function baseDoc(overrides = {}) {
   return {
-    id: 1,
+    id: '00000000-0000-0000-0000-000000000001',
     status: 'SIGNED',
     signed_xml: '<xml/>',
     access_key: ACCESS_KEY,

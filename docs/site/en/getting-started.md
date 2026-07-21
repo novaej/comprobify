@@ -47,13 +47,13 @@ Response:
 {
   "ok": true,
   "tenant": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "email": "your@email.com",
     "subscriptionTier": "FREE",
     "status": "PENDING_VERIFICATION",
     "documentQuota": 5
   },
-  "issuer": { "id": 1, "ruc": "...", "sandbox": true },
+  "issuer": { "id": "00000000-0000-0000-0000-000000000001", "ruc": "...", "sandbox": true },
   "apiKey": "<your-sandbox-api-key>"
 }
 ```
@@ -137,7 +137,7 @@ The new issuer inherits your RUC, business name, and digital certificate from yo
 ```json
 {
   "ok": true,
-  "issuer": { "id": 2, "branchCode": "002", "issuePointCode": "001", "sandbox": true }
+  "issuer": { "id": "00000000-0000-0000-0000-000000000002", "branchCode": "002", "issuePointCode": "001", "sandbox": true }
 }
 ```
 
@@ -193,7 +193,7 @@ Response:
 {
   "ok": true,
   "endpoint": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "url": "https://app.example.com/v1/comprobify/events",
     "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRING", "CERT_EXPIRED"],
     "active": true

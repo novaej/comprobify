@@ -22,7 +22,7 @@ Devuelve una fila por cada tipo de comprobante activo del emisor, con el valor a
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor |
+| `id` | UUID del emisor |
 
 ### Respuesta
 
@@ -72,7 +72,7 @@ La escritura bloquea la fila del contador (`SELECT ... FOR UPDATE`) dentro de la
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor |
+| `id` | UUID del emisor |
 | `documentType` | Código de tipo de comprobante del SRI (por ejemplo, `01`) |
 
 ### Cuerpo de la solicitud

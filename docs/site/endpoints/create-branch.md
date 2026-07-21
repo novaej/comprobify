@@ -25,7 +25,7 @@ Limitador de escritura — depende del plan (10–300 solicitudes/min por llave 
 | `branchAddress` | string | No | Dirección de la sucursal (máx. 300 caracteres) |
 | `documentTypes` | array | No | Códigos de tipo de comprobante a habilitar (por defecto: `["01"]`) — restringido por tu plan, igual que [Agregar un tipo de comprobante](document-types.md#document-type-tier-limits) |
 | `initialSequentials` | array | No | Números secuenciales iniciales: `[{ "documentType": "01", "sequential": 1 }]` |
-| `sourceIssuerId` | integer | No | Id numérico del emisor del cual heredar el certificado/perfil. Por defecto, el primer emisor existente del tenant. Se ignora si se sube un archivo `cert`. |
+| `sourceIssuerId` | string (UUID) | No | UUID del emisor del cual heredar el certificado/perfil. Por defecto, el primer emisor existente del tenant. Se ignora si se sube un archivo `cert`. |
 | `cert` | file | No | Archivo de certificado P12 — solo necesario si esta sucursal usa un certificado distinto |
 | `certPassword` | string | No | Contraseña del P12 — solo al proporcionar un archivo `cert` |
 
@@ -56,7 +56,7 @@ Una nueva sucursal se cuenta cuando el `branchCode` aún no existe para el tenan
 {
   "ok": true,
   "issuer": {
-    "id": 2,
+    "id": "00000000-0000-0000-0000-000000000002",
     "ruc": "1712345678001",
     "businessName": "My Company S.A.",
     "tradeName": "My Company",

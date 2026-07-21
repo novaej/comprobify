@@ -1,6 +1,6 @@
 CREATE TABLE invoice_details (
-  id            SERIAL PRIMARY KEY,
-  document_id   INTEGER NOT NULL REFERENCES documents(id),
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  document_id   UUID NOT NULL REFERENCES documents(id),
   main_code     VARCHAR(25) NOT NULL,
   aux_code      VARCHAR(25),
   description   VARCHAR(300) NOT NULL,

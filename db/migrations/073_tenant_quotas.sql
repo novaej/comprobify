@@ -13,8 +13,8 @@
 BEGIN;
 
 CREATE TABLE tenant_quotas (
-  id              BIGSERIAL     PRIMARY KEY,
-  tenant_id       BIGINT        NOT NULL REFERENCES tenants(id),
+  id              UUID          PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id       UUID          NOT NULL REFERENCES tenants(id),
   period_start    TIMESTAMPTZ   NOT NULL,
   period_end      TIMESTAMPTZ   NOT NULL,
   document_quota  INTEGER       NOT NULL,

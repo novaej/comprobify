@@ -1,6 +1,6 @@
 CREATE TABLE clients (
-  id            SERIAL PRIMARY KEY,
-  issuer_id     INTEGER NOT NULL REFERENCES issuers(id),
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  issuer_id     UUID NOT NULL REFERENCES issuers(id),
   id_type       VARCHAR(2) NOT NULL,
   identifier    VARCHAR(20) NOT NULL,
   name          VARCHAR(300) NOT NULL,

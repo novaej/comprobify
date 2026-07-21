@@ -22,7 +22,7 @@ Returns one row per active document type for the issuer, with the current counte
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id |
+| `id` | Issuer UUID |
 
 ### Response
 
@@ -72,7 +72,7 @@ The write locks the counter row (`SELECT ... FOR UPDATE`) inside the same transa
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id |
+| `id` | Issuer UUID |
 | `documentType` | SRI document type code (e.g. `01`) |
 
 ### Request body

@@ -22,22 +22,22 @@ const listTenants = async (req, res) => {
 };
 
 const updateTenantTier = async (req, res) => {
-  const tenant = await adminService.updateTenantTier(parseInt(req.params.id, 10), req.body.subscriptionTier);
+  const tenant = await adminService.updateTenantTier(req.params.id, req.body.subscriptionTier);
   res.json({ ok: true, tenant });
 };
 
 const updateTenantStatus = async (req, res) => {
-  const tenant = await adminService.updateTenantStatus(parseInt(req.params.id, 10), req.body.status);
+  const tenant = await adminService.updateTenantStatus(req.params.id, req.body.status);
   res.json({ ok: true, tenant });
 };
 
 const verifyTenant = async (req, res) => {
-  const tenant = await adminService.verifyTenant(parseInt(req.params.id, 10));
+  const tenant = await adminService.verifyTenant(req.params.id);
   res.json({ ok: true, tenant });
 };
 
 const listTenantEvents = async (req, res) => {
-  const events = await adminService.listTenantEvents(parseInt(req.params.id, 10));
+  const events = await adminService.listTenantEvents(req.params.id);
   res.json({ ok: true, events });
 };
 
@@ -47,7 +47,7 @@ const createIssuer = async (req, res) => {
     req.body,
     req.file?.buffer,
     req.body.certPassword,
-    req.body.sourceIssuerId ? parseInt(req.body.sourceIssuerId, 10) : undefined,
+    req.body.sourceIssuerId,
   );
   res.status(201).json({ ok: true, issuer });
 };
@@ -62,7 +62,7 @@ const renewIssuerCertificate = async (req, res) => {
     throw new AppError('A P12 certificate file is required', 400, ErrorCodes.INVALID_FILE_UPLOAD);
   }
   const { certFingerprint, certExpiry } = await adminService.renewIssuerCertificate(
-    parseInt(req.params.id, 10),
+    req.params.id,
     req.file.buffer,
     req.body.certPassword,
   );
@@ -71,7 +71,7 @@ const renewIssuerCertificate = async (req, res) => {
 
 const promoteTenant = async (req, res) => {
   const { apiKeys } = await adminService.promoteTenant(
-    parseInt(req.params.id, 10),
+    req.params.id,
     req.body.initialSequentials || [],
   );
   res.json({ ok: true, apiKeys });
@@ -79,7 +79,7 @@ const promoteTenant = async (req, res) => {
 
 // API keys
 const createApiKey = async (req, res) => {
-  const tenantId = parseInt(req.params.id, 10);
+  const tenantId = req.params.id;
   const apiKey = await adminService.createApiKey(
     tenantId,
     req.body.label,
@@ -90,14 +90,14 @@ const createApiKey = async (req, res) => {
 };
 
 const revokeApiKey = async (req, res) => {
-  await adminService.revokeApiKey(parseInt(req.params.id, 10));
+  await adminService.revokeApiKey(req.params.id);
   res.json({ ok: true });
 };
 
 // Subscriptions & payments
 const createSubscription = async (req, res) => {
   const result = await subscriptionService.createSubscription(
-    parseInt(req.params.id, 10),
+    req.params.id,
     req.body.tier,
     req.body.billingInterval,
   );
@@ -105,23 +105,23 @@ const createSubscription = async (req, res) => {
 };
 
 const listSubscriptions = async (req, res) => {
-  const subscriptions = await subscriptionService.listByTenant(parseInt(req.params.id, 10));
+  const subscriptions = await subscriptionService.listByTenant(req.params.id);
   res.json({ ok: true, subscriptions });
 };
 
 const linkInvoice = async (req, res) => {
-  const subscription = await subscriptionService.linkInvoice(parseInt(req.params.id, 10), req.body.accessKey);
+  const subscription = await subscriptionService.linkInvoice(req.params.id, req.body.accessKey);
   res.json({ ok: true, subscription });
 };
 
 const cancelSubscription = async (req, res) => {
-  const subscription = await subscriptionService.cancelSubscription(parseInt(req.params.id, 10));
+  const subscription = await subscriptionService.cancelSubscription(req.params.id);
   res.json({ ok: true, subscription });
 };
 
 const reviewPayment = async (req, res) => {
   const result = await subscriptionService.reviewPayment(
-    parseInt(req.params.id, 10),
+    req.params.id,
     req.body.decision,
     req.body.rejectionReasonCode,
   );
@@ -129,15 +129,15 @@ const reviewPayment = async (req, res) => {
 };
 
 const listPaymentProofs = async (req, res) => {
-  const proofs = await subscriptionService.listPaymentProofsForAdmin(parseInt(req.params.id, 10));
+  const proofs = await subscriptionService.listPaymentProofsForAdmin(req.params.id);
   res.json({ ok: true, proofs });
 };
 
 // Streams any proof file (active or soft-deleted) for full audit visibility.
 const getPaymentProof = async (req, res) => {
   const { buffer, filename, mimeType } = await subscriptionService.getPaymentProofFile(
-    parseInt(req.params.id, 10),
-    parseInt(req.params.proofId, 10),
+    req.params.id,
+    req.params.proofId,
   );
   res.setHeader('Content-Type', mimeType);
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -152,7 +152,7 @@ const listPayments = async (req, res) => {
 // Legal documents
 
 const generateTenantAgreements = async (req, res) => {
-  const tenantId = parseInt(req.params.id, 10);
+  const tenantId = req.params.id;
   const issuer = await issuerModel.findByTenantId(tenantId);
   const created = await tenantAgreementService.generateForTenant(tenantId, issuer);
   res.status(201).json({ ok: true, generated: created.length, documents: created.map((d) => ({
@@ -173,7 +173,7 @@ const publishAgreement = async (req, res) => {
 };
 
 const activateAgreement = async (req, res) => {
-  const document = await agreementService.activateVersion(parseInt(req.params.id, 10));
+  const document = await agreementService.activateVersion(req.params.id);
   res.json({ ok: true, document: { id: document.id, documentType: document.document_type, version: document.version, isCurrent: document.is_current } });
 };
 
@@ -183,7 +183,7 @@ const listAgreementVersions = async (req, res) => {
 };
 
 const getAgreementVersion = async (req, res) => {
-  const document = await agreementService.getById(parseInt(req.params.id, 10));
+  const document = await agreementService.getById(req.params.id);
   res.json({
     ok: true,
     document: {

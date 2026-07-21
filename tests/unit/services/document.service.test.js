@@ -43,8 +43,8 @@ const documentTransmission = require('../../../src/services/document-transmissio
 const documentQuery = require('../../../src/services/document-query.service');
 
 const mockIssuer = {
-  id: 1,
-  tenant_id: 10,
+  id: '00000000-0000-0000-0000-000000000001',
+  tenant_id: '00000000-0000-0000-0000-000000000010',
   ruc: '1712345678001',
   business_name: 'TEST COMPANY',
   trade_name: 'TEST',
@@ -79,7 +79,7 @@ describe('DocumentCreationService', () => {
     jest.clearAllMocks();
 
     db.getClient.mockResolvedValue(mockClient);
-    mockClient.query.mockResolvedValue({ rows: [{ id: 1 }] });
+    mockClient.query.mockResolvedValue({ rows: [{ id: '00000000-0000-0000-0000-000000000001' }] });
 
     issuerDocumentTypeModel.findActiveByIssuerId.mockResolvedValue(['01']);
     sequentialService.getNext.mockResolvedValue(263);
@@ -97,7 +97,7 @@ describe('DocumentCreationService', () => {
     documentEventModel.create.mockResolvedValue({});
 
     documentModel.create.mockResolvedValue({
-      id: 1,
+      id: '00000000-0000-0000-0000-000000000001',
       access_key: '2602202601171234567800110010010000002630000026311',
       sequential: 263,
       status: 'SIGNED',
@@ -111,7 +111,7 @@ describe('DocumentCreationService', () => {
     const { document, created } = await documentCreation.create(validBody, null, mockIssuer);
 
     // issuer is now passed in — no DB lookup
-    expect(sequentialService.getNext).toHaveBeenCalledWith(1, '001', '001', '01', mockClient);
+    expect(sequentialService.getNext).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', '001', '001', '01', mockClient);
     expect(accessKeyService.generate).toHaveBeenCalled();
     expect(builders.getBuilder).toHaveBeenCalledWith('01', mockIssuer);
     expect(signingService.signXml).toHaveBeenCalledWith(
@@ -156,9 +156,9 @@ describe('DocumentCreationService', () => {
 
   test('create persists invoice_details and logs CREATED event', async () => {
     await documentCreation.create(validBody, null, mockIssuer);
-    expect(documentLineItemModel.bulkCreate).toHaveBeenCalledWith(1, validBody.items, mockClient);
+    expect(documentLineItemModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', validBody.items, mockClient);
     expect(documentEventModel.create).toHaveBeenCalledWith(
-      1, 'CREATED', null, 'SIGNED', expect.any(Object), mockClient
+      '00000000-0000-0000-0000-000000000001', 'CREATED', null, 'SIGNED', expect.any(Object), mockClient
     );
   });
 
@@ -168,7 +168,7 @@ describe('DocumentCreationService', () => {
     const payloadHash = crypto.createHash('sha256').update(JSON.stringify(validBody)).digest('hex');
 
     const existingDoc = {
-      id: 99,
+      id: '00000000-0000-0000-0000-000000000099',
       access_key: '2602202601171234567800110010010000002630000026311',
       sequential: 263,
       status: 'SIGNED',
@@ -354,7 +354,7 @@ describe('DocumentTransmissionService', () => {
 
   test('sendToSri rejects when status is not PENDING_SEND', async () => {
     documentModel.findByAccessKey.mockResolvedValue({
-      id: 1,
+      id: '00000000-0000-0000-0000-000000000001',
       status: 'AUTHORIZED',
       signed_xml: '<xml/>',
     });
@@ -367,7 +367,7 @@ describe('DocumentTransmissionService', () => {
     // sendToSri is only ever called (by the worker) on a PENDING_SEND
     // document now — SIGNED -> RECEIVED is no longer a valid direct
     // transition since the send/authorize pipeline went async-only.
-    const doc = { id: 1, status: 'PENDING_SEND', signed_xml: '<xml/>' };
+    const doc = { id: '00000000-0000-0000-0000-000000000001', status: 'PENDING_SEND', signed_xml: '<xml/>' };
     documentModel.findByAccessKey.mockResolvedValue(doc);
     sriService.sendReceipt.mockResolvedValue({
       status: 'DEVUELTA',
@@ -380,9 +380,9 @@ describe('DocumentTransmissionService', () => {
 
     const result = await documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer);
 
-    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RECEIVED', {}, mockIssuer.id, mockIssuer.sandbox);
+    expect(documentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'RECEIVED', {}, mockIssuer.id, mockIssuer.sandbox);
     expect(documentEventModel.create).toHaveBeenCalledWith(
-      1, 'SENT', 'PENDING_SEND', 'RECEIVED',
+      '00000000-0000-0000-0000-000000000001', 'SENT', 'PENDING_SEND', 'RECEIVED',
       expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
       null, mockIssuer.id, mockIssuer.sandbox
     );
@@ -393,7 +393,7 @@ describe('DocumentTransmissionService', () => {
   });
 
   test('sends and sets RETURNED for non-70 DEVUELTA', async () => {
-    const doc = { id: 1, status: 'PENDING_SEND', signed_xml: '<xml/>' };
+    const doc = { id: '00000000-0000-0000-0000-000000000001', status: 'PENDING_SEND', signed_xml: '<xml/>' };
     documentModel.findByAccessKey.mockResolvedValue(doc);
     const messages = [{ identifier: '43', message: 'SOME OTHER ERROR' }];
     sriService.sendReceipt.mockResolvedValue({
@@ -407,9 +407,9 @@ describe('DocumentTransmissionService', () => {
 
     const result = await documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer);
 
-    expect(documentModel.updateStatus).toHaveBeenCalledWith(1, 'RETURNED', {}, mockIssuer.id, mockIssuer.sandbox);
+    expect(documentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'RETURNED', {}, mockIssuer.id, mockIssuer.sandbox);
     expect(documentEventModel.create).toHaveBeenCalledWith(
-      1, 'SENT', 'PENDING_SEND', 'RETURNED',
+      '00000000-0000-0000-0000-000000000001', 'SENT', 'PENDING_SEND', 'RETURNED',
       { sriStatus: 'DEVUELTA' },
       null, mockIssuer.id, mockIssuer.sandbox
     );
@@ -421,7 +421,7 @@ describe('DocumentTransmissionService', () => {
 
   test('checkAuthorization rejects when status is not RECEIVED', async () => {
     documentModel.findByAccessKey.mockResolvedValue({
-      id: 1,
+      id: '00000000-0000-0000-0000-000000000001',
       status: 'SIGNED',
     });
 

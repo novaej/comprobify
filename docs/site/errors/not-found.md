@@ -16,7 +16,7 @@ El ID de emisor proporcionado en `X-Issuer-Id` o en un parámetro de URL (`/v1/i
 
 El campo `sourceIssuerId` en `POST /v1/issuers` (creación de sucursal) no coincide con ningún emisor que pertenezca a este tenant.
 
-**Qué hacer:** Asegúrate de que `sourceIssuerId` sea el ID numérico de uno de los emisores existentes de tu tenant, devuelto por `GET /v1/issuers`.
+**Qué hacer:** Asegúrate de que `sourceIssuerId` sea el UUID de uno de los emisores existentes de tu tenant, devuelto por `GET /v1/issuers`.
 
 ### `NOT_FOUND` (respaldo)
 

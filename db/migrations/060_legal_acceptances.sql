@@ -12,8 +12,8 @@
 BEGIN;
 
 CREATE TABLE legal_acceptances (
-  id            BIGSERIAL     PRIMARY KEY,
-  tenant_id     INTEGER       NOT NULL REFERENCES tenants(id),
+  id            UUID          PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id     UUID          NOT NULL REFERENCES tenants(id),
   document_type TEXT          NOT NULL,
   version       TEXT          NOT NULL,
   content_hash  TEXT          NOT NULL,

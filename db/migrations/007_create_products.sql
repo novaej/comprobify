@@ -1,6 +1,6 @@
 CREATE TABLE products (
-  id            SERIAL PRIMARY KEY,
-  issuer_id     INTEGER NOT NULL REFERENCES issuers(id),
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  issuer_id     UUID NOT NULL REFERENCES issuers(id),
   main_code     VARCHAR(25) NOT NULL,
   aux_code      VARCHAR(25),
   description   VARCHAR(300) NOT NULL,

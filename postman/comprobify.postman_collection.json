@@ -444,7 +444,7 @@
                 "me"
               ]
             },
-            "description": "Resolves the tenant owning the authenticated API key (id, email, subscriptionTier, status, documentCount, documentQuota, sandbox). Useful for a third-party app that only has an API key and needs to discover its numeric tenant id."
+            "description": "Resolves the tenant owning the authenticated API key (id, email, subscriptionTier, status, documentCount, documentQuota, sandbox). Useful for a third-party app that only has an API key and needs to discover its tenant UUID."
           },
           "event": [
             {
@@ -517,7 +517,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"initialSequentials\": [\n    { \"issuerId\": 1, \"documentType\": \"01\", \"sequential\": 1 }\n  ],\n  \"tier\": \"STARTER\",\n  \"billingInterval\": \"MONTHLY\"\n}",
+              "raw": "{\n  \"initialSequentials\": [\n    { \"issuerId\": \"00000000-0000-0000-0000-000000000001\", \"documentType\": \"01\", \"sequential\": 1 }\n  ],\n  \"tier\": \"STARTER\",\n  \"billingInterval\": \"MONTHLY\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1303,7 +1303,7 @@
                 {
                   "key": "sourceIssuerId",
                   "value": "{{issuer_id}}",
-                  "description": "Optional. Numeric id of the issuer to inherit cert/profile from. Defaults to the tenant's first existing issuer. Ignored if a cert file is uploaded.",
+                  "description": "Optional. UUID of the issuer to inherit cert/profile from. Defaults to the tenant's first existing issuer. Ignored if a cert file is uploaded.",
                   "type": "text",
                   "disabled": true
                 },
@@ -1550,7 +1550,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               },
               {
                 "key": "Idempotency-Key",
@@ -1605,7 +1605,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers). Must have document type 04 enabled."
+                "description": "UUID of the issuing branch (from GET /v1/issuers). Must have document type 04 enabled."
               },
               {
                 "key": "Idempotency-Key",
@@ -1656,7 +1656,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -1742,7 +1742,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -1767,7 +1767,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -1792,7 +1792,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -1831,7 +1831,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -1874,7 +1874,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -1909,7 +1909,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -1935,7 +1935,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -1961,7 +1961,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -1987,7 +1987,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -2013,7 +2013,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -2039,7 +2039,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {
@@ -2073,7 +2073,7 @@
               {
                 "key": "X-Issuer-Id",
                 "value": "{{issuer_id}}",
-                "description": "Numeric id of the issuing branch (from GET /v1/issuers)"
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
               }
             ],
             "url": {

@@ -5,8 +5,8 @@ const ALL_EVENT_TYPES = Object.values(NotificationTypes);
 
 const idValidator = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Webhook endpoint id must be a positive integer'),
+    .isUUID()
+    .withMessage('Webhook endpoint id must be a valid UUID'),
 ];
 
 const createValidator = [

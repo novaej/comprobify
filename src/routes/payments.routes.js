@@ -27,10 +27,10 @@ const router = Router();
 
 router.use(authenticate);
 
-const idParam = [param('id').isInt({ min: 1 }).withMessage('id must be a positive integer')];
+const idParam = [param('id').isUUID().withMessage('id must be a valid UUID')];
 const idAndProofIdParams = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
-  param('proofId').isInt({ min: 1 }).withMessage('proofId must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+  param('proofId').isUUID().withMessage('proofId must be a valid UUID'),
 ];
 const submitProofFields = [
   ...idParam,

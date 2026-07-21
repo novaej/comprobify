@@ -14,7 +14,7 @@ DELETE /v1/issuers/:id
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor (de `GET /v1/issuers`) |
+| `id` | UUID del emisor (de `GET /v1/issuers`) |
 
 ## Restricciones
 

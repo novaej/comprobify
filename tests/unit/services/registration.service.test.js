@@ -60,7 +60,7 @@ describe('RegistrationService', () => {
     cryptoService.encrypt.mockReturnValue('ENCRYPTED_PRIVATE_KEY');
     issuerDocumentTypeModel.bulkCreate.mockResolvedValue(undefined);
     sequentialService.initialize.mockResolvedValue(undefined);
-    apiKeyModel.create.mockResolvedValue({ id: 999 });
+    apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999' });
     emailService.sendVerificationEmail.mockResolvedValue({ messageId: 'mg-id-1' });
     tenantModel.updateVerificationEmailSent.mockResolvedValue(undefined);
     tenantEventModel.create.mockResolvedValue(undefined);
@@ -73,7 +73,7 @@ describe('RegistrationService', () => {
   describe('register', () => {
     test('rejects when the RUC is already registered by another tenant', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
-      issuerModel.findByRuc.mockResolvedValue({ id: 1, ruc: baseFields.ruc });
+      issuerModel.findByRuc.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', ruc: baseFields.ruc });
 
       await expect(registrationService.register(baseFields, p12Buffer, p12Password))
         .rejects.toMatchObject({ statusCode: 409 });
@@ -82,7 +82,7 @@ describe('RegistrationService', () => {
     });
 
     test('rejects when the account already exists and is suspended', async () => {
-      tenantModel.findByEmail.mockResolvedValue({ id: 1, status: 'SUSPENDED' });
+      tenantModel.findByEmail.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'SUSPENDED' });
 
       await expect(registrationService.register(baseFields, p12Buffer, p12Password))
         .rejects.toMatchObject({ statusCode: 403, code: 'ACCOUNT_SUSPENDED' });
@@ -91,7 +91,7 @@ describe('RegistrationService', () => {
     });
 
     test('rejects when the email exists but has no issuer (inconsistent state, not a recoverable duplicate)', async () => {
-      tenantModel.findByEmail.mockResolvedValue({ id: 1, status: 'ACTIVE' });
+      tenantModel.findByEmail.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
       issuerModel.findByTenantId.mockResolvedValue(null);
 
       await expect(registrationService.register(baseFields, p12Buffer, p12Password))
@@ -102,13 +102,13 @@ describe('RegistrationService', () => {
 
     test('idempotent re-registration: existing email + existing issuer revokes the current sandbox key and mints a new one', async () => {
       const existingTenant = {
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         email: baseFields.email,
         status: 'PENDING_VERIFICATION',
         subscription_tier: 'FREE',
       };
       const existingIssuer = {
-        id: 10,
+        id: '00000000-0000-0000-0000-000000000010',
         ruc: baseFields.ruc,
         business_name: 'Acme Corp',
         trade_name: 'Acme',
@@ -119,21 +119,21 @@ describe('RegistrationService', () => {
       };
       tenantModel.findByEmail.mockResolvedValue(existingTenant);
       issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
-      apiKeyModel.create.mockResolvedValue({ id: 500 });
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000500' });
 
       const result = await registrationService.register(baseFields, p12Buffer, p12Password);
 
-      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'sandbox');
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({
-        tenantId: 1,
+        tenantId: '00000000-0000-0000-0000-000000000001',
         label: 'Recovery sandbox key',
         environment: 'sandbox',
       }));
       expect(result.recovered).toBe(true);
       expect(result.apiKey).toEqual(expect.any(String));
       expect(result.apiKey).toHaveLength(64); // 32 random bytes as hex
-      expect(result.tenant).toMatchObject({ id: 1, email: baseFields.email });
-      expect(result.issuer).toMatchObject({ id: 10, ruc: baseFields.ruc });
+      expect(result.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000001', email: baseFields.email });
+      expect(result.issuer).toMatchObject({ id: '00000000-0000-0000-0000-000000000010', ruc: baseFields.ruc });
 
       // Does not attempt to create a brand-new tenant/issuer on the recovery path.
       expect(tenantModel.create).not.toHaveBeenCalled();
@@ -171,7 +171,7 @@ describe('RegistrationService', () => {
     test('translates a duplicate-key DB error (23505) on issuer creation into a ConflictError', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       issuerModel.findByRuc.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({ id: 2, email: baseFields.email });
+      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
       issuerModel.create.mockRejectedValue(Object.assign(new Error('duplicate key'), { code: '23505' }));
 
       await expect(registrationService.register(baseFields, p12Buffer, p12Password))
@@ -181,7 +181,7 @@ describe('RegistrationService', () => {
     test('rethrows a non-duplicate-key DB error from issuer creation as-is', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       issuerModel.findByRuc.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({ id: 2, email: baseFields.email });
+      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
       const dbError = Object.assign(new Error('connection lost'), { code: '08006' });
       issuerModel.create.mockRejectedValue(dbError);
 
@@ -193,14 +193,14 @@ describe('RegistrationService', () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       issuerModel.findByRuc.mockResolvedValue(null);
       const createdTenant = {
-        id: 2,
+        id: '00000000-0000-0000-0000-000000000002',
         email: baseFields.email,
         subscription_tier: 'FREE',
         status: 'PENDING_VERIFICATION',
         created_at: new Date('2026-01-01T00:00:00Z'),
       };
       const createdIssuer = {
-        id: 20,
+        id: '00000000-0000-0000-0000-000000000020',
         ruc: baseFields.ruc,
         business_name: baseFields.businessName,
         trade_name: baseFields.tradeName,
@@ -222,20 +222,20 @@ describe('RegistrationService', () => {
         status: 'PENDING_VERIFICATION',
         legalVersion: baseFields.termsVersion,
       }), mockClient);
-      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith(2, 5, mockClient);
+      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 5, mockClient);
       expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
-        tenantId: 2,
+        tenantId: '00000000-0000-0000-0000-000000000002',
         ruc: baseFields.ruc,
         businessName: baseFields.businessName,
         encryptedPrivateKey: 'ENCRYPTED_PRIVATE_KEY',
         certificatePem: 'CERT_PEM',
         requiredAccounting: 'NO',
       }));
-      expect(tenantAgreementService.generateForTenant).toHaveBeenCalledWith(2, createdIssuer);
-      expect(issuerDocumentTypeModel.bulkCreate).toHaveBeenCalledWith(20, ['01']);
-      expect(sequentialService.initialize).toHaveBeenCalledWith(20, baseFields.branchCode, baseFields.issuePointCode, '01', 1, true);
+      expect(tenantAgreementService.generateForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', createdIssuer);
+      expect(issuerDocumentTypeModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', ['01']);
+      expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', baseFields.branchCode, baseFields.issuePointCode, '01', 1, true);
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({
-        tenantId: 2,
+        tenantId: '00000000-0000-0000-0000-000000000002',
         label: 'Initial sandbox key',
         environment: 'sandbox',
       }));
@@ -248,15 +248,15 @@ describe('RegistrationService', () => {
 
       expect(result.recovered).toBeUndefined();
       expect(result.apiKey).toHaveLength(64);
-      expect(result.tenant).toMatchObject({ id: 2, email: baseFields.email });
-      expect(result.issuer).toMatchObject({ id: 20, ruc: baseFields.ruc });
+      expect(result.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
+      expect(result.issuer).toMatchObject({ id: '00000000-0000-0000-0000-000000000020', ruc: baseFields.ruc });
     });
 
     test('normalises requiredAccounting truthy variants to SI', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       issuerModel.findByRuc.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({ id: 2, email: baseFields.email });
-      issuerModel.create.mockResolvedValue({ id: 20, branch_code: '001', issue_point_code: '001' });
+      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
+      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', branch_code: '001', issue_point_code: '001' });
 
       await registrationService.register({ ...baseFields, requiredAccounting: 'true' }, p12Buffer, p12Password);
 
@@ -266,8 +266,8 @@ describe('RegistrationService', () => {
     test('uses caller-supplied documentTypes and initialSequentials instead of the defaults', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       issuerModel.findByRuc.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({ id: 2, email: baseFields.email });
-      issuerModel.create.mockResolvedValue({ id: 20, branch_code: '001', issue_point_code: '001' });
+      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
+      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', branch_code: '001', issue_point_code: '001' });
 
       await registrationService.register({
         ...baseFields,
@@ -275,16 +275,16 @@ describe('RegistrationService', () => {
         initialSequentials: [{ documentType: '04', sequential: '15' }],
       }, p12Buffer, p12Password);
 
-      expect(issuerDocumentTypeModel.bulkCreate).toHaveBeenCalledWith(20, ['01', '04']);
-      expect(sequentialService.initialize).toHaveBeenCalledWith(20, '001', '001', '01', 1, true);
-      expect(sequentialService.initialize).toHaveBeenCalledWith(20, '001', '001', '04', 15, true);
+      expect(issuerDocumentTypeModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', ['01', '04']);
+      expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', '001', '001', '01', 1, true);
+      expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', '001', '001', '04', 15, true);
     });
 
     test('does not attempt to send a verification email when EMAIL_PROVIDER is none', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       issuerModel.findByRuc.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({ id: 2, email: baseFields.email });
-      issuerModel.create.mockResolvedValue({ id: 20, branch_code: '001', issue_point_code: '001' });
+      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
+      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', branch_code: '001', issue_point_code: '001' });
 
       const originalProvider = config.email.provider;
       config.email.provider = 'none';
@@ -300,22 +300,22 @@ describe('RegistrationService', () => {
     test('registration does not fail even if the verification email send later rejects', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       issuerModel.findByRuc.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({ id: 2, email: baseFields.email });
-      issuerModel.create.mockResolvedValue({ id: 20, branch_code: '001', issue_point_code: '001' });
+      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
+      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', branch_code: '001', issue_point_code: '001' });
       emailService.sendVerificationEmail.mockRejectedValue(new Error('Mailgun down'));
 
       await expect(registrationService.register(baseFields, p12Buffer, p12Password)).resolves.toBeDefined();
 
       // allow the fire-and-forget rejection chain to settle so it doesn't leak into another test
       await new Promise((resolve) => setImmediate(resolve));
-      expect(tenantEventModel.create).toHaveBeenCalledWith(2, 'VERIFICATION_EMAIL_FAILED', { error: 'Mailgun down' });
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 'VERIFICATION_EMAIL_FAILED', { error: 'Mailgun down' });
     });
 
     test('registration does not block on generateForTenant failing (fire-and-forget)', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       issuerModel.findByRuc.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({ id: 2, email: baseFields.email });
-      issuerModel.create.mockResolvedValue({ id: 20, branch_code: '001', issue_point_code: '001' });
+      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
+      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', branch_code: '001', issue_point_code: '001' });
       tenantAgreementService.generateForTenant.mockRejectedValue(new Error('template missing'));
 
       await expect(registrationService.register(baseFields, p12Buffer, p12Password)).resolves.toBeDefined();
@@ -332,14 +332,14 @@ describe('RegistrationService', () => {
     });
 
     test('rejects when the tenant is already ACTIVE (verified)', async () => {
-      tenantModel.findByEmail.mockResolvedValue({ id: 1, status: 'ACTIVE' });
+      tenantModel.findByEmail.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
 
       await expect(registrationService.resendVerification(baseFields.email))
         .rejects.toMatchObject({ statusCode: 409, code: 'ALREADY_VERIFIED' });
     });
 
     test('rejects when the tenant is SUSPENDED', async () => {
-      tenantModel.findByEmail.mockResolvedValue({ id: 1, status: 'SUSPENDED' });
+      tenantModel.findByEmail.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'SUSPENDED' });
 
       await expect(registrationService.resendVerification(baseFields.email))
         .rejects.toMatchObject({ statusCode: 403, code: 'ACCOUNT_SUSPENDED' });
@@ -347,7 +347,7 @@ describe('RegistrationService', () => {
 
     test('rejects with a 429 cooldown error when the last verification email was sent under 60 seconds ago', async () => {
       tenantModel.findByEmail.mockResolvedValue({
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         status: 'PENDING_VERIFICATION',
         verification_email_sent_at: new Date(Date.now() - 10_000).toISOString(),
       });
@@ -360,7 +360,7 @@ describe('RegistrationService', () => {
 
     test('allows resend once the 60-second cooldown has elapsed', async () => {
       tenantModel.findByEmail.mockResolvedValue({
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         status: 'PENDING_VERIFICATION',
         preferred_language: 'es',
         verification_email_sent_at: new Date(Date.now() - 61_000).toISOString(),
@@ -368,13 +368,13 @@ describe('RegistrationService', () => {
 
       await registrationService.resendVerification(baseFields.email);
 
-      expect(tenantModel.updateVerificationToken).toHaveBeenCalledWith(1, expect.any(String), expect.any(Date));
+      expect(tenantModel.updateVerificationToken).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', expect.any(String), expect.any(Date));
       expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(baseFields.email, expect.any(String), null, 'es');
     });
 
     test('sends the first verification email when none has been sent before (no cooldown to check)', async () => {
       tenantModel.findByEmail.mockResolvedValue({
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         status: 'PENDING_VERIFICATION',
         preferred_language: 'es',
         verification_email_sent_at: null,
@@ -382,12 +382,12 @@ describe('RegistrationService', () => {
 
       await registrationService.resendVerification(baseFields.email);
 
-      expect(tenantModel.updateVerificationToken).toHaveBeenCalledWith(1, expect.any(String), expect.any(Date));
+      expect(tenantModel.updateVerificationToken).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', expect.any(String), expect.any(Date));
     });
 
     test('updates the stored redirect URL when a new one is explicitly supplied', async () => {
       tenantModel.findByEmail.mockResolvedValue({
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         status: 'PENDING_VERIFICATION',
         verification_email_sent_at: null,
         verification_redirect_url: 'https://old.example.com/verify',
@@ -395,7 +395,7 @@ describe('RegistrationService', () => {
 
       await registrationService.resendVerification(baseFields.email, 'https://new.example.com/verify');
 
-      expect(tenantModel.updateVerificationRedirectUrl).toHaveBeenCalledWith(1, 'https://new.example.com/verify');
+      expect(tenantModel.updateVerificationRedirectUrl).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'https://new.example.com/verify');
       expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
         baseFields.email, expect.any(String), 'https://new.example.com/verify', 'es'
       );
@@ -403,7 +403,7 @@ describe('RegistrationService', () => {
 
     test('falls back to the tenant-stored redirect URL when none is supplied on resend', async () => {
       tenantModel.findByEmail.mockResolvedValue({
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         status: 'PENDING_VERIFICATION',
         verification_email_sent_at: null,
         verification_redirect_url: 'https://stored.example.com/verify',
@@ -429,12 +429,12 @@ describe('RegistrationService', () => {
     });
 
     test('activates the tenant and logs an EMAIL_VERIFIED event on a valid token', async () => {
-      tenantModel.findByVerificationToken.mockResolvedValue({ id: 3, email: 'someone@example.com' });
+      tenantModel.findByVerificationToken.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000003', email: 'someone@example.com' });
 
       const result = await registrationService.verifyEmail('good-token');
 
-      expect(tenantModel.activate).toHaveBeenCalledWith(3);
-      expect(tenantEventModel.create).toHaveBeenCalledWith(3, 'EMAIL_VERIFIED');
+      expect(tenantModel.activate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003');
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', 'EMAIL_VERIFIED');
       expect(result).toEqual({ email: 'someone@example.com' });
     });
   });
@@ -442,7 +442,7 @@ describe('RegistrationService', () => {
   describe('formatTenant', () => {
     test('maps a DB row to the camelCase tenant response shape', () => {
       const row = {
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         email: 'a@example.com',
         subscription_tier: 'FREE',
         status: 'ACTIVE',
@@ -453,7 +453,7 @@ describe('RegistrationService', () => {
       const quotaRow = { document_quota: 5, document_count: 2 };
 
       expect(registrationService.formatTenant(row, quotaRow)).toEqual({
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         email: 'a@example.com',
         subscriptionTier: 'FREE',
         status: 'ACTIVE',
@@ -467,7 +467,7 @@ describe('RegistrationService', () => {
 
     test('defaults quota fields to null when no quota row is available', () => {
       const row = {
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         email: 'a@example.com',
         subscription_tier: 'FREE',
         status: 'ACTIVE',
@@ -477,7 +477,7 @@ describe('RegistrationService', () => {
       };
 
       expect(registrationService.formatTenant(row)).toEqual({
-        id: 1,
+        id: '00000000-0000-0000-0000-000000000001',
         email: 'a@example.com',
         subscriptionTier: 'FREE',
         status: 'ACTIVE',

@@ -19,7 +19,7 @@ GET /v1/issuers
   "ok": true,
   "issuers": [
     {
-      "id": 1,
+      "id": "00000000-0000-0000-0000-000000000001",
       "ruc": "1234567890001",
       "businessName": "ACME S.A.",
       "tradeName": "ACME",
@@ -37,7 +37,7 @@ GET /v1/issuers
 
 | Campo | Descripción |
 |---|---|
-| `id` | Id numérico del emisor — pásalo como `X-Issuer-Id` en las solicitudes de comprobantes |
+| `id` | UUID del emisor — pásalo como `X-Issuer-Id` en las solicitudes de comprobantes |
 | `ruc` | RUC del contribuyente |
 | `businessName` | Razón social |
 | `tradeName` | Nombre comercial (null si no está definido) |

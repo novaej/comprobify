@@ -57,19 +57,19 @@ Set `DB_USER=comprobify_app` and `DB_PASSWORD=changeme` in `.env`.
 
 ```bash
 # Start the container
-docker run --name postgres16 \
+docker run --name postgres18 \
   -e POSTGRES_PASSWORD=postgres \
   -e POSTGRES_DB=comprobify_local \
   -p 5432:5432 \
-  -d postgres:16
+  -d postgres:18
 
 # Wait a moment for Postgres to initialise, then create the application role.
 # Role creation is run as a separate command so that if the role already exists
 # and errors, it does not abort the grant block below.
-docker exec -it postgres16 psql -U postgres -c "CREATE ROLE comprobify_app LOGIN PASSWORD 'changeme';"
+docker exec -it postgres18 psql -U postgres -c "CREATE ROLE comprobify_app LOGIN PASSWORD 'changeme';"
 
 # Grant all required privileges:
-docker exec -it postgres16 psql -U postgres -d comprobify_local -c "
+docker exec -it postgres18 psql -U postgres -d comprobify_local -c "
   GRANT ALL PRIVILEGES ON DATABASE comprobify_local TO comprobify_app;
   GRANT ALL ON SCHEMA public TO PUBLIC;
   GRANT ALL ON SCHEMA public TO comprobify_app;
@@ -185,7 +185,7 @@ This applies all 33 migrations, creating tables: `issuers`, `api_keys`, `documen
 > ```
 > **Docker:**
 > ```bash
-> docker exec -it postgres16 psql -U postgres -d comprobify_local -c "
+> docker exec -it postgres18 psql -U postgres -d comprobify_local -c "
 >   GRANT ALL ON SCHEMA sandbox TO comprobify_app;
 >   ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON TABLES TO comprobify_app;
 >   ALTER DEFAULT PRIVILEGES IN SCHEMA sandbox GRANT ALL ON SEQUENCES TO comprobify_app;
@@ -581,7 +581,7 @@ Check what privileges the app user actually has:
 # Local
 psql -U postgres -d comprobify_local -c "SELECT has_schema_privilege('comprobify_app', 'public', 'USAGE') AS usage, has_schema_privilege('comprobify_app', 'public', 'CREATE') AS create;"
 # Docker
-docker exec -it postgres16 psql -U postgres -d comprobify_local -c "SELECT has_schema_privilege('comprobify_app', 'public', 'USAGE') AS usage, has_schema_privilege('comprobify_app', 'public', 'CREATE') AS create;"
+docker exec -it postgres18 psql -U postgres -d comprobify_local -c "SELECT has_schema_privilege('comprobify_app', 'public', 'USAGE') AS usage, has_schema_privilege('comprobify_app', 'public', 'CREATE') AS create;"
 ```
 
 Both columns must be `t`. If `create` is `f`, run the missing grant:
@@ -589,17 +589,17 @@ Both columns must be `t`. If `create` is `f`, run the missing grant:
 # Local
 psql -U postgres -d comprobify_local -c "GRANT ALL ON SCHEMA public TO comprobify_app;"
 # Docker
-docker exec -it postgres16 psql -U postgres -d comprobify_local -c "GRANT ALL ON SCHEMA public TO comprobify_app;"
+docker exec -it postgres18 psql -U postgres -d comprobify_local -c "GRANT ALL ON SCHEMA public TO comprobify_app;"
 ```
 
 If you want to start completely fresh, drop the database and role and recreate them using Option B above. You must revoke all privileges before dropping the role — PostgreSQL will refuse to drop it otherwise:
 ```bash
-docker exec -it postgres16 psql -U postgres -c "REVOKE ALL PRIVILEGES ON DATABASE comprobify_local FROM comprobify_app;"
-docker exec -it postgres16 psql -U postgres -c "REVOKE ALL ON SCHEMA public FROM comprobify_app;"
-docker exec -it postgres16 psql -U postgres -c "ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE ALL ON TABLES FROM comprobify_app;"
-docker exec -it postgres16 psql -U postgres -c "ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE ALL ON SEQUENCES FROM comprobify_app;"
-docker exec -it postgres16 psql -U postgres -c "DROP DATABASE IF EXISTS comprobify_local;"
-docker exec -it postgres16 psql -U postgres -c "DROP ROLE IF EXISTS comprobify_app;"
+docker exec -it postgres18 psql -U postgres -c "REVOKE ALL PRIVILEGES ON DATABASE comprobify_local FROM comprobify_app;"
+docker exec -it postgres18 psql -U postgres -c "REVOKE ALL ON SCHEMA public FROM comprobify_app;"
+docker exec -it postgres18 psql -U postgres -c "ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE ALL ON TABLES FROM comprobify_app;"
+docker exec -it postgres18 psql -U postgres -c "ALTER DEFAULT PRIVILEGES FOR ROLE postgres REVOKE ALL ON SEQUENCES FROM comprobify_app;"
+docker exec -it postgres18 psql -U postgres -c "DROP DATABASE IF EXISTS comprobify_local;"
+docker exec -it postgres18 psql -U postgres -c "DROP ROLE IF EXISTS comprobify_app;"
 ```
 Then follow Option B from step 2 to recreate everything.
 

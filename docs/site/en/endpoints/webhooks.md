@@ -28,7 +28,7 @@ DELETE /v1/webhooks/:id
 
 ```json
 {
-  "id":         1,
+  "id": "00000000-0000-0000-0000-000000000001",
   "url":        "https://app.example.com/v1/comprobify/events",
   "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRING"],
   "active":     true,
@@ -39,7 +39,7 @@ DELETE /v1/webhooks/:id
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | integer | Stable identifier |
+| `id` | string (UUID) | Stable identifier |
 | `url` | string | HTTPS URL the API POSTs events to |
 | `eventTypes` | string[] | Subscribed event types. Empty array = subscribe to **all** event types. |
 | `active` | boolean | `false` after deregistration; historical deliveries are preserved |
@@ -80,7 +80,7 @@ Creates a new webhook endpoint and returns the signing secret. **The secret is s
 {
   "ok": true,
   "endpoint": {
-    "id":         1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "url":        "https://app.example.com/v1/comprobify/events",
     "eventTypes": ["DOCUMENT_AUTHORIZED"],
     "active":     true,
@@ -195,17 +195,17 @@ Soft-deletes the endpoint (`active = false`). The endpoint stops receiving deliv
 ```json
 {
   "event":      "DOCUMENT_AUTHORIZED",
-  "deliveryId": 17,
+  "deliveryId": "00000000-0000-0000-0000-000000000017",
   "timestamp":  1748649600,
-  "tenantId":   7,
+  "tenantId": "00000000-0000-0000-0000-000000000007",
   "data": {
-    "id":        42,
+    "id": "00000000-0000-0000-0000-000000000042",
     "type":      "DOCUMENT_AUTHORIZED",
     "severity":  "INFO",
     "title":     "Invoice authorized",
     "message":   "Invoice 001-001-000000012 for ACME Corp was authorized by SRI.",
     "metadata":  { ... },
-    "issuerId":  3,
+    "issuerId": "00000000-0000-0000-0000-000000000003",
     "readAt":    null,
     "expiresAt": null,
     "createdAt": "2026-05-28T14:30:00.000Z"

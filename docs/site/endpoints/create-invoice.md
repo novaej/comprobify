@@ -17,7 +17,7 @@ Para notas de crédito (`documentType: "04"`), consulta [Crear Nota de Crédito]
 | Header | Requerido | Descripción |
 |---|---|---|
 | `Authorization` | Sí | Llave API tipo Bearer |
-| `X-Issuer-Id` | Sí | Id numérico de la sucursal emisora (obtenido de `GET /v1/issuers`). Identifica qué sucursal y certificado usar. |
+| `X-Issuer-Id` | Sí | UUID de la sucursal emisora (obtenido de `GET /v1/issuers`). Identifica qué sucursal y certificado usar. |
 | `Content-Type` | Sí | `application/json` |
 | `Idempotency-Key` | No | String único (máx. 255 caracteres) — consulta [idempotencia](#idempotency) |
 

@@ -1,5 +1,7 @@
 # ADR-012: PostgreSQL Row-Level Security for Tenant Isolation
 
+> **Update (2026-07-21):** `issuer_id`/`id` columns are now `UUID`, not `BIGINT`. Every `::bigint` cast in the policy SQL below became `::uuid` — the RLS design itself (transaction-local `app.current_issuer_id` GUC, `NULLIF`-based bypass for context-free code paths) is unchanged. See ADR-020.
+
 ## Status
 Accepted
 

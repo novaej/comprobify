@@ -4,8 +4,8 @@ const db = require('../../../src/config/database');
 const paymentProofModel = require('../../../src/models/payment-proof.model');
 
 const mockProof = {
-  id: 1,
-  payment_id: 20,
+  id: '00000000-0000-0000-0000-000000000001',
+  payment_id: '00000000-0000-0000-0000-000000000020',
   file: Buffer.from('x'),
   filename: 'receipt.pdf',
   mime_type: 'application/pdf',
@@ -27,7 +27,7 @@ describe('PaymentProofModel', () => {
     });
 
     test('bulk-inserts one row per file with correctly offset placeholders', async () => {
-      db.query.mockResolvedValue({ rows: [mockProof, { ...mockProof, id: 2, filename: 'back.pdf' }] });
+      db.query.mockResolvedValue({ rows: [mockProof, { ...mockProof, id: '00000000-0000-0000-0000-000000000002', filename: 'back.pdf' }] });
       const files = [
         { buffer: Buffer.from('a'), filename: 'front.pdf', mimeType: 'application/pdf' },
         { buffer: Buffer.from('b'), filename: 'back.pdf', mimeType: 'application/pdf' },
@@ -59,7 +59,7 @@ describe('PaymentProofModel', () => {
   });
 
   test('findAllByPaymentId returns rows regardless of active state', async () => {
-    db.query.mockResolvedValue({ rows: [mockProof, { ...mockProof, id: 2, active: false }] });
+    db.query.mockResolvedValue({ rows: [mockProof, { ...mockProof, id: '00000000-0000-0000-0000-000000000002', active: false }] });
 
     const result = await paymentProofModel.findAllByPaymentId(20);
 

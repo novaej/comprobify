@@ -8,7 +8,7 @@ GET /v1/documents/stats
 
 ## Autenticación
 
-`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (UUID obtenido de `GET /v1/issuers`)
 
 ## Respuesta
 

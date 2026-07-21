@@ -12,7 +12,7 @@ If RabbitMQ is briefly unreachable when you call this endpoint, the document sti
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (UUID from `GET /v1/issuers`)
 
 ## Path parameters
 

@@ -19,7 +19,7 @@ GET /v1/tenants/agreements/history
   "ok": true,
   "documents": [
     {
-      "id": 1,
+      "id": "00000000-0000-0000-0000-000000000001",
       "documentType": "TERMS",
       "templateVersion": "2026-07-01",
       "status": "ACCEPTED",
@@ -27,7 +27,7 @@ GET /v1/tenants/agreements/history
       "acceptedAt": "2026-07-01T14:05:00.000Z"
     },
     {
-      "id": 2,
+      "id": "00000000-0000-0000-0000-000000000002",
       "documentType": "PRIVACY",
       "templateVersion": "2026-07-01",
       "status": "ACCEPTED",
@@ -35,7 +35,7 @@ GET /v1/tenants/agreements/history
       "acceptedAt": "2026-07-01T14:05:00.000Z"
     },
     {
-      "id": 3,
+      "id": "00000000-0000-0000-0000-000000000003",
       "documentType": "DPA",
       "templateVersion": "2026-07-01",
       "status": "ACCEPTED",

@@ -19,7 +19,7 @@ const createTenant = [
 ];
 
 const updateTenantTier = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 
   body('subscriptionTier')
     .isIn(Object.keys(TIERS))
@@ -27,7 +27,7 @@ const updateTenantTier = [
 ];
 
 const updateTenantStatus = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 
   body('status')
     .isIn(Object.values(TenantStatus))
@@ -35,18 +35,18 @@ const updateTenantStatus = [
 ];
 
 const verifyTenant = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
 const listTenantEvents = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
 // Issuers
 const createIssuer = [
   body('tenantId')
-    .isInt({ min: 1 })
-    .withMessage('tenantId must be a positive integer'),
+    .isUUID()
+    .withMessage('tenantId must be a valid UUID'),
 
   body('ruc')
     .notEmpty()
@@ -122,11 +122,11 @@ const createIssuer = [
 ];
 
 const renewIssuerCertificate = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
 const promoteTenant = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 
   body('initialSequentials')
     .optional()
@@ -135,8 +135,8 @@ const promoteTenant = [
 
   body('initialSequentials.*.issuerId')
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('each initialSequentials entry must have a positive integer issuerId'),
+    .isUUID()
+    .withMessage('each initialSequentials entry must have a valid UUID issuerId'),
 
   body('initialSequentials.*.documentType')
     .optional()
@@ -151,7 +151,7 @@ const promoteTenant = [
 
 // API keys
 const createApiKey = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 
   body('label')
     .optional()
@@ -171,14 +171,14 @@ const createApiKey = [
 ];
 
 const revokeApiKey = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
 // Subscriptions & payments
 const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 
 const createSubscription = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 
   body('tier')
     .isIn(PAID_TIERS)
@@ -191,11 +191,11 @@ const createSubscription = [
 ];
 
 const listSubscriptions = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
 const linkInvoice = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 
   body('accessKey')
     .isLength({ min: 49, max: 49 })
@@ -205,11 +205,11 @@ const linkInvoice = [
 ];
 
 const cancelSubscription = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
 const reviewPayment = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 
   body('decision')
     .isIn(['VERIFIED', 'REJECTED'])
@@ -223,12 +223,12 @@ const reviewPayment = [
 ];
 
 const listPaymentProofs = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
 const getPaymentProof = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
-  param('proofId').isInt({ min: 1 }).withMessage('proofId must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+  param('proofId').isUUID().withMessage('proofId must be a valid UUID'),
 ];
 
 const listPayments = [
@@ -256,7 +256,7 @@ const publishAgreement = [
 ];
 
 const getAgreementVersion = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
 module.exports = {
@@ -265,6 +265,6 @@ module.exports = {
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments, publishAgreement,
   getAgreementVersion,
-  activateAgreement: [param('id').isInt({ min: 1 }).withMessage('id must be a positive integer')],
+  activateAgreement: [param('id').isUUID().withMessage('id must be a valid UUID')],
   listAgreementVersions: [param('type').isIn(agreementService.AGREEMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],
 };

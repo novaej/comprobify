@@ -30,8 +30,8 @@ const promoteValidator = [
     .withMessage('initialSequentials must be a non-empty array'),
   body('initialSequentials.*.issuerId')
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('each initialSequentials entry must have a positive integer issuerId'),
+    .isUUID()
+    .withMessage('each initialSequentials entry must have a valid UUID issuerId'),
   body('initialSequentials.*.documentType')
     .optional()
     .isIn(SUPPORTED_TYPES)

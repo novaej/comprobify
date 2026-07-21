@@ -23,28 +23,28 @@ Este es el único lugar que muestra la secuencia completa de cambios en tu suscr
   "ok": true,
   "events": [
     {
-      "id": 101,
+      "id": "00000000-0000-0000-0000-000000000101",
       "eventType": "EMAIL_VERIFIED",
       "detail": null,
       "createdAt": "2026-06-01T10:00:00.000Z"
     },
     {
-      "id": 118,
+      "id": "00000000-0000-0000-0000-000000000118",
       "eventType": "SUBSCRIPTION_CREATED",
-      "detail": { "subscriptionId": 12, "tier": "GROWTH", "billingInterval": "MONTHLY" },
+      "detail": { "subscriptionId": "00000000-0000-0000-0000-000000000012", "tier": "GROWTH", "billingInterval": "MONTHLY" },
       "createdAt": "2026-06-01T10:05:00.000Z"
     },
     {
-      "id": 119,
+      "id": "00000000-0000-0000-0000-000000000119",
       "eventType": "SUBSCRIPTION_ACTIVATED",
-      "detail": { "subscriptionId": 12, "tier": "GROWTH" },
+      "detail": { "subscriptionId": "00000000-0000-0000-0000-000000000012", "tier": "GROWTH" },
       "createdAt": "2026-06-01T10:20:00.000Z"
     },
     {
-      "id": 205,
+      "id": "00000000-0000-0000-0000-000000000205",
       "eventType": "TIER_CHANGE_REQUESTED",
       "detail": {
-        "subscriptionId": 12,
+        "subscriptionId": "00000000-0000-0000-0000-000000000012",
         "fromTier": "GROWTH",
         "toTier": "STARTER",
         "fromBillingInterval": "MONTHLY",
@@ -55,24 +55,24 @@ Este es el único lugar que muestra la secuencia completa de cambios en tu suscr
       "createdAt": "2026-06-25T09:00:00.000Z"
     },
     {
-      "id": 212,
+      "id": "00000000-0000-0000-0000-000000000212",
       "eventType": "TIER_CHANGE_SCHEDULED",
       "detail": {
-        "subscriptionId": 12,
+        "subscriptionId": "00000000-0000-0000-0000-000000000012",
         "fromTier": "GROWTH",
         "toTier": "STARTER",
         "fromBillingInterval": "MONTHLY",
         "toBillingInterval": "YEARLY",
         "effectiveAt": "2026-07-01T10:20:00.000Z",
-        "paymentId": 40
+        "paymentId": "00000000-0000-0000-0000-000000000040"
       },
       "createdAt": "2026-06-27T14:10:00.000Z"
     },
     {
-      "id": 230,
+      "id": "00000000-0000-0000-0000-000000000230",
       "eventType": "TIER_CHANGED",
       "detail": {
-        "subscriptionId": 12,
+        "subscriptionId": "00000000-0000-0000-0000-000000000012",
         "fromTier": "GROWTH",
         "toTier": "STARTER",
         "fromBillingInterval": "MONTHLY",

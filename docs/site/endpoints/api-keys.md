@@ -29,7 +29,7 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
   "ok": true,
   "keys": [
     {
-      "id": 17,
+      "id": "00000000-0000-0000-0000-000000000017",
       "label": "frontend-prod",
       "environment": "production",
       "active": true,
@@ -37,7 +37,7 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
       "revokedAt": null
     },
     {
-      "id": 18,
+      "id": "00000000-0000-0000-0000-000000000018",
       "label": "erp-integration",
       "environment": "production",
       "active": true,
@@ -105,7 +105,7 @@ Marca la llave como inactiva. La llave no podrá usarse para autenticar ninguna 
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico de la llave (obtenido de `GET /v1/keys`) |
+| `id` | UUID de la llave (obtenido de `GET /v1/keys`) |
 
 ### Respuesta
 

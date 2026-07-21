@@ -14,7 +14,7 @@ PATCH /v1/issuers/:id
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor (obtenido de `GET /v1/issuers`) |
+| `id` | UUID del emisor (obtenido de `GET /v1/issuers`) |
 
 ## Cuerpo de la solicitud
 
@@ -42,7 +42,7 @@ Se requiere al menos un campo.
 {
   "ok": true,
   "issuer": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "ruc": "1234567890001",
     "businessName": "ACME S.A.",
     "tradeName": "ACME Express",

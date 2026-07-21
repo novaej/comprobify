@@ -4,7 +4,7 @@
 -- Tenants created by admin start as ACTIVE.
 
 CREATE TABLE tenants (
-  id                            BIGSERIAL PRIMARY KEY,
+  id                            UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
   email                         VARCHAR(255) NOT NULL UNIQUE,
   subscription_tier             VARCHAR(20)  NOT NULL DEFAULT 'FREE'
     CHECK (subscription_tier IN ('FREE', 'STARTER', 'GROWTH', 'BUSINESS')),
@@ -18,4 +18,4 @@ CREATE TABLE tenants (
   updated_at                    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE issuers ADD COLUMN tenant_id BIGINT NOT NULL REFERENCES tenants(id);
+ALTER TABLE issuers ADD COLUMN tenant_id UUID NOT NULL REFERENCES tenants(id);

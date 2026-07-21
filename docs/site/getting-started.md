@@ -47,13 +47,13 @@ Respuesta:
 {
   "ok": true,
   "tenant": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "email": "your@email.com",
     "subscriptionTier": "FREE",
     "status": "PENDING_VERIFICATION",
     "documentQuota": 5
   },
-  "issuer": { "id": 1, "ruc": "...", "sandbox": true },
+  "issuer": { "id": "00000000-0000-0000-0000-000000000001", "ruc": "...", "sandbox": true },
   "apiKey": "<your-sandbox-api-key>"
 }
 ```
@@ -117,7 +117,7 @@ GET /v1/issuers
 Authorization: Bearer <your-api-key>
 ```
 
-Devuelve cada emisor (sucursal / punto de emisión) bajo tu tenant con su `id` numérico. Usa ese `id` como el valor del encabezado `X-Issuer-Id` en las solicitudes de comprobantes.
+Devuelve cada emisor (sucursal / punto de emisión) bajo tu tenant con su `id`. Usa ese `id` como el valor del encabezado `X-Issuer-Id` en las solicitudes de comprobantes.
 
 ### Agregando una nueva sucursal o punto de emisión
 
@@ -137,7 +137,7 @@ El nuevo emisor hereda tu RUC, razón social y certificado digital del primer em
 ```json
 {
   "ok": true,
-  "issuer": { "id": 2, "branchCode": "002", "issuePointCode": "001", "sandbox": true }
+  "issuer": { "id": "00000000-0000-0000-0000-000000000002", "branchCode": "002", "issuePointCode": "001", "sandbox": true }
 }
 ```
 
@@ -193,7 +193,7 @@ Respuesta:
 {
   "ok": true,
   "endpoint": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "url": "https://app.example.com/v1/comprobify/events",
     "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRING", "CERT_EXPIRED"],
     "active": true

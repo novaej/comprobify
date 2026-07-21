@@ -37,8 +37,8 @@ const builders = require('../../../src/builders');
 const documentCreationService = require('../../../src/services/document-creation.service');
 
 const prodIssuer = {
-  id: 1,
-  tenant_id: 10,
+  id: '00000000-0000-0000-0000-000000000001',
+  tenant_id: '00000000-0000-0000-0000-000000000010',
   ruc: '1712345678001',
   business_name: 'ACME S.A.',
   branch_code: '001',
@@ -70,7 +70,7 @@ const accessKey = '2602202601171234567800110010010000002630000026311';
 
 function makeCreatedDocument(overrides = {}) {
   return {
-    id: 1,
+    id: '00000000-0000-0000-0000-000000000001',
     access_key: accessKey,
     sequential: 263,
     document_type: '01',
@@ -93,7 +93,7 @@ describe('DocumentCreationService', () => {
     config.appEnv = 'production';
 
     db.getClient.mockResolvedValue(mockClient);
-    mockClient.query.mockResolvedValue({ rows: [{ id: 1 }] });
+    mockClient.query.mockResolvedValue({ rows: [{ id: '00000000-0000-0000-0000-000000000001' }] });
 
     issuerDocumentTypeModel.findActiveByIssuerId.mockResolvedValue(['01']);
     sequentialService.getNext.mockResolvedValue(263);
@@ -118,10 +118,10 @@ describe('DocumentCreationService', () => {
     test('runs the pipeline in order and returns created:true with the formatted document', async () => {
       const { document, created } = await documentCreationService.create(validBody, null, prodIssuer);
 
-      expect(issuerDocumentTypeModel.findActiveByIssuerId).toHaveBeenCalledWith(1);
-      expect(sequentialService.getNext).toHaveBeenCalledWith(1, '001', '001', '01', mockClient);
+      expect(issuerDocumentTypeModel.findActiveByIssuerId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
+      expect(sequentialService.getNext).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', '001', '001', '01', mockClient);
       expect(accessKeyService.generate).toHaveBeenCalled();
-      expect(builders.getBuilder).toHaveBeenCalledWith('01', expect.objectContaining({ id: 1, environment: '2' }));
+      expect(builders.getBuilder).toHaveBeenCalledWith('01', expect.objectContaining({ id: '00000000-0000-0000-0000-000000000001', environment: '2' }));
       expect(mockBuilder.build).toHaveBeenCalledWith(
         expect.objectContaining({ issueDate: '26/02/2026' }),
         accessKey,
@@ -157,9 +157,9 @@ describe('DocumentCreationService', () => {
     test('persists line items and logs a CREATED audit event within the same transaction', async () => {
       await documentCreationService.create(validBody, null, prodIssuer);
 
-      expect(documentLineItemModel.bulkCreate).toHaveBeenCalledWith(1, validBody.items, mockClient);
+      expect(documentLineItemModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', validBody.items, mockClient);
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        1, 'CREATED', null, 'SIGNED', { accessKey, sequential: 263 }, mockClient
+        '00000000-0000-0000-0000-000000000001', 'CREATED', null, 'SIGNED', { accessKey, sequential: 263 }, mockClient
       );
     });
 
@@ -265,7 +265,7 @@ describe('DocumentCreationService', () => {
         if (typeof sql === 'string' && sql.includes('UPDATE tenant_quotas')) {
           return { rows: [] };
         }
-        return { rows: [{ id: 1 }] };
+        return { rows: [{ id: '00000000-0000-0000-0000-000000000001' }] };
       });
 
       await expect(documentCreationService.create(validBody, null, prodIssuer)).rejects.toMatchObject({
@@ -322,7 +322,7 @@ describe('DocumentCreationService', () => {
     const payloadHash = crypto.createHash('sha256').update(JSON.stringify(validBody)).digest('hex');
 
     const existingDoc = makeCreatedDocument({
-      id: 99,
+      id: '00000000-0000-0000-0000-000000000099',
       idempotency_key: IDEM_KEY,
       payload_hash: payloadHash,
     });

@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Breaking: every primary/foreign key across the schema is now a UUID (v7, time-ordered) instead of an auto-increment integer.** All `id` fields in API responses — `tenants`, `issuers`, `documents`, `subscriptions`, `payments`, `webhooks`, notifications, etc. — are now UUID strings, not integers. The `X-Issuer-Id` header must now be a UUID rather than a numeric id. `sourceIssuerId`, `initialSequentials.*.issuerId`, and every other id-shaped request field follow the same change. Business-numeric fields (SRI sequential numbers, pagination) are unaffected. See [ADR-020](docs/adr/020-uuid-primary-keys.md).
+
 ## [0.9.0] — 2026-07-15
 
 ### Added

@@ -1,6 +1,6 @@
 CREATE TABLE tenant_events (
-  id         BIGSERIAL PRIMARY KEY,
-  tenant_id  BIGINT NOT NULL REFERENCES tenants(id),
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id  UUID NOT NULL REFERENCES tenants(id),
   event_type VARCHAR(40) NOT NULL,
   detail     JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

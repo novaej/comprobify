@@ -9,7 +9,7 @@ const sriResponseModel = require('../../../src/models/sri-response.model');
 const catalogModel = require('../../../src/models/catalog.model');
 const documentQueryService = require('../../../src/services/document-query.service');
 
-const mockIssuer = { id: 5, sandbox: false, branch_code: '001', issue_point_code: '001' };
+const mockIssuer = { id: '00000000-0000-0000-0000-000000000005', sandbox: false, branch_code: '001', issue_point_code: '001' };
 const accessKey = '1234567890123456789012345678901234567890123456789';
 
 describe('DocumentQueryService', () => {
@@ -25,7 +25,7 @@ describe('DocumentQueryService', () => {
 
       const result = await documentQueryService.getByAccessKey(accessKey, mockIssuer);
 
-      expect(documentModel.findByAccessKey).toHaveBeenCalledWith(accessKey, 5, false);
+      expect(documentModel.findByAccessKey).toHaveBeenCalledWith(accessKey, '00000000-0000-0000-0000-000000000005', false);
       expect(result.accessKey).toBe(accessKey);
       expect(result.sequential).toBe('000000007');
       expect(result.status).toBe('SIGNED');
@@ -79,24 +79,24 @@ describe('DocumentQueryService', () => {
     });
 
     test('returns the audit trail mapped to the camelCase response shape', async () => {
-      documentModel.findByAccessKey.mockResolvedValue({ id: 10 });
+      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010' });
       const createdAt = new Date('2026-01-15T10:00:00Z');
       documentEventModel.findByDocumentId.mockResolvedValue([
-        { id: 1, event_type: 'CREATED', from_status: null, to_status: 'SIGNED', detail: { foo: 'bar' }, created_at: createdAt },
-        { id: 2, event_type: 'SENT', from_status: 'SIGNED', to_status: 'RECEIVED', detail: null, created_at: createdAt },
+        { id: '00000000-0000-0000-0000-000000000001', event_type: 'CREATED', from_status: null, to_status: 'SIGNED', detail: { foo: 'bar' }, created_at: createdAt },
+        { id: '00000000-0000-0000-0000-000000000002', event_type: 'SENT', from_status: 'SIGNED', to_status: 'RECEIVED', detail: null, created_at: createdAt },
       ]);
 
       const result = await documentQueryService.getEvents(accessKey, mockIssuer);
 
-      expect(documentEventModel.findByDocumentId).toHaveBeenCalledWith(10, 5, false);
+      expect(documentEventModel.findByDocumentId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000005', false);
       expect(result).toEqual([
-        { id: 1, eventType: 'CREATED', fromStatus: null, toStatus: 'SIGNED', detail: { foo: 'bar' }, createdAt },
-        { id: 2, eventType: 'SENT', fromStatus: 'SIGNED', toStatus: 'RECEIVED', detail: null, createdAt },
+        { id: '00000000-0000-0000-0000-000000000001', eventType: 'CREATED', fromStatus: null, toStatus: 'SIGNED', detail: { foo: 'bar' }, createdAt },
+        { id: '00000000-0000-0000-0000-000000000002', eventType: 'SENT', fromStatus: 'SIGNED', toStatus: 'RECEIVED', detail: null, createdAt },
       ]);
     });
 
     test('returns an empty array when the document has no events', async () => {
-      documentModel.findByAccessKey.mockResolvedValue({ id: 10 });
+      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010' });
       documentEventModel.findByDocumentId.mockResolvedValue([]);
 
       const result = await documentQueryService.getEvents(accessKey, mockIssuer);
@@ -115,7 +115,7 @@ describe('DocumentQueryService', () => {
     });
 
     test('passes the issuer sandbox flag through and maps rows to the camelCase response shape', async () => {
-      documentModel.findByAccessKey.mockResolvedValue({ id: 10 });
+      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010' });
       const createdAt = new Date('2026-01-15T10:00:00Z');
       sriResponseModel.findByDocumentId.mockResolvedValue([
         {
@@ -129,7 +129,7 @@ describe('DocumentQueryService', () => {
 
       const result = await documentQueryService.getSriResponses(accessKey, mockIssuer);
 
-      expect(sriResponseModel.findByDocumentId).toHaveBeenCalledWith(10, false);
+      expect(sriResponseModel.findByDocumentId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', false);
       expect(result).toEqual([
         {
           operationType: 'AUTHORIZATION',
@@ -141,7 +141,7 @@ describe('DocumentQueryService', () => {
     });
 
     test('returns an empty array when the document has no SRI responses', async () => {
-      documentModel.findByAccessKey.mockResolvedValue({ id: 10 });
+      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010' });
       sriResponseModel.findByDocumentId.mockResolvedValue([]);
 
       const result = await documentQueryService.getSriResponses(accessKey, mockIssuer);
@@ -156,7 +156,7 @@ describe('DocumentQueryService', () => {
 
       await documentQueryService.list(mockIssuer, { from: '01/02/2026', to: '28/02/2026', status: 'AUTHORIZED' });
 
-      expect(documentModel.findByIssuerId).toHaveBeenCalledWith(5, {
+      expect(documentModel.findByIssuerId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005', {
         from: '2026-02-01', to: '2026-02-28', status: 'AUTHORIZED',
       }, false);
     });
@@ -166,7 +166,7 @@ describe('DocumentQueryService', () => {
 
       await documentQueryService.list(mockIssuer, { status: 'SIGNED' });
 
-      expect(documentModel.findByIssuerId).toHaveBeenCalledWith(5, { status: 'SIGNED' }, false);
+      expect(documentModel.findByIssuerId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005', { status: 'SIGNED' }, false);
     });
 
     test('defaults filters to {} when none are supplied', async () => {
@@ -174,7 +174,7 @@ describe('DocumentQueryService', () => {
 
       await documentQueryService.list(mockIssuer);
 
-      expect(documentModel.findByIssuerId).toHaveBeenCalledWith(5, {}, false);
+      expect(documentModel.findByIssuerId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005', {}, false);
     });
 
     test('formats every returned document and preserves pagination', async () => {
@@ -208,7 +208,7 @@ describe('DocumentQueryService', () => {
 
       const result = await documentQueryService.getStats(mockIssuer);
 
-      expect(documentModel.getStats).toHaveBeenCalledWith(5, false);
+      expect(documentModel.getStats).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005', false);
       expect(result).toEqual({
         thisMonth: {
           byType: [
@@ -246,7 +246,7 @@ describe('DocumentQueryService', () => {
       await documentQueryService.getCreditNotes('orig-key', mockIssuer);
 
       expect(documentModel.findCreditNotesByOriginalDocument).toHaveBeenCalledWith(
-        5, '01', '001-001-000000027', false
+        '00000000-0000-0000-0000-000000000005', '01', '001-001-000000027', false
       );
     });
 
@@ -291,7 +291,7 @@ describe('DocumentQueryService', () => {
 
       await documentQueryService.getCreditNotes('orig-key', mockIssuer);
 
-      expect(documentModel.findCreditNotesByOriginalDocument).toHaveBeenCalledWith(5, '03', expect.any(String), false);
+      expect(documentModel.findCreditNotesByOriginalDocument).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005', '03', expect.any(String), false);
     });
   });
 });

@@ -32,7 +32,7 @@ describe('TenantService', () => {
     beforeEach(() => {
       issuerModel.findAllByTenantId.mockResolvedValue([]);
       apiKeyModel.findActiveByTenantId.mockResolvedValue([]);
-      tenantModel.promote.mockResolvedValue({ id: 1, sandbox: false });
+      tenantModel.promote.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: false });
       subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
     });
 
@@ -43,7 +43,7 @@ describe('TenantService', () => {
     });
 
     test('rejects when the tenant has not verified their email', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 1, status: 'PENDING_VERIFICATION', sandbox: true });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'PENDING_VERIFICATION', sandbox: true });
 
       await expect(tenantService.promote(1)).rejects.toMatchObject({
         statusCode: 403,
@@ -52,13 +52,13 @@ describe('TenantService', () => {
     });
 
     test('rejects when the tenant is already in production', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: false });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: false });
 
       await expect(tenantService.promote(1)).rejects.toMatchObject({ statusCode: 409 });
     });
 
     test('with no tier requested and no prior subscription, promotes without starting billing', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: true });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
 
       const result = await tenantService.promote(1);
 
@@ -67,10 +67,10 @@ describe('TenantService', () => {
     });
 
     test('with a tier requested and no prior subscription, kicks off the subscription pipeline', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: true });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
       subscriptionService.createSubscription.mockResolvedValue({
-        subscription: { id: 10, tier: 'STARTER' },
-        payment: { id: 20 },
+        subscription: { id: '00000000-0000-0000-0000-000000000010', tier: 'STARTER' },
+        payment: { id: '00000000-0000-0000-0000-000000000020' },
         bankTransfer: { bankName: 'Banco' },
       });
 
@@ -79,35 +79,35 @@ describe('TenantService', () => {
       expect(subscriptionService.createSubscription).toHaveBeenCalledWith(1, 'STARTER', 'MONTHLY');
       expect(result).toEqual({
         apiKeys: [],
-        subscription: { id: 10, tier: 'STARTER' },
-        payment: { id: 20 },
+        subscription: { id: '00000000-0000-0000-0000-000000000010', tier: 'STARTER' },
+        payment: { id: '00000000-0000-0000-0000-000000000020' },
         bankTransfer: { bankName: 'Banco' },
       });
     });
 
     test('when an ACTIVE subscription already exists (started while in sandbox), skips tier selection entirely and surfaces it', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: true });
-      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue({ id: 10, tier: 'GROWTH', status: 'ACTIVE' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
+      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', status: 'ACTIVE' });
 
       const result = await tenantService.promote(1, [], 'STARTER', 'MONTHLY');
 
       expect(subscriptionService.createSubscription).not.toHaveBeenCalled();
-      expect(result).toEqual({ apiKeys: [], subscription: { id: 10, tier: 'GROWTH', status: 'ACTIVE' } });
+      expect(result).toEqual({ apiKeys: [], subscription: { id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', status: 'ACTIVE' } });
     });
 
     test('when a PENDING_PAYMENT subscription already exists, skips tier selection and does not reset its period', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: true });
-      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue({ id: 11, tier: 'STARTER', status: 'PENDING_PAYMENT' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
+      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000011', tier: 'STARTER', status: 'PENDING_PAYMENT' });
 
       const result = await tenantService.promote(1, [], 'GROWTH', 'MONTHLY');
 
       expect(subscriptionService.createSubscription).not.toHaveBeenCalled();
       expect(subscriptionService.resetPeriodOnPromotion).not.toHaveBeenCalled();
-      expect(result).toEqual({ apiKeys: [], subscription: { id: 11, tier: 'STARTER', status: 'PENDING_PAYMENT' } });
+      expect(result).toEqual({ apiKeys: [], subscription: { id: '00000000-0000-0000-0000-000000000011', tier: 'STARTER', status: 'PENDING_PAYMENT' } });
     });
 
     test('rotates sandbox API keys to production, preserving labels', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: true });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
       apiKeyModel.findActiveByTenantId.mockResolvedValue([
         { label: 'frontend-prod' },
         { label: 'erp' },
@@ -124,16 +124,16 @@ describe('TenantService', () => {
     });
 
     test('seeds sequentials for every issuer x active document type', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE', sandbox: true });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
       issuerModel.findAllByTenantId.mockResolvedValue([
-        { id: 5, branch_code: '001', issue_point_code: '001' },
+        { id: '00000000-0000-0000-0000-000000000005', branch_code: '001', issue_point_code: '001' },
       ]);
       issuerDocumentTypeModel.findActiveByIssuerId.mockResolvedValue(['01', '04']);
 
-      await tenantService.promote(1, [{ issuerId: 5, documentType: '01', sequential: 7 }]);
+      await tenantService.promote(1, [{ issuerId: '00000000-0000-0000-0000-000000000005', documentType: '01', sequential: 7 }]);
 
-      expect(sequentialService.initialize).toHaveBeenCalledWith(5, '001', '001', '01', 7, false);
-      expect(sequentialService.initialize).toHaveBeenCalledWith(5, '001', '001', '04', 1, false);
+      expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005', '001', '001', '01', 7, false);
+      expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005', '001', '001', '04', 1, false);
     });
   });
 
@@ -146,17 +146,17 @@ describe('TenantService', () => {
     });
 
     test('returns the tenant event log mapped to the camelCase response shape', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 1 });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
       const createdAt = new Date('2026-06-01T00:00:00Z');
       tenantEventModel.findByTenantId.mockResolvedValue([
-        { id: 100, event_type: 'SUBSCRIPTION_CREATED', detail: { tier: 'GROWTH' }, created_at: createdAt },
+        { id: '00000000-0000-0000-0000-000000000100', event_type: 'SUBSCRIPTION_CREATED', detail: { tier: 'GROWTH' }, created_at: createdAt },
       ]);
 
       const result = await tenantService.getEvents(1);
 
       expect(tenantEventModel.findByTenantId).toHaveBeenCalledWith(1);
       expect(result).toEqual([
-        { id: 100, eventType: 'SUBSCRIPTION_CREATED', detail: { tier: 'GROWTH' }, createdAt },
+        { id: '00000000-0000-0000-0000-000000000100', eventType: 'SUBSCRIPTION_CREATED', detail: { tier: 'GROWTH' }, createdAt },
       ]);
     });
   });

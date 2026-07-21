@@ -16,9 +16,9 @@
 BEGIN;
 
 CREATE TABLE notifications (
-  id          BIGSERIAL     PRIMARY KEY,
-  tenant_id   INTEGER       NOT NULL REFERENCES tenants(id),
-  issuer_id   INTEGER       REFERENCES issuers(id),
+  id          UUID          PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id   UUID          NOT NULL REFERENCES tenants(id),
+  issuer_id   UUID          REFERENCES issuers(id),
   type        TEXT          NOT NULL,
   severity    TEXT          NOT NULL DEFAULT 'INFO',
   title       TEXT          NOT NULL,

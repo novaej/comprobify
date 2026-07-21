@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS issuers (
-    id              SERIAL PRIMARY KEY,
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     ruc             VARCHAR(13) UNIQUE NOT NULL,
     business_name   VARCHAR(300) NOT NULL,
     trade_name      VARCHAR(300),

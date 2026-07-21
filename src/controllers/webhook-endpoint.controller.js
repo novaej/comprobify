@@ -34,7 +34,7 @@ async function list(req, res) {
  * Update a webhook endpoint's URL, event subscriptions, or active flag.
  */
 async function update(req, res) {
-  const id = parseInt(req.params.id, 10);
+  const id = req.params.id;
   const { url, eventTypes, active } = req.body;
   const endpoint = await webhookEndpointService.update(req.tenant.id, id, { url, eventTypes, active });
   res.json({ ok: true, endpoint });
@@ -46,7 +46,7 @@ async function update(req, res) {
  * Deregister a webhook endpoint (soft-delete). Past deliveries are preserved.
  */
 async function deregister(req, res) {
-  const id = parseInt(req.params.id, 10);
+  const id = req.params.id;
   await webhookEndpointService.deregister(req.tenant.id, id);
   res.json({ ok: true });
 }

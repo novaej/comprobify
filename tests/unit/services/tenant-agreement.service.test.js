@@ -67,28 +67,28 @@ describe('TenantAgreementService', () => {
       }));
       agreementService.substitutePlaceholders.mockReturnValue('rendered markdown');
       agreementService.computeHash.mockReturnValue('hash123');
-      tenantAgreementModel.create.mockResolvedValue({ id: 1 });
+      tenantAgreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
 
       const issuer = { business_name: 'ACME S.A.', ruc: '1712345678001', email: 'billing@acme.com' };
-      const result = await tenantAgreementService.generateForTenant(5, issuer);
+      const result = await tenantAgreementService.generateForTenant('00000000-0000-0000-0000-000000000005', issuer);
 
       expect(agreementService.substitutePlaceholders).toHaveBeenCalledWith('raw markdown', {
         cliente: { razonSocial: 'ACME S.A.', ruc: '1712345678001', email: 'billing@acme.com' },
       });
       expect(tenantAgreementModel.create).toHaveBeenCalledWith({
-        tenantId: 5,
+        tenantId: '00000000-0000-0000-0000-000000000005',
         documentType: 'TERMS',
         templateVersion: 'v1',
         contentMarkdown: 'rendered markdown',
         contentHash: 'hash123',
       });
       expect(tenantAgreementModel.create).toHaveBeenCalledWith(expect.objectContaining({ documentType: 'PRIVACY' }));
-      expect(result).toEqual([{ id: 1 }, { id: 1 }]);
+      expect(result).toEqual([{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000001' }]);
     });
 
     test('substitutes empty cliente fields when no issuer can be resolved', async () => {
       stubSingleTemplateGeneration();
-      tenantAgreementModel.create.mockResolvedValue({ id: 2 });
+      tenantAgreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
       issuerModel.findByTenantId.mockResolvedValue(null);
 
       await tenantAgreementService.generateForTenant(5);
@@ -141,12 +141,12 @@ describe('TenantAgreementService', () => {
 
   describe('acceptAll', () => {
     test('delegates to the model with ip/userAgent', async () => {
-      tenantAgreementModel.acceptAllPendingByTenant.mockResolvedValue([{ id: 1, status: 'ACCEPTED' }]);
+      tenantAgreementModel.acceptAllPendingByTenant.mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000001', status: 'ACCEPTED' }]);
 
       const result = await tenantAgreementService.acceptAll(1, { ip: '1.2.3.4', userAgent: 'jest' });
 
       expect(tenantAgreementModel.acceptAllPendingByTenant).toHaveBeenCalledWith(1, { ip: '1.2.3.4', userAgent: 'jest' });
-      expect(result).toEqual([{ id: 1, status: 'ACCEPTED' }]);
+      expect(result).toEqual([{ id: '00000000-0000-0000-0000-000000000001', status: 'ACCEPTED' }]);
     });
 
     test('defaults ip/userAgent to undefined when no options are given', async () => {
@@ -171,7 +171,7 @@ describe('TenantAgreementService', () => {
     test('flags a type with no generated instance as NOT_GENERATED', async () => {
       stubSingleTemplateGeneration({ documentType: 'TERMS', version: 'v1' });
       issuerModel.findByTenantId.mockResolvedValue(null);
-      tenantAgreementModel.create.mockResolvedValue({ id: 1 });
+      tenantAgreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
       tenantAgreementModel.findLatestByTenantAndType.mockResolvedValue(null);
 
       const result = await tenantAgreementService.getStatus(1);
@@ -217,7 +217,7 @@ describe('TenantAgreementService', () => {
     test('flags an outdated ACCEPTED instance and reports the previously accepted version', async () => {
       stubSingleTemplateGeneration({ documentType: 'TERMS', version: 'v2' });
       issuerModel.findByTenantId.mockResolvedValue(null);
-      tenantAgreementModel.create.mockResolvedValue({ id: 3 });
+      tenantAgreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000003' });
       tenantAgreementModel.findLatestByTenantAndType.mockResolvedValue({ template_version: 'v1', status: 'ACCEPTED' });
 
       const result = await tenantAgreementService.getStatus(1);
@@ -241,7 +241,7 @@ describe('TenantAgreementService', () => {
     test('returns false when at least one type is outdated', async () => {
       stubSingleTemplateGeneration({ documentType: 'TERMS', version: 'v1' });
       issuerModel.findByTenantId.mockResolvedValue(null);
-      tenantAgreementModel.create.mockResolvedValue({ id: 1 });
+      tenantAgreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
       tenantAgreementModel.findLatestByTenantAndType.mockResolvedValue(null);
 
       const result = await tenantAgreementService.hasAllAccepted(1);
@@ -252,12 +252,12 @@ describe('TenantAgreementService', () => {
 
   describe('listForTenant', () => {
     test('delegates to the model', async () => {
-      tenantAgreementModel.findAllByTenant.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      tenantAgreementModel.findAllByTenant.mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000002' }]);
 
       const result = await tenantAgreementService.listForTenant(9);
 
       expect(tenantAgreementModel.findAllByTenant).toHaveBeenCalledWith(9);
-      expect(result).toEqual([{ id: 1 }, { id: 2 }]);
+      expect(result).toEqual([{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000002' }]);
     });
   });
 
@@ -300,7 +300,7 @@ describe('TenantAgreementService', () => {
     test('lazily generates a PENDING row before looking up (calls generateForTenant internally)', async () => {
       stubSingleTemplateGeneration({ documentType: 'TERMS', version: 'v1' });
       issuerModel.findByTenantId.mockResolvedValue(null);
-      tenantAgreementModel.create.mockResolvedValue({ id: 1 });
+      tenantAgreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
       tenantAgreementModel.findLatestByTenantAndType.mockResolvedValue({
         document_type: 'TERMS', content_markdown: 'md', template_version: 'v1', status: 'PENDING', accepted_at: null,
       });

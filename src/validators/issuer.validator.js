@@ -11,8 +11,8 @@ function arrayFromJsonString(value) {
 const createBranch = [
   body('sourceIssuerId')
     .optional()
-    .isInt({ min: 1 })
-    .withMessage('sourceIssuerId must be a positive integer'),
+    .isUUID()
+    .withMessage('sourceIssuerId must be a valid UUID'),
 
   body('branchCode')
     .notEmpty()

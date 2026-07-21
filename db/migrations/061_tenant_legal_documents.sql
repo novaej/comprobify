@@ -15,8 +15,8 @@ BEGIN;
 DROP TABLE IF EXISTS legal_acceptances;
 
 CREATE TABLE tenant_legal_documents (
-  id               BIGSERIAL     PRIMARY KEY,
-  tenant_id        INTEGER       NOT NULL REFERENCES tenants(id),
+  id               UUID          PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id        UUID          NOT NULL REFERENCES tenants(id),
   document_type    TEXT          NOT NULL,
   template_version TEXT          NOT NULL,
   content_markdown TEXT          NOT NULL,

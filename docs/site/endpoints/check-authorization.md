@@ -10,7 +10,7 @@ El comprobante debe estar en estado `RECEIVED`. Una llamada exitosa encola la ve
 
 ## Autenticación
 
-`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico obtenido de `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (UUID obtenido de `GET /v1/issuers`)
 
 ## Parámetros de ruta
 

@@ -1,6 +1,6 @@
 CREATE TABLE issuer_document_types (
-  id            BIGSERIAL PRIMARY KEY,
-  issuer_id     BIGINT NOT NULL REFERENCES issuers(id),
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  issuer_id     UUID NOT NULL REFERENCES issuers(id),
   document_type VARCHAR(2) NOT NULL,
   active        BOOLEAN NOT NULL DEFAULT true,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -22,7 +22,7 @@ Returns the active document types for the named issuer.
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id (from `GET /v1/issuers`) |
+| `id` | Issuer UUID (from `GET /v1/issuers`) |
 
 ### Response
 
@@ -47,7 +47,7 @@ Enables a new document type for the issuer. If the type was previously removed, 
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id |
+| `id` | Issuer UUID |
 
 ### Request body
 
@@ -95,7 +95,7 @@ Disables a document type for the issuer. The last active type cannot be removed.
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id |
+| `id` | Issuer UUID |
 | `code` | Document type code to remove (e.g. `01`) |
 
 ### Response

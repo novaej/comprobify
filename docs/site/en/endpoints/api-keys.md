@@ -29,7 +29,7 @@ Returns every active key for the tenant. The plaintext token is **never** return
   "ok": true,
   "keys": [
     {
-      "id": 17,
+      "id": "00000000-0000-0000-0000-000000000017",
       "label": "frontend-prod",
       "environment": "production",
       "active": true,
@@ -37,7 +37,7 @@ Returns every active key for the tenant. The plaintext token is **never** return
       "revokedAt": null
     },
     {
-      "id": 18,
+      "id": "00000000-0000-0000-0000-000000000018",
       "label": "erp-integration",
       "environment": "production",
       "active": true,
@@ -105,7 +105,7 @@ Marks the key as inactive. The key cannot be used to authenticate any future req
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric id of the key (from `GET /v1/keys`) |
+| `id` | UUID of the key (from `GET /v1/keys`) |
 
 ### Response
 

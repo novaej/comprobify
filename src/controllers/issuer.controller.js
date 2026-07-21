@@ -10,7 +10,7 @@ const ErrorCodes = require('../constants/error-codes');
  * authenticated tenant. Returns the full issuer row.
  */
 async function loadOwnedIssuer(req) {
-  const id = parseInt(req.params.id, 10);
+  const id = req.params.id;
   const issuer = await issuerModel.findById(id);
   if (!issuer) {
     throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
@@ -26,7 +26,7 @@ async function loadOwnedIssuer(req) {
  * the one action that must be able to load a deactivated issuer.
  */
 async function loadOwnedIssuerAny(req) {
-  const id = parseInt(req.params.id, 10);
+  const id = req.params.id;
   const issuer = await issuerModel.findByIdAny(id);
   if (!issuer) {
     throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
@@ -48,7 +48,7 @@ const createBranch = async (req, res) => {
 
   let sourceIssuer = null;
   if (!req.file) {
-    const sourceId = req.body.sourceIssuerId ? parseInt(req.body.sourceIssuerId, 10) : null;
+    const sourceId = req.body.sourceIssuerId || null;
     if (sourceId) {
       sourceIssuer = await issuerModel.findById(sourceId);
       if (!sourceIssuer || sourceIssuer.tenant_id !== req.tenant.id) {

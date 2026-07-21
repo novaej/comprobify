@@ -9,7 +9,7 @@
 BEGIN;
 
 CREATE TABLE notification_preferences (
-  tenant_id   INTEGER  NOT NULL REFERENCES tenants(id),
+  tenant_id   UUID     NOT NULL REFERENCES tenants(id),
   type        TEXT     NOT NULL,
   enabled     BOOLEAN  NOT NULL DEFAULT true,
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
