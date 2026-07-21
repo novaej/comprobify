@@ -42,8 +42,8 @@ describe('AgreementService', () => {
     test('reads the source file, strips the draft header, substitutes operator tokens, hashes, creates, and activates', async () => {
       const raw = '> BORRADOR PARA REVISIÓN\n> no publicar\n\n# Términos de Servicio\n\nOperado por {{operador.nombre}} ({{operador.ruc}}).';
       fs.readFileSync.mockReturnValue(raw);
-      agreementModel.create.mockResolvedValue({ id: 5, document_type: 'TERMS', version: '1.0' });
-      agreementModel.activate.mockResolvedValue({ id: 5, document_type: 'TERMS', version: '1.0', is_current: true });
+      agreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000005', document_type: 'TERMS', version: '1.0' });
+      agreementModel.activate.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000005', document_type: 'TERMS', version: '1.0', is_current: true });
 
       const result = await agreementService.publish('TERMS', '1.0');
 
@@ -56,16 +56,16 @@ describe('AgreementService', () => {
       expect(createArgs.contentMarkdown).toContain('Operado por Comprobify Cia. Ltda. (1790000000001).');
       expect(createArgs.contentHash).toBe(crypto.createHash('sha256').update(createArgs.contentMarkdown).digest('hex'));
 
-      expect(agreementModel.activate).toHaveBeenCalledWith(5);
+      expect(agreementModel.activate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005');
       // publish() returns the row from create(), not the (separately awaited) activate() result.
-      expect(result).toEqual({ id: 5, document_type: 'TERMS', version: '1.0' });
+      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000005', document_type: 'TERMS', version: '1.0' });
     });
 
     test('falls back to the default domicilio when OPERATOR_ADDRESS is unset', async () => {
       config.operator = { nombre: 'Comprobify', ruc: '1790000000001', email: 'legal@comprobify.com', domicilio: '' };
       fs.readFileSync.mockReturnValue('# DPA\n\nDomicilio: {{operador.domicilio}}');
-      agreementModel.create.mockResolvedValue({ id: 6 });
-      agreementModel.activate.mockResolvedValue({ id: 6 });
+      agreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000006' });
+      agreementModel.activate.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000006' });
 
       await agreementService.publish('DPA', '1.0');
 
@@ -76,8 +76,8 @@ describe('AgreementService', () => {
     test('substitutes {{soporte.email}} from ADMIN_NOTIFICATION_EMAIL when set', async () => {
       config.adminNotificationEmail = 'soporte@comprobify.com';
       fs.readFileSync.mockReturnValue('Contacto: {{soporte.email}}');
-      agreementModel.create.mockResolvedValue({ id: 7 });
-      agreementModel.activate.mockResolvedValue({ id: 7 });
+      agreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000007' });
+      agreementModel.activate.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000007' });
 
       await agreementService.publish('TERMS', '1.0');
 
@@ -88,8 +88,8 @@ describe('AgreementService', () => {
     test('falls back to the operator email for {{soporte.email}} when ADMIN_NOTIFICATION_EMAIL is unset', async () => {
       config.adminNotificationEmail = '';
       fs.readFileSync.mockReturnValue('Contacto: {{soporte.email}}');
-      agreementModel.create.mockResolvedValue({ id: 8 });
-      agreementModel.activate.mockResolvedValue({ id: 8 });
+      agreementModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000008' });
+      agreementModel.activate.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000008' });
 
       await agreementService.publish('TERMS', '1.0');
 
@@ -109,23 +109,23 @@ describe('AgreementService', () => {
     });
 
     test('returns the activated row', async () => {
-      agreementModel.activate.mockResolvedValue({ id: 5, is_current: true });
+      agreementModel.activate.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000005', is_current: true });
 
-      const result = await agreementService.activateVersion(5);
+      const result = await agreementService.activateVersion('00000000-0000-0000-0000-000000000005');
 
-      expect(agreementModel.activate).toHaveBeenCalledWith(5);
-      expect(result).toEqual({ id: 5, is_current: true });
+      expect(agreementModel.activate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005');
+      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000005', is_current: true });
     });
   });
 
   describe('listVersionsByType', () => {
     test('delegates to agreementModel.findAllByType', async () => {
-      agreementModel.findAllByType.mockResolvedValue([{ id: 1 }, { id: 2 }]);
+      agreementModel.findAllByType.mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000002' }]);
 
       const result = await agreementService.listVersionsByType('TERMS');
 
       expect(agreementModel.findAllByType).toHaveBeenCalledWith('TERMS');
-      expect(result).toEqual([{ id: 1 }, { id: 2 }]);
+      expect(result).toEqual([{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000002' }]);
     });
   });
 
@@ -140,11 +140,11 @@ describe('AgreementService', () => {
     });
 
     test('returns the current row', async () => {
-      agreementModel.findCurrentByType.mockResolvedValue({ id: 3, document_type: 'PRIVACY' });
+      agreementModel.findCurrentByType.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000003', document_type: 'PRIVACY' });
 
       const result = await agreementService.getCurrent('PRIVACY');
 
-      expect(result).toEqual({ id: 3, document_type: 'PRIVACY' });
+      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000003', document_type: 'PRIVACY' });
     });
   });
 
@@ -204,7 +204,7 @@ describe('AgreementService', () => {
   describe('getCurrentHtml', () => {
     test('renders the current version with a default fecha derived from created_at', async () => {
       agreementModel.findCurrentByType.mockResolvedValue({
-        id: 5, version: '1.0', content_markdown: 'Versión: {{fecha}}', created_at: '2026-07-01T00:00:00Z',
+        id: '00000000-0000-0000-0000-000000000005', version: '1.0', content_markdown: 'Versión: {{fecha}}', created_at: '2026-07-01T00:00:00Z',
       });
 
       const result = await agreementService.getCurrentHtml('TERMS');
@@ -215,7 +215,7 @@ describe('AgreementService', () => {
 
     test('lets a caller-supplied fecha override the default', async () => {
       agreementModel.findCurrentByType.mockResolvedValue({
-        id: 5, version: '1.0', content_markdown: 'Versión: {{fecha}}', created_at: '2026-07-01T00:00:00Z',
+        id: '00000000-0000-0000-0000-000000000005', version: '1.0', content_markdown: 'Versión: {{fecha}}', created_at: '2026-07-01T00:00:00Z',
       });
 
       const result = await agreementService.getCurrentHtml('TERMS', { fecha: '15 de junio de 2026' });

@@ -14,7 +14,7 @@ DELETE /v1/issuers/:id
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id (from `GET /v1/issuers`) |
+| `id` | Issuer UUID (from `GET /v1/issuers`) |
 
 ## Guard rails
 

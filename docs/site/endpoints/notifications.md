@@ -26,13 +26,13 @@ Todas las respuestas de listado y de notificación individual usan la misma estr
 
 ```json
 {
-  "id":        42,
+  "id": "00000000-0000-0000-0000-000000000042",
   "type":      "DOCUMENT_AUTHORIZED",
   "severity":  "INFO",
   "title":     "Factura autorizada",
   "message":   "La factura 001-001-000000012 de ACME Corp fue autorizada por el SRI.",
   "metadata":  { "accessKey": "...", "sequential": "001-001-000000012", "total": "118.00" },
-  "issuerId":  3,
+  "issuerId": "00000000-0000-0000-0000-000000000003",
   "readAt":    null,
   "expiresAt": null,
   "createdAt": "2026-05-28T14:30:00.000Z"
@@ -41,13 +41,13 @@ Todas las respuestas de listado y de notificación individual usan la misma estr
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `id` | integer | Identificador estable. Úsalo para eliminar duplicados entre consultas y rastrear el estado de lectura por usuario. |
+| `id` | string (UUID) | Identificador estable. Úsalo para eliminar duplicados entre consultas y rastrear el estado de lectura por usuario. |
 | `type` | string | Código de tipo legible por máquina — ver [Tipos de notificación](#tipos-de-notificación). |
 | `severity` | string | `INFO` · `WARNING` · `ERROR` |
 | `title` | string | Encabezado breve y legible para humanos. |
 | `message` | string | Descripción completa y legible para humanos. |
 | `metadata` | object\|null | Datos estructurados específicos del tipo (ver [Tipos de notificación](#tipos-de-notificación)). |
-| `issuerId` | integer\|null | El emisor al que concierne esta notificación, o `null` para alertas a nivel de tenant. |
+| `issuerId` | string (UUID)\|null | El emisor al que concierne esta notificación, o `null` para alertas a nivel de tenant. |
 | `readAt` | string\|null | Marca de tiempo ISO de cuando la notificación fue marcada como leída, o `null` si sigue sin leer. |
 | `expiresAt` | string\|null | Marca de tiempo ISO después de la cual la notificación debería ocultarse, o `null` si nunca expira. |
 | `createdAt` | string | Marca de tiempo ISO de creación. |
@@ -97,7 +97,7 @@ Creada o actualizada por el job programado de la API cuando el certificado de un
 
 ```json
 {
-  "issuerId": 3,
+  "issuerId": "00000000-0000-0000-0000-000000000003",
   "certExpiry": "2026-06-15T00:00:00.000Z",
   "daysRemaining": 18,
   "branchCode": "001",
@@ -126,8 +126,8 @@ Creada automáticamente (fire-and-forget) cuando tu proveedor verifica un compro
 
 ```json
 {
-  "paymentId": 18,
-  "subscriptionId": 12,
+  "paymentId": "00000000-0000-0000-0000-000000000018",
+  "subscriptionId": "00000000-0000-0000-0000-000000000012",
   "tier": "STARTER",
   "billingInterval": "MONTHLY",
   "purpose": "INITIAL",
@@ -160,8 +160,8 @@ Creada automáticamente por el job programado del proveedor unos 7 días antes d
 
 ```json
 {
-  "subscriptionId": 12,
-  "paymentId": 25,
+  "subscriptionId": "00000000-0000-0000-0000-000000000012",
+  "paymentId": "00000000-0000-0000-0000-000000000025",
   "tier": "STARTER",
   "amount": "17.39",
   "ivaAmount": "2.61",
@@ -182,7 +182,7 @@ Creada automáticamente por el mismo job programado cuando una suscripción pasa
 
 ```json
 {
-  "subscriptionId": 12,
+  "subscriptionId": "00000000-0000-0000-0000-000000000012",
   "previousTier": "STARTER"
 }
 ```
@@ -213,7 +213,7 @@ Devuelve las notificaciones activas (no expiradas) del tenant, de la más recien
 
 | Parámetro | Tipo | Descripción |
 |---|---|---|
-| `sinceId` | integer | Opcional. Cuando se proporciona, devuelve solo las notificaciones con `id > sinceId`. Úsalo para consultas de actualización incremental eficientes: guarda el `id` más alto visto en cada consulta y pásalo en la siguiente solicitud. |
+| `sinceId` | string (UUID) | Opcional. Cuando se proporciona, devuelve solo las notificaciones con `id > sinceId`. Úsalo para consultas de actualización incremental eficientes: guarda el `id` más alto visto en cada consulta y pásalo en la siguiente solicitud. |
 
 ### Filtro por emisor
 
@@ -259,7 +259,7 @@ Marca una sola notificación como leída (`readAt` se establece al momento actua
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico de la notificación |
+| `id` | UUID de la notificación |
 
 ### Respuesta
 

@@ -22,7 +22,7 @@ describe('NotificationService', () => {
       notificationPreferenceModel.isEnabled.mockResolvedValue(false);
 
       const result = await notificationService.createPaymentReviewed(
-        { id: 20, purpose: 'INITIAL' }, { id: 10, tenant_id: 1, tier: 'STARTER' }, 'VERIFIED',
+        { id: '00000000-0000-0000-0000-000000000020', purpose: 'INITIAL' }, { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' }, 'VERIFIED',
       );
 
       expect(result).toBeNull();
@@ -31,34 +31,34 @@ describe('NotificationService', () => {
 
     test('creates an INFO PAYMENT_VERIFIED notification and fans it out', async () => {
       notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-      notificationModel.create.mockResolvedValue({ id: 100, type: 'PAYMENT_VERIFIED' });
+      notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000100', type: 'PAYMENT_VERIFIED' });
 
       const result = await notificationService.createPaymentReviewed(
-        { id: 20, purpose: 'INITIAL', amount: 17.39, total_amount: 20 },
-        { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY' },
+        { id: '00000000-0000-0000-0000-000000000020', purpose: 'INITIAL', amount: 17.39, total_amount: 20 },
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY' },
         'VERIFIED',
       );
 
       expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
-        tenantId: 1,
+        tenantId: '00000000-0000-0000-0000-000000000001',
         type: 'PAYMENT_VERIFIED',
         severity: 'INFO',
         metadata: expect.objectContaining({
-          paymentId: 20, subscriptionId: 10, tier: 'STARTER', billingInterval: 'MONTHLY',
+          paymentId: '00000000-0000-0000-0000-000000000020', subscriptionId: '00000000-0000-0000-0000-000000000010', tier: 'STARTER', billingInterval: 'MONTHLY',
           purpose: 'INITIAL', amount: 20, rejectionReasonCode: null,
         }),
       }));
-      expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: 100, type: 'PAYMENT_VERIFIED' });
-      expect(result).toEqual({ id: 100, type: 'PAYMENT_VERIFIED' });
+      expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000100', type: 'PAYMENT_VERIFIED' });
+      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000100', type: 'PAYMENT_VERIFIED' });
     });
 
     test('creates a WARNING PAYMENT_REJECTED notification including the rejection reason', async () => {
       notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-      notificationModel.create.mockResolvedValue({ id: 101, type: 'PAYMENT_REJECTED' });
+      notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000101', type: 'PAYMENT_REJECTED' });
 
       await notificationService.createPaymentReviewed(
-        { id: 20, purpose: 'RENEWAL', amount: 16.52, total_amount: 19, rejection_reason_code: 'TRANSFER_NOT_FOUND' },
-        { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY' },
+        { id: '00000000-0000-0000-0000-000000000020', purpose: 'RENEWAL', amount: 16.52, total_amount: 19, rejection_reason_code: 'TRANSFER_NOT_FOUND' },
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY' },
         'REJECTED',
       );
 
@@ -72,14 +72,14 @@ describe('NotificationService', () => {
 
     test('uses the payment target_tier/target_billing_interval for a TIER_CHANGE payment, not the subscription\'s current values', async () => {
       notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-      notificationModel.create.mockResolvedValue({ id: 102, type: 'PAYMENT_VERIFIED' });
+      notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000102', type: 'PAYMENT_VERIFIED' });
 
       await notificationService.createPaymentReviewed(
         {
-          id: 20, purpose: 'TIER_CHANGE', amount: 782.61, total_amount: 900,
+          id: '00000000-0000-0000-0000-000000000020', purpose: 'TIER_CHANGE', amount: 782.61, total_amount: 900,
           target_tier: 'GROWTH', target_billing_interval: 'YEARLY',
         },
-        { id: 10, tenant_id: 1, tier: 'STARTER', billing_interval: 'MONTHLY' },
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY' },
         'VERIFIED',
       );
 
@@ -95,8 +95,8 @@ describe('NotificationService', () => {
       notificationPreferenceModel.isEnabled.mockResolvedValue(false);
 
       const result = await notificationService.createSubscriptionRenewalDue(
-        { id: 10, tenant_id: 1, tier: 'GROWTH', current_period_end: new Date() },
-        { id: 40, amount: 79 },
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', current_period_end: new Date() },
+        { id: '00000000-0000-0000-0000-000000000040', amount: 79 },
       );
 
       expect(result).toBeNull();
@@ -105,22 +105,22 @@ describe('NotificationService', () => {
 
     test('creates a WARNING SUBSCRIPTION_RENEWAL_DUE notification and fans it out', async () => {
       notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-      notificationModel.create.mockResolvedValue({ id: 102, type: 'SUBSCRIPTION_RENEWAL_DUE' });
+      notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000102', type: 'SUBSCRIPTION_RENEWAL_DUE' });
       const periodEnd = new Date('2026-07-06T00:00:00Z');
 
       const result = await notificationService.createSubscriptionRenewalDue(
-        { id: 10, tenant_id: 1, tier: 'GROWTH', current_period_end: periodEnd },
-        { id: 40, amount: 79 },
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', current_period_end: periodEnd },
+        { id: '00000000-0000-0000-0000-000000000040', amount: 79 },
       );
 
       expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
-        tenantId: 1,
+        tenantId: '00000000-0000-0000-0000-000000000001',
         type: 'SUBSCRIPTION_RENEWAL_DUE',
         severity: 'WARNING',
-        metadata: expect.objectContaining({ subscriptionId: 10, paymentId: 40, tier: 'GROWTH', amount: 79, currentPeriodEnd: periodEnd }),
+        metadata: expect.objectContaining({ subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000040', tier: 'GROWTH', amount: 79, currentPeriodEnd: periodEnd }),
       }));
-      expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: 102, type: 'SUBSCRIPTION_RENEWAL_DUE' });
-      expect(result).toEqual({ id: 102, type: 'SUBSCRIPTION_RENEWAL_DUE' });
+      expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000102', type: 'SUBSCRIPTION_RENEWAL_DUE' });
+      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000102', type: 'SUBSCRIPTION_RENEWAL_DUE' });
     });
   });
 
@@ -128,7 +128,7 @@ describe('NotificationService', () => {
     test('returns null when the tenant disabled this type', async () => {
       notificationPreferenceModel.isEnabled.mockResolvedValue(false);
 
-      const result = await notificationService.createSubscriptionExpired({ id: 10, tenant_id: 1, tier: 'GROWTH' });
+      const result = await notificationService.createSubscriptionExpired({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH' });
 
       expect(result).toBeNull();
       expect(notificationModel.create).not.toHaveBeenCalled();
@@ -136,18 +136,18 @@ describe('NotificationService', () => {
 
     test('creates an ERROR SUBSCRIPTION_EXPIRED notification and fans it out', async () => {
       notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-      notificationModel.create.mockResolvedValue({ id: 103, type: 'SUBSCRIPTION_EXPIRED' });
+      notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000103', type: 'SUBSCRIPTION_EXPIRED' });
 
-      const result = await notificationService.createSubscriptionExpired({ id: 10, tenant_id: 1, tier: 'GROWTH' });
+      const result = await notificationService.createSubscriptionExpired({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH' });
 
       expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
-        tenantId: 1,
+        tenantId: '00000000-0000-0000-0000-000000000001',
         type: 'SUBSCRIPTION_EXPIRED',
         severity: 'ERROR',
-        metadata: { subscriptionId: 10, previousTier: 'GROWTH' },
+        metadata: { subscriptionId: '00000000-0000-0000-0000-000000000010', previousTier: 'GROWTH' },
       }));
-      expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: 103, type: 'SUBSCRIPTION_EXPIRED' });
-      expect(result).toEqual({ id: 103, type: 'SUBSCRIPTION_EXPIRED' });
+      expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000103', type: 'SUBSCRIPTION_EXPIRED' });
+      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000103', type: 'SUBSCRIPTION_EXPIRED' });
     });
   });
 });

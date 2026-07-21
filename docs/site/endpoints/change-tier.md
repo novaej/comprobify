@@ -39,7 +39,7 @@ Solo puede haber un cambio de plan/intervalo pendiente a la vez — si solicitas
 {
   "ok": true,
   "subscription": {
-    "id": 12,
+    "id": "00000000-0000-0000-0000-000000000012",
     "tenant_id": 4,
     "tier": "STARTER",
     "billing_interval": "MONTHLY",
@@ -48,7 +48,7 @@ Solo puede haber un cambio de plan/intervalo pendiente a la vez — si solicitas
     "current_period_end": "2026-07-15T00:00:00.000Z"
   },
   "payment": {
-    "id": 25,
+    "id": "00000000-0000-0000-0000-000000000025",
     "subscription_id": 12,
     "status": "PENDING",
     "amount": "30.00",
@@ -73,7 +73,7 @@ Solo puede haber un cambio de plan/intervalo pendiente a la vez — si solicitas
 {
   "ok": true,
   "subscription": {
-    "id": 12,
+    "id": "00000000-0000-0000-0000-000000000012",
     "tier": "GROWTH"
   },
   "payment": null,
@@ -87,7 +87,7 @@ Solo puede haber un cambio de plan/intervalo pendiente a la vez — si solicitas
 {
   "ok": true,
   "subscription": {
-    "id": 12,
+    "id": "00000000-0000-0000-0000-000000000012",
     "tier": "GROWTH",
     "pending_tier": "STARTER"
   },
@@ -101,7 +101,7 @@ Solo puede haber un cambio de plan/intervalo pendiente a la vez — si solicitas
 {
   "ok": true,
   "subscription": {
-    "id": 12,
+    "id": "00000000-0000-0000-0000-000000000012",
     "tenant_id": 4,
     "tier": "GROWTH",
     "billing_interval": "MONTHLY",
@@ -109,7 +109,7 @@ Solo puede haber un cambio de plan/intervalo pendiente a la vez — si solicitas
     "current_period_end": "2026-07-15T00:00:00.000Z"
   },
   "payment": {
-    "id": 26,
+    "id": "00000000-0000-0000-0000-000000000026",
     "subscription_id": 12,
     "status": "PENDING",
     "total_amount": "200.00",

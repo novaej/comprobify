@@ -15,7 +15,7 @@ describe('DocumentModel.findByIssuerId', () => {
         return Promise.resolve({ rows: [{ count: '2' }] });
       }
       if (sql.startsWith('SELECT * FROM documents')) {
-        return Promise.resolve({ rows: [{ id: 1 }, { id: 2 }] });
+        return Promise.resolve({ rows: [{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000002' }] });
       }
       return Promise.resolve({ rows: [] });
     });

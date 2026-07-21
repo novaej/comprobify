@@ -26,7 +26,7 @@ ON CONFLICT (code) DO NOTHING;
 
 -- cat_tax_rates — rate codes per tax type
 CREATE TABLE IF NOT EXISTS cat_tax_rates (
-    id          SERIAL PRIMARY KEY,
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
     tax_code    VARCHAR(1) NOT NULL REFERENCES cat_tax_types(code),
     rate_code   VARCHAR(4) NOT NULL,
     description VARCHAR(100) NOT NULL,

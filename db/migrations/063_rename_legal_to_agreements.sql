@@ -9,10 +9,6 @@ BEGIN;
 ALTER TABLE legal_documents         RENAME TO agreements;
 ALTER TABLE tenant_legal_documents  RENAME TO tenant_agreements;
 
--- Sequences (BIGSERIAL auto-names them after the original table)
-ALTER SEQUENCE legal_documents_id_seq        RENAME TO agreements_id_seq;
-ALTER SEQUENCE tenant_legal_documents_id_seq RENAME TO tenant_agreements_id_seq;
-
 -- Indexes on agreements (was legal_documents)
 ALTER INDEX idx_legal_documents_type_created RENAME TO idx_agreements_type_created;
 ALTER INDEX idx_legal_documents_is_current   RENAME TO idx_agreements_is_current;

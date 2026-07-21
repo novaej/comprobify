@@ -14,7 +14,7 @@ PATCH /v1/issuers/:id
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id (from `GET /v1/issuers`) |
+| `id` | Issuer UUID (from `GET /v1/issuers`) |
 
 ## Request body
 
@@ -42,7 +42,7 @@ At least one field is required.
 {
   "ok": true,
   "issuer": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "ruc": "1234567890001",
     "businessName": "ACME S.A.",
     "tradeName": "ACME Express",

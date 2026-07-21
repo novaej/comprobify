@@ -33,8 +33,8 @@ router.use(requireNotSuspended);
 
 const idParam = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('id must be a positive integer'),
+    .isUUID()
+    .withMessage('id must be a valid UUID'),
 ];
 
 const addDocumentTypeValidator = [

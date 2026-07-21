@@ -14,10 +14,10 @@
 BEGIN;
 
 CREATE TABLE webhook_deliveries (
-  id               BIGSERIAL    PRIMARY KEY,
-  notification_id  BIGINT       NOT NULL REFERENCES notifications(id),
-  webhook_id       BIGINT       NOT NULL REFERENCES webhook_endpoints(id),
-  tenant_id        INTEGER      NOT NULL REFERENCES tenants(id),
+  id               UUID         PRIMARY KEY DEFAULT uuid_generate_v7(),
+  notification_id  UUID         NOT NULL REFERENCES notifications(id),
+  webhook_id       UUID         NOT NULL REFERENCES webhook_endpoints(id),
+  tenant_id        UUID         NOT NULL REFERENCES tenants(id),
   status           TEXT         NOT NULL DEFAULT 'PENDING',
   attempt_count    INTEGER      NOT NULL DEFAULT 0,
   next_retry_at    TIMESTAMPTZ,

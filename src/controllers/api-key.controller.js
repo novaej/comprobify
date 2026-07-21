@@ -14,7 +14,7 @@ const create = async (req, res) => {
 };
 
 const revoke = async (req, res) => {
-  await apiKeyService.revokeKey(req.tenant.id, parseInt(req.params.id, 10), req.apiKey.id);
+  await apiKeyService.revokeKey(req.tenant.id, req.params.id, req.apiKey.id);
   res.json({ ok: true });
 };
 

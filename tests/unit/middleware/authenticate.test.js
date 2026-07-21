@@ -4,8 +4,8 @@ const apiKeyModel = require('../../../src/models/api-key.model');
 const authenticate = require('../../../src/middleware/authenticate');
 
 const mockRow = {
-  key_id: 7,
-  tenant_id: 10,
+  key_id: '00000000-0000-0000-0000-000000000007',
+  tenant_id: '00000000-0000-0000-0000-000000000010',
   label: 'frontend-prod',
   key_environment: 'sandbox',
   tenant_status: 'ACTIVE',
@@ -35,8 +35,8 @@ describe('authenticate middleware', () => {
     apiKeyModel.findByKeyHash.mockResolvedValue(mockRow);
     const req = makeReq('Bearer mytoken');
     await runMiddleware(req);
-    expect(req.tenant).toMatchObject({ id: 10, subscriptionTier: 'FREE', status: 'ACTIVE' });
-    expect(req.apiKey).toEqual({ id: 7, label: 'frontend-prod', environment: 'sandbox' });
+    expect(req.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000010', subscriptionTier: 'FREE', status: 'ACTIVE' });
+    expect(req.apiKey).toEqual({ id: '00000000-0000-0000-0000-000000000007', label: 'frontend-prod', environment: 'sandbox' });
     expect(req.keyHash).toBeDefined();
     expect(typeof req.keyHash).toBe('string');
     expect(req.issuer).toBeUndefined();

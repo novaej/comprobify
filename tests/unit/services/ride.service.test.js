@@ -13,7 +13,7 @@ const rideService = require('../../../src/services/ride.service');
 
 describe('RideService', () => {
   const baseIssuer = {
-    id: 7,
+    id: '00000000-0000-0000-0000-000000000007',
     ruc: '1234567890001',
     business_name: 'Acme SA',
     trade_name: 'Acme',
@@ -29,8 +29,8 @@ describe('RideService', () => {
   };
 
   const baseDocument = {
-    id: 42,
-    issuer_id: 7,
+    id: '00000000-0000-0000-0000-000000000042',
+    issuer_id: '00000000-0000-0000-0000-000000000007',
     status: DocumentStatus.AUTHORIZED,
     authorization_number: 'AUTH-1',
     authorization_date: '2026-06-01',
@@ -80,16 +80,16 @@ describe('RideService', () => {
       await rideService.generate(baseDocument.access_key);
 
       expect(documentModel.findByAccessKey).toHaveBeenCalledWith(baseDocument.access_key, null, false);
-      expect(issuerModel.findById).toHaveBeenCalledWith(7);
+      expect(issuerModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000007');
     });
 
     test('scopes the lookup to the issuerOverride id/sandbox when supplied', async () => {
-      const issuerOverride = { ...baseIssuer, id: 9, sandbox: true };
+      const issuerOverride = { ...baseIssuer, id: '00000000-0000-0000-0000-000000000009', sandbox: true };
       documentModel.findByAccessKey.mockResolvedValue(baseDocument);
 
       await rideService.generate(baseDocument.access_key, issuerOverride);
 
-      expect(documentModel.findByAccessKey).toHaveBeenCalledWith(baseDocument.access_key, 9, true);
+      expect(documentModel.findByAccessKey).toHaveBeenCalledWith(baseDocument.access_key, '00000000-0000-0000-0000-000000000009', true);
       // issuerOverride is used directly — issuerModel.findById is never called
       expect(issuerModel.findById).not.toHaveBeenCalled();
     });
@@ -100,7 +100,7 @@ describe('RideService', () => {
       await rideService.generate(baseDocument);
 
       expect(documentModel.findByAccessKey).not.toHaveBeenCalled();
-      expect(issuerModel.findById).toHaveBeenCalledWith(7);
+      expect(issuerModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000007');
     });
 
     test('throws DOCUMENT_NOT_AUTHORIZED when the document status is not AUTHORIZED', async () => {

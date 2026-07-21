@@ -14,7 +14,7 @@ PATCH /v1/issuers/:id/activate
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id of a deactivated issuer belonging to your tenant |
+| `id` | Issuer UUID of a deactivated issuer belonging to your tenant |
 
 ## Plan limits
 

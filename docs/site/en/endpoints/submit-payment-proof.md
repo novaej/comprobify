@@ -35,7 +35,7 @@ After requesting a paid tier — either via [`POST /v1/subscriptions`](create-su
 {
   "ok": true,
   "payment": {
-    "id": 18,
+    "id": "00000000-0000-0000-0000-000000000018",
     "subscription_id": 12,
     "status": "REPORTED",
     "amount": "17.39",
@@ -47,7 +47,7 @@ After requesting a paid tier — either via [`POST /v1/subscriptions`](create-su
   },
   "proofs": [
     {
-      "id": 42,
+      "id": "00000000-0000-0000-0000-000000000042",
       "filename": "receipt.pdf",
       "mimeType": "application/pdf",
       "referenceNumber": "SPI-20260628-00931",

@@ -14,7 +14,7 @@ PATCH /v1/issuers/:id/activate
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor desactivado, perteneciente a tu tenant |
+| `id` | UUID del emisor desactivado, perteneciente a tu tenant |
 
 ## Límites del plan
 

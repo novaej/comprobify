@@ -25,7 +25,7 @@ Write limiter — tier-dependent (10–300 req/min per API key).
 | `branchAddress` | string | No | Branch address (max 300 chars) |
 | `documentTypes` | array | No | Document type codes to enable (default: `["01"]`) — gated by your plan, same as [Add a document type](document-types.md#document-type-tier-limits) |
 | `initialSequentials` | array | No | Starting sequential numbers: `[{ "documentType": "01", "sequential": 1 }]` |
-| `sourceIssuerId` | integer | No | Numeric id of the issuer to inherit cert/profile from. Defaults to the tenant's first existing issuer. Ignored if a `cert` file is uploaded. |
+| `sourceIssuerId` | string (UUID) | No | UUID of the issuer to inherit cert/profile from. Defaults to the tenant's first existing issuer. Ignored if a `cert` file is uploaded. |
 | `cert` | file | No | P12 certificate file — only needed if this branch uses a different certificate |
 | `certPassword` | string | No | P12 password — only when providing a `cert` file |
 
@@ -56,7 +56,7 @@ A new branch is counted when `branchCode` does not yet exist for the tenant. Add
 {
   "ok": true,
   "issuer": {
-    "id": 2,
+    "id": "00000000-0000-0000-0000-000000000002",
     "ruc": "1712345678001",
     "businessName": "My Company S.A.",
     "tradeName": "My Company",

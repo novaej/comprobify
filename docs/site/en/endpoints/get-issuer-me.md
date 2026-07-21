@@ -16,7 +16,7 @@ GET /v1/issuers/:id
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric issuer id (from `GET /v1/issuers`) |
+| `id` | Issuer UUID (from `GET /v1/issuers`) |
 
 ## Response
 
@@ -26,7 +26,7 @@ GET /v1/issuers/:id
 {
   "ok": true,
   "issuer": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "ruc": "1791234567001",
     "businessName": "ACME S.A.",
     "tradeName": "ACME",
@@ -41,7 +41,7 @@ GET /v1/issuers/:id
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | integer | Numeric issuer id — used as `X-Issuer-Id` on document requests |
+| `id` | string (UUID) | Issuer UUID — used as `X-Issuer-Id` on document requests |
 | `ruc` | string | 13-digit RUC (tax ID) |
 | `businessName` | string | Legal business name |
 | `tradeName` | string \| null | Trade name, if set |

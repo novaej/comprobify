@@ -23,7 +23,7 @@ A payment review (verified/rejected) and the renewal reminder/expiry both fire a
   "ok": true,
   "subscriptions": [
     {
-      "id": 12,
+      "id": "00000000-0000-0000-0000-000000000012",
       "tenant_id": 4,
       "tier": "STARTER",
       "billing_interval": "MONTHLY",
@@ -35,7 +35,7 @@ A payment review (verified/rejected) and the renewal reminder/expiry both fire a
       "canceled_at": null,
       "payments": [
         {
-          "id": 18,
+          "id": "00000000-0000-0000-0000-000000000018",
           "status": "REJECTED",
           "amount": "17.39",
           "iva_rate": "0.1500",

@@ -33,21 +33,21 @@ CREATE POLICY documents_isolation ON documents
   AS PERMISSIVE FOR ALL
   USING (
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
-    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
   );
 
 CREATE POLICY sequential_numbers_isolation ON sequential_numbers
   AS PERMISSIVE FOR ALL
   USING (
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
-    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
   );
 
 CREATE POLICY api_keys_isolation ON api_keys
   AS PERMISSIVE FOR ALL
   USING (
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
-    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+    OR issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
   );
 
 -- ─── child tables (linked via document_id) ────────────────────────────────────
@@ -64,7 +64,7 @@ CREATE POLICY document_line_items_isolation ON document_line_items
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
     OR document_id IN (
       SELECT id FROM documents
-      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
     )
   );
 
@@ -74,7 +74,7 @@ CREATE POLICY document_events_isolation ON document_events
     NULLIF(current_setting('app.current_issuer_id', true), '') IS NULL
     OR document_id IN (
       SELECT id FROM documents
-      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::bigint
+      WHERE issuer_id = NULLIF(current_setting('app.current_issuer_id', true), '')::uuid
     )
   );
 

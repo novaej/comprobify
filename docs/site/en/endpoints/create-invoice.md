@@ -17,7 +17,7 @@ For credit notes (`documentType: "04"`), see [Create Credit Note](create-credit-
 | Header | Required | Description |
 |---|---|---|
 | `Authorization` | Yes | Bearer API key |
-| `X-Issuer-Id` | Yes | Numeric id of the issuing branch (from `GET /v1/issuers`). Identifies which branch and certificate to use. |
+| `X-Issuer-Id` | Yes | UUID of the issuing branch (from `GET /v1/issuers`). Identifies which branch and certificate to use. |
 | `Content-Type` | Yes | `application/json` |
 | `Idempotency-Key` | No | Unique string (max 255 chars) — see [idempotency](#idempotency) |
 

@@ -8,7 +8,7 @@ GET /v1/documents/:accessKey/events
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (UUID from `GET /v1/issuers`)
 
 ## Path parameters
 

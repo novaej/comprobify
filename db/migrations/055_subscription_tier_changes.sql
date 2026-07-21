@@ -22,7 +22,7 @@ ALTER TABLE payments
   ADD COLUMN target_tier VARCHAR(20),
   ADD CONSTRAINT chk_payments_target_tier
     CHECK (target_tier IS NULL OR target_tier IN ('STARTER', 'GROWTH', 'BUSINESS')),
-  ADD COLUMN invoice_document_id BIGINT REFERENCES documents(id);
+  ADD COLUMN invoice_document_id UUID REFERENCES documents(id);
 
 CREATE INDEX idx_payments_invoice_document_id ON payments(invoice_document_id);
 

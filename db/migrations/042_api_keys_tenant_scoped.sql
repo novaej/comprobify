@@ -18,7 +18,7 @@ BEGIN;
 
 -- ─── Add tenant_id column ────────────────────────────────────────────────────
 
-ALTER TABLE api_keys ADD COLUMN tenant_id BIGINT REFERENCES tenants(id);
+ALTER TABLE api_keys ADD COLUMN tenant_id UUID REFERENCES tenants(id);
 
 UPDATE api_keys
    SET tenant_id = issuers.tenant_id

@@ -83,7 +83,7 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 {
   "ok": true,
   "tenant": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "email": "you@company.com",
     "subscriptionTier": "FREE",
     "status": "PENDING_VERIFICATION",
@@ -94,7 +94,7 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
     "agreementVersion": "2026-06-28"
   },
   "issuer": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "ruc": "1712345678001",
     "businessName": "My Company S.A.",
     "tradeName": null,

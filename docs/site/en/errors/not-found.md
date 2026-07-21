@@ -16,7 +16,7 @@ The issuer ID supplied in `X-Issuer-Id` or a URL parameter (`/v1/issuers/:id/…
 
 The `sourceIssuerId` field on `POST /v1/issuers` (branch creation) does not match any issuer that belongs to this tenant.
 
-**What to do:** Ensure `sourceIssuerId` is the numeric ID of one of your tenant's existing issuers, returned by `GET /v1/issuers`.
+**What to do:** Ensure `sourceIssuerId` is the UUID of one of your tenant's existing issuers, returned by `GET /v1/issuers`.
 
 ### `NOT_FOUND` (fallback)
 

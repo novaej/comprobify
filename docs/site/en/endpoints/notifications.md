@@ -26,13 +26,13 @@ All list and single-notification responses use the same shape:
 
 ```json
 {
-  "id":        42,
+  "id": "00000000-0000-0000-0000-000000000042",
   "type":      "DOCUMENT_AUTHORIZED",
   "severity":  "INFO",
   "title":     "Invoice authorized",
   "message":   "Invoice 001-001-000000012 for ACME Corp was authorized by SRI.",
   "metadata":  { "accessKey": "...", "sequential": "001-001-000000012", "total": "118.00" },
-  "issuerId":  3,
+  "issuerId": "00000000-0000-0000-0000-000000000003",
   "readAt":    null,
   "expiresAt": null,
   "createdAt": "2026-05-28T14:30:00.000Z"
@@ -41,13 +41,13 @@ All list and single-notification responses use the same shape:
 
 | Field | Type | Description |
 |---|---|---|
-| `id` | integer | Stable identifier. Use it to deduplicate across polls and track per-user read state. |
+| `id` | string (UUID) | Stable identifier. Use it to deduplicate across polls and track per-user read state. |
 | `type` | string | Machine-readable type code — see [Notification types](#notification-types). |
 | `severity` | string | `INFO` · `WARNING` · `ERROR` |
 | `title` | string | Short human-readable headline. |
 | `message` | string | Full human-readable description. |
 | `metadata` | object\|null | Type-specific structured data (see [Notification types](#notification-types)). |
-| `issuerId` | integer\|null | The issuer this notification concerns, or `null` for tenant-level alerts. |
+| `issuerId` | string (UUID)\|null | The issuer this notification concerns, or `null` for tenant-level alerts. |
 | `readAt` | string\|null | ISO timestamp when the notification was marked read, or `null` if still unread. |
 | `expiresAt` | string\|null | ISO timestamp after which the notification should be hidden, or `null` if it never expires. |
 | `createdAt` | string | ISO timestamp of creation. |
@@ -97,7 +97,7 @@ Created or updated by the API scheduler job when an issuer's certificate is with
 
 ```json
 {
-  "issuerId": 3,
+  "issuerId": "00000000-0000-0000-0000-000000000003",
   "certExpiry": "2026-06-15T00:00:00.000Z",
   "daysRemaining": 18,
   "branchCode": "001",
@@ -126,8 +126,8 @@ Created automatically (fire-and-forget) when your provider verifies a payment pr
 
 ```json
 {
-  "paymentId": 18,
-  "subscriptionId": 12,
+  "paymentId": "00000000-0000-0000-0000-000000000018",
+  "subscriptionId": "00000000-0000-0000-0000-000000000012",
   "tier": "STARTER",
   "billingInterval": "MONTHLY",
   "purpose": "INITIAL",
@@ -160,8 +160,8 @@ Created automatically by the provider's scheduled job about 7 days before your s
 
 ```json
 {
-  "subscriptionId": 12,
-  "paymentId": 25,
+  "subscriptionId": "00000000-0000-0000-0000-000000000012",
+  "paymentId": "00000000-0000-0000-0000-000000000025",
   "tier": "STARTER",
   "amount": "17.39",
   "ivaAmount": "2.61",
@@ -182,7 +182,7 @@ Created automatically by the same scheduled job when a subscription runs about 7
 
 ```json
 {
-  "subscriptionId": 12,
+  "subscriptionId": "00000000-0000-0000-0000-000000000012",
   "previousTier": "STARTER"
 }
 ```
@@ -213,7 +213,7 @@ Returns active (unexpired) notifications for the tenant, newest first. Both read
 
 | Parameter | Type | Description |
 |---|---|---|
-| `sinceId` | integer | Optional. When provided, returns only notifications with `id > sinceId`. Use for efficient catch-up polling: store the highest `id` seen on each poll and pass it on the next request. |
+| `sinceId` | string (UUID) | Optional. When provided, returns only notifications with `id > sinceId`. Use for efficient catch-up polling: store the highest `id` seen on each poll and pass it on the next request. |
 
 ### Issuer filter
 
@@ -259,7 +259,7 @@ Marks a single notification as read (`readAt` is set to now). The notification i
 
 | Parameter | Description |
 |---|---|
-| `id` | Numeric notification id |
+| `id` | Notification UUID |
 
 ### Response
 

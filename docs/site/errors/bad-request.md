@@ -40,7 +40,7 @@ Falta el encabezado de solicitud `X-Issuer-Id`. Toda solicitud de creación y ge
 
 El valor del encabezado `X-Issuer-Id` no es un entero positivo válido (p. ej. `abc`, `0`, `-5`).
 
-**Qué hacer:** Proporciona el ID numérico del emisor devuelto por `GET /v1/issuers`.
+**Qué hacer:** Proporciona el UUID del emisor devuelto por `GET /v1/issuers`.
 
 ### `INVALID_OR_EXPIRED_TOKEN`
 

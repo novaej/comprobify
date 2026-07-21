@@ -89,7 +89,7 @@ async function list(req, res) {
  * or is already read.
  */
 async function markRead(req, res) {
-  const id = parseInt(req.params.id, 10);
+  const id = req.params.id;
   const notification = await notificationService.markRead(id, req.tenant.id);
   if (!notification) throw new NotFoundError('Notification');
   res.json({ notification: formatNotification(notification) });

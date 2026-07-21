@@ -22,7 +22,7 @@ Devuelve los tipos de comprobante activos para el emisor indicado.
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor (obtenido de `GET /v1/issuers`) |
+| `id` | UUID del emisor (obtenido de `GET /v1/issuers`) |
 
 ### Respuesta
 
@@ -47,7 +47,7 @@ Habilita un nuevo tipo de comprobante para el emisor. Si el tipo había sido rem
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor |
+| `id` | UUID del emisor |
 
 ### Cuerpo de la solicitud
 
@@ -95,7 +95,7 @@ Deshabilita un tipo de comprobante para el emisor. El último tipo activo no pue
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor |
+| `id` | UUID del emisor |
 | `code` | Código del tipo de comprobante a remover (por ejemplo, `01`) |
 
 ### Respuesta

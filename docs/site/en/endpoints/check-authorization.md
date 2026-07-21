@@ -10,7 +10,7 @@ The document must be in `RECEIVED` status. A successful call queues the check an
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (numeric id from `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` and `X-Issuer-Id: <issuer-id>` (UUID from `GET /v1/issuers`)
 
 ## Path parameters
 

@@ -29,7 +29,7 @@ const builders = require('../../../src/builders');
 const documentRebuildService = require('../../../src/services/document-rebuild.service');
 
 const mockIssuer = {
-  id: 5,
+  id: '00000000-0000-0000-0000-000000000005',
   sandbox: true,
   branch_code: '001',
   issue_point_code: '001',
@@ -40,7 +40,7 @@ const mockIssuer = {
 const accessKey = '1234567890123456789012345678901234567890123456789';
 
 const returnedDocument = {
-  id: 10,
+  id: '00000000-0000-0000-0000-000000000010',
   status: 'RETURNED',
   access_key: accessKey,
   sequential: 7,
@@ -129,9 +129,9 @@ describe('DocumentRebuildService', () => {
 
     expect(db.getClient).toHaveBeenCalled();
     expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
-    expect(db.setIssuerContext).toHaveBeenCalledWith(mockClient, 5, true);
+    expect(db.setIssuerContext).toHaveBeenCalledWith(mockClient, '00000000-0000-0000-0000-000000000005',true);
 
-    expect(documentModel.updateStatus).toHaveBeenCalledWith(10, 'SIGNED', {
+    expect(documentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010','SIGNED', {
       unsigned_xml: '<factura>unsigned</factura>',
       signed_xml: '<factura>signed</factura>',
       request_payload: JSON.stringify(body),
@@ -141,11 +141,11 @@ describe('DocumentRebuildService', () => {
       buyer_name: body.buyer.name,
       buyer_id_type: body.buyer.idType,
       buyer_email: body.buyer.email,
-    }, 5, true, mockClient);
+    }, '00000000-0000-0000-0000-000000000005', true, mockClient);
 
-    expect(documentLineItemModel.deleteByDocumentId).toHaveBeenCalledWith(10, mockClient);
-    expect(documentLineItemModel.bulkCreate).toHaveBeenCalledWith(10, body.items, mockClient);
-    expect(documentEventModel.create).toHaveBeenCalledWith(10, 'REBUILT', 'RETURNED', 'SIGNED', {}, mockClient);
+    expect(documentLineItemModel.deleteByDocumentId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010',mockClient);
+    expect(documentLineItemModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010',body.items, mockClient);
+    expect(documentEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010','REBUILT', 'RETURNED', 'SIGNED', {}, mockClient);
 
     expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
     expect(mockClient.release).toHaveBeenCalled();
@@ -160,7 +160,7 @@ describe('DocumentRebuildService', () => {
     await documentRebuildService.rebuild(accessKey, body, productionIssuer);
 
     expect(builders.getBuilder).toHaveBeenCalledWith('01', expect.objectContaining({ environment: '2' }));
-    expect(db.setIssuerContext).toHaveBeenCalledWith(mockClient, 5, false);
+    expect(db.setIssuerContext).toHaveBeenCalledWith(mockClient, '00000000-0000-0000-0000-000000000005',false);
   });
 
   test('throws ValidationError when the payments total does not match the invoice total', async () => {

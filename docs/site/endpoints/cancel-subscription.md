@@ -30,7 +30,7 @@ Ninguno.
 {
   "ok": true,
   "subscription": {
-    "id": 12,
+    "id": "00000000-0000-0000-0000-000000000012",
     "tenant_id": 4,
     "tier": "STARTER",
     "billing_interval": "MONTHLY",

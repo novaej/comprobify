@@ -17,7 +17,7 @@ describe('IssuerService', () => {
   });
 
   describe('removeIssuer', () => {
-    const issuer = { id: 1, tenant_id: 9, branch_code: '001', issue_point_code: '001' };
+    const issuer = { id: '00000000-0000-0000-0000-000000000001', tenant_id: '00000000-0000-0000-0000-000000000009', branch_code: '001', issue_point_code: '001' };
 
     test('deactivates the issuer when more than one active issuer exists and it has no documents', async () => {
       issuerModel.countActiveByTenantId.mockResolvedValue(2);
@@ -25,7 +25,7 @@ describe('IssuerService', () => {
 
       await issuerService.removeIssuer(issuer);
 
-      expect(issuerModel.deactivate).toHaveBeenCalledWith(1, 9);
+      expect(issuerModel.deactivate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000009');
     });
 
     test('rejects when the issuer is the tenant\'s last remaining one', async () => {
@@ -49,46 +49,46 @@ describe('IssuerService', () => {
 
   describe('getSequentials', () => {
     test('fetches active document types and delegates to sequentialService.getCounters', async () => {
-      const issuer = { id: 1 };
+      const issuer = { id: '00000000-0000-0000-0000-000000000001' };
       issuerDocumentTypeModel.findActiveByIssuerId.mockResolvedValue(['01', '04']);
       sequentialService.getCounters.mockResolvedValue([{ documentType: '01' }]);
 
       const result = await issuerService.getSequentials(issuer);
 
-      expect(issuerDocumentTypeModel.findActiveByIssuerId).toHaveBeenCalledWith(1);
-      expect(sequentialService.getCounters).toHaveBeenCalledWith(1, ['01', '04']);
+      expect(issuerDocumentTypeModel.findActiveByIssuerId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
+      expect(sequentialService.getCounters).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', ['01', '04']);
       expect(result).toEqual([{ documentType: '01' }]);
     });
   });
 
   describe('setSequential', () => {
-    const issuer = { id: 1, branch_code: '001', issue_point_code: '001' };
+    const issuer = { id: '00000000-0000-0000-0000-000000000001', branch_code: '001', issue_point_code: '001' };
 
     test('translates environment to the sandbox boolean and delegates to sequentialService.setNext', async () => {
       await issuerService.setSequential(issuer, '01', 'sandbox', 10);
 
-      expect(sequentialService.setNext).toHaveBeenCalledWith(1, '001', '001', '01', 10, true);
+      expect(sequentialService.setNext).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', '001', '001', '01', 10, true);
     });
 
     test('passes sandbox=false for production', async () => {
       await issuerService.setSequential(issuer, '01', 'production', 10);
 
-      expect(sequentialService.setNext).toHaveBeenCalledWith(1, '001', '001', '01', 10, false);
+      expect(sequentialService.setNext).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', '001', '001', '01', 10, false);
     });
   });
 
   describe('activateIssuer', () => {
-    const issuer = { id: 1, tenant_id: 9, branch_code: '001' };
-    const tenant = { id: 9, subscriptionTier: 'STARTER' };
+    const issuer = { id: '00000000-0000-0000-0000-000000000001', tenant_id: '00000000-0000-0000-0000-000000000009', branch_code: '001' };
+    const tenant = { id: '00000000-0000-0000-0000-000000000009', subscriptionTier: 'STARTER' };
 
     test('reactivates the issuer when the branch is brand new and under the branch limit', async () => {
       tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
       tenantModel.countBranchesByTenantId.mockResolvedValue(1); // STARTER maxBranches = 3
-      issuerModel.activate.mockResolvedValue({ id: 1 });
+      issuerModel.activate.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
 
       await issuerService.activateIssuer(issuer, tenant);
 
-      expect(issuerModel.activate).toHaveBeenCalledWith(1, 9);
+      expect(issuerModel.activate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000009');
     });
 
     test('rejects when reactivating would exceed the branch limit', async () => {
@@ -110,12 +110,12 @@ describe('IssuerService', () => {
 
     test('skips both limit checks for an unlimited (BUSINESS) tier', async () => {
       tenantModel.countIssuePointsByBranch.mockResolvedValue(5);
-      issuerModel.activate.mockResolvedValue({ id: 1 });
+      issuerModel.activate.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
 
-      await issuerService.activateIssuer(issuer, { id: 9, subscriptionTier: 'BUSINESS' });
+      await issuerService.activateIssuer(issuer, { id: '00000000-0000-0000-0000-000000000009', subscriptionTier: 'BUSINESS' });
 
       expect(tenantModel.countBranchesByTenantId).not.toHaveBeenCalled();
-      expect(issuerModel.activate).toHaveBeenCalledWith(1, 9);
+      expect(issuerModel.activate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000009');
     });
 
     test('throws NotFoundError when the issuer was not actually inactive', async () => {

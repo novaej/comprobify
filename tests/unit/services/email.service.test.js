@@ -47,17 +47,17 @@ describe('EmailService', () => {
 
   describe('sendInvoiceAuthorized', () => {
     const document = {
-      id: 1,
-      issuer_id: 5,
+      id: '00000000-0000-0000-0000-000000000001',
+      issuer_id: '00000000-0000-0000-0000-000000000005',
       buyer_email: 'buyer@example.com',
       access_key: '2602202601171234567800110010010000002630000026311',
       authorization_xml: '<autorizacion>xml</autorizacion>',
     };
-    const issuer = { id: 5, tenant_id: 10, business_name: 'ACME S.A.' };
+    const issuer = { id: '00000000-0000-0000-0000-000000000005', tenant_id: '00000000-0000-0000-0000-000000000010', business_name: 'ACME S.A.' };
 
     beforeEach(() => {
       issuerModel.findById.mockResolvedValue(issuer);
-      tenantModel.findById.mockResolvedValue({ id: 10, preferred_language: 'es' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', preferred_language: 'es' });
       rideService.generate.mockResolvedValue(Buffer.from('PDF-BYTES'));
       invoiceAuthorizedTemplate.render.mockReturnValue({
         subject: 'Invoice authorized',
@@ -77,8 +77,8 @@ describe('EmailService', () => {
     test('sends the RIDE PDF and XML attachments with the issuer business name as sender', async () => {
       const result = await emailService.sendInvoiceAuthorized(document);
 
-      expect(issuerModel.findById).toHaveBeenCalledWith(5);
-      expect(tenantModel.findById).toHaveBeenCalledWith(10);
+      expect(issuerModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005');
+      expect(tenantModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010');
       expect(rideService.generate).toHaveBeenCalledWith(document);
       expect(mockSend).toHaveBeenCalledWith({
         from: 'ACME S.A. via Comprobify <facturas@comprobify.test>',
@@ -103,7 +103,7 @@ describe('EmailService', () => {
     });
 
     test('renders the invoice-authorized template using the tenant preferred_language', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 10, preferred_language: 'en' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', preferred_language: 'en' });
 
       await emailService.sendInvoiceAuthorized(document);
 
@@ -111,7 +111,7 @@ describe('EmailService', () => {
     });
 
     test('falls back to "es" when the tenant has no preferred_language set', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 10, preferred_language: null });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', preferred_language: null });
 
       await emailService.sendInvoiceAuthorized(document);
 
@@ -180,9 +180,9 @@ describe('EmailService', () => {
   });
 
   describe('sendPaymentProofSubmitted', () => {
-    const payment = { id: 1, subscription_id: 10 };
-    const subscription = { id: 10, tier: 'STARTER' };
-    const tenant = { id: 20, business_name: 'ACME S.A.' };
+    const payment = { id: '00000000-0000-0000-0000-000000000001', subscription_id: '00000000-0000-0000-0000-000000000010' };
+    const subscription = { id: '00000000-0000-0000-0000-000000000010', tier: 'STARTER' };
+    const tenant = { id: '00000000-0000-0000-0000-000000000020', business_name: 'ACME S.A.' };
 
     test('is a no-op when ADMIN_NOTIFICATION_EMAIL is unset', async () => {
       config.adminNotificationEmail = '';
@@ -218,8 +218,8 @@ describe('EmailService', () => {
   });
 
   describe('sendPaymentReviewed', () => {
-    const payment = { id: 1, subscription_id: 10 };
-    const subscription = { id: 10, tenant_id: 20 };
+    const payment = { id: '00000000-0000-0000-0000-000000000001', subscription_id: '00000000-0000-0000-0000-000000000010' };
+    const subscription = { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020' };
 
     beforeEach(() => {
       paymentReviewedTemplate.render.mockReturnValue({
@@ -230,11 +230,11 @@ describe('EmailService', () => {
     });
 
     test('looks up the tenant and sends to their email, using the platform sender name', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: 'es' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
 
       const result = await emailService.sendPaymentReviewed(payment, subscription, 'VERIFIED');
 
-      expect(tenantModel.findById).toHaveBeenCalledWith(20);
+      expect(tenantModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020');
       expect(paymentReviewedTemplate.render).toHaveBeenCalledWith(payment, subscription, 'VERIFIED', 'es');
       expect(mockSend).toHaveBeenCalledWith({
         from: 'Comprobify <noreply@comprobify.test>',
@@ -248,7 +248,7 @@ describe('EmailService', () => {
     });
 
     test('passes the REJECTED decision through to the template', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: 'es' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
 
       await emailService.sendPaymentReviewed(payment, subscription, 'REJECTED');
 
@@ -256,7 +256,7 @@ describe('EmailService', () => {
     });
 
     test('falls back to "es" when the tenant has no preferred_language set', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: undefined });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: undefined });
 
       await emailService.sendPaymentReviewed(payment, subscription, 'VERIFIED');
 
@@ -265,8 +265,8 @@ describe('EmailService', () => {
   });
 
   describe('sendSubscriptionRenewalDue', () => {
-    const subscription = { id: 10, tenant_id: 20 };
-    const payment = { id: 1, purpose: 'RENEWAL' };
+    const subscription = { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020' };
+    const payment = { id: '00000000-0000-0000-0000-000000000001', purpose: 'RENEWAL' };
 
     beforeEach(() => {
       subscriptionRenewalDueTemplate.render.mockReturnValue({
@@ -277,11 +277,11 @@ describe('EmailService', () => {
     });
 
     test('looks up the tenant, renders with bank transfer instructions, and sends', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: 'en' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'en' });
 
       const result = await emailService.sendSubscriptionRenewalDue(subscription, payment);
 
-      expect(tenantModel.findById).toHaveBeenCalledWith(20);
+      expect(tenantModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020');
       expect(subscriptionRenewalDueTemplate.render).toHaveBeenCalledWith(
         subscription, payment, config.bankTransfer, 'en'
       );
@@ -297,7 +297,7 @@ describe('EmailService', () => {
     });
 
     test('falls back to "es" when the tenant has no preferred_language set', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: null });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: null });
 
       await emailService.sendSubscriptionRenewalDue(subscription, payment);
 
@@ -308,7 +308,7 @@ describe('EmailService', () => {
   });
 
   describe('sendSubscriptionExpired', () => {
-    const subscription = { id: 10, tenant_id: 20, tier: 'GROWTH' };
+    const subscription = { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020', tier: 'GROWTH' };
 
     beforeEach(() => {
       subscriptionExpiredTemplate.render.mockReturnValue({
@@ -319,11 +319,11 @@ describe('EmailService', () => {
     });
 
     test('looks up the tenant and sends the expiry notice', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: 'es' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
 
       const result = await emailService.sendSubscriptionExpired(subscription);
 
-      expect(tenantModel.findById).toHaveBeenCalledWith(20);
+      expect(tenantModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020');
       expect(subscriptionExpiredTemplate.render).toHaveBeenCalledWith(subscription, 'es');
       expect(mockSend).toHaveBeenCalledWith({
         from: 'Comprobify <noreply@comprobify.test>',
@@ -337,7 +337,7 @@ describe('EmailService', () => {
     });
 
     test('falls back to "es" when the tenant has no preferred_language set', async () => {
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: undefined });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: undefined });
 
       await emailService.sendSubscriptionExpired(subscription);
 
@@ -357,9 +357,9 @@ describe('EmailService', () => {
         text: 'text body',
         html: '<p>html body</p>',
       });
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: 'es' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
 
-      await emailService.sendSubscriptionExpired({ id: 10, tenant_id: 20, tier: 'GROWTH' });
+      await emailService.sendSubscriptionExpired({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020', tier: 'GROWTH' });
 
       expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
         text: 'text body',
@@ -374,9 +374,9 @@ describe('EmailService', () => {
         text: 'text body',
         html: '<p>html body</p>',
       });
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: 'es' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
 
-      await emailService.sendSubscriptionExpired({ id: 10, tenant_id: 20, tier: 'GROWTH' });
+      await emailService.sendSubscriptionExpired({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020', tier: 'GROWTH' });
 
       const sentArgs = mockSend.mock.calls[0][0];
       expect(sentArgs.text).toBe(
@@ -394,9 +394,9 @@ describe('EmailService', () => {
         text: 'text body',
         html: '<!DOCTYPE html><html><body style="margin:0;"><p>html body</p></body></html>',
       });
-      tenantModel.findById.mockResolvedValue({ id: 20, email: 'tenant@example.com', preferred_language: 'en' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'en' });
 
-      await emailService.sendSubscriptionExpired({ id: 10, tenant_id: 20, tier: 'GROWTH' });
+      await emailService.sendSubscriptionExpired({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020', tier: 'GROWTH' });
 
       const sentArgs = mockSend.mock.calls[0][0];
       expect(sentArgs.html).toBe(
@@ -407,14 +407,14 @@ describe('EmailService', () => {
     test('uses the invoice-authorized fromDocuments sender while still applying the banner', async () => {
       config.appEnv = 'staging';
       const document = {
-        id: 1,
-        issuer_id: 5,
+        id: '00000000-0000-0000-0000-000000000001',
+        issuer_id: '00000000-0000-0000-0000-000000000005',
         buyer_email: 'buyer@example.com',
         access_key: '2602202601171234567800110010010000002630000026311',
         authorization_xml: '<autorizacion>xml</autorizacion>',
       };
-      issuerModel.findById.mockResolvedValue({ id: 5, tenant_id: 10, business_name: 'ACME S.A.' });
-      tenantModel.findById.mockResolvedValue({ id: 10, preferred_language: 'es' });
+      issuerModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000005', tenant_id: '00000000-0000-0000-0000-000000000010', business_name: 'ACME S.A.' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', preferred_language: 'es' });
       rideService.generate.mockResolvedValue(Buffer.from('PDF-BYTES'));
       invoiceAuthorizedTemplate.render.mockReturnValue({
         subject: 'Invoice authorized',

@@ -19,8 +19,8 @@ router.use(requireNotSuspended);
 
 const idValidator = [
   param('id')
-    .isInt({ min: 1 })
-    .withMessage('Notification id must be a positive integer'),
+    .isUUID()
+    .withMessage('Notification id must be a valid UUID'),
 ];
 
 const preferencesValidator = [

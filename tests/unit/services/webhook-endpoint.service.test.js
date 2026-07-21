@@ -29,20 +29,20 @@ describe('WebhookEndpointService', () => {
     test('allows creating up to (but not exceeding) the tier limit', async () => {
       webhookEndpointModel.countActiveByTenantId.mockResolvedValue(1); // GROWTH allows 5
       webhookEndpointModel.create.mockResolvedValue({
-        id: 10, url: 'https://example.com/hook', event_types: [], active: true,
+        id: '00000000-0000-0000-0000-000000000010', url: 'https://example.com/hook', event_types: [], active: true,
         created_at: new Date(), updated_at: new Date(),
       });
 
       const result = await webhookEndpointService.create(1, 'GROWTH', 'https://example.com/hook');
 
       expect(webhookEndpointModel.create).toHaveBeenCalled();
-      expect(result.endpoint.id).toBe(10);
+      expect(result.endpoint.id).toBe('00000000-0000-0000-0000-000000000010');
     });
 
     test('generates a 64-char hex secret, creates the endpoint with default eventTypes, and returns the secret once', async () => {
       webhookEndpointModel.countActiveByTenantId.mockResolvedValue(0);
       webhookEndpointModel.create.mockResolvedValue({
-        id: 10, url: 'https://example.com/hook', event_types: [], active: true,
+        id: '00000000-0000-0000-0000-000000000010', url: 'https://example.com/hook', event_types: [], active: true,
         created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01'),
       });
 
@@ -57,7 +57,7 @@ describe('WebhookEndpointService', () => {
       expect(result.secret).toMatch(HEX_64);
       expect(result.secret).toBe(createArgs.secret);
       expect(result.endpoint).toEqual({
-        id: 10, url: 'https://example.com/hook', eventTypes: [], active: true,
+        id: '00000000-0000-0000-0000-000000000010', url: 'https://example.com/hook', eventTypes: [], active: true,
         createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01'),
       });
       expect(result.endpoint.secret).toBeUndefined();
@@ -66,7 +66,7 @@ describe('WebhookEndpointService', () => {
     test('passes through explicit eventTypes', async () => {
       webhookEndpointModel.countActiveByTenantId.mockResolvedValue(0);
       webhookEndpointModel.create.mockResolvedValue({
-        id: 11, url: 'https://example.com/hook', event_types: ['DOCUMENT_AUTHORIZED'], active: true,
+        id: '00000000-0000-0000-0000-000000000011', url: 'https://example.com/hook', event_types: ['DOCUMENT_AUTHORIZED'], active: true,
         created_at: new Date(), updated_at: new Date(),
       });
 
@@ -80,16 +80,16 @@ describe('WebhookEndpointService', () => {
   describe('list', () => {
     test('returns formatted endpoints without secrets', async () => {
       webhookEndpointModel.findActiveByTenantId.mockResolvedValue([
-        { id: 10, url: 'https://a.example.com', event_types: [], active: true, created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01'), secret: 'should-not-leak' },
-        { id: 11, url: 'https://b.example.com', event_types: ['DOCUMENT_AUTHORIZED'], active: true, created_at: new Date('2026-01-02'), updated_at: new Date('2026-01-02'), secret: 'should-not-leak-either' },
+        { id: '00000000-0000-0000-0000-000000000010', url: 'https://a.example.com', event_types: [], active: true, created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-01'), secret: 'should-not-leak' },
+        { id: '00000000-0000-0000-0000-000000000011', url: 'https://b.example.com', event_types: ['DOCUMENT_AUTHORIZED'], active: true, created_at: new Date('2026-01-02'), updated_at: new Date('2026-01-02'), secret: 'should-not-leak-either' },
       ]);
 
       const result = await webhookEndpointService.list(1);
 
       expect(webhookEndpointModel.findActiveByTenantId).toHaveBeenCalledWith(1);
       expect(result).toEqual([
-        { id: 10, url: 'https://a.example.com', eventTypes: [], active: true, createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01') },
-        { id: 11, url: 'https://b.example.com', eventTypes: ['DOCUMENT_AUTHORIZED'], active: true, createdAt: new Date('2026-01-02'), updatedAt: new Date('2026-01-02') },
+        { id: '00000000-0000-0000-0000-000000000010', url: 'https://a.example.com', eventTypes: [], active: true, createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01') },
+        { id: '00000000-0000-0000-0000-000000000011', url: 'https://b.example.com', eventTypes: ['DOCUMENT_AUTHORIZED'], active: true, createdAt: new Date('2026-01-02'), updatedAt: new Date('2026-01-02') },
       ]);
       expect(result[0].secret).toBeUndefined();
     });
@@ -113,9 +113,9 @@ describe('WebhookEndpointService', () => {
     });
 
     test('updates the endpoint and returns the formatted result', async () => {
-      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: 10, url: 'https://old.example.com' });
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com' });
       webhookEndpointModel.update.mockResolvedValue({
-        id: 10, url: 'https://new.example.com', event_types: [], active: false,
+        id: '00000000-0000-0000-0000-000000000010', url: 'https://new.example.com', event_types: [], active: false,
         created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-05'),
       });
 
@@ -124,7 +124,7 @@ describe('WebhookEndpointService', () => {
       expect(webhookEndpointModel.findByIdAndTenantId).toHaveBeenCalledWith(10, 1);
       expect(webhookEndpointModel.update).toHaveBeenCalledWith(10, { url: 'https://new.example.com', active: false });
       expect(result).toEqual({
-        id: 10, url: 'https://new.example.com', eventTypes: [], active: false,
+        id: '00000000-0000-0000-0000-000000000010', url: 'https://new.example.com', eventTypes: [], active: false,
         createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-05'),
       });
     });
@@ -140,8 +140,8 @@ describe('WebhookEndpointService', () => {
     });
 
     test('soft-deletes the endpoint by setting active=false', async () => {
-      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: 10, url: 'https://example.com' });
-      webhookEndpointModel.update.mockResolvedValue({ id: 10, active: false });
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://example.com' });
+      webhookEndpointModel.update.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', active: false });
 
       const result = await webhookEndpointService.deregister(1, 10);
 

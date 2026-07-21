@@ -21,8 +21,8 @@ All fields are optional. An empty body `{}` is valid.
 ```json
 {
   "initialSequentials": [
-    { "issuerId": 1, "documentType": "01", "sequential": 1 },
-    { "issuerId": 2, "documentType": "01", "sequential": 1 }
+    { "issuerId": "00000000-0000-0000-0000-000000000001", "documentType": "01", "sequential": 1 },
+    { "issuerId": "00000000-0000-0000-0000-000000000002", "documentType": "01", "sequential": 1 }
   ],
   "tier": "STARTER",
   "billingInterval": "MONTHLY"
@@ -32,7 +32,7 @@ All fields are optional. An empty body `{}` is valid.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `initialSequentials` | array | No | Per-issuer, per-document-type starting sequential numbers. Any combination not listed defaults to `1`. |
-| `initialSequentials[].issuerId` | integer | Yes (per entry) | Numeric issuer id (from `GET /v1/issuers`) |
+| `initialSequentials[].issuerId` | string (UUID) | Yes (per entry) | Issuer UUID (from `GET /v1/issuers`) |
 | `initialSequentials[].documentType` | string | Yes (per entry) | Document type code, e.g. `"01"` |
 | `initialSequentials[].sequential` | integer | Yes (per entry) | Next sequential number to issue (≥ 1) |
 | `tier` | string | No | `STARTER`, `GROWTH`, or `BUSINESS` — see [Get Tiers](get-tiers.md). Omit to stay on FREE in production; promotion never waits on payment either way. Ignored if the tenant already has a subscription in progress (see below). |
@@ -53,8 +53,8 @@ If the tenant already started a subscription before promoting — via [`POST /v1
     { "label": "Initial sandbox key", "apiKey": "a3f8c2bd..." },
     { "label": "erp-integration",     "apiKey": "d94e17ac..." }
   ],
-  "subscription": { "id": 12, "tier": "STARTER", "status": "PENDING_PAYMENT", "billing_interval": "MONTHLY" },
-  "payment": { "id": 18, "status": "PENDING", "amount": "17.39", "iva_rate": "0.1500", "iva_amount": "2.61", "total_amount": "20.00" },
+  "subscription": { "id": "00000000-0000-0000-0000-000000000012", "tier": "STARTER", "status": "PENDING_PAYMENT", "billing_interval": "MONTHLY" },
+  "payment": { "id": "00000000-0000-0000-0000-000000000018", "status": "PENDING", "amount": "17.39", "iva_rate": "0.1500", "iva_amount": "2.61", "total_amount": "20.00" },
   "bankTransfer": { "bankName": "...", "accountType": "...", "accountNumber": "...", "accountHolder": "...", "identification": "..." }
 }
 ```

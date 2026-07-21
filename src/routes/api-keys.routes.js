@@ -26,7 +26,7 @@ const createValidator = [
 ];
 
 const idParam = [
-  param('id').isInt({ min: 1 }).withMessage('id must be a positive integer'),
+  param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
 router.get('/', readLimiter, asyncHandler(controller.list));

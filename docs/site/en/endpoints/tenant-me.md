@@ -1,6 +1,6 @@
 # Get Current Tenant
 
-Returns identity and account details for the tenant that owns the API key used to authenticate the request. Useful for a third-party app that already has an API key (e.g. issued via `POST /v1/register` or by an admin) and needs to resolve the numeric `tenant.id` — for example, to link an existing API account in a frontend without re-entering the RUC or P12 certificate, or to match incoming webhook deliveries back to the right account.
+Returns identity and account details for the tenant that owns the API key used to authenticate the request. Useful for a third-party app that already has an API key (e.g. issued via `POST /v1/register` or by an admin) and needs to resolve the `tenant.id` UUID — for example, to link an existing API account in a frontend without re-entering the RUC or P12 certificate, or to match incoming webhook deliveries back to the right account.
 
 ```
 GET /v1/tenants/me
@@ -16,7 +16,7 @@ GET /v1/tenants/me
 {
   "ok": true,
   "tenant": {
-    "id": 42,
+    "id": "00000000-0000-0000-0000-000000000042",
     "email": "owner@example.com",
     "subscriptionTier": "GROWTH",
     "status": "ACTIVE",
@@ -31,7 +31,7 @@ GET /v1/tenants/me
 
 | Field | Description |
 |---|---|
-| `id` | Numeric tenant id. Use this to correlate webhook deliveries and other tenant-scoped resources. |
+| `id` | Tenant UUID. Use this to correlate webhook deliveries and other tenant-scoped resources. |
 | `email` | Tenant's registered email address. |
 | `subscriptionTier` | `FREE`, `STARTER`, `GROWTH`, or `BUSINESS`. |
 | `status` | `PENDING_VERIFICATION`, `ACTIVE`, or `SUSPENDED`. |

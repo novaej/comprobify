@@ -55,14 +55,14 @@ describe('WebhookDeliveryService', () => {
 
   describe('fanOut', () => {
     const notification = {
-      id: 100,
-      tenant_id: 1,
+      id: '00000000-0000-0000-0000-000000000100',
+      tenant_id: '00000000-0000-0000-0000-000000000001',
       type: 'DOCUMENT_AUTHORIZED',
       severity: 'INFO',
       title: 'Invoice authorized',
       message: 'Invoice was authorized',
       metadata: null,
-      issuer_id: 5,
+      issuer_id: '00000000-0000-0000-0000-000000000005',
       read_at: null,
       expires_at: null,
       created_at: new Date('2026-01-01T00:00:00Z'),
@@ -86,9 +86,9 @@ describe('WebhookDeliveryService', () => {
 
     test('delivers to a subscribed endpoint and marks success on a 2xx response', async () => {
       webhookEndpointModel.findSubscribedByTenantIdAndType.mockResolvedValue([
-        { id: 7, url: 'https://example.com/hook', secret: 'sekret' },
+        { id: '00000000-0000-0000-0000-000000000007', url: 'https://example.com/hook', secret: 'sekret' },
       ]);
-      webhookDeliveryModel.create.mockResolvedValue({ id: 55, attempt_count: 0 });
+      webhookDeliveryModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000055', attempt_count: 0 });
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -97,11 +97,11 @@ describe('WebhookDeliveryService', () => {
 
       await webhookDeliveryService.fanOut(notification);
 
-      expect(webhookEndpointModel.findSubscribedByTenantIdAndType).toHaveBeenCalledWith(1, 'DOCUMENT_AUTHORIZED');
+      expect(webhookEndpointModel.findSubscribedByTenantIdAndType).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'DOCUMENT_AUTHORIZED');
       expect(webhookDeliveryModel.create).toHaveBeenCalledWith({
-        notificationId: 100,
-        webhookId: 7,
-        tenantId: 1,
+        notificationId: '00000000-0000-0000-0000-000000000100',
+        webhookId: '00000000-0000-0000-0000-000000000007',
+        tenantId: '00000000-0000-0000-0000-000000000001',
       });
       expect(global.fetch).toHaveBeenCalledWith(
         'https://example.com/hook',
@@ -115,7 +115,7 @@ describe('WebhookDeliveryService', () => {
           }),
         })
       );
-      expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith(55, {
+      expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000055',{
         statusCode: 200,
         body: '{"received":true}',
       });
@@ -124,9 +124,9 @@ describe('WebhookDeliveryService', () => {
 
     test('marks failure when the endpoint responds with a non-2xx status', async () => {
       webhookEndpointModel.findSubscribedByTenantIdAndType.mockResolvedValue([
-        { id: 7, url: 'https://example.com/hook', secret: 'sekret' },
+        { id: '00000000-0000-0000-0000-000000000007', url: 'https://example.com/hook', secret: 'sekret' },
       ]);
-      webhookDeliveryModel.create.mockResolvedValue({ id: 55, attempt_count: 0 });
+      webhookDeliveryModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000055', attempt_count: 0 });
       global.fetch = jest.fn().mockResolvedValue({
         ok: false,
         status: 500,
@@ -135,7 +135,7 @@ describe('WebhookDeliveryService', () => {
 
       await webhookDeliveryService.fanOut(notification);
 
-      expect(webhookDeliveryModel.markFailure).toHaveBeenCalledWith(55, 0, {
+      expect(webhookDeliveryModel.markFailure).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000055',0, {
         ok: false,
         statusCode: 500,
         body: 'Internal Server Error',
@@ -145,14 +145,14 @@ describe('WebhookDeliveryService', () => {
 
     test('marks failure with a captured error message when fetch throws (network error)', async () => {
       webhookEndpointModel.findSubscribedByTenantIdAndType.mockResolvedValue([
-        { id: 7, url: 'https://example.com/hook', secret: 'sekret' },
+        { id: '00000000-0000-0000-0000-000000000007', url: 'https://example.com/hook', secret: 'sekret' },
       ]);
-      webhookDeliveryModel.create.mockResolvedValue({ id: 55, attempt_count: 0 });
+      webhookDeliveryModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000055', attempt_count: 0 });
       global.fetch = jest.fn().mockRejectedValue(new Error('connect ECONNREFUSED'));
 
       await webhookDeliveryService.fanOut(notification);
 
-      expect(webhookDeliveryModel.markFailure).toHaveBeenCalledWith(55, 0, {
+      expect(webhookDeliveryModel.markFailure).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000055',0, {
         ok: false,
         error: 'connect ECONNREFUSED',
       });
@@ -160,12 +160,12 @@ describe('WebhookDeliveryService', () => {
 
     test('delivers to every subscribed endpoint independently', async () => {
       webhookEndpointModel.findSubscribedByTenantIdAndType.mockResolvedValue([
-        { id: 7, url: 'https://example.com/hook-a', secret: 'sekret-a' },
-        { id: 8, url: 'https://example.com/hook-b', secret: 'sekret-b' },
+        { id: '00000000-0000-0000-0000-000000000007', url: 'https://example.com/hook-a', secret: 'sekret-a' },
+        { id: '00000000-0000-0000-0000-000000000008', url: 'https://example.com/hook-b', secret: 'sekret-b' },
       ]);
       webhookDeliveryModel.create
-        .mockResolvedValueOnce({ id: 55, attempt_count: 0 })
-        .mockResolvedValueOnce({ id: 56, attempt_count: 0 });
+        .mockResolvedValueOnce({ id: '00000000-0000-0000-0000-000000000055', attempt_count: 0 })
+        .mockResolvedValueOnce({ id: '00000000-0000-0000-0000-000000000056', attempt_count: 0 });
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -175,18 +175,18 @@ describe('WebhookDeliveryService', () => {
       await webhookDeliveryService.fanOut(notification);
 
       expect(global.fetch).toHaveBeenCalledTimes(2);
-      expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith(55, expect.any(Object));
-      expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith(56, expect.any(Object));
+      expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000055',expect.any(Object));
+      expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000056', expect.any(Object));
     });
 
     test('skips an endpoint whose delivery row creation fails, but continues to the next one', async () => {
       webhookEndpointModel.findSubscribedByTenantIdAndType.mockResolvedValue([
-        { id: 7, url: 'https://example.com/hook-a', secret: 'sekret-a' },
-        { id: 8, url: 'https://example.com/hook-b', secret: 'sekret-b' },
+        { id: '00000000-0000-0000-0000-000000000007', url: 'https://example.com/hook-a', secret: 'sekret-a' },
+        { id: '00000000-0000-0000-0000-000000000008', url: 'https://example.com/hook-b', secret: 'sekret-b' },
       ]);
       webhookDeliveryModel.create
         .mockRejectedValueOnce(new Error('insert failed'))
-        .mockResolvedValueOnce({ id: 56, attempt_count: 0 });
+        .mockResolvedValueOnce({ id: '00000000-0000-0000-0000-000000000056', attempt_count: 0 });
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -201,9 +201,9 @@ describe('WebhookDeliveryService', () => {
 
     test('swallows an error thrown while persisting the delivery result', async () => {
       webhookEndpointModel.findSubscribedByTenantIdAndType.mockResolvedValue([
-        { id: 7, url: 'https://example.com/hook', secret: 'sekret' },
+        { id: '00000000-0000-0000-0000-000000000007', url: 'https://example.com/hook', secret: 'sekret' },
       ]);
-      webhookDeliveryModel.create.mockResolvedValue({ id: 55, attempt_count: 0 });
+      webhookDeliveryModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000055', attempt_count: 0 });
       webhookDeliveryModel.markSuccess.mockRejectedValue(new Error('update failed'));
       global.fetch = jest.fn().mockResolvedValue({
         ok: true,
@@ -227,7 +227,7 @@ describe('WebhookDeliveryService', () => {
 
     test('skips a due retry whose notification lookup fails', async () => {
       webhookDeliveryModel.findDueRetries.mockResolvedValue([
-        { id: 1, notification_id: 100, url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
+        { id: '00000000-0000-0000-0000-000000000001', notification_id: '00000000-0000-0000-0000-000000000100', url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
       ]);
       notificationModel.findById.mockRejectedValue(new Error('DB down'));
 
@@ -238,7 +238,7 @@ describe('WebhookDeliveryService', () => {
 
     test('skips a due retry whose notification no longer exists', async () => {
       webhookDeliveryModel.findDueRetries.mockResolvedValue([
-        { id: 1, notification_id: 100, url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
+        { id: '00000000-0000-0000-0000-000000000001', notification_id: '00000000-0000-0000-0000-000000000100', url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
       ]);
       notificationModel.findById.mockResolvedValue(null);
 
@@ -249,57 +249,57 @@ describe('WebhookDeliveryService', () => {
 
     test('counts a successful retry', async () => {
       webhookDeliveryModel.findDueRetries.mockResolvedValue([
-        { id: 1, notification_id: 100, url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
+        { id: '00000000-0000-0000-0000-000000000001', notification_id: '00000000-0000-0000-0000-000000000100', url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
       ]);
       notificationModel.findById.mockResolvedValue({
-        id: 100, tenant_id: 1, type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
+        id: '00000000-0000-0000-0000-000000000100', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
       });
       global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve('ok') });
 
       const result = await webhookDeliveryService.processDueRetries();
 
-      expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith(1, { statusCode: 200, body: 'ok' });
+      expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', { statusCode: 200, body: 'ok' });
       expect(result).toEqual({ attempted: 1, succeeded: 1, failed: 0, exhausted: 0 });
     });
 
     test('counts a failed retry that still has attempts remaining (RETRYING)', async () => {
       webhookDeliveryModel.findDueRetries.mockResolvedValue([
-        { id: 1, notification_id: 100, url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
+        { id: '00000000-0000-0000-0000-000000000001', notification_id: '00000000-0000-0000-0000-000000000100', url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
       ]);
       notificationModel.findById.mockResolvedValue({
-        id: 100, tenant_id: 1, type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
+        id: '00000000-0000-0000-0000-000000000100', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
       });
       global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('err') });
-      webhookDeliveryModel.markFailure.mockResolvedValue({ id: 1, status: 'RETRYING' });
+      webhookDeliveryModel.markFailure.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'RETRYING' });
 
       const result = await webhookDeliveryService.processDueRetries();
 
-      expect(webhookDeliveryModel.markFailure).toHaveBeenCalledWith(1, 1, { ok: false, statusCode: 500, body: 'err' });
+      expect(webhookDeliveryModel.markFailure).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 1, { ok: false, statusCode: 500, body: 'err' });
       expect(result).toEqual({ attempted: 1, succeeded: 0, failed: 1, exhausted: 0 });
     });
 
     test('counts an exhausted retry (final failure -> FAILED) separately from a retryable one', async () => {
       webhookDeliveryModel.findDueRetries.mockResolvedValue([
-        { id: 1, notification_id: 100, url: 'https://example.com/hook', secret: 's', attempt_count: 2 },
+        { id: '00000000-0000-0000-0000-000000000001', notification_id: '00000000-0000-0000-0000-000000000100', url: 'https://example.com/hook', secret: 's', attempt_count: 2 },
       ]);
       notificationModel.findById.mockResolvedValue({
-        id: 100, tenant_id: 1, type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
+        id: '00000000-0000-0000-0000-000000000100', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
       });
       global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('err') });
-      webhookDeliveryModel.markFailure.mockResolvedValue({ id: 1, status: 'FAILED' });
+      webhookDeliveryModel.markFailure.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'FAILED' });
 
       const result = await webhookDeliveryService.processDueRetries();
 
-      expect(webhookDeliveryModel.markFailure).toHaveBeenCalledWith(1, 2, { ok: false, statusCode: 500, body: 'err' });
+      expect(webhookDeliveryModel.markFailure).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 2, { ok: false, statusCode: 500, body: 'err' });
       expect(result).toEqual({ attempted: 1, succeeded: 0, failed: 0, exhausted: 1 });
     });
 
     test('swallows an error thrown while persisting a retry result and does not count it', async () => {
       webhookDeliveryModel.findDueRetries.mockResolvedValue([
-        { id: 1, notification_id: 100, url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
+        { id: '00000000-0000-0000-0000-000000000001', notification_id: '00000000-0000-0000-0000-000000000100', url: 'https://example.com/hook', secret: 's', attempt_count: 1 },
       ]);
       notificationModel.findById.mockResolvedValue({
-        id: 100, tenant_id: 1, type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
+        id: '00000000-0000-0000-0000-000000000100', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
       });
       global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve('ok') });
       webhookDeliveryModel.markSuccess.mockRejectedValue(new Error('update failed'));
@@ -311,16 +311,16 @@ describe('WebhookDeliveryService', () => {
 
     test('processes multiple due retries and aggregates counters correctly', async () => {
       webhookDeliveryModel.findDueRetries.mockResolvedValue([
-        { id: 1, notification_id: 100, url: 'https://example.com/hook-a', secret: 's', attempt_count: 0 },
-        { id: 2, notification_id: 101, url: 'https://example.com/hook-b', secret: 's', attempt_count: 2 },
+        { id: '00000000-0000-0000-0000-000000000001', notification_id: '00000000-0000-0000-0000-000000000100', url: 'https://example.com/hook-a', secret: 's', attempt_count: 0 },
+        { id: '00000000-0000-0000-0000-000000000002', notification_id: '00000000-0000-0000-0000-000000000101', url: 'https://example.com/hook-b', secret: 's', attempt_count: 2 },
       ]);
       notificationModel.findById.mockImplementation((id) => Promise.resolve({
-        id, tenant_id: 1, type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
+        id, tenant_id: '00000000-0000-0000-0000-000000000001', type: 'DOCUMENT_AUTHORIZED', created_at: new Date('2026-01-01T00:00:00Z'),
       }));
       global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, text: () => Promise.resolve('err') });
       webhookDeliveryModel.markFailure
-        .mockResolvedValueOnce({ id: 1, status: 'RETRYING' })
-        .mockResolvedValueOnce({ id: 2, status: 'FAILED' });
+        .mockResolvedValueOnce({ id: '00000000-0000-0000-0000-000000000001', status: 'RETRYING' })
+        .mockResolvedValueOnce({ id: '00000000-0000-0000-0000-000000000002', status: 'FAILED' });
 
       const result = await webhookDeliveryService.processDueRetries();
 

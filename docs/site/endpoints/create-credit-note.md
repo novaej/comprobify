@@ -21,7 +21,7 @@ Antes de enviar, verifica [Get Credit Notes](get-credit-notes.md) contra la clav
 | Header | Requerido | Descripción |
 |---|---|---|
 | `Authorization` | Sí | Llave API tipo Bearer |
-| `X-Issuer-Id` | Sí | Id numérico de la sucursal emisora (obtenido de `GET /v1/issuers`). Identifica qué sucursal y certificado usar. |
+| `X-Issuer-Id` | Sí | UUID de la sucursal emisora (obtenido de `GET /v1/issuers`). Identifica qué sucursal y certificado usar. |
 | `Content-Type` | Sí | `application/json` |
 | `Idempotency-Key` | No | String único (máx. 255 caracteres) — consulta [idempotencia](#idempotency) |
 

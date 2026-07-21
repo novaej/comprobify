@@ -71,7 +71,7 @@ describe('MailgunWebhookService', () => {
   });
 
   describe('processEvent — document event handling', () => {
-    const document = { id: 42, issuer_id: 7, sandbox: false };
+    const document = { id: '00000000-0000-0000-0000-000000000042', issuer_id: '00000000-0000-0000-0000-000000000007', sandbox: false };
 
     test('delivered: updates email_status to DELIVERED and logs EMAIL_DELIVERED', async () => {
       documentModel.findByEmailMessageId.mockResolvedValue(document);
@@ -80,9 +80,9 @@ describe('MailgunWebhookService', () => {
         event: 'delivered', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith(42, 'DELIVERED', false);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'DELIVERED', false);
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        42, 'EMAIL_DELIVERED', null, null, { to: 'buyer@example.com' }, null, 7, false
+        '00000000-0000-0000-0000-000000000042', 'EMAIL_DELIVERED', null, null, { to: 'buyer@example.com' }, null, '00000000-0000-0000-0000-000000000007', false
       );
       expect(tenantModel.findByVerificationEmailMessageId).not.toHaveBeenCalled();
     });
@@ -94,9 +94,9 @@ describe('MailgunWebhookService', () => {
         event: 'complained', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith(42, 'COMPLAINED', false);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'COMPLAINED', false);
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        42, 'EMAIL_COMPLAINED', null, null, { to: 'buyer@example.com' }, null, 7, false
+        '00000000-0000-0000-0000-000000000042', 'EMAIL_COMPLAINED', null, null, { to: 'buyer@example.com' }, null, '00000000-0000-0000-0000-000000000007', false
       );
     });
 
@@ -109,7 +109,7 @@ describe('MailgunWebhookService', () => {
 
       expect(documentModel.updateEmailStatus).not.toHaveBeenCalled();
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        42, 'EMAIL_TEMP_FAILED', null, null, { to: 'buyer@example.com', severity: 'temporary' }, null, 7, false
+        '00000000-0000-0000-0000-000000000042', 'EMAIL_TEMP_FAILED', null, null, { to: 'buyer@example.com', severity: 'temporary' }, null, '00000000-0000-0000-0000-000000000007', false
       );
     });
 
@@ -120,9 +120,9 @@ describe('MailgunWebhookService', () => {
         event: 'failed', severity: 'permanent', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith(42, 'FAILED', false);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'FAILED', false);
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        42, 'EMAIL_FAILED', null, null, { to: 'buyer@example.com', severity: 'permanent' }, null, 7, false
+        '00000000-0000-0000-0000-000000000042', 'EMAIL_FAILED', null, null, { to: 'buyer@example.com', severity: 'permanent' }, null, '00000000-0000-0000-0000-000000000007', false
       );
     });
 
@@ -133,9 +133,9 @@ describe('MailgunWebhookService', () => {
         event: 'failed', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith(42, 'FAILED', false);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'FAILED', false);
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        42, 'EMAIL_FAILED', null, null, { to: 'buyer@example.com', severity: undefined }, null, 7, false
+        '00000000-0000-0000-0000-000000000042', 'EMAIL_FAILED', null, null, { to: 'buyer@example.com', severity: undefined }, null, '00000000-0000-0000-0000-000000000007', false
       );
     });
 
@@ -146,15 +146,15 @@ describe('MailgunWebhookService', () => {
         event: 'delivered', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith(42, 'DELIVERED', true);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'DELIVERED', true);
       expect(documentEventModel.create).toHaveBeenCalledWith(
-        42, 'EMAIL_DELIVERED', null, null, { to: 'buyer@example.com' }, null, 7, true
+        '00000000-0000-0000-0000-000000000042', 'EMAIL_DELIVERED', null, null, { to: 'buyer@example.com' }, null, '00000000-0000-0000-0000-000000000007', true
       );
     });
   });
 
   describe('processEvent — tenant verification event handling', () => {
-    const tenant = { id: 3 };
+    const tenant = { id: '00000000-0000-0000-0000-000000000003' };
 
     beforeEach(() => {
       documentModel.findByEmailMessageId.mockResolvedValue(null);
@@ -166,8 +166,8 @@ describe('MailgunWebhookService', () => {
         event: 'delivered', 'message-id': '<verify@mailgun>', recipient: 'tenant@example.com',
       });
 
-      expect(tenantModel.updateVerificationEmailStatus).toHaveBeenCalledWith(3, 'DELIVERED');
-      expect(tenantEventModel.create).toHaveBeenCalledWith(3, 'VERIFICATION_EMAIL_DELIVERED', { to: 'tenant@example.com' });
+      expect(tenantModel.updateVerificationEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', 'DELIVERED');
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', 'VERIFICATION_EMAIL_DELIVERED', { to: 'tenant@example.com' });
     });
 
     test('complained: updates verification email status to COMPLAINED and logs VERIFICATION_EMAIL_COMPLAINED', async () => {
@@ -175,8 +175,8 @@ describe('MailgunWebhookService', () => {
         event: 'complained', 'message-id': '<verify@mailgun>', recipient: 'tenant@example.com',
       });
 
-      expect(tenantModel.updateVerificationEmailStatus).toHaveBeenCalledWith(3, 'COMPLAINED');
-      expect(tenantEventModel.create).toHaveBeenCalledWith(3, 'VERIFICATION_EMAIL_COMPLAINED', { to: 'tenant@example.com' });
+      expect(tenantModel.updateVerificationEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', 'COMPLAINED');
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', 'VERIFICATION_EMAIL_COMPLAINED', { to: 'tenant@example.com' });
     });
 
     test('failed + temporary: does not update status, only logs VERIFICATION_EMAIL_TEMP_FAILED', async () => {
@@ -185,7 +185,7 @@ describe('MailgunWebhookService', () => {
       });
 
       expect(tenantModel.updateVerificationEmailStatus).not.toHaveBeenCalled();
-      expect(tenantEventModel.create).toHaveBeenCalledWith(3, 'VERIFICATION_EMAIL_TEMP_FAILED', {
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', 'VERIFICATION_EMAIL_TEMP_FAILED', {
         to: 'tenant@example.com', severity: 'temporary',
       });
     });
@@ -195,8 +195,8 @@ describe('MailgunWebhookService', () => {
         event: 'failed', severity: 'permanent', 'message-id': '<verify@mailgun>', recipient: 'tenant@example.com',
       });
 
-      expect(tenantModel.updateVerificationEmailStatus).toHaveBeenCalledWith(3, 'FAILED');
-      expect(tenantEventModel.create).toHaveBeenCalledWith(3, 'VERIFICATION_EMAIL_FAILED', {
+      expect(tenantModel.updateVerificationEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', 'FAILED');
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', 'VERIFICATION_EMAIL_FAILED', {
         to: 'tenant@example.com', severity: 'permanent',
       });
     });

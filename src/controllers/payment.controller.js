@@ -8,7 +8,7 @@ const submitProof = async (req, res) => {
   }
   const files = req.files.map((file) => ({ buffer: file.buffer, filename: file.originalname, mimeType: file.mimetype }));
   const { payment, proofs } = await subscriptionService.submitPaymentProof(
-    parseInt(req.params.id, 10),
+    req.params.id,
     req.tenant.id,
     files,
     req.body.referenceNumber,
@@ -17,7 +17,7 @@ const submitProof = async (req, res) => {
 };
 
 const listProofs = async (req, res) => {
-  const proofs = await subscriptionService.listPaymentProofsForTenant(parseInt(req.params.id, 10), req.tenant.id);
+  const proofs = await subscriptionService.listPaymentProofsForTenant(req.params.id, req.tenant.id);
   res.json({ ok: true, proofs });
 };
 
@@ -25,8 +25,8 @@ const listProofs = async (req, res) => {
 // Ownership is verified in getPaymentProofFileForTenant via the subscription join.
 const downloadProof = async (req, res) => {
   const { buffer, filename, mimeType } = await subscriptionService.getPaymentProofFileForTenant(
-    parseInt(req.params.id, 10),
-    parseInt(req.params.proofId, 10),
+    req.params.id,
+    req.params.proofId,
     req.tenant.id,
   );
   res.setHeader('Content-Type', mimeType);
@@ -36,8 +36,8 @@ const downloadProof = async (req, res) => {
 
 const deleteProof = async (req, res) => {
   await subscriptionService.deletePaymentProofForTenant(
-    parseInt(req.params.id, 10),
-    parseInt(req.params.proofId, 10),
+    req.params.id,
+    req.params.proofId,
     req.tenant.id,
   );
   res.json({ ok: true });

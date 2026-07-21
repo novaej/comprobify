@@ -1,6 +1,6 @@
 # Consultar Tenant Actual
 
-Devuelve la identidad y los detalles de la cuenta del tenant propietario de la llave API usada para autenticar la solicitud. Útil para una aplicación de terceros que ya tiene una llave API (por ejemplo, emitida mediante `POST /v1/register` o por un administrador) y necesita resolver el `tenant.id` numérico — por ejemplo, para vincular una cuenta API existente en un frontend sin volver a ingresar el RUC o el certificado P12, o para hacer coincidir los envíos de webhooks entrantes con la cuenta correcta.
+Devuelve la identidad y los detalles de la cuenta del tenant propietario de la llave API usada para autenticar la solicitud. Útil para una aplicación de terceros que ya tiene una llave API (por ejemplo, emitida mediante `POST /v1/register` o por un administrador) y necesita resolver el `tenant.id` — por ejemplo, para vincular una cuenta API existente en un frontend sin volver a ingresar el RUC o el certificado P12, o para hacer coincidir los envíos de webhooks entrantes con la cuenta correcta.
 
 ```
 GET /v1/tenants/me
@@ -16,7 +16,7 @@ GET /v1/tenants/me
 {
   "ok": true,
   "tenant": {
-    "id": 42,
+    "id": "00000000-0000-0000-0000-000000000042",
     "email": "owner@example.com",
     "subscriptionTier": "GROWTH",
     "status": "ACTIVE",
@@ -31,7 +31,7 @@ GET /v1/tenants/me
 
 | Campo | Descripción |
 |---|---|
-| `id` | Id numérico del tenant. Úsalo para correlacionar envíos de webhooks y otros recursos asociados al tenant. |
+| `id` | UUID del tenant. Úsalo para correlacionar envíos de webhooks y otros recursos asociados al tenant. |
 | `email` | Correo electrónico registrado del tenant. |
 | `subscriptionTier` | `FREE`, `STARTER`, `GROWTH` o `BUSINESS`. |
 | `status` | `PENDING_VERIFICATION`, `ACTIVE` o `SUSPENDED`. |

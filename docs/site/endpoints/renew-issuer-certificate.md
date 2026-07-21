@@ -14,7 +14,7 @@ PATCH /v1/issuers/:id/certificate
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor (de `GET /v1/issuers`) |
+| `id` | UUID del emisor (de `GET /v1/issuers`) |
 
 ## Cuerpo de la solicitud
 

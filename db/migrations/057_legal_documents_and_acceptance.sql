@@ -12,7 +12,7 @@
 BEGIN;
 
 CREATE TABLE legal_documents (
-  id            BIGSERIAL     PRIMARY KEY,
+  id            UUID          PRIMARY KEY DEFAULT uuid_generate_v7(),
   document_type TEXT          NOT NULL,
   version       TEXT          NOT NULL,
   content       BYTEA         NOT NULL,

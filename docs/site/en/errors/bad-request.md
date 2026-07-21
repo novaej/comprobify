@@ -40,7 +40,7 @@ The `X-Issuer-Id` request header is missing. Every document-creation and documen
 
 The `X-Issuer-Id` header value is not a valid positive integer (e.g. `abc`, `0`, `-5`).
 
-**What to do:** Supply the numeric issuer ID returned by `GET /v1/issuers`.
+**What to do:** Supply the issuer UUID returned by `GET /v1/issuers`.
 
 ### `INVALID_OR_EXPIRED_TOKEN`
 

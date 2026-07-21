@@ -27,7 +27,7 @@ The payment must belong to a subscription owned by your tenant.
   "ok": true,
   "proofs": [
     {
-      "id": 42,
+      "id": "00000000-0000-0000-0000-000000000042",
       "filename": "receipt.pdf",
       "mimeType": "application/pdf",
       "referenceNumber": "SPI-20260628-00931",
@@ -35,7 +35,7 @@ The payment must belong to a subscription owned by your tenant.
       "createdAt": "2026-06-28T23:14:03.087Z"
     },
     {
-      "id": 43,
+      "id": "00000000-0000-0000-0000-000000000043",
       "filename": "bank-statement.png",
       "mimeType": "image/png",
       "referenceNumber": "SPI-20260628-00931",

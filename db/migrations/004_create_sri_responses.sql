@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS sri_responses (
-    id              SERIAL PRIMARY KEY,
-    document_id     INTEGER NOT NULL REFERENCES documents(id),
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    document_id     UUID NOT NULL REFERENCES documents(id),
     operation_type  VARCHAR(20) NOT NULL,
     status          VARCHAR(20),
     messages        JSONB,

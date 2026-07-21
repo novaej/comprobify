@@ -8,7 +8,7 @@ GET /v1/documents
 
 ## Autenticación
 
-`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (id numérico de `GET /v1/issuers`)
+`Authorization: Bearer <api-key>` y `X-Issuer-Id: <issuer-id>` (UUID de `GET /v1/issuers`)
 
 ## Parámetros de consulta
 

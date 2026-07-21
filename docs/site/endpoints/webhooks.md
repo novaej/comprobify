@@ -28,7 +28,7 @@ DELETE /v1/webhooks/:id
 
 ```json
 {
-  "id":         1,
+  "id": "00000000-0000-0000-0000-000000000001",
   "url":        "https://app.example.com/v1/comprobify/events",
   "eventTypes": ["DOCUMENT_AUTHORIZED", "CERT_EXPIRING"],
   "active":     true,
@@ -39,7 +39,7 @@ DELETE /v1/webhooks/:id
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `id` | integer | Identificador estable |
+| `id` | string (UUID) | Identificador estable |
 | `url` | string | URL HTTPS a la que la API envía los eventos |
 | `eventTypes` | string[] | Tipos de evento suscritos. Un arreglo vacío significa suscripción a **todos** los tipos de evento. |
 | `active` | boolean | `false` después de darse de baja; los envíos históricos se conservan |
@@ -80,7 +80,7 @@ Crea un nuevo endpoint de webhook y devuelve el secreto de firma. **El secreto s
 {
   "ok": true,
   "endpoint": {
-    "id":         1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "url":        "https://app.example.com/v1/comprobify/events",
     "eventTypes": ["DOCUMENT_AUTHORIZED"],
     "active":     true,
@@ -195,17 +195,17 @@ Elimina el endpoint de forma lógica (`active = false`). El endpoint deja de rec
 ```json
 {
   "event":      "DOCUMENT_AUTHORIZED",
-  "deliveryId": 17,
+  "deliveryId": "00000000-0000-0000-0000-000000000017",
   "timestamp":  1748649600,
-  "tenantId":   7,
+  "tenantId": "00000000-0000-0000-0000-000000000007",
   "data": {
-    "id":        42,
+    "id": "00000000-0000-0000-0000-000000000042",
     "type":      "DOCUMENT_AUTHORIZED",
     "severity":  "INFO",
     "title":     "Factura autorizada",
     "message":   "La factura 001-001-000000012 de ACME Corp fue autorizada por el SRI.",
     "metadata":  { ... },
-    "issuerId":  3,
+    "issuerId": "00000000-0000-0000-0000-000000000003",
     "readAt":    null,
     "expiresAt": null,
     "createdAt": "2026-05-28T14:30:00.000Z"

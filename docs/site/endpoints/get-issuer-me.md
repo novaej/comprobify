@@ -16,7 +16,7 @@ GET /v1/issuers/:id
 
 | Parámetro | Descripción |
 |---|---|
-| `id` | Id numérico del emisor (obtenido de `GET /v1/issuers`) |
+| `id` | UUID del emisor (obtenido de `GET /v1/issuers`) |
 
 ## Respuesta
 
@@ -26,7 +26,7 @@ GET /v1/issuers/:id
 {
   "ok": true,
   "issuer": {
-    "id": 1,
+    "id": "00000000-0000-0000-0000-000000000001",
     "ruc": "1791234567001",
     "businessName": "ACME S.A.",
     "tradeName": "ACME",
@@ -41,7 +41,7 @@ GET /v1/issuers/:id
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `id` | integer | Id numérico del emisor — usado como `X-Issuer-Id` en las solicitudes de comprobantes |
+| `id` | string (UUID) | UUID del emisor — usado como `X-Issuer-Id` en las solicitudes de comprobantes |
 | `ruc` | string | RUC de 13 dígitos (identificación tributaria) |
 | `businessName` | string | Razón social |
 | `tradeName` | string \| null | Nombre comercial, si está definido |

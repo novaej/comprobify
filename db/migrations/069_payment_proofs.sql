@@ -8,8 +8,8 @@
 BEGIN;
 
 CREATE TABLE payment_proofs (
-  id          BIGSERIAL PRIMARY KEY,
-  payment_id  BIGINT NOT NULL REFERENCES payments(id),
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  payment_id  UUID NOT NULL REFERENCES payments(id),
   file        BYTEA NOT NULL,
   filename    VARCHAR(255) NOT NULL,
   mime_type   VARCHAR(100) NOT NULL,

@@ -13,11 +13,11 @@
 BEGIN;
 
 CREATE TABLE subscriptions (
-  id                     BIGSERIAL PRIMARY KEY,
-  tenant_id              BIGINT NOT NULL REFERENCES tenants(id),
+  id                     UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  tenant_id              UUID NOT NULL REFERENCES tenants(id),
   tier                   VARCHAR(20) NOT NULL,
   status                 VARCHAR(20) NOT NULL DEFAULT 'PENDING_PAYMENT',
-  invoice_document_id    BIGINT REFERENCES documents(id),
+  invoice_document_id    UUID REFERENCES documents(id),
   current_period_start   TIMESTAMPTZ,
   current_period_end     TIMESTAMPTZ,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -33,8 +33,8 @@ CREATE INDEX idx_subscriptions_tenant_id ON subscriptions(tenant_id);
 CREATE INDEX idx_subscriptions_invoice_document_id ON subscriptions(invoice_document_id);
 
 CREATE TABLE payments (
-  id               BIGSERIAL PRIMARY KEY,
-  subscription_id  BIGINT NOT NULL REFERENCES subscriptions(id),
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+  subscription_id  UUID NOT NULL REFERENCES subscriptions(id),
   status           VARCHAR(20) NOT NULL DEFAULT 'PENDING',
   amount           DECIMAL(14,2) NOT NULL,
   method           VARCHAR(20) NOT NULL DEFAULT 'SPI_TRANSFER',
