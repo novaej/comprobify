@@ -100,7 +100,7 @@ describe('RegistrationService', () => {
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
     });
 
-    test('idempotent re-registration: existing email + existing issuer revokes the current sandbox key and mints a new one', async () => {
+    test('idempotent re-registration: existing email + existing issuer + matching certificate revokes the current sandbox key and mints a new one', async () => {
       const existingTenant = {
         id: '00000000-0000-0000-0000-000000000001',
         email: baseFields.email,
@@ -123,6 +123,9 @@ describe('RegistrationService', () => {
 
       const result = await registrationService.register(baseFields, p12Buffer, p12Password);
 
+      // Recovery requires proof of ownership: the uploaded P12 must be parsed
+      // and its fingerprint compared against the issuer on file.
+      expect(certificateService.parseCertificate).toHaveBeenCalledWith(p12Buffer, p12Password);
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'sandbox');
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({
         tenantId: '00000000-0000-0000-0000-000000000001',
@@ -138,7 +141,37 @@ describe('RegistrationService', () => {
       // Does not attempt to create a brand-new tenant/issuer on the recovery path.
       expect(tenantModel.create).not.toHaveBeenCalled();
       expect(issuerModel.create).not.toHaveBeenCalled();
-      expect(certificateService.parseCertificate).not.toHaveBeenCalled();
+    });
+
+    test('rejects recovery when the uploaded certificate fingerprint does not match the certificate on file', async () => {
+      const existingTenant = {
+        id: '00000000-0000-0000-0000-000000000001',
+        email: baseFields.email,
+        status: 'PENDING_VERIFICATION',
+        subscription_tier: 'FREE',
+      };
+      const existingIssuer = {
+        id: '00000000-0000-0000-0000-000000000010',
+        ruc: baseFields.ruc,
+        cert_fingerprint: 'THE-REAL-CERT-FINGERPRINT',
+      };
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      certificateService.parseCertificate.mockReturnValue({
+        privateKeyPem: 'PRIVATE_KEY_PEM',
+        certPem: 'CERT_PEM',
+        certFingerprint: 'AN-ATTACKERS-DIFFERENT-CERT',
+        certExpiry: new Date('2030-01-01T00:00:00Z'),
+      });
+
+      await expect(registrationService.register(baseFields, p12Buffer, p12Password))
+        .rejects.toMatchObject({ statusCode: 403, code: 'CERTIFICATE_FINGERPRINT_MISMATCH' });
+
+      // Must not revoke or issue any key on a failed ownership check — an
+      // attacker who doesn't hold the real certificate must not be able to
+      // invalidate the legitimate tenant's existing sandbox key either.
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
 
     test('validates termsVersion against the published TERMS agreement before parsing the certificate', async () => {

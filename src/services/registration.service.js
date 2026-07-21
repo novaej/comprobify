@@ -46,6 +46,23 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
     if (!issuer) {
       throw new ConflictError(`An account with email ${fields.email} already exists`);
     }
+
+    // Recovery requires proof of ownership: the uploaded P12 must match the
+    // certificate already on file for this tenant's primary issuer. Without
+    // this check, knowing a tenant's registered email alone would be enough
+    // to revoke their current sandbox key and mint a new one (see NEXT_STEPS
+    // item 5 — this was a real account-takeover / DoS gap).
+    const uploaded = certificateService.parseCertificate(p12Buffer, p12Password || '');
+    if (uploaded.certFingerprint !== issuer.cert_fingerprint) {
+      console.warn(`[registration] recovery attempt rejected: certificate fingerprint mismatch for tenant ${existing.id}`);
+      throw new AppError(
+        'The uploaded certificate does not match the certificate on file for this account.',
+        403,
+        ErrorCodes.CERTIFICATE_FINGERPRINT_MISMATCH
+      );
+    }
+    console.warn(`[registration] recovery key issued for tenant ${existing.id}`);
+
     await apiKeyModel.revokeAllByTenantIdAndEnvironment(existing.id, 'sandbox');
     const plainToken = crypto.randomBytes(32).toString('hex');
     await apiKeyModel.create({

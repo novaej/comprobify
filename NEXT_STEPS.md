@@ -124,19 +124,16 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 ## 5. Registration Recovery-Key Authentication Gap
 
-**Priority: High — unauthenticated credential issuance, not just a DoS risk. Found during a Terms of Service review (2026-07-21) while checking §3's "account recovery mechanism" claim.**
+**Status: Core fix shipped 2026-07-21 (`docs/legal-agreements-review-fixes` branch). Priority: Low — residual observability piece only.**
 
-`POST /v1/register` treats any request whose email matches an existing tenant as an implicit "recovery": `registration.service.js`'s `register()` (the early-return branch, lines ~39-56) revokes **all** of that tenant's sandbox API keys and issues a fresh one back in the response (`recovered: true`) — without verifying the requester actually owns the account. There is no password check (tenants have none by design), no match against the stored certificate (`issuers.cert_fingerprint`), and no email-verification step; the uploaded P12 file isn't even parsed in this branch. `registrationLimiter` only throttles by source IP, so a single request from anywhere is enough — this is a targeted attack, not just a brute-force one.
+~~`POST /v1/register` treats any request whose email matches an existing tenant as an implicit "recovery"...~~ Fixed: `registration.service.js`'s recovery branch now parses the uploaded P12 (`certificateService.parseCertificate`) and requires its fingerprint to match `issuer.cert_fingerprint` on file before revoking or issuing any sandbox key — a mismatch is rejected with `403 CERTIFICATE_FINGERPRINT_MISMATCH` and leaves existing keys untouched. Covered by two new tests in `tests/unit/services/registration.service.test.js` (matching-cert success path, mismatch rejection). See `CHANGELOG.md`'s Unreleased/Fixed entry.
 
-This is two distinct harms, and the previous version of this item only covered the second one:
-- **Account takeover** — anyone who knows (or guesses) a tenant's registered email receives a working sandbox API key for that tenant's account in the response body.
-- **Denial of service** — the same request also revokes the tenant's existing sandbox keys, breaking any legitimate integration using them.
+**What's left (optional, not urgent now that the actual authentication gap is closed):**
+- Structured log entry with IP + timestamp whenever a recovery key is issued or rejected — today this is just a `console.warn` with the tenant id, not routed anywhere queryable.
+- Alert rule on repeated recovery attempts (successful or rejected) for the same tenant/email within a short window.
+- Related, lower-priority inconsistency noticed while fixing this: `resendVerification()` deliberately avoids confirming whether an email is registered ("don't leak whether email exists"), but the registration recovery path still does — a mismatched-certificate response (`403`) still confirms the account exists. Not addressed here; would need the same generic-response treatment if account enumeration becomes a real concern.
 
-**What:**
-- Require actual proof of ownership before issuing a recovery key — e.g. only allow recovery via a one-time link sent to the tenant's verified email (mirrors the existing `verification_token` flow already used for email verification), or require the uploaded P12's certificate fingerprint to match `issuers.cert_fingerprint` on file before minting a new key. Either closes the "just know the email" gap.
-- Structured log entry whenever a recovery key is issued (email, IP, timestamp) and an alert on repeated issuance for the same email — useful as a secondary detection layer, but not a substitute for closing the authentication gap itself (this was the entirety of the original scope of this item).
-
-**Effort:** Medium — no new infra, but touches the registration flow's core trust model; needs careful testing against the legitimate recovery use case it's meant to serve.
+**Effort:** Low — logging/alerting infrastructure only; no more changes to the core trust model.
 
 ---
 
