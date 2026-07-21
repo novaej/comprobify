@@ -47,6 +47,7 @@ El Responsable autoriza el uso de los siguientes subencargados, ya en operación
 | Neon | Base de datos del Servicio, incluida la base de datos independiente de la interfaz web cuando el Responsable la utiliza | Todos los clientes |
 | Mailgun | Envío de correos transaccionales | Todos los clientes |
 | Sentry | Monitoreo y diagnóstico de errores | Todos los clientes |
+| CloudAMQP | Enrutamiento de mensajes para el procesamiento asíncrono de comprobantes electrónicos (identificadores del comprobante únicamente, sin datos del comprador) | Todos los clientes |
 | SRI | Recepción obligatoria de comprobantes electrónicos conforme a la normativa ecuatoriana | Todos los clientes |
 | Vercel | Alojamiento de la interfaz web del Servicio (comprobify-web) | Solo clientes que utilizan la interfaz web |
 
@@ -56,7 +57,7 @@ Algunos subencargados pueden procesar datos personales fuera del territorio ecua
 
 El Responsable autoriza las transferencias internacionales de datos que resulten necesarias para la prestación del Servicio mediante los subencargados identificados en este DPA.
 
-El Encargado notificará al Responsable con razonable antelación antes de incorporar un nuevo subencargado que implique una nueva transferencia internacional de datos. La lista de subencargados podrá actualizarse cuando resulte necesario para la prestación del Servicio, conforme a lo dispuesto en esta sección.
+El Encargado notificará al Responsable con razonable antelación antes de incorporar un nuevo subencargado, indicando expresamente si dicha incorporación implica una nueva transferencia internacional de datos. La lista de subencargados podrá actualizarse cuando resulte necesario para la prestación del Servicio, conforme a lo dispuesto en esta sección.
 
 ## 7. Retención y eliminación al término del contrato
 
@@ -78,4 +79,4 @@ La responsabilidad de las partes bajo este DPA se rige por lo dispuesto en los T
 
 ## 10. Vigencia y aceptación
 
-Este DPA forma parte integrante de los Términos de Servicio y se considera aceptado por el Responsable al aceptar dichos Términos. Permanecerá vigente mientras el Responsable mantenga una cuenta activa en el Servicio, y se entiende automáticamente terminado al cancelarse dicha cuenta, sin perjuicio de las obligaciones de confidencialidad y de las descritas en la sección 7 que sobrevivan a la terminación.
+Este DPA forma parte integrante de la relación contractual entre el Responsable y Comprobify y requiere aceptación expresa, independiente de la aceptación de los Términos de Servicio, según lo descrito en la sección 1 de dichos Términos. Permanecerá vigente mientras el Responsable mantenga una cuenta activa en el Servicio, y se entiende automáticamente terminado al darse de baja dicha cuenta, sin perjuicio de las obligaciones de confidencialidad y de las descritas en la sección 7 que sobrevivan a la terminación.

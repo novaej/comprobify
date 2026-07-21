@@ -122,20 +122,21 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 ---
 
-## 5. Registration DoS Monitoring
+## 5. Registration Recovery-Key Authentication Gap
 
-**Priority: Low — risk mitigation**
+**Priority: High — unauthenticated credential issuance, not just a DoS risk. Found during a Terms of Service review (2026-07-21) while checking §3's "account recovery mechanism" claim.**
 
-`POST /v1/register` is now idempotent: calling it with an existing email revokes the current sandbox key and issues a new one. This is intentional for frontend recovery, but a bad actor could loop it to continuously invalidate a tenant's key.
+`POST /v1/register` treats any request whose email matches an existing tenant as an implicit "recovery": `registration.service.js`'s `register()` (the early-return branch, lines ~39-56) revokes **all** of that tenant's sandbox API keys and issues a fresh one back in the response (`recovered: true`) — without verifying the requester actually owns the account. There is no password check (tenants have none by design), no match against the stored certificate (`issuers.cert_fingerprint`), and no email-verification step; the uploaded P12 file isn't even parsed in this branch. `registrationLimiter` only throttles by source IP, so a single request from anywhere is enough — this is a targeted attack, not just a brute-force one.
 
-The existing `registrationLimiter` (5 req/hour per IP) limits per-IP burst, but does not detect distributed multi-IP abuse targeting a single email.
+This is two distinct harms, and the previous version of this item only covered the second one:
+- **Account takeover** — anyone who knows (or guesses) a tenant's registered email receives a working sandbox API key for that tenant's account in the response body.
+- **Denial of service** — the same request also revokes the tenant's existing sandbox keys, breaking any legitimate integration using them.
 
 **What:**
-- Structured log entry whenever a recovery key is issued (email, IP, timestamp) — already distinguishable via the `recovered: true` flag in the service response
-- Alert rule (e.g., Datadog / Grafana) firing when the same email sees >3 recovery key issuances within a rolling 1-hour window
-- Optionally: add an `api_key_recovery_count` counter to `tenants` and expose it in the admin tenant detail response so operators can spot abuse manually
+- Require actual proof of ownership before issuing a recovery key — e.g. only allow recovery via a one-time link sent to the tenant's verified email (mirrors the existing `verification_token` flow already used for email verification), or require the uploaded P12's certificate fingerprint to match `issuers.cert_fingerprint` on file before minting a new key. Either closes the "just know the email" gap.
+- Structured log entry whenever a recovery key is issued (email, IP, timestamp) and an alert on repeated issuance for the same email — useful as a secondary detection layer, but not a substitute for closing the authentication gap itself (this was the entirety of the original scope of this item).
 
-**Effort:** Low (logging only) to Medium (alerting infrastructure).
+**Effort:** Medium — no new infra, but touches the registration flow's core trust model; needs careful testing against the legitimate recovery use case it's meant to serve.
 
 ---
 
@@ -252,4 +253,18 @@ What's left is exactly the overage-billing half, still blocked on the payment ga
 **What:** log a `tenant_events` row (or a new `issuer_events` table if issuer-level granularity matters more than tenant-level) on certificate upload (registration/branch creation) and renewal — fingerprint and expiry are already computed by `certificateService.parseCertificate`, just not persisted as an event.
 
 **Effort:** Low — one event write per existing call site, no new flow.
+
+---
+
+## 12. Real Account Termination / Closure State
+
+**Priority: Low — legal/product gap found during a Terms of Service review (2026-07-21)**
+
+`TenantStatus` (`src/constants/tenant-status.js`) only has `PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED` — there is no terminated/closed/cancelled state. `docs/agreements/terms-of-service.md` originally committed to letting a Client "terminate" their account at any time, but nothing in the tenant model represents that outcome distinctly from `SUSPENDED`, which elsewhere in the codebase (`PATCH /v1/admin/tenants/:id/status`) is treated as a reversible, admin-toggled state, not a permanent closure. The ToS wording has been softened in the meantime to describe what the product actually does today (a support-processed suspension of access) rather than promising a state that doesn't exist — but the underlying gap is still worth closing.
+
+**What:**
+- Decide whether account closure should be a genuinely new `TenantStatus` value (e.g. `TERMINATED`, permanent, no reactivation path) or whether the product intentionally treats closure as indefinite suspension — if the latter, no code change is needed, just confirmation that the ToS wording matches intent long-term
+- If a new status is added: update the `TenantStatus` enum, any CHECK constraints referencing it, `admin.service.js`'s `updateTenantStatus()`, and how it interacts with `requireNotSuspended` (a terminated tenant presumably needs the same or stricter blocking than a suspended one)
+
+**Effort:** Low–Medium — mostly a product decision (permanent vs. reversible), followed by a small migration + enum update if a new status is chosen.
 

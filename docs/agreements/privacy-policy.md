@@ -37,6 +37,7 @@ Los datos se almacenan y procesan utilizando los siguientes proveedores, todos b
 - **Neon** — base de datos PostgreSQL de la API (todos los Clientes), incluida la base de datos independiente de la interfaz web cuando el Cliente la utiliza.
 - **Mailgun** — envío de correos transaccionales (verificación de cuenta, RIDE/PDF de comprobantes autorizados, notificaciones) (todos los Clientes).
 - **Sentry** — monitoreo de errores (configurado para minimizar el tratamiento de datos personales) (todos los Clientes).
+- **CloudAMQP** — enrutamiento de mensajes para el procesamiento asíncrono de comprobantes electrónicos; los mensajes contienen únicamente identificadores del comprobante, sin datos del comprador (todos los Clientes).
 - **SRI (Servicio de Rentas Internas)** — autoridad tributaria ecuatoriana receptora obligatoria por mandato legal; la transmisión de comprobantes electrónicos es exigida por la normativa tributaria aplicable (todos los Clientes).
 - **Vercel** — hosting de la interfaz web del Servicio (comprobify-web) (solo Clientes que utilizan la interfaz web).
 

@@ -4,7 +4,7 @@
 
 Comprobify es operado por **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, domiciliado en {{operador.domicilio}} (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
 
-Al crear una cuenta o utilizar el Servicio, usted declara haber leído, entendido y aceptado estos Términos, la **Política de Privacidad** y, cuando resulte aplicable, el **Acuerdo de Procesamiento de Datos** ("DPA"), todos los cuales forman parte integrante de la relación contractual entre el Cliente y Comprobify.
+Al registrarse, el Cliente indica la versión vigente de estos Términos. La aceptación expresa de estos Términos, de la **Política de Privacidad** y del **Acuerdo de Procesamiento de Datos** ("DPA") se realiza como un paso posterior a la creación de la cuenta, y es requisito indispensable para activar el Servicio en ambiente de producción. Una vez aceptados, dichos documentos forman parte integrante de la relación contractual entre el Cliente y Comprobify.
 
 ## 2. Descripción del Servicio
 
@@ -32,9 +32,9 @@ Los comprobantes electrónicos emitidos a través del Servicio y sus metadatos d
 
 El Servicio se ofrece bajo planes de suscripción con diferentes límites de uso y funcionalidades, según lo publicado en la documentación oficial.
 
-El pago se realiza mediante transferencia bancaria manual. La activación del servicio ocurre únicamente tras la verificación del pago.
+El pago se realiza mediante transferencia bancaria manual. La activación del servicio ocurre una vez verificado el pago por Comprobify y autorizado por el SRI el comprobante electrónico que respalda dicho pago; este proceso puede tomar tiempo adicional después de verificado el pago.
 
-Los cambios de plan y renovaciones siguen el mismo mecanismo de verificación de pago.
+Los cambios de plan y renovaciones siguen el mismo mecanismo.
 
 Comprobify se reserva el derecho de modificar los precios de los planes de suscripción. Cualquier cambio de precio será notificado al Cliente con al menos treinta (30) días de anticipación mediante correo electrónico a la dirección de correo electrónico de la cuenta del Cliente. El nuevo precio no se aplicará a ninguna renovación que ocurra antes de cumplirse dicho plazo de treinta (30) días: si la renovación más próxima del Cliente cae dentro de ese plazo, esa renovación se cobrará todavía al precio anterior, y el nuevo precio aplicará recién a partir de la primera renovación —mensual o anual, según corresponda— que ocurra una vez cumplidos los treinta (30) días de aviso. El uso continuado del Servicio tras la fecha de entrada en vigencia del cambio de precio constituye la aceptación del nuevo precio.
 
@@ -91,9 +91,9 @@ Ninguna parte será responsable por incumplimientos causados por eventos fuera d
 
 Comprobify puede suspender o terminar cuentas en caso de incumplimiento de estos Términos, uso fraudulento, abuso del sistema, impago reiterado o actividades ilícitas.
 
-El Cliente puede solicitar la terminación de su cuenta en cualquier momento mediante comunicación a `{{soporte.email}}`.
+El Cliente puede solicitar la baja de su cuenta en cualquier momento mediante comunicación a `{{soporte.email}}`. Esta solicitud es procesada manualmente por el equipo de Comprobify, quien suspenderá el acceso a la cuenta.
 
-La terminación no elimina obligaciones de pago ni afecta el historial de comprobantes ya emitidos.
+La baja de la cuenta no elimina obligaciones de pago pendientes ni afecta el historial de comprobantes ya emitidos, el cual se conserva conforme a los plazos indicados en la Sección 3.
 
 ## 11. Modificaciones
 
