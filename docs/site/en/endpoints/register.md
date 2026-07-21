@@ -107,10 +107,6 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 }
 ```
 
-### 200 OK — email already registered (key recovery)
-
-If the email is already registered and not suspended, the current sandbox key is revoked and a fresh one is returned. Same response shape as 201 but with `recovered: true`.
-
 ## Errors
 
 | Status | Code | When |
@@ -119,8 +115,7 @@ If the email is already registered and not suspended, the current sandbox key is
 | `400` | `VERSION_MISMATCH` | `termsVersion` does not match the currently published TERMS version — re-fetch `GET /v1/agreements` and show the current version |
 | `400` | `BAD_REQUEST` | P12 file is corrupt or the certificate password is wrong |
 | `400` | `INVALID_FILE_UPLOAD` | Logo file exceeds 500 KB |
-| `403` | `FORBIDDEN` | The account is suspended |
-| `409` | `CONFLICT` | RUC already registered under a different email |
+| `409` | `CONFLICT` | RUC already registered under a different email, or the email already has an account — use [`POST /v1/recover`](recover.md) to regain access |
 | `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
 
 ## Notes
@@ -128,6 +123,6 @@ If the email is already registered and not suspended, the current sandbox key is
 - The tenant starts in `PENDING_VERIFICATION` status. A verification email is sent immediately (fire-and-forget).
 - Unverified tenants can use sandbox but cannot promote to production.
 - The verification token expires after the configured TTL (default 24 hours). Use `POST /v1/resend-verification` to issue a fresh one.
-- The endpoint is idempotent on the email address — safe to retry if the API key was lost.
+- This endpoint is for new accounts only — if the email is already registered, the request is rejected with `409 CONFLICT` regardless of account status. If you lost your API key, use [`POST /v1/recover`](recover.md) instead.
 - Fetch the current `termsVersion` from `GET /v1/agreements` immediately before showing the acceptance checkbox, not at page load — the server validates the submitted version and rejects stale ones.
 - Returning tenants whose acceptance version has drifted (e.g. after the DPA is updated) should use `GET /v1/tenants/agreements` to discover which documents need re-accepting, and `POST /v1/tenants/agreements` to record the new acceptance. See [Agreement Acceptance](agreement-acceptance.md).

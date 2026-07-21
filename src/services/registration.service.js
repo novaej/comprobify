@@ -39,54 +39,9 @@ function formatTenant(row, quotaRow = null) {
 async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   const existing = await tenantModel.findByEmail(fields.email);
   if (existing) {
-    if (existing.status === TenantStatus.SUSPENDED) {
-      throw new AppError('This account has been suspended.', 403, ErrorCodes.ACCOUNT_SUSPENDED);
-    }
-    const issuer = await issuerModel.findByTenantId(existing.id);
-    if (!issuer) {
-      throw new ConflictError(`An account with email ${fields.email} already exists`);
-    }
-
-    // Recovery requires proof of ownership: the uploaded P12 must match the
-    // certificate already on file for this tenant's primary issuer. Without
-    // this check, knowing a tenant's registered email alone would be enough
-    // to revoke their current sandbox key and mint a new one (see NEXT_STEPS
-    // item 5 — this was a real account-takeover / DoS gap).
-    const uploaded = certificateService.parseCertificate(p12Buffer, p12Password || '');
-    if (uploaded.certFingerprint !== issuer.cert_fingerprint) {
-      console.warn(`[registration] recovery attempt rejected: certificate fingerprint mismatch for tenant ${existing.id}`);
-      throw new AppError(
-        'The uploaded certificate does not match the certificate on file for this account.',
-        403,
-        ErrorCodes.CERTIFICATE_FINGERPRINT_MISMATCH
-      );
-    }
-    console.warn(`[registration] recovery key issued for tenant ${existing.id}`);
-
-    await apiKeyModel.revokeAllByTenantIdAndEnvironment(existing.id, 'sandbox');
-    const plainToken = crypto.randomBytes(32).toString('hex');
-    await apiKeyModel.create({
-      tenantId: existing.id,
-      keyHash: sha256Hex(plainToken),
-      label: 'Recovery sandbox key',
-      environment: 'sandbox',
-    });
-    const existingQuota = await tenantQuotaService.getCurrentForTenant(existing.id);
-    return {
-      tenant: formatTenant(existing, existingQuota),
-      issuer: {
-        id: issuer.id,
-        ruc: issuer.ruc,
-        businessName: issuer.business_name,
-        tradeName: issuer.trade_name,
-        branchCode: issuer.branch_code,
-        issuePointCode: issuer.issue_point_code,
-        certFingerprint: issuer.cert_fingerprint,
-        certExpiry: issuer.cert_expiry,
-      },
-      apiKey: plainToken,
-      recovered: true,
-    };
+    throw new ConflictError(
+      `An account with email ${fields.email} already exists. Use POST /v1/recover to regain access.`
+    );
   }
 
   const existingIssuer = await issuerModel.findByRuc(fields.ruc);
@@ -221,6 +176,84 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   };
 }
 
+// Recovery for a tenant who lost their API key. Deliberately a separate
+// endpoint from register() rather than an implicit branch of it — that
+// used to leak account existence (a certificate mismatch on an existing
+// email returned a distinct error from a genuinely new email). A matching
+// certificate is the same ownership bar fresh registration accepts, so a
+// real match issues a key synchronously; anything else (unregistered
+// email, no issuer, wrong certificate) returns the identical generic
+// response so none of those cases are distinguishable from one another.
+async function recover(email, p12Buffer, p12Password) {
+  // Parse the certificate BEFORE any tenant lookup — a corrupt/wrong-password/
+  // expired P12 fails identically whether or not the email is registered, so
+  // certificate errors never correlate with account existence.
+  const uploaded = certificateService.parseCertificate(p12Buffer, p12Password || '');
+
+  const tenant = await tenantModel.findByEmail(email);
+  const issuer = tenant ? await issuerModel.findByTenantId(tenant.id) : null;
+
+  if (!tenant || !issuer || uploaded.certFingerprint !== issuer.cert_fingerprint) {
+    return { ok: true, message: 'If this email and certificate match an existing account, a new key has been issued.' };
+  }
+
+  // Suspension is only revealed to a caller who already proved ownership via
+  // a matching certificate — a caller with the wrong cert already got the
+  // generic response above and learns nothing about account status.
+  if (tenant.status === TenantStatus.SUSPENDED) {
+    throw new AppError('This account has been suspended.', 403, ErrorCodes.ACCOUNT_SUSPENDED);
+  }
+
+  // Environment is resolved from the tenant's actual current environment,
+  // not hardcoded to sandbox, so a promoted (production) tenant's real key
+  // gets recovered too.
+  const environment = tenant.sandbox ? 'sandbox' : 'production';
+  console.warn(`[registration] recovery key issued for tenant ${tenant.id} (${environment})`);
+  await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenant.id, environment);
+  const plainToken = crypto.randomBytes(32).toString('hex');
+  await apiKeyModel.create({
+    tenantId: tenant.id,
+    keyHash: sha256Hex(plainToken),
+    label: 'Recovery key',
+    environment,
+  });
+
+  // Fire-and-forget a fresh verification email as an out-of-band notice,
+  // reusing the existing token/email/redemption machinery instead of a
+  // parallel one — harmless no-op if clicked by an already-ACTIVE tenant;
+  // the value is the email itself landing in the inbox as a signal that
+  // recovery just happened.
+  if (config.email.provider !== 'none') {
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const verificationTokenExpiresAt = new Date(Date.now() + config.verificationTokenTtlHours * 60 * 60 * 1000);
+    tenantModel.updateVerificationToken(tenant.id, verificationToken, verificationTokenExpiresAt)
+      .then(() => emailService.sendVerificationEmail(email, verificationToken, tenant.verification_redirect_url || null, tenant.preferred_language || 'es'))
+      .then(({ messageId }) => Promise.all([
+        tenantModel.updateVerificationEmailSent(tenant.id, messageId),
+        tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),
+      ]))
+      .catch((err) => tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_FAILED', { error: err.message }).catch(() => {}));
+  }
+
+  const quotaRow = await tenantQuotaService.getCurrentForTenant(tenant.id);
+  return {
+    ok: true,
+    tenant: formatTenant(tenant, quotaRow),
+    issuer: {
+      id: issuer.id,
+      ruc: issuer.ruc,
+      businessName: issuer.business_name,
+      tradeName: issuer.trade_name,
+      branchCode: issuer.branch_code,
+      issuePointCode: issuer.issue_point_code,
+      certFingerprint: issuer.cert_fingerprint,
+      certExpiry: issuer.cert_expiry,
+    },
+    apiKey: plainToken,
+    environment,
+  };
+}
+
 const RESEND_COOLDOWN_MS = 60 * 1000;
 
 async function resendVerification(email, verificationRedirectUrl) {
@@ -280,4 +313,4 @@ async function verifyEmail(token) {
   return { email: tenant.email };
 }
 
-module.exports = { register, resendVerification, verifyEmail, formatTenant };
+module.exports = { register, recover, resendVerification, verifyEmail, formatTenant };

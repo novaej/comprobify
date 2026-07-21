@@ -99,7 +99,7 @@ Rate limiting is already per `keyHash` (in-memory, enforces throttling). But the
 - Audit trail: `created_at` + `last_used_at` + `request_count` per key tells the full lifecycle story
 
 **Notes:**
-- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 6) or an APM tool
+- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 5) or an APM tool
 - The background UPDATE is a single indexed write per request (`WHERE id = $1`); acceptable overhead for the observability gain
 - Per-issuer document volume is already derivable from `documents.issuer_id` — this adds the per-integration request-level dimension
 
@@ -122,22 +122,7 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 ---
 
-## 5. Registration Recovery-Key Authentication Gap
-
-**Status: Core fix shipped 2026-07-21 (`docs/legal-agreements-review-fixes` branch). Priority: Low — residual observability piece only.**
-
-~~`POST /v1/register` treats any request whose email matches an existing tenant as an implicit "recovery"...~~ Fixed: `registration.service.js`'s recovery branch now parses the uploaded P12 (`certificateService.parseCertificate`) and requires its fingerprint to match `issuer.cert_fingerprint` on file before revoking or issuing any sandbox key — a mismatch is rejected with `403 CERTIFICATE_FINGERPRINT_MISMATCH` and leaves existing keys untouched. Covered by two new tests in `tests/unit/services/registration.service.test.js` (matching-cert success path, mismatch rejection). See `CHANGELOG.md`'s Unreleased/Fixed entry.
-
-**What's left (optional, not urgent now that the actual authentication gap is closed):**
-- Structured log entry with IP + timestamp whenever a recovery key is issued or rejected — today this is just a `console.warn` with the tenant id, not routed anywhere queryable.
-- Alert rule on repeated recovery attempts (successful or rejected) for the same tenant/email within a short window.
-- Related, lower-priority inconsistency noticed while fixing this: `resendVerification()` deliberately avoids confirming whether an email is registered ("don't leak whether email exists"), but the registration recovery path still does — a mismatched-certificate response (`403`) still confirms the account exists. Not addressed here; would need the same generic-response treatment if account enumeration becomes a real concern.
-
-**Effort:** Low — logging/alerting infrastructure only; no more changes to the core trust model.
-
----
-
-## 6. Structured Request Logging
+## 5. Structured Request Logging
 
 **Priority: Medium — important for a B2B API where documents have legal weight**
 
@@ -145,19 +130,23 @@ No log aggregation is currently in place. Without it there is no way to debug a 
 
 **What to log (one JSON line per request):**
 - `timestamp`, `method`, `path`, `statusCode`, `durationMs`
-- `keyHash` (never the plaintext key), `apiKeyId`, `tenantId`, `issuerId`
+- `ip` (client IP — needed for item 12's anomaly detection and for tracing unauthenticated-route abuse, e.g. registration recovery attempts, not just for post-hoc key-leak investigation)
+- `keyHash` (never the plaintext key), `apiKeyId`, `tenantId`, `issuerId` — `null` on routes that never reach `authenticate` (registration, verification, public agreement/tiers endpoints)
 - `requestId` (UUID injected by middleware for correlation)
 
 With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `frontend-prod` vs `erp`) and `issuerId` identifies which branch the request targeted — the two dimensions slice traffic independently.
+
+**Scope: mount globally, not just on authenticated routes.** The original draft of this item only attached fields "after `authenticate` runs," which would silently exclude every public endpoint — `POST /v1/register`, `POST /v1/recover`, `/v1/resend-verification`, `/v1/verify-email`, `GET /v1/agreements/*`, `GET /v1/tiers`. Mount the logging middleware ahead of `authenticate` at the top of the stack so every request gets a line regardless of whether it ever authenticates; the identity fields are simply `null` until `authenticate` (if it runs at all) populates `req.tenant`/`req.apiKey`.
 
 **What this enables:**
 - **Client debugging** — look up a key hash and see exactly what was sent and what the API returned, without needing the client to reproduce
 - **SRI failure investigation** — the document event log captures outcomes but not timing; logs capture slow or intermittently failing SRI SOAP calls
 - **Quota disputes** — per-request audit trail independent of the `document_count` counter
 - **Security** — detect a leaked key used from an unexpected IP before the tenant reports it; especially important given documents have legal standing under Ecuadorian tax law
+- **Traces registration recovery volume** — `path=/v1/recover` + `ip` + `timestamp` gives per-IP/per-time visibility into recovery attempts with no registration-specific code. Note the anti-enumeration design means `statusCode` alone can't distinguish a real match from a no-op (both return `200`) — item 12's anomaly detection is what actually needs to tell those apart, not this logging layer
 
 **Implementation:**
-1. Add `express-winston` (or a thin custom middleware) to emit one structured JSON log line per request after the response is sent — attach `tenantId`, `issuerId`, `keyHash` from `req` after `authenticate` runs
+1. Add `express-winston` (or a thin custom middleware) to emit one structured JSON log line per request after the response is sent, mounted globally (see Scope above) — attach `tenantId`/`issuerId`/`keyHash`/`apiKeyId` from `req` when `authenticate` has run, `null` otherwise
 2. Ship logs to **Datadog** or **Betterstack** (both have free tiers; Betterstack integrates in ~10 lines for Node)
 3. The item 3 `request_count` counter on `api_keys` still has value as a cheap "is this key alive" check without a log query — these two are complementary, not alternatives
 
@@ -169,7 +158,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 
 ---
 
-## 7. API Key Scopes
+## 6. API Key Scopes
 
 **Priority: Low — defer until first concrete use case**
 
@@ -193,7 +182,7 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 8. Shared Rate-Limit Store for Horizontal Scaling
+## 7. Shared Rate-Limit Store for Horizontal Scaling
 
 **Priority: Medium — blocks running more than one API instance correctly in production**
 
@@ -207,7 +196,7 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 9. Payment Gateway Integration
+## 8. Payment Gateway Integration
 
 **Priority: Low — blocked, requires a registered legal entity. Every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different vendor. No vendor has been selected yet — not under active consideration until the entity exists.**
 
@@ -222,13 +211,13 @@ The manual subscription/payment pipeline this depends on (`subscriptions`/`payme
 
 ---
 
-## 10. Overage Billing (Per-Tenant Toggle + Charging)
+## 9. Overage Billing (Per-Tenant Toggle + Charging)
 
-**Priority: Low — depends on the payment gateway integration (#9)**
+**Priority: Low — depends on the payment gateway integration (#8)**
 
 The monthly quota reset this item used to require now exists: `tenant_quotas` (migration 073) decouples usage tracking from `tenants` entirely — one row per tenant per period (`period_start`/`period_end`, `document_quota`, `document_count`), with its own `is_current` flag mirroring `agreements`' per-type versioning. `POST /v1/admin/jobs/quota` (`tenant-quota.service.js`'s `resetDuePeriods()`) rolls over every period whose `period_end` has passed, on its own clock — independent of `subscriptions.billing_interval` for exactly the reason this item originally called out (a YEARLY subscriber must still get quota refreshed monthly, not yearly). `document-creation.service.js`'s atomic quota gate now increments/checks against the tenant's current `tenant_quotas` row instead of `tenants.document_count`/`document_quota` (both columns dropped). See CLAUDE.md's "Document quota enforcement" entry for the full design.
 
-What's left is exactly the overage-billing half, still blocked on the payment gateway (#9) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
+What's left is exactly the overage-billing half, still blocked on the payment gateway (#8) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
 
 **What:**
 1. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
@@ -241,7 +230,7 @@ What's left is exactly the overage-billing half, still blocked on the payment ga
 
 ---
 
-## 11. Audit Certificate Changes
+## 10. Audit Certificate Changes
 
 **Priority: Low — cheap gap, found while reviewing the billing audit-trail design**
 
@@ -253,7 +242,7 @@ What's left is exactly the overage-billing half, still blocked on the payment ga
 
 ---
 
-## 12. Real Account Termination / Closure State
+## 11. Real Account Termination / Closure State
 
 **Priority: Low — legal/product gap found during a Terms of Service review (2026-07-21)**
 
@@ -264,4 +253,27 @@ What's left is exactly the overage-billing half, still blocked on the payment ga
 - If a new status is added: update the `TenantStatus` enum, any CHECK constraints referencing it, `admin.service.js`'s `updateTenantStatus()`, and how it interacts with `requireNotSuspended` (a terminated tenant presumably needs the same or stricter blocking than a suspended one)
 
 **Effort:** Low–Medium — mostly a product decision (permanent vs. reversible), followed by a small migration + enum update if a new status is chosen.
+
+---
+
+## 12. Generic Repeated-Attempt / Anomaly Detection
+
+**Priority: Medium — reusable security mechanism, first identified while closing the registration recovery account-takeover gap**
+
+That fix (see `CHANGELOG.md`'s Unreleased/Added entry — `POST /v1/recover`) closed the takeover itself, but left "what if someone keeps trying anyway" unaddressed. Rather than build one-off counting/alerting logic just for that endpoint, this item is a small reusable mechanism any sensitive code path can call into — because registration recovery isn't the only place a repeated-attempt pattern is worth noticing:
+
+- **Registration recovery** (`POST /v1/recover`) — repeated recovery key issuances for the same tenant. Note this can't be counted via a distinct "mismatch" error the way it originally could — the endpoint deliberately returns the same generic response for every non-matching attempt (anti-enumeration), so the only observable signal here is the *successful* case repeating unexpectedly often, which could indicate a compromised certificate being reused rather than one being guessed
+- **API key authentication** (`authenticate` middleware) — repeated bearer tokens that fail the `keyHash` lookup, which can indicate someone testing leaked/scraped keys
+- **Admin authentication** (`authenticate-admin.js`) — repeated wrong `ADMIN_SECRET` values against `/v1/admin/*`, currently only bounded by `adminLimiter`'s 20 req/min IP cap with no alerting on sustained attempts
+- **Mailgun webhook** (`verify-mailgun-webhook.js`) — repeated invalid HMAC signatures could indicate probing, not just a misconfigured signing key
+
+**Important framing: this is not brute-force *prevention*.** Every secret involved (API keys, `ADMIN_SECRET`, verification tokens, cert fingerprints) is already high-entropy (256-bit or equivalent) and computationally infeasible to guess — nothing here is defending against an attacker who could plausibly succeed by trying enough values. The value is *detection*: repeated failures against the same target is a signal an operator should see, regardless of whether the underlying attack was ever likely to work.
+
+**What:**
+- A small reusable service (e.g. `src/services/attempt-tracker.service.js`) exposing something like `recordFailure(eventType, key)` → returns whether the configured threshold was crossed for that `(eventType, key)` pair within the configured window
+- A pluggable action on threshold-crossed — start with a single WARN-level structured log line (once item 5 ships, this is just another queryable log line, no separate storage needed for the *detection* half); escalate later to an email via the existing `ADMIN_NOTIFICATION_EMAIL`/`emailService` pattern (mirrors `sendPaymentProofSubmitted`'s operator-facing notification) if false-positive rate proves low enough to be worth an inbox ping
+- **Depends on item 7's shared store to be meaningful in production** — an in-memory counter is exactly the per-instance problem item 7 already documents for the rate limiters (`limit × N` across N instances). Either sequence this after item 7, or reuse whatever Redis connection item 7 introduces rather than standing up a second one
+- First wire-up targets: the three call sites listed above — proves the mechanism generalizes before adding a fourth
+
+**Effort:** Medium — the tracker itself is small, but real value depends on item 7 landing first, and touches three separate existing call sites to wire in.
 

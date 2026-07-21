@@ -11,8 +11,13 @@ const register = async (req, res) => {
   }
   const logoBuffer = logoFile?.buffer || null;
   const result = await registrationService.register(req.body, req.file?.buffer, req.body.certPassword, logoBuffer);
-  const { tenant, issuer, apiKey, recovered } = result;
-  res.status(recovered ? 200 : 201).json({ ok: true, tenant, issuer, apiKey });
+  const { tenant, issuer, apiKey } = result;
+  res.status(201).json({ ok: true, tenant, issuer, apiKey });
+};
+
+const recover = async (req, res) => {
+  const result = await registrationService.recover(req.body.email, req.file?.buffer, req.body.certPassword);
+  res.json(result);
 };
 
 const verifyEmail = async (req, res) => {
@@ -25,4 +30,4 @@ const resendVerification = async (req, res) => {
   res.json({ ok: true, message: 'If that email is registered and unverified, a new verification email has been sent.' });
 };
 
-module.exports = { register, resendVerification, verifyEmail };
+module.exports = { register, recover, resendVerification, verifyEmail };

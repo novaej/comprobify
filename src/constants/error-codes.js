@@ -24,8 +24,6 @@ const ErrorCodes = Object.freeze({
   CERTIFICATE_KEY_NOT_FOUND: 'CERTIFICATE_KEY_NOT_FOUND',
   /** Certificate notAfter date has passed */
   CERTIFICATE_EXPIRED: 'CERTIFICATE_EXPIRED',
-  /** Uploaded P12's certificate fingerprint does not match the one on file (recovery flow) */
-  CERTIFICATE_FINGERPRINT_MISMATCH: 'CERTIFICATE_FINGERPRINT_MISMATCH',
 
   // --- Account / tenant status ---
   /** The tenant account has been suspended */

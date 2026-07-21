@@ -112,6 +112,22 @@ const verifyEmail = [
     .withMessage('token must be a 64-character hex string'),
 ];
 
+const recover = [
+  body('email')
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('email must be a valid email address'),
+
+  body('certPassword')
+    .optional()
+    .isString(),
+
+  body().custom((_, { req }) => {
+    if (!req.file) throw new Error('A P12 certificate file is required');
+    return true;
+  }),
+];
+
 const resendVerification = [
   body('email')
     .isEmail()
@@ -132,4 +148,4 @@ const resendVerification = [
     ),
 ];
 
-module.exports = { register, resendVerification, verifyEmail };
+module.exports = { register, recover, resendVerification, verifyEmail };

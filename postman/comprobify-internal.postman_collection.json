@@ -287,7 +287,7 @@
                 }
               ]
             },
-            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nIf the email already exists and is not suspended, the endpoint revokes the current sandbox key and returns a new one (200 with `recovered: true`).\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
+            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nThis endpoint is for new accounts only. If the email already exists, it rejects with 409 CONFLICT regardless of account status — use the public collection's \"Recover Account\" request instead if the API key was lost.\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
           },
           "event": [
             {

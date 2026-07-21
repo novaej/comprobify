@@ -8,7 +8,8 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/v1/register` | Autoservicio: crea tenant + emisor + llave API de sandbox. Idempotente — si el correo ya existe, revoca la llave de sandbox actual y devuelve una nueva (200). |
+| `POST` | `/v1/register` | Autoservicio: crea tenant + emisor + llave API de sandbox. Solo para cuentas nuevas — si el correo ya existe, rechaza con `409 CONFLICT` (usa `/v1/recover` en su lugar). |
+| `POST` | `/v1/recover` | Recupera el acceso a una cuenta existente con el mismo certificado P12 — revoca y reemite la llave del entorno actual solo si el certificado coincide con el archivado |
 | `GET` | `/v1/verify-email` | Verifica el correo con el token del correo de registro |
 | `POST` | `/v1/resend-verification` | Reenvía el correo de verificación (regenera el token) |
 

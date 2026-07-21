@@ -18,6 +18,7 @@ function esSidebar() {
           collapsed: false,
           items: [
             { text: 'Registrarse', link: '/endpoints/register' },
+            { text: 'Recuperar cuenta', link: '/endpoints/recover' },
             { text: 'Verificar correo', link: '/endpoints/verify-email' },
             { text: 'Reenviar verificación', link: '/endpoints/resend-verification' },
           ],
@@ -169,6 +170,7 @@ function enSidebar() {
           collapsed: false,
           items: [
             { text: 'Register', link: '/en/endpoints/register' },
+            { text: 'Recover Account', link: '/en/endpoints/recover' },
             { text: 'Verify Email', link: '/en/endpoints/verify-email' },
             { text: 'Resend Verification', link: '/en/endpoints/resend-verification' },
           ],
