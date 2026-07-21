@@ -32,6 +32,12 @@ const updateTenantStatus = [
   body('status')
     .isIn(Object.values(TenantStatus))
     .withMessage(`status must be one of: ${Object.values(TenantStatus).join(', ')}`),
+
+  body('reason')
+    .optional()
+    .isString()
+    .isLength({ max: 200 })
+    .withMessage('reason must be a string of max 200 characters'),
 ];
 
 const verifyTenant = [

@@ -130,7 +130,7 @@ No log aggregation is currently in place. Without it there is no way to debug a 
 
 **What to log (one JSON line per request):**
 - `timestamp`, `method`, `path`, `statusCode`, `durationMs`
-- `ip` (client IP — needed for item 12's anomaly detection and for tracing unauthenticated-route abuse, e.g. registration recovery attempts, not just for post-hoc key-leak investigation)
+- `ip` (client IP — needed for item 11's anomaly detection and for tracing unauthenticated-route abuse, e.g. registration recovery attempts, not just for post-hoc key-leak investigation)
 - `keyHash` (never the plaintext key), `apiKeyId`, `tenantId`, `issuerId` — `null` on routes that never reach `authenticate` (registration, verification, public agreement/tiers endpoints)
 - `requestId` (UUID injected by middleware for correlation)
 
@@ -143,7 +143,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 - **SRI failure investigation** — the document event log captures outcomes but not timing; logs capture slow or intermittently failing SRI SOAP calls
 - **Quota disputes** — per-request audit trail independent of the `document_count` counter
 - **Security** — detect a leaked key used from an unexpected IP before the tenant reports it; especially important given documents have legal standing under Ecuadorian tax law
-- **Traces registration recovery volume** — `path=/v1/recover` + `ip` + `timestamp` gives per-IP/per-time visibility into recovery attempts with no registration-specific code. Note the anti-enumeration design means `statusCode` alone can't distinguish a real match from a no-op (both return `200`) — item 12's anomaly detection is what actually needs to tell those apart, not this logging layer
+- **Traces registration recovery volume** — `path=/v1/recover` + `ip` + `timestamp` gives per-IP/per-time visibility into recovery attempts with no registration-specific code. Note the anti-enumeration design means `statusCode` alone can't distinguish a real match from a no-op (both return `200`) — item 11's anomaly detection is what actually needs to tell those apart, not this logging layer
 
 **Implementation:**
 1. Add `express-winston` (or a thin custom middleware) to emit one structured JSON log line per request after the response is sent, mounted globally (see Scope above) — attach `tenantId`/`issuerId`/`keyHash`/`apiKeyId` from `req` when `authenticate` has run, `null` otherwise
@@ -242,21 +242,7 @@ What's left is exactly the overage-billing half, still blocked on the payment ga
 
 ---
 
-## 11. Real Account Termination / Closure State
-
-**Priority: Low — legal/product gap found during a Terms of Service review (2026-07-21)**
-
-`TenantStatus` (`src/constants/tenant-status.js`) only has `PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED` — there is no terminated/closed/cancelled state. `docs/agreements/terms-of-service.md` originally committed to letting a Client "terminate" their account at any time, but nothing in the tenant model represents that outcome distinctly from `SUSPENDED`, which elsewhere in the codebase (`PATCH /v1/admin/tenants/:id/status`) is treated as a reversible, admin-toggled state, not a permanent closure. The ToS wording has been softened in the meantime to describe what the product actually does today (a support-processed suspension of access) rather than promising a state that doesn't exist — but the underlying gap is still worth closing.
-
-**What:**
-- Decide whether account closure should be a genuinely new `TenantStatus` value (e.g. `TERMINATED`, permanent, no reactivation path) or whether the product intentionally treats closure as indefinite suspension — if the latter, no code change is needed, just confirmation that the ToS wording matches intent long-term
-- If a new status is added: update the `TenantStatus` enum, any CHECK constraints referencing it, `admin.service.js`'s `updateTenantStatus()`, and how it interacts with `requireNotSuspended` (a terminated tenant presumably needs the same or stricter blocking than a suspended one)
-
-**Effort:** Low–Medium — mostly a product decision (permanent vs. reversible), followed by a small migration + enum update if a new status is chosen.
-
----
-
-## 12. Generic Repeated-Attempt / Anomaly Detection
+## 11. Generic Repeated-Attempt / Anomaly Detection
 
 **Priority: Medium — reusable security mechanism, first identified while closing the registration recovery account-takeover gap**
 

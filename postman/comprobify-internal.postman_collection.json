@@ -2389,14 +2389,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"SUSPENDED\"\n}",
+              "raw": "{\n  \"status\": \"SUSPENDED\",\n  \"reason\": \"Voluntary account closure requested by tenant\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Activate or suspend a tenant. Accepted values: `ACTIVE`, `SUSPENDED`."
+            "description": "Activate or suspend a tenant. Accepted values: `ACTIVE`, `SUSPENDED`.\n\nOptional `reason` (max 200 chars) is recorded on the `STATUS_CHANGED` tenant event alongside `from`/`to` — useful for distinguishing why a tenant landed in SUSPENDED (e.g. a voluntary closure request per the Terms of Service, vs. fraud or non-payment), since the product intentionally has no separate \"terminated\" status."
           }
         },
         {

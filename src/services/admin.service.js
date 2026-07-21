@@ -100,7 +100,7 @@ async function updateTenantTier(id, tier) {
   return formatTenant(row, quotaRow);
 }
 
-async function updateTenantStatus(id, status) {
+async function updateTenantStatus(id, status, reason = null) {
   const allowed = Object.values(TenantStatus);
   if (!allowed.includes(status)) {
     throw new AppError(`Invalid status: '${status}'. Valid values: ${allowed.join(', ')}`, 400, ErrorCodes.INVALID_TENANT_STATUS);
@@ -110,7 +110,12 @@ async function updateTenantStatus(id, status) {
 
   const row = await tenantModel.updateStatus(id, status);
   const quotaRow = await tenantQuotaService.getCurrentForTenant(id);
-  await tenantEventModel.create(id, 'STATUS_CHANGED', { from: previous.status, to: status });
+  // reason distinguishes why a tenant landed in SUSPENDED — e.g. a
+  // voluntary account-closure request (docs/agreements/terms-of-service.md
+  // §10) reads very differently in the audit trail from a fraud/non-payment
+  // suspension, even though both use the same status value (see NEXT_STEPS
+  // item 11 — account closure is intentionally not a separate status).
+  await tenantEventModel.create(id, 'STATUS_CHANGED', { from: previous.status, to: status, reason });
   return formatTenant(row, quotaRow);
 }
 
