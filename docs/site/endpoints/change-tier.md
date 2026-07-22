@@ -142,7 +142,7 @@ Recibirás una notificación y un correo `PAYMENT_VERIFIED`/`PAYMENT_REJECTED` c
 | `400` | `INVALID_TIER` | `tier` no es `STARTER`, `GROWTH`, ni `BUSINESS` |
 | `400` | `INVALID_BILLING_INTERVAL` | Se proporciona `billingInterval` pero no es `MONTHLY` ni `YEARLY` |
 | `400` | `TIER_CHANGE_NO_OP` | Tanto `tier` como el `billingInterval` resuelto coinciden con los valores actuales de tu suscripción |
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `404` | `NOT_FOUND` | No se pudo resolver el tenant (normalmente no debería ocurrir en una solicitud autenticada) |
 | `409` | `NO_ACTIVE_SUBSCRIPTION` | No tienes ninguna suscripción `ACTIVE` — promociona con un plan pago y completa esa revisión de pago primero |
 | `409` | `TIER_CHANGE_ALREADY_PENDING` | Ya hay un cambio programado, o un pago ya está en curso, para esta suscripción |

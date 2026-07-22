@@ -8,7 +8,7 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/v1/register` | Autoservicio: crea tenant + emisor + llave API de sandbox. Solo para cuentas nuevas — si el correo ya existe, rechaza con `409 CONFLICT` (usa `/v1/recover` en su lugar). |
+| `POST` | `/v1/register` | Autoservicio: crea tenant + emisor + API key de sandbox. Solo para cuentas nuevas — si el correo ya existe, rechaza con `409 CONFLICT` (usa `/v1/recover` en su lugar). |
 | `POST` | `/v1/recover` | Recupera el acceso a una cuenta existente con el mismo certificado P12 — revoca y reemite la llave del entorno actual solo si el certificado coincide con el archivado |
 | `GET` | `/v1/verify-email` | Verifica el correo con el token del correo de registro |
 | `POST` | `/v1/resend-verification` | Reenvía el correo de verificación (regenera el token) |
@@ -48,7 +48,7 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/v1/tenants/me` | Resuelve el tenant (id, correo, plan, estado, cuota, entorno, aceptación de acuerdos) para la llave API autenticada |
+| `GET` | `/v1/tenants/me` | Resuelve el tenant (id, correo, plan, estado, cuota, entorno, aceptación de acuerdos) para la API key autenticada |
 | `PATCH` | `/v1/tenants/language` | Actualiza el idioma preferido para los correos salientes |
 | `POST` | `/v1/tenants/promote` | Promueve el tenant a producción — revoca todas las llaves de sandbox y crea llaves de producción equivalentes |
 | `GET` | `/v1/tenants/agreements` | Verifica si algún acuerdo necesita aceptación — devuelve qué tipos están desactualizados. Genera instancias PENDING de forma diferida para cualquier versión de plantilla nueva; los integradores externos deberían consultar esto periódicamente |
@@ -62,7 +62,7 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/v1/issuers` | Lista todos los emisores activos (sucursales / puntos de emisión) del tenant |
-| `POST` | `/v1/issuers` | Crea una nueva sucursal o punto de emisión — hereda el certificado de un emisor existente del tenant. NO genera una nueva llave API. |
+| `POST` | `/v1/issuers` | Crea una nueva sucursal o punto de emisión — hereda el certificado de un emisor existente del tenant. NO genera una nueva API key. |
 | `GET` | `/v1/issuers/:id` | Obtiene el perfil de un emisor (nombre, RUC, vencimiento del certificado) |
 | `PATCH` | `/v1/issuers/:id` | Edita `tradeName` y/o `branchAddress` |
 | `DELETE` | `/v1/issuers/:id` | Elimina (soft-delete) un emisor (bloqueado si es el último o si ya emitió comprobantes) |
@@ -75,13 +75,13 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 | `GET` | `/v1/issuers/:id/sequentials` | Consulta los números secuenciales actuales y siguientes por tipo de comprobante, por entorno |
 | `PATCH` | `/v1/issuers/:id/sequentials/:documentType` | Establece manualmente el siguiente número secuencial para un tipo de comprobante/entorno |
 
-## Llaves API (autenticado)
+## API keys (autenticado)
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/v1/keys` | Lista todas las llaves activas del tenant (etiqueta, entorno, created_at) |
 | `POST` | `/v1/keys` | Genera una nueva llave con nombre (`label`, `environment` opcional) |
-| `DELETE` | `/v1/keys/:id` | Revoca una llave API. No se puede revocar la llave usada en la solicitud actual. |
+| `DELETE` | `/v1/keys/:id` | Revoca una API key. No se puede revocar la llave usada en la solicitud actual. |
 
 ## Comprobantes
 

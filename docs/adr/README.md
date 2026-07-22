@@ -104,3 +104,5 @@ YYYY-MM-DD
 | [017](017-subscription-payment-pipeline.md) | Manual Subscription/Payment Pipeline with Invoice-Gated Activation | Accepted | 2026-06-28 |
 | [018](018-legal-document-acceptance.md) | Markdown-Sourced Legal Documents with Per-Type Acceptance Audit Trail | Accepted | 2026-06-30 |
 | [019](019-rabbitmq-async-sri-submission.md) | RabbitMQ-Backed Async SRI Submission | Accepted | 2026-07-13 |
+| [020](020-uuid-primary-keys.md) | UUID Primary Keys | Accepted | 2026-07-21 |
+| [021](021-account-recovery-flow.md) | Synchronous, Certificate-Verified Account Recovery | Accepted | 2026-07-21 |

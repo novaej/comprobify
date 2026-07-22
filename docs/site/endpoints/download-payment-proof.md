@@ -32,6 +32,6 @@ El pago debe pertenecer a una suscripción de tu tenant, y el archivo debe segui
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `404` | `NOT_FOUND` | El pago no existe, pertenece a otro tenant, el comprobante no pertenece a este pago, o fue eliminado |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

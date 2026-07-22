@@ -86,10 +86,10 @@ function esSidebar() {
           ],
         },
         {
-          text: 'Llaves API',
+          text: 'API Keys',
           collapsed: false,
           items: [
-            { text: 'Administrar llaves API', link: '/endpoints/api-keys' },
+            { text: 'Administrar API keys', link: '/endpoints/api-keys' },
           ],
         },
         {

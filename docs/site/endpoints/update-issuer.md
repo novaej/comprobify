@@ -60,7 +60,7 @@ Se requiere al menos un campo.
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | No se proporcionó ni `tradeName` ni `branchAddress`, o un campo supera los 300 caracteres |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
 | `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |

@@ -71,6 +71,8 @@ The account starts on the **FREE** tier (5 documents, 1 branch, 1 issuing point,
 | `400` | `BAD_REQUEST` | Certificate is expired or invalid |
 | `429` | `TOO_MANY_REQUESTS` | More than 5 registration attempts per hour from this IP |
 
+Lost your API key? `POST /v1/register` won't recover it for you anymore — use [`POST /v1/recover`](endpoints/recover.md) instead, with the same `.p12` certificate you registered with.
+
 ---
 
 ## 2. Verify your email

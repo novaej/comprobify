@@ -33,7 +33,7 @@ https://api.comprobify.com/v1
 
 ## Autenticación
 
-Las llaves API están vinculadas al tenant — una sola llave puede operar sobre cada sucursal de tu cuenta. Los endpoints de comprobantes requieren tanto la llave Bearer como un encabezado `X-Issuer-Id` que nombra la sucursal destino:
+Las API keys están vinculadas al tenant — una sola llave puede operar sobre cada sucursal de tu cuenta. Los endpoints de comprobantes requieren tanto la llave Bearer como un encabezado `X-Issuer-Id` que nombra la sucursal destino:
 
 ```
 Authorization: Bearer <api-key>

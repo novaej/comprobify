@@ -38,7 +38,7 @@ PATCH /v1/issuers/:id/logo
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
 | `400` | `INVALID_FILE_UPLOAD` | No se proporcionó ningún archivo, el archivo supera los 500 KB, o el tipo MIME no es compatible |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
 | `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |

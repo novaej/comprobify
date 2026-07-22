@@ -148,7 +148,7 @@ El payload original está disponible en el campo `requestPayload` de la respuest
 | `VALIDATION_FAILED` | 400 | La suma de `payments[].total` no coincide con el total calculado de la factura |
 | `BAD_REQUEST` | 400 | El encabezado `X-Issuer-Id` falta o está mal formado |
 | `INVALID_STATE_TRANSITION` | 400 | El comprobante no está en estado `RETURNED` o `NOT_AUTHORIZED` |
-| `UNAUTHORIZED` | 401 | Llave API faltante o inválida, o discrepancia de entorno |
+| `UNAUTHORIZED` | 401 | API key faltante o inválida, o discrepancia de entorno |
 | `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
 | `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
 | `NOT_FOUND` | 404 | Comprobante no encontrado |

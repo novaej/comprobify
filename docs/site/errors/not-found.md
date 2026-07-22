@@ -20,11 +20,11 @@ El campo `sourceIssuerId` en `POST /v1/issuers` (creación de sucursal) no coinc
 
 ### `NOT_FOUND` (respaldo)
 
-Una respuesta genérica de no encontrado para otros recursos (comprobantes, llaves API, etc.). Lee `detail` para conocer el tipo de recurso específico.
+Una respuesta genérica de no encontrado para otros recursos (comprobantes, API keys, etc.). Lee `detail` para conocer el tipo de recurso específico.
 
 **Qué hacer:**
 - Para comprobantes — verifica que la clave de acceso tenga exactamente 49 dígitos y haya sido creada por un emisor que pertenece a este tenant
-- Para llaves API — verifica el ID de la llave en la URL; lista las llaves activas con `GET /v1/keys`
+- Para API keys — verifica el ID de la llave en la URL; lista las llaves activas con `GET /v1/keys`
 
 ## Ejemplos de respuesta
 

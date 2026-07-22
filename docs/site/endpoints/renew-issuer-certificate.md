@@ -43,7 +43,7 @@ PATCH /v1/issuers/:id/certificate
 | `400` | `CERTIFICATE_PASSWORD_INVALID` | `certPassword` incorrecta |
 | `400` | `CERTIFICATE_KEY_NOT_FOUND` | No se encontró ningún bag de llave de firma de BANCO CENTRAL/SECURITY DATA en el P12 |
 | `400` | `CERTIFICATE_EXPIRED` | El certificado subido ya está vencido |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

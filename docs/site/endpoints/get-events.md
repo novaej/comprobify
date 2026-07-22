@@ -77,7 +77,7 @@ GET /v1/documents/:accessKey/events
 | Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
 | `BAD_REQUEST` | 400 | Falta el header `X-Issuer-Id` o está mal formado |
-| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `UNAUTHORIZED` | 401 | API key ausente o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
 | `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
 | `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
 | `NOT_FOUND` | 404 | Comprobante no encontrado |

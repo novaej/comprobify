@@ -82,9 +82,9 @@ La operación requiere que el comprobante tenga estado `AUTHORIZED`. Esto aplica
 
 ### `SELF_REVOCATION_FORBIDDEN`
 
-No puedes revocar la llave API que autenticó la solicitud actual.
+No puedes revocar la API key que autenticó la solicitud actual.
 
-**Qué hacer:** Usa una llave API activa distinta para revocar esta. Lista tus llaves con `GET /v1/keys`.
+**Qué hacer:** Usa una API key activa distinta para revocar esta. Lista tus llaves con `GET /v1/keys`.
 
 ### `INVALID_FILE_UPLOAD`
 

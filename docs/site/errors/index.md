@@ -117,7 +117,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `DOCUMENT_TYPE_NOT_SUPPORTED` | El código de tipo de comprobante no está registrado en el sistema |
 | `INVALID_STATE_TRANSITION` | La operación del comprobante no es válida para su estado actual |
 | `DOCUMENT_NOT_AUTHORIZED` | La operación (RIDE, correo) requiere que el comprobante tenga estado `AUTHORIZED` |
-| `SELF_REVOCATION_FORBIDDEN` | No se puede revocar la llave API usada para autenticar esta solicitud |
+| `SELF_REVOCATION_FORBIDDEN` | No se puede revocar la API key usada para autenticar esta solicitud |
 | `INVALID_FILE_UPLOAD` | El archivo subido falta, es del tipo incorrecto, o excede el límite de tamaño del campo (p. ej. un logo de más de 500 KB) |
 | `PROOF_FILE_LIMIT_REACHED` | El pago ya tiene el número máximo de archivos de comprobante activos (10) — elimina uno antes de subir más |
 | `VERSION_MISMATCH` | `termsVersion` en `POST /v1/register` o `POST /v1/tenants/agreements` no coincide con la versión actualmente publicada del documento TERMS — vuelve a consultar `GET /v1/agreements` y presenta la versión actual antes de pedirle al usuario que acepte de nuevo |
@@ -132,8 +132,8 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 
 | Código | Cuándo ocurre |
 |---|---|
-| `API_KEY_ENV_MISMATCH` | El ambiente de la llave API (`sandbox`/`production`) no coincide con el ambiente actual del tenant |
-| `UNAUTHORIZED` | Llave API faltante, inválida o revocada (respaldo) |
+| `API_KEY_ENV_MISMATCH` | El ambiente de la API key (`sandbox`/`production`) no coincide con el ambiente actual del tenant |
+| `UNAUTHORIZED` | API key faltante, inválida o revocada (respaldo) |
 
 ### 402 Payment Required
 
@@ -153,7 +153,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `ACCOUNT_SUSPENDED` | La cuenta del tenant está suspendida — contacta a soporte |
 | `EMAIL_VERIFICATION_REQUIRED` | La operación requiere que la dirección de correo esté verificada |
 | `AGREEMENT_ACCEPTANCE_REQUIRED` | Promoción bloqueada — uno o más acuerdos siguen en estado `PENDING` (revisa `GET /v1/tenants/agreements`, visualízalos en `GET /v1/tenants/agreements/:type`, acéptalos vía `POST /v1/tenants/agreements`) |
-| `PRODUCTION_KEY_REQUIRES_PROMOTION` | No se puede crear una llave API de producción antes de promover a producción |
+| `PRODUCTION_KEY_REQUIRES_PROMOTION` | No se puede crear una API key de producción antes de promover a producción |
 | `FORBIDDEN` | Otro fallo de permisos (respaldo — lee `detail`) |
 
 ### 404 Not Found
@@ -166,7 +166,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `SUBSCRIPTION_NOT_FOUND` | Suscripción no encontrada |
 | `PAYMENT_NOT_FOUND` | Pago no encontrado, o pertenece a otro tenant |
 | `AGREEMENT_NOT_FOUND` | Todavía no se ha publicado ningún documento del tipo solicitado (TERMS, PRIVACY o DPA) |
-| `NOT_FOUND` | Otro recurso no encontrado (comprobante, llave API — lee `detail`) |
+| `NOT_FOUND` | Otro recurso no encontrado (comprobante, API key — lee `detail`) |
 
 ### 409 Conflict
 
@@ -184,7 +184,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | Código | Cuándo ocurre |
 |---|---|
 | `RESEND_COOLDOWN` | Se solicitó reenviar la verificación de nuevo antes de que transcurriera el período de espera de 60 segundos |
-| `TOO_MANY_REQUESTS` | Se excedió el límite de tasa de la llave API |
+| `TOO_MANY_REQUESTS` | Se excedió el límite de tasa de la API key |
 
 ### 500 / 502
 

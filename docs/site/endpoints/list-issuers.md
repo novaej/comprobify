@@ -51,4 +51,4 @@ GET /v1/issuers
 
 | Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | Llave API faltante o inválida |
+| `UNAUTHORIZED` | 401 | API key faltante o inválida |

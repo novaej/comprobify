@@ -1,6 +1,6 @@
 # Recuperar cuenta
 
-Recupera el acceso a una cuenta existente cuando se perdió la llave API. Requiere el mismo certificado P12 usado al registrarse — la llave API se revoca y se reemplaza únicamente cuando el certificado coincide con el que está en archivo para esa cuenta.
+Recupera el acceso a una cuenta existente cuando se perdió la API key. Requiere el mismo certificado P12 usado al registrarse — la API key se revoca y se reemplaza únicamente cuando el certificado coincide con el que está en archivo para esa cuenta.
 
 ```
 POST /v1/recover
@@ -30,7 +30,7 @@ Este endpoint devuelve **siempre la misma forma de respuesta genérica** salvo q
 
 ### 200 OK — certificado coincide con una cuenta existente
 
-La llave API actual para el entorno vigente de la cuenta (sandbox o producción) se revoca y se emite una nueva de inmediato.
+La API key actual para el entorno vigente de la cuenta (sandbox o producción) se revoca y se emite una nueva de inmediato.
 
 ```json
 {

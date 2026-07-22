@@ -1,6 +1,6 @@
 # Registro
 
-Registro por autoservicio. Crea un tenant, un emisor y una llave API de sandbox en una sola llamada. La llave API devuelta se muestra **una sola vez** — guárdala de inmediato.
+Registro por autoservicio. Crea un tenant, un emisor y una API key de sandbox en una sola llamada. La API key devuelta se muestra **una sola vez** — guárdala de inmediato.
 
 ```
 POST /v1/register
@@ -123,6 +123,6 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 - El tenant inicia en estado `PENDING_VERIFICATION`. Se envía de inmediato un correo de verificación (fire-and-forget).
 - Los tenants no verificados pueden usar sandbox pero no pueden promoverse a producción.
 - El token de verificación expira después del TTL configurado (24 horas por defecto). Usa `POST /v1/resend-verification` para emitir uno nuevo.
-- Este endpoint es solo para cuentas nuevas — si el correo ya está registrado, la solicitud se rechaza con `409 CONFLICT` sin importar el estado de la cuenta. Si perdiste tu llave API, usa [`POST /v1/recover`](recover.md) en su lugar.
+- Este endpoint es solo para cuentas nuevas — si el correo ya está registrado, la solicitud se rechaza con `409 CONFLICT` sin importar el estado de la cuenta. Si perdiste tu API key, usa [`POST /v1/recover`](recover.md) en su lugar.
 - Obtén el `termsVersion` actual desde `GET /v1/agreements` justo antes de mostrar la casilla de aceptación, no en la carga de la página — el servidor valida la versión enviada y rechaza las versiones desactualizadas.
 - Los tenants que regresan y cuya versión de aceptación quedó desactualizada (por ejemplo, después de una actualización del DPA) deberían usar `GET /v1/tenants/agreements` para descubrir qué documentos necesitan volver a aceptarse, y `POST /v1/tenants/agreements` para registrar la nueva aceptación. Ver [Agreement Acceptance](agreement-acceptance.md).
