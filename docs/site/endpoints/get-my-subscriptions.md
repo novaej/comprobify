@@ -58,7 +58,7 @@ Los archivos de comprobante en sí nunca se incluyen aquí — llama a [Listar C
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
 ## Notas

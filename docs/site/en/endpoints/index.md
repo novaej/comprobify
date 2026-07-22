@@ -8,7 +8,8 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/v1/register` | Self-service: create tenant + issuer + sandbox API key. Idempotent — if the email already exists, revokes the current sandbox key and returns a new one (200). |
+| `POST` | `/v1/register` | Self-service: create tenant + issuer + sandbox API key. New accounts only — if the email already exists, rejects with `409 CONFLICT` (use `/v1/recover` instead). |
+| `POST` | `/v1/recover` | Recover access to an existing account with the same P12 certificate — revokes and reissues the current environment's key only if the certificate matches the one on file |
 | `GET` | `/v1/verify-email` | Verify email with token from registration email |
 | `POST` | `/v1/resend-verification` | Resend verification email (regenerates token) |
 

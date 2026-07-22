@@ -1,6 +1,6 @@
 # Crear Sucursal / Punto de Emisión
 
-Crea una nueva sucursal o punto de emisión para el tenant autenticado. El nuevo emisor hereda el RUC, la razón social y el certificado de un emisor existente del tenant. **No se genera ninguna llave API nueva** — tu llave de tenant existente ya cubre todas las sucursales mediante el header `X-Issuer-Id`.
+Crea una nueva sucursal o punto de emisión para el tenant autenticado. El nuevo emisor hereda el RUC, la razón social y el certificado de un emisor existente del tenant. **No se genera ninguna API key nueva** — tu llave de tenant existente ya cubre todas las sucursales mediante el header `X-Issuer-Id`.
 
 ```
 POST /v1/issuers
@@ -12,7 +12,7 @@ POST /v1/issuers
 
 ## Límite de tasa
 
-Limitador de escritura — depende del plan (10–300 solicitudes/min por llave API).
+Limitador de escritura — depende del plan (10–300 solicitudes/min por API key).
 
 ## Cuerpo de la solicitud
 
@@ -76,7 +76,7 @@ El `id` devuelto es lo que pasas como `X-Issuer-Id` en las solicitudes de compro
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | Campos faltantes o inválidos, o el tenant no tiene ningún emisor existente del cual heredar y no se subió ningún P12 |
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `402` | `BRANCH_LIMIT_REACHED` / `ISSUE_POINT_LIMIT_REACHED` | Se alcanzó el límite de sucursales o puntos de emisión para este plan |
 | `402` | `DOCUMENT_TYPE_NOT_IN_TIER` | Un código de `documentTypes` solicitado no está incluido en tu plan |
 | `403` | `FORBIDDEN` | El correo del tenant aún no ha sido verificado |

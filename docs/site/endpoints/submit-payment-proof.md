@@ -10,7 +10,7 @@ PATCH /v1/payments/:id/proof
 
 `Authorization: Bearer <api-key>`
 
-El pago debe pertenecer a una suscripción propiedad de tu tenant. Esta es tu propia llave API — no el secreto de administrador.
+El pago debe pertenecer a una suscripción propiedad de tu tenant. Esta es tu propia API key — no el secreto de administrador.
 
 ## Cuándo llamar a este endpoint
 
@@ -73,6 +73,6 @@ Recibirás una notificación y un correo `PAYMENT_VERIFIED` o `PAYMENT_REJECTED`
 | `400` | `INVALID_FILE_UPLOAD` | No se envió ningún archivo, un archivo no es PNG/JPEG/GIF/PDF, o un archivo supera los 2 MB |
 | `400` | `VALIDATION_FAILED` | `referenceNumber` faltó, estaba vacío, o superaba los 50 caracteres |
 | `400` | `PROOF_FILE_LIMIT_REACHED` | Este pago ya tiene el número máximo de archivos de comprobante activos (10 en total, considerando todos los intentos de subida) — elimina uno primero mediante [Eliminar Comprobante de Pago](delete-payment-proof.md) |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `404` | `PAYMENT_NOT_FOUND` | El pago no existe, o pertenece a otro tenant |
 | `409` | `CONFLICT` | El pago ya estaba `VERIFIED` y no puede aceptar más comprobantes |

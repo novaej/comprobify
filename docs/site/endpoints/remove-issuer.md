@@ -35,7 +35,7 @@ DELETE /v1/issuers/:id
 |---|---|---|
 | `400` | `LAST_ISSUER_CANNOT_BE_REMOVED` | Este es el único emisor activo restante del tenant |
 | `400` | `ISSUER_HAS_DOCUMENTS` | El emisor ha emitido al menos un comprobante |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o ya inactivo |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

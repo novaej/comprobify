@@ -2,7 +2,7 @@
 
 **Estado HTTP:** `403 Forbidden`
 
-La llave API es válida y el recurso existe, pero no tienes permiso para realizar esta operación. Cada error 403 lleva un `code` específico — úsalo para manejar cada caso de forma programática.
+La API key es válida y el recurso existe, pero no tienes permiso para realizar esta operación. Cada error 403 lleva un `code` específico — úsalo para manejar cada caso de forma programática.
 
 ## Códigos
 
@@ -10,7 +10,7 @@ La llave API es válida y el recurso existe, pero no tienes permiso para realiza
 
 El encabezado `X-Issuer-Id` nombra un emisor que existe pero pertenece a otro tenant. Cada tenant solo puede operar sobre sus propios emisores.
 
-**Qué hacer:** Llama a `GET /v1/issuers` con la misma llave API para listar los emisores de tu tenant, luego reenvía la solicitud con un `X-Issuer-Id` válido.
+**Qué hacer:** Llama a `GET /v1/issuers` con la misma API key para listar los emisores de tu tenant, luego reenvía la solicitud con un `X-Issuer-Id` válido.
 
 ### `ACCOUNT_SUSPENDED`
 
@@ -23,13 +23,13 @@ La cuenta del tenant ha sido suspendida. Toda solicitud de escritura falla hasta
 La operación requiere que se haya completado la verificación de correo. Esto bloquea:
 - Crear sucursales adicionales (`POST /v1/issuers`)
 - Promover a producción (`POST /v1/tenants/promote`)
-- Generar nuevas llaves API (`POST /v1/keys`)
+- Generar nuevas API keys (`POST /v1/keys`)
 
 **Qué hacer:** Revisa la bandeja de entrada en busca del correo de verificación original, o solicita uno nuevo vía `POST /v1/resend-verification`. Luego reintenta la operación original.
 
 ### `PRODUCTION_KEY_REQUIRES_PROMOTION`
 
-Una llave API de producción solo puede crearse si el tenant ya se ha promovido a producción al menos una vez. Antes de la promoción, solo se pueden generar llaves de sandbox.
+Una API key de producción solo puede crearse si el tenant ya se ha promovido a producción al menos una vez. Antes de la promoción, solo se pueden generar llaves de sandbox.
 
 **Qué hacer:** Llama a `POST /v1/tenants/promote` para promover el tenant a producción. Las llaves de producción se emitirán automáticamente como parte de esa respuesta. Se pueden generar llaves de producción adicionales después vía `POST /v1/keys`.
 

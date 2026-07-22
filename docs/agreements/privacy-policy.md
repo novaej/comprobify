@@ -37,6 +37,7 @@ Los datos se almacenan y procesan utilizando los siguientes proveedores, todos b
 - **Neon** — base de datos PostgreSQL de la API (todos los Clientes), incluida la base de datos independiente de la interfaz web cuando el Cliente la utiliza.
 - **Mailgun** — envío de correos transaccionales (verificación de cuenta, RIDE/PDF de comprobantes autorizados, notificaciones) (todos los Clientes).
 - **Sentry** — monitoreo de errores (configurado para minimizar el tratamiento de datos personales) (todos los Clientes).
+- **CloudAMQP** — enrutamiento de mensajes para el procesamiento asíncrono de comprobantes electrónicos; los mensajes contienen únicamente identificadores del comprobante, sin datos del comprador (todos los Clientes).
 - **SRI (Servicio de Rentas Internas)** — autoridad tributaria ecuatoriana receptora obligatoria por mandato legal; la transmisión de comprobantes electrónicos es exigida por la normativa tributaria aplicable (todos los Clientes).
 - **Vercel** — hosting de la interfaz web del Servicio (comprobify-web) (solo Clientes que utilizan la interfaz web).
 
@@ -54,6 +55,7 @@ Esta lista de proveedores puede actualizarse conforme evolucione la infraestruct
 - **Cifrado AES-256-GCM** de la clave privada de firma; la clave de cifrado se gestiona fuera de la base de datos.
 - **TLS** en todas las comunicaciones con la API.
 - **Acceso administrativo** restringido mediante mecanismos de autenticación independientes de las credenciales de los Clientes.
+- **Recuperación de cuenta verificada por certificado** — una nueva llave API solo se emite si el certificado digital presentado coincide con el certificado ya registrado para la cuenta; conocer el correo electrónico de la cuenta, por sí solo, no es suficiente para obtener acceso.
 - La cuenta de base de datos utilizada por la aplicación no tiene privilegios de superusuario, y las políticas de RLS están diseñadas para impedir su elusión desde la capa de aplicación.
 
 ## 6. Registros (logs)

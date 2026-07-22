@@ -16,7 +16,7 @@ Para notas de crédito (`documentType: "04"`), consulta [Crear Nota de Crédito]
 
 | Header | Requerido | Descripción |
 |---|---|---|
-| `Authorization` | Sí | Llave API tipo Bearer |
+| `Authorization` | Sí | API key tipo Bearer |
 | `X-Issuer-Id` | Sí | UUID de la sucursal emisora (obtenido de `GET /v1/issuers`). Identifica qué sucursal y certificado usar. |
 | `Content-Type` | Sí | `application/json` |
 | `Idempotency-Key` | No | String único (máx. 255 caracteres) — consulta [idempotencia](#idempotency) |
@@ -135,7 +135,7 @@ Incluye un header `Idempotency-Key` para hacer que la creación sea idempotente.
 | `VALIDATION_FAILED` | 400 | El cuerpo de la solicitud falla la validación de campos |
 | `DOCUMENT_TYPE_NOT_ENABLED` | 400 | El emisor no tiene habilitado el tipo de comprobante `01` — consulta [Document Types](document-types.md) |
 | `BAD_REQUEST` | 400 | El header `X-Issuer-Id` falta o está mal formado |
-| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o desajuste de ambiente (llave sandbox apuntando a un emisor de producción o viceversa) |
+| `UNAUTHORIZED` | 401 | API key ausente o inválida, o desajuste de ambiente (llave sandbox apuntando a un emisor de producción o viceversa) |
 | `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a un tenant diferente |
 | `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |
 | `CONFLICT` | 409 | Se reutilizó la clave de idempotencia con un payload diferente |

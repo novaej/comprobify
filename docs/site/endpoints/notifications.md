@@ -241,7 +241,7 @@ Omite el encabezado para recibir todas las notificaciones de todos los emisores 
 |---|---|---|
 | `400` | `ISSUER_ID_INVALID` | El encabezado `X-Issuer-Id` está presente pero no es un entero positivo válido |
 | `400` | `ISSUER_ID_INVALID` | `sinceId` está presente pero no es un entero positivo válido |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 
 ---
 
@@ -276,7 +276,7 @@ Marca una sola notificación como leída (`readAt` se establece al momento actua
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `404` | `NOT_FOUND` | La notificación no existe, pertenece a otro tenant, o ya está leída |
 
 ---
@@ -346,7 +346,7 @@ Cuando `enabled` es `false` para un tipo, la API no creará nuevas notificacione
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | El cuerpo no es un arreglo, o una entrada tiene un `type` inválido o un `enabled` que no es booleano |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 
 ---
 

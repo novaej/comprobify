@@ -55,7 +55,7 @@ Si la suscripción pasa a `ACTIVE` antes de que ocurra la promoción, [`POST /v1
 |---|---|---|
 | `400` | `INVALID_TIER` | `tier` no es `STARTER`, `GROWTH`, ni `BUSINESS` |
 | `400` | `VALIDATION_FAILED` | `billingInterval` no es un valor reconocido |
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `403` | `FORBIDDEN` (`EMAIL_VERIFICATION_REQUIRED`) | El correo del tenant aún no ha sido verificado |
 | `404` | `NOT_FOUND` | No se pudo resolver el tenant (normalmente no debería ocurrir en una solicitud autenticada) |
 | `409` | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | El tenant ya tiene una suscripción en curso |

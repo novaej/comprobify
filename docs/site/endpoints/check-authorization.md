@@ -44,7 +44,7 @@ El comprobante debe estar en estado `RECEIVED`. Una llamada exitosa encola la ve
 |---|---|---|
 | `BAD_REQUEST` | 400 | El header `X-Issuer-Id` falta o está mal formado |
 | `BAD_REQUEST` | 400 | El comprobante no está en estado `RECEIVED` |
-| `UNAUTHORIZED` | 401 | Llave API ausente o inválida, o desajuste de ambiente (llave sandbox apuntando a un tenant de producción o viceversa) |
+| `UNAUTHORIZED` | 401 | API key ausente o inválida, o desajuste de ambiente (llave sandbox apuntando a un tenant de producción o viceversa) |
 | `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
 | `ACCOUNT_SUSPENDED` | 403 | La cuenta del tenant está suspendida — a diferencia de la mayoría de los demás endpoints de lectura de comprobantes (listar, obtener, RIDE, XML, eventos, notas de crédito), este permanece bloqueado durante la suspensión porque de todos modos resulta en una llamada al SRI y en el envío del correo de autorización (solo que ahora de forma asíncrona, vía el worker) — esto es "usar" el servicio, no una visualización pasiva; consulta el [catálogo de errores](../errors/index.md) |
 | `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |

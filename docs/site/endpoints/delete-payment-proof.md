@@ -1,6 +1,6 @@
 # Eliminar Comprobante de Pago
 
-Elimina un archivo de comprobante de tu propia vista — por ejemplo, si subiste el archivo equivocado por error. Esto es una eliminación **reversible** (soft delete): tu proveedor aún puede verlo y descargarlo para sus registros, simplemente desaparece de tu propia lista en [List Payment Proofs](list-payment-proofs.md) y ya no puede [descargarse](download-payment-proof.md) con tu propia llave API.
+Elimina un archivo de comprobante de tu propia vista — por ejemplo, si subiste el archivo equivocado por error. Esto es una eliminación **reversible** (soft delete): tu proveedor aún puede verlo y descargarlo para sus registros, simplemente desaparece de tu propia lista en [List Payment Proofs](list-payment-proofs.md) y ya no puede [descargarse](download-payment-proof.md) con tu propia API key.
 
 ```
 DELETE /v1/payments/:id/proofs/:proofId
@@ -31,7 +31,7 @@ El pago debe pertenecer a una suscripción propiedad de tu tenant.
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `404` | `PAYMENT_NOT_FOUND` | El pago no existe, o pertenece a un tenant diferente |
 | `404` | `NOT_FOUND` | El comprobante no pertenece a este pago, o ya fue eliminado |
 | `409` | `CONFLICT` | El pago ya está `VERIFIED` — sus archivos de comprobante ya no pueden modificarse |

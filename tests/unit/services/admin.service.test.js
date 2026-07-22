@@ -159,7 +159,7 @@ describe('AdminService', () => {
       expect(tenantModel.updateStatus).not.toHaveBeenCalled();
     });
 
-    test('updates the status, logs a STATUS_CHANGED event with from/to, and returns the formatted tenant', async () => {
+    test('updates the status, logs a STATUS_CHANGED event with from/to/reason, and returns the formatted tenant', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
       tenantModel.updateStatus.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscription_tier: 'FREE', status: 'SUSPENDED',
@@ -170,8 +170,25 @@ describe('AdminService', () => {
       const result = await adminService.updateTenantStatus(1, 'SUSPENDED');
 
       expect(tenantModel.updateStatus).toHaveBeenCalledWith(1, 'SUSPENDED');
-      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'STATUS_CHANGED', { from: 'ACTIVE', to: 'SUSPENDED' });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'STATUS_CHANGED', { from: 'ACTIVE', to: 'SUSPENDED', reason: null });
       expect(result.status).toBe('SUSPENDED');
+    });
+
+    test('records an optional reason on the STATUS_CHANGED event (e.g. voluntary account closure)', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
+      tenantModel.updateStatus.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscription_tier: 'FREE', status: 'SUSPENDED',
+        created_at: new Date('2026-01-01'),
+      });
+      tenantQuotaService.getCurrentForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
+
+      await adminService.updateTenantStatus(1, 'SUSPENDED', 'Voluntary account closure requested by tenant');
+
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'STATUS_CHANGED', {
+        from: 'ACTIVE',
+        to: 'SUSPENDED',
+        reason: 'Voluntary account closure requested by tenant',
+      });
     });
   });
 

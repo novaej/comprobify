@@ -64,6 +64,6 @@ Todos los filtros se combinan con `AND`.
 |---|---|---|
 | `BAD_REQUEST` | 400 | El encabezado `X-Issuer-Id` falta o está mal formado |
 | `VALIDATION_FAILED` | 400 | Parámetro de consulta inválido (por ejemplo, estado inválido, formato de fecha inválido) |
-| `UNAUTHORIZED` | 401 | Llave API faltante o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
+| `UNAUTHORIZED` | 401 | API key faltante o inválida, o discrepancia de entorno (llave de sandbox apuntando a un tenant de producción o viceversa) |
 | `FORBIDDEN` | 403 | El emisor de `X-Issuer-Id` pertenece a otro tenant |
 | `NOT_FOUND` | 404 | El emisor de `X-Issuer-Id` no existe |

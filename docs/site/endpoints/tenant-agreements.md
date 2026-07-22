@@ -70,7 +70,7 @@ Los headers de la respuesta incluyen:
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `:type` no es un tipo de documento válido |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `404` | `AGREEMENT_NOT_FOUND` | Aún no se ha publicado ninguna plantilla para este tipo |
 | `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
 

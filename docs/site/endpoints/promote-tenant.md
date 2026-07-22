@@ -1,6 +1,6 @@
 # Promover Tenant a Producción
 
-Promueve el tenant autenticado de sandbox a producción. Todas las sucursales (emisores) se promueven a la vez. Los contadores secuenciales se inicializan para cada combinación de emisor × tipo de comprobante. Todas las llaves API de sandbox activas se revocan y se reemplazan con llaves de producción equivalentes — una por cada llave de sandbox revocada, conservando la misma etiqueta.
+Promueve el tenant autenticado de sandbox a producción. Todas las sucursales (emisores) se promueven a la vez. Los contadores secuenciales se inicializan para cada combinación de emisor × tipo de comprobante. Todas las API keys de sandbox activas se revocan y se reemplazan con llaves de producción equivalentes — una por cada llave de sandbox revocada, conservando la misma etiqueta.
 
 ```
 POST /v1/tenants/promote
@@ -72,7 +72,7 @@ Las llaves de sandbox se revocan automáticamente durante la promoción. Si no t
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `tier` o `billingInterval` no es un valor reconocido |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `FORBIDDEN` | El correo del tenant aún no está verificado (estado `PENDING_VERIFICATION`) |
 | `403` | `AGREEMENT_ACCEPTANCE_REQUIRED` | Uno o más acuerdos no han sido aceptados — llama a `GET /v1/tenants/agreements` para ver cuáles, revísalos en `GET /v1/tenants/agreements/:type`, y luego acéptalos vía `POST /v1/tenants/agreements` |
 | `409` | `CONFLICT` | El tenant ya está en producción |

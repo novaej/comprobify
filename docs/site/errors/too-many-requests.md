@@ -14,9 +14,9 @@ La solicitud fue limitada. Revisa el campo `code` para distinguir entre un lími
 
 ### `TOO_MANY_REQUESTS` — límite de tasa de la API
 
-Tu llave API excedió el límite de solicitudes por minuto.
+Tu API key excedió el límite de solicitudes por minuto.
 
-**Límites (por llave API):**
+**Límites (por API key):**
 - **Endpoints de escritura** (POST): 60 solicitudes / minuto
 - **Endpoints de lectura** (GET): 300 solicitudes / minuto
 
@@ -70,7 +70,7 @@ async function requestWithRetry(fn, maxRetries = 3) {
   "title":    "Too Many Requests",
   "status":   429,
   "code":     "TOO_MANY_REQUESTS",
-  "detail":   "Se excedió el límite de tasa para esta llave API",
+  "detail":   "Se excedió el límite de tasa para esta API key",
   "instance": "/v1/documents"
 }
 ```

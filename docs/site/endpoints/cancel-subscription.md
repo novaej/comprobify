@@ -10,7 +10,7 @@ DELETE /v1/subscriptions
 
 `Authorization: Bearer <api-key>`
 
-Requiere una suscripción `ACTIVE` y una llave API de producción — los tenants en sandbox deben [promoverse primero](promote-tenant.md). Si en lugar de cancelar por completo deseas moverte a un plan **pago** inferior, usa [`POST /v1/subscriptions/change-tier`](change-tier.md).
+Requiere una suscripción `ACTIVE` y una API key de producción — los tenants en sandbox deben [promoverse primero](promote-tenant.md). Si en lugar de cancelar por completo deseas moverte a un plan **pago** inferior, usa [`POST /v1/subscriptions/change-tier`](change-tier.md).
 
 ## Cómo funciona
 
@@ -55,7 +55,7 @@ No se emitirá ningún recordatorio de renovación para una suscripción con can
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `403` | `REQUIRES_PRODUCTION` | El tenant sigue en sandbox — promuévelo a producción primero |
 | `409` | `NO_ACTIVE_SUBSCRIPTION` | No tienes ninguna suscripción `ACTIVE` para cancelar |
 | `409` | `CANCELLATION_ALREADY_PENDING` | Ya hay una cancelación programada para esta suscripción |

@@ -63,6 +63,7 @@ describe('RegistrationService', () => {
     apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999' });
     emailService.sendVerificationEmail.mockResolvedValue({ messageId: 'mg-id-1' });
     tenantModel.updateVerificationEmailSent.mockResolvedValue(undefined);
+    tenantModel.updateVerificationToken.mockResolvedValue(undefined);
     tenantEventModel.create.mockResolvedValue(undefined);
   });
 
@@ -81,64 +82,18 @@ describe('RegistrationService', () => {
       expect(tenantModel.create).not.toHaveBeenCalled();
     });
 
-    test('rejects when the account already exists and is suspended', async () => {
-      tenantModel.findByEmail.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'SUSPENDED' });
-
-      await expect(registrationService.register(baseFields, p12Buffer, p12Password))
-        .rejects.toMatchObject({ statusCode: 403, code: 'ACCOUNT_SUSPENDED' });
-
-      expect(issuerModel.findByTenantId).not.toHaveBeenCalled();
-    });
-
-    test('rejects when the email exists but has no issuer (inconsistent state, not a recoverable duplicate)', async () => {
+    test('rejects when an account with the given email already exists, regardless of status or issuer state', async () => {
       tenantModel.findByEmail.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
-      issuerModel.findByTenantId.mockResolvedValue(null);
 
       await expect(registrationService.register(baseFields, p12Buffer, p12Password))
         .rejects.toMatchObject({ statusCode: 409 });
 
-      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
-    });
-
-    test('idempotent re-registration: existing email + existing issuer revokes the current sandbox key and mints a new one', async () => {
-      const existingTenant = {
-        id: '00000000-0000-0000-0000-000000000001',
-        email: baseFields.email,
-        status: 'PENDING_VERIFICATION',
-        subscription_tier: 'FREE',
-      };
-      const existingIssuer = {
-        id: '00000000-0000-0000-0000-000000000010',
-        ruc: baseFields.ruc,
-        business_name: 'Acme Corp',
-        trade_name: 'Acme',
-        branch_code: '001',
-        issue_point_code: '001',
-        cert_fingerprint: 'AA:BB:CC',
-        cert_expiry: new Date('2030-01-01T00:00:00Z'),
-      };
-      tenantModel.findByEmail.mockResolvedValue(existingTenant);
-      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
-      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000500' });
-
-      const result = await registrationService.register(baseFields, p12Buffer, p12Password);
-
-      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'sandbox');
-      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({
-        tenantId: '00000000-0000-0000-0000-000000000001',
-        label: 'Recovery sandbox key',
-        environment: 'sandbox',
-      }));
-      expect(result.recovered).toBe(true);
-      expect(result.apiKey).toEqual(expect.any(String));
-      expect(result.apiKey).toHaveLength(64); // 32 random bytes as hex
-      expect(result.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000001', email: baseFields.email });
-      expect(result.issuer).toMatchObject({ id: '00000000-0000-0000-0000-000000000010', ruc: baseFields.ruc });
-
-      // Does not attempt to create a brand-new tenant/issuer on the recovery path.
-      expect(tenantModel.create).not.toHaveBeenCalled();
-      expect(issuerModel.create).not.toHaveBeenCalled();
+      // register() no longer inspects the existing tenant/issuer at all —
+      // that's recover()'s job now. No cert parsing, no key operations.
+      expect(issuerModel.findByTenantId).not.toHaveBeenCalled();
       expect(certificateService.parseCertificate).not.toHaveBeenCalled();
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+      expect(tenantModel.create).not.toHaveBeenCalled();
     });
 
     test('validates termsVersion against the published TERMS agreement before parsing the certificate', async () => {
@@ -319,6 +274,147 @@ describe('RegistrationService', () => {
       tenantAgreementService.generateForTenant.mockRejectedValue(new Error('template missing'));
 
       await expect(registrationService.register(baseFields, p12Buffer, p12Password)).resolves.toBeDefined();
+    });
+  });
+
+  describe('recover', () => {
+    const existingTenant = {
+      id: '00000000-0000-0000-0000-000000000001',
+      email: baseFields.email,
+      status: 'ACTIVE',
+      subscription_tier: 'FREE',
+      sandbox: true,
+      preferred_language: 'es',
+      verification_redirect_url: null,
+    };
+    const existingIssuer = {
+      id: '00000000-0000-0000-0000-000000000010',
+      ruc: baseFields.ruc,
+      business_name: 'Acme Corp',
+      trade_name: 'Acme',
+      branch_code: '001',
+      issue_point_code: '001',
+      cert_fingerprint: 'AA:BB:CC', // matches the default parseCertificate mock from beforeEach
+      cert_expiry: new Date('2030-01-01T00:00:00Z'),
+    };
+
+    test('parses the certificate before looking up the tenant (anti-enumeration ordering)', async () => {
+      certificateService.parseCertificate.mockImplementation(() => {
+        throw Object.assign(new Error('Invalid P12 certificate password.'), { statusCode: 400, code: 'CERTIFICATE_PASSWORD_INVALID' });
+      });
+
+      await expect(registrationService.recover(baseFields.email, p12Buffer, p12Password))
+        .rejects.toMatchObject({ statusCode: 400, code: 'CERTIFICATE_PASSWORD_INVALID' });
+
+      expect(tenantModel.findByEmail).not.toHaveBeenCalled();
+    });
+
+    test('returns a generic response when no tenant matches the email (does not leak existence)', async () => {
+      tenantModel.findByEmail.mockResolvedValue(null);
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+
+      expect(result).toEqual({ ok: true, message: expect.any(String) });
+      expect(result.apiKey).toBeUndefined();
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+    });
+
+    test('returns the same generic response when the tenant has no issuer (inconsistent state)', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(null);
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+
+      expect(result).toEqual({ ok: true, message: expect.any(String) });
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+    });
+
+    test('returns the same generic response when the certificate fingerprint does not match (indistinguishable from a nonexistent email)', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      certificateService.parseCertificate.mockReturnValue({
+        privateKeyPem: 'PRIVATE_KEY_PEM',
+        certPem: 'CERT_PEM',
+        certFingerprint: 'AN-ATTACKERS-DIFFERENT-CERT',
+        certExpiry: new Date('2030-01-01T00:00:00Z'),
+      });
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+
+      expect(result).toEqual({ ok: true, message: expect.any(String) });
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+    });
+
+    test('rejects with ACCOUNT_SUSPENDED when the certificate matches but the tenant is suspended', async () => {
+      tenantModel.findByEmail.mockResolvedValue({ ...existingTenant, status: 'SUSPENDED' });
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      await expect(registrationService.recover(baseFields.email, p12Buffer, p12Password))
+        .rejects.toMatchObject({ statusCode: 403, code: 'ACCOUNT_SUSPENDED' });
+
+      // Suspension is only ever revealed to a caller who already proved
+      // ownership via a matching certificate.
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+    });
+
+    test('matched + sandbox tenant: revokes and reissues a sandbox key', async () => {
+      tenantModel.findByEmail.mockResolvedValue({ ...existingTenant, sandbox: true });
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000500' });
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'sandbox');
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        tenantId: '00000000-0000-0000-0000-000000000001',
+        label: 'Recovery key',
+        environment: 'sandbox',
+      }));
+      expect(result.environment).toBe('sandbox');
+      expect(result.apiKey).toEqual(expect.any(String));
+      expect(result.apiKey).toHaveLength(64);
+      expect(result.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000001', email: baseFields.email });
+      expect(result.issuer).toMatchObject({ id: '00000000-0000-0000-0000-000000000010', ruc: baseFields.ruc });
+    });
+
+    test('matched + production (promoted) tenant: revokes and reissues a production key, not sandbox (regression test)', async () => {
+      tenantModel.findByEmail.mockResolvedValue({ ...existingTenant, sandbox: false });
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000501' });
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'production');
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        tenantId: '00000000-0000-0000-0000-000000000001',
+        environment: 'production',
+      }));
+      expect(result.environment).toBe('production');
+    });
+
+    test('matched: fires a fresh verification email as a fire-and-forget notification', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(tenantModel.updateVerificationToken).toHaveBeenCalledWith(
+        existingTenant.id,
+        expect.any(String),
+        expect.any(Date)
+      );
+      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
+        baseFields.email,
+        expect.any(String),
+        existingTenant.verification_redirect_url,
+        existingTenant.preferred_language
+      );
+      expect(tenantEventModel.create).toHaveBeenCalledWith(existingTenant.id, 'VERIFICATION_EMAIL_SENT');
     });
   });
 

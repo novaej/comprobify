@@ -98,7 +98,7 @@ Guarda el `secret` de forma segura. Se usa para verificar el header `X-Comprobif
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `url` no es una URL HTTPS válida, o un `eventType` no es reconocido |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `402` | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Se alcanzó el límite del tier en endpoints activos |
 
 ---
@@ -158,7 +158,7 @@ Actualiza la URL, las suscripciones de eventos, o el indicador `active` de un en
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `url` inválida, `eventType` desconocido, o `active` no booleano |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `404` | `NOT_FOUND` | Endpoint no encontrado o pertenece a otro tenant |
 
 ---
@@ -183,7 +183,7 @@ Elimina el endpoint de forma lógica (`active = false`). El endpoint deja de rec
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `404` | `NOT_FOUND` | Endpoint no encontrado o pertenece a otro tenant |
 
 ---

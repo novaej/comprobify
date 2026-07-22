@@ -52,6 +52,6 @@ Aquí solo se devuelven los archivos con `active: true` — un archivo que hayas
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `404` | `PAYMENT_NOT_FOUND` | El pago no existe, o pertenece a otro tenant |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

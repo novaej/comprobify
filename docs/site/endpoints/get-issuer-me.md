@@ -6,7 +6,7 @@ Devuelve la información de perfil de un solo emisor propiedad del tenant autent
 GET /v1/issuers/:id
 ```
 
-> **Migrado desde `GET /v1/issuers/me`** (eliminado en mayo de 2026). Dado que las llaves API están ahora asociadas al tenant, "el emisor actual" ya no está bien definido — debes nombrar el emisor por su id. Lista todos los emisores de tu tenant con `GET /v1/issuers`.
+> **Migrado desde `GET /v1/issuers/me`** (eliminado en mayo de 2026). Dado que las API keys están ahora asociadas al tenant, "el emisor actual" ya no está bien definido — debes nombrar el emisor por su id. Lista todos los emisores de tu tenant con `GET /v1/issuers`.
 
 ## Autenticación
 
@@ -55,6 +55,6 @@ GET /v1/issuers/:id
 
 | Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | Llave API ausente o inválida |
+| `UNAUTHORIZED` | 401 | API key ausente o inválida |
 | `FORBIDDEN` | 403 | El emisor existe pero pertenece a otro tenant |
 | `NOT_FOUND` | 404 | El id del emisor no existe o está inactivo |

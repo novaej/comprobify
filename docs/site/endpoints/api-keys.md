@@ -1,6 +1,6 @@
-# Llaves API
+# API keys
 
-Gestión de llaves API a nivel de tenant. Crea llaves nombradas para cada integración (frontend, ERP, aplicación móvil, banco de pruebas sandbox, etc.), lístalas y revoca las filtradas o sin uso.
+Gestión de API keys a nivel de tenant. Crea llaves nombradas para cada integración (frontend, ERP, aplicación móvil, banco de pruebas sandbox, etc.), lístalas y revoca las filtradas o sin uso.
 
 ```
 GET    /v1/keys
@@ -88,7 +88,7 @@ Crea una nueva llave a nivel de tenant. El token en texto plano se muestra **una
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `label` demasiado largo o `environment` inválido |
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `403` | `FORBIDDEN` | El correo del tenant no está verificado, O se intenta crear una llave de producción antes de que algún emisor haya sido promovido |
 
 ---
@@ -120,7 +120,7 @@ Marca la llave como inactiva. La llave no podrá usarse para autenticar ninguna 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `BAD_REQUEST` | Se intenta revocar la misma llave que se está usando para hacer esta solicitud — usa una llave diferente, o coordina con soporte de administración |
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `404` | `NOT_FOUND` | El id de la llave no existe o ya fue revocado, o pertenece a un tenant diferente |
 
 ---

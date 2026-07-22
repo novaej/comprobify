@@ -337,7 +337,7 @@
                 }
               ]
             },
-            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nIf the email already exists and is not suspended, the endpoint revokes the current sandbox key and returns a new one (200 with `recovered: true`).\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
+            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nThis endpoint is for new accounts only. If the email already exists, it rejects with 409 CONFLICT regardless of account status — use \"Recover Account\" instead if you lost your API key.\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
           },
           "event": [
             {
@@ -345,9 +345,63 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "pm.test('Status 201 or 200 (recovery)', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+                  "pm.test('Status 201', () => pm.expect(pm.response.code).to.equal(201));",
                   "pm.test('ok', () => pm.expect(r.ok).to.be.true);",
                   "if (r.apiKey) { pm.collectionVariables.set('api_key', r.apiKey); console.log('api_key saved'); }",
+                  "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
+                  "if (r.issuer?.id) pm.collectionVariables.set('issuer_id', String(r.issuer.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recover Account",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/recover",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "recover"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "email",
+                  "value": "your@email.com",
+                  "type": "text"
+                },
+                {
+                  "key": "certPassword",
+                  "value": "",
+                  "type": "text"
+                },
+                {
+                  "key": "cert",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "description": "Recovers access to an existing account when the API key was lost. Requires the same P12 certificate used at registration — the API key is only revoked and replaced when the uploaded certificate matches the one on file.\n\nAlways returns 200 with the same generic response shape unless the certificate genuinely matches an existing account (anti-enumeration — a nonexistent email, an account with no issuer, and a mismatched certificate are all indistinguishable). On a real match, the key for the account's actual current environment (sandbox or production) is revoked and reissued immediately, returned in `apiKey`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.expect(pm.response.code).to.equal(200));",
+                  "pm.test('ok', () => pm.expect(r.ok).to.be.true);",
+                  "if (r.apiKey) { pm.collectionVariables.set('api_key', r.apiKey); console.log('api_key saved (recovered)'); }",
                   "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
                   "if (r.issuer?.id) pm.collectionVariables.set('issuer_id', String(r.issuer.id));"
                 ],

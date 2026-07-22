@@ -63,7 +63,7 @@ Cada entrada en `outdated` indica el tipo específico de documento que cambió. 
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
 Este es un endpoint de solo lectura, por lo que sigue siendo accesible incluso si la cuenta del tenant está `SUSPENDED` — consulta la entrada `ACCOUNT_SUSPENDED` en el [catálogo de errores](../errors/index.md).
@@ -102,11 +102,11 @@ Registra una fila de aceptación por cada tipo de documento actualmente publicad
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `termsVersion` ausente o demasiado largo |
 | `400` | `VERSION_MISMATCH` | El `termsVersion` enviado no coincide con la versión de TERMS actualmente publicada — el documento se actualizó entre el momento en que tu interfaz cargó y el momento en que el usuario hizo clic en aceptar. Vuelve a consultar `GET /v1/agreements`, muestra el contenido actualizado y solicita la aceptación nuevamente. |
-| `401` | `UNAUTHORIZED` | Llave API ausente o inválida |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `403` | `FORBIDDEN` | La cuenta está suspendida |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
 ## Notas
 
 - Los cambios en cualquiera de los tres documentos (TERMS, PRIVACY o DPA) de forma independiente aparecerán como un desajuste únicamente para ese tipo — los otros dos no aparecerán en `outdated` a menos que también hayan cambiado. Esto significa que una actualización exclusiva del DPA activa la re-aceptación solo del DPA, sin forzar al tenant a "re-aceptar" contenido de Términos o Privacidad que no cambió.
-- La llave API no necesita `X-Issuer-Id` — esta es una operación a nivel de tenant.
+- La API key no necesita `X-Issuer-Id` — esta es una operación a nivel de tenant.

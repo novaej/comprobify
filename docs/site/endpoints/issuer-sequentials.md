@@ -51,7 +51,7 @@ Un tipo de comprobante que nunca ha emitido un comprobante en un entorno reporta
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
@@ -103,7 +103,7 @@ La escritura bloquea la fila del contador (`SELECT ... FOR UPDATE`) dentro de la
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `documentType` no es un tipo soportado, `environment` no es `sandbox`/`production`, o `nextSequential` no es un entero positivo |
 | `400` | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` no supera el valor actual del contador |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |

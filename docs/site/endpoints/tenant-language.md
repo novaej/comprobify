@@ -8,7 +8,7 @@ PATCH /v1/tenants/language
 
 ## Autenticación
 
-Bearer token — se requiere llave API.
+Bearer token — se requiere API key.
 
 ## Cuerpo de la solicitud
 
@@ -35,7 +35,7 @@ Bearer token — se requiere llave API.
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `language` falta o no es un valor admitido |
-| `401` | `UNAUTHORIZED` | Llave API faltante o inválida |
+| `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `FORBIDDEN` | La cuenta está suspendida |
 | `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
 

@@ -1,6 +1,6 @@
 # Registro
 
-Registro por autoservicio. Crea un tenant, un emisor y una llave API de sandbox en una sola llamada. La llave API devuelta se muestra **una sola vez** — guárdala de inmediato.
+Registro por autoservicio. Crea un tenant, un emisor y una API key de sandbox en una sola llamada. La API key devuelta se muestra **una sola vez** — guárdala de inmediato.
 
 ```
 POST /v1/register
@@ -107,10 +107,6 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 }
 ```
 
-### 200 OK — correo ya registrado (recuperación de llave)
-
-Si el correo ya está registrado y no está suspendido, la llave de sandbox actual se revoca y se devuelve una nueva. Misma estructura de respuesta que 201 pero con `recovered: true`.
-
 ## Errores
 
 | Estado HTTP | Código | Cuándo ocurre |
@@ -119,8 +115,7 @@ Si el correo ya está registrado y no está suspendido, la llave de sandbox actu
 | `400` | `VERSION_MISMATCH` | `termsVersion` no coincide con la versión de TERMS actualmente publicada — vuelve a consultar `GET /v1/agreements` y muestra la versión actual |
 | `400` | `BAD_REQUEST` | El archivo P12 está corrupto o la contraseña del certificado es incorrecta |
 | `400` | `INVALID_FILE_UPLOAD` | El archivo de logo excede los 500 KB |
-| `403` | `FORBIDDEN` | La cuenta está suspendida |
-| `409` | `CONFLICT` | El RUC ya está registrado bajo otro correo |
+| `409` | `CONFLICT` | El RUC ya está registrado bajo otro correo, o el correo ya tiene una cuenta — usa [`POST /v1/recover`](recover.md) para recuperar el acceso |
 | `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
 
 ## Notas
@@ -128,6 +123,6 @@ Si el correo ya está registrado y no está suspendido, la llave de sandbox actu
 - El tenant inicia en estado `PENDING_VERIFICATION`. Se envía de inmediato un correo de verificación (fire-and-forget).
 - Los tenants no verificados pueden usar sandbox pero no pueden promoverse a producción.
 - El token de verificación expira después del TTL configurado (24 horas por defecto). Usa `POST /v1/resend-verification` para emitir uno nuevo.
-- El endpoint es idempotente respecto a la dirección de correo — es seguro reintentarlo si se perdió la llave API.
+- Este endpoint es solo para cuentas nuevas — si el correo ya está registrado, la solicitud se rechaza con `409 CONFLICT` sin importar el estado de la cuenta. Si perdiste tu API key, usa [`POST /v1/recover`](recover.md) en su lugar.
 - Obtén el `termsVersion` actual desde `GET /v1/agreements` justo antes de mostrar la casilla de aceptación, no en la carga de la página — el servidor valida la versión enviada y rechaza las versiones desactualizadas.
 - Los tenants que regresan y cuya versión de aceptación quedó desactualizada (por ejemplo, después de una actualización del DPA) deberían usar `GET /v1/tenants/agreements` para descubrir qué documentos necesitan volver a aceptarse, y `POST /v1/tenants/agreements` para registrar la nueva aceptación. Ver [Agreement Acceptance](agreement-acceptance.md).

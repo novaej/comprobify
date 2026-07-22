@@ -10,11 +10,11 @@ Todos los ejemplos de este sitio usan rutas relativas a esa base (p. ej. `POST /
 
 ## Colección de Postman
 
-Importa la colección completa para probar cada endpoint directamente desde Postman — todas las solicitudes vienen preconfiguradas con variables para tu URL base, tu llave API y tu clave de acceso.
+Importa la colección completa para probar cada endpoint directamente desde Postman — todas las solicitudes vienen preconfiguradas con variables para tu URL base, tu API key y tu clave de acceso.
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
 
-> **Configuración inicial:** después de importar, abre la colección, ve a **Variables**, y configura `base_url` como `https://api.comprobify.com` y `api_key` con tu llave API. Después de crear una factura, copia el `accessKey` devuelto en la variable `access_key`.
+> **Configuración inicial:** después de importar, abre la colección, ve a **Variables**, y configura `base_url` como `https://api.comprobify.com` y `api_key` con tu API key. Después de crear una factura, copia el `accessKey` devuelto en la variable `access_key`.
 
 También puedes descargar el JSON de la colección directamente: [`comprobify.postman_collection.json`](https://raw.githubusercontent.com/novaej/comprobify/main/postman/comprobify.postman_collection.json)
 
@@ -22,7 +22,7 @@ También puedes descargar el JSON de la colección directamente: [`comprobify.po
 
 ## 1. Registro
 
-Crea tu cuenta, emisor y llave API de sandbox en una sola llamada. Cada RUC solo puede registrarse una vez.
+Crea tu cuenta, emisor y API key de sandbox en una sola llamada. Cada RUC solo puede registrarse una vez.
 
 ```http
 POST /v1/register
@@ -71,6 +71,8 @@ La cuenta comienza en el tier **FREE** (5 comprobantes, 1 sucursal, 1 punto de e
 | `400` | `BAD_REQUEST` | El certificado está expirado o es inválido |
 | `429` | `TOO_MANY_REQUESTS` | Más de 5 intentos de registro por hora desde esta IP |
 
+¿Perdiste tu API key? `POST /v1/register` ya no la recupera — usa [`POST /v1/recover`](endpoints/recover.md) en su lugar, con el mismo certificado `.p12` con el que te registraste.
+
 ---
 
 ## 2. Verifica tu correo
@@ -89,7 +91,7 @@ Se requiere verificación de correo antes de poder promoverte a producción. Pue
 
 ## 3. Autentica las solicitudes
 
-Incluye tu llave API como token Bearer en cada solicitud de comprobante:
+Incluye tu API key como token Bearer en cada solicitud de comprobante:
 
 ```http
 Authorization: Bearer <your-api-key>
@@ -99,11 +101,11 @@ La llave se hashea con SHA-256 en cada solicitud — el texto plano nunca se per
 
 ---
 
-## Entendiendo las llaves API y las sucursales
+## Entendiendo las API keys y las sucursales
 
 Este es el concepto más importante que debes entender antes de integrar.
 
-**Una sola llave API cubre toda tu cuenta (todas las sucursales).** Las llaves API están **vinculadas al tenant**, no al emisor. Una llave puede operar sobre cualquiera de tus sucursales; declaras la sucursal destino a través del encabezado `X-Issuer-Id` en cada solicitud.
+**Una sola API key cubre toda tu cuenta (todas las sucursales).** Las API keys están **vinculadas al tenant**, no al emisor. Una llave puede operar sobre cualquiera de tus sucursales; declaras la sucursal destino a través del encabezado `X-Issuer-Id` en cada solicitud.
 
 Tu cuenta (tenant) puede tener múltiples emisores — cada uno es un par único de `branchCode` y `issuePointCode` (p. ej., `001/001`, `001/002`, `002/001`). Cuando llamas a `POST /v1/documents`, la API usa la llave para identificar tu tenant, luego usa `X-Issuer-Id` para determinar:
 - Qué sucursal y punto de emisión incrustar en el comprobante
@@ -121,7 +123,7 @@ Devuelve cada emisor (sucursal / punto de emisión) bajo tu tenant con su `id`. 
 
 ### Agregando una nueva sucursal o punto de emisión
 
-Una vez que tu correo esté verificado, llama a `POST /v1/issuers` con tu llave API:
+Una vez que tu correo esté verificado, llama a `POST /v1/issuers` con tu API key:
 
 ```http
 POST /v1/issuers
@@ -141,7 +143,7 @@ El nuevo emisor hereda tu RUC, razón social y certificado digital del primer em
 }
 ```
 
-No se genera ninguna llave API nueva — la llave que ya tienes cubre cada sucursal bajo tu tenant.
+No se genera ninguna API key nueva — la llave que ya tienes cubre cada sucursal bajo tu tenant.
 
 ### Múltiples llaves con nombre por tenant
 
@@ -279,7 +281,7 @@ Content-Type: application/json
 Un cuerpo vacío es válido. Opcionalmente puedes proporcionar `initialSequentials` para establecer los números secuenciales iniciales por emisor y tipo de comprobante.
 
 Esto es de **una sola dirección** — no hay vuelta atrás al sandbox. Al tener éxito:
-- **Todas las llaves API de sandbox activas se revocan** y se crea una llave de producción por cada una de ellas, conservando la misma etiqueta
+- **Todas las API keys de sandbox activas se revocan** y se crea una llave de producción por cada una de ellas, conservando la misma etiqueta
 - Todos los nuevos tokens de producción se devuelven en la respuesta — **guárdalos de inmediato, se muestran solo una vez**
 - Todas las sucursales se promueven a la vez — no existe la promoción por sucursal
 - Todos los comprobantes posteriores de cualquier sucursal se enviarán al endpoint de producción del SRI con `ambiente = 2`
@@ -342,7 +344,7 @@ Intentar crear una sucursal más allá del límite del tier devuelve `402 BRANCH
 
 ## Límite de tasa
 
-Las solicitudes tienen un límite de tasa por llave API según tu tier de suscripción (ver tabla arriba). Cuando excedes el límite, la API devuelve [`429 Too Many Requests`](errors/too-many-requests.md). Implementa retroceso exponencial: espera 1s, luego 2s, luego 4s antes de reintentar.
+Las solicitudes tienen un límite de tasa por API key según tu tier de suscripción (ver tabla arriba). Cuando excedes el límite, la API devuelve [`429 Too Many Requests`](errors/too-many-requests.md). Implementa retroceso exponencial: espera 1s, luego 2s, luego 4s antes de reintentar.
 
 `POST /v1/register` tiene además un límite de **5 solicitudes por hora por dirección IP**, sin importar el tier.
 

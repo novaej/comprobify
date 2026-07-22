@@ -27,7 +27,7 @@ const updateTenantTier = async (req, res) => {
 };
 
 const updateTenantStatus = async (req, res) => {
-  const tenant = await adminService.updateTenantStatus(req.params.id, req.body.status);
+  const tenant = await adminService.updateTenantStatus(req.params.id, req.body.status, req.body.reason);
   res.json({ ok: true, tenant });
 };
 

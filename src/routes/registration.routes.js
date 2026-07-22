@@ -3,7 +3,7 @@ const multer = require('multer');
 const controller = require('../controllers/registration.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
-const { register, resendVerification, verifyEmail } = require('../validators/registration.validator');
+const { register, recover, resendVerification, verifyEmail } = require('../validators/registration.validator');
 const { registrationLimiter } = require('../middleware/rate-limit');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
@@ -37,7 +37,22 @@ const uploadRegistrationFiles = (req, res, next) => {
   });
 };
 
+const uploadRecoveryCert = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB — a bare P12 (no logo to accommodate)
+});
+
+const uploadRecoveryFile = (req, res, next) => {
+  uploadRecoveryCert.single('cert')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      return next(new AppError(err.message, 400, ErrorCodes.INVALID_FILE_UPLOAD));
+    }
+    next(err);
+  });
+};
+
 router.post('/register', registrationLimiter, uploadRegistrationFiles, register, validateRequest, asyncHandler(controller.register));
+router.post('/recover', registrationLimiter, uploadRecoveryFile, recover, validateRequest, asyncHandler(controller.recover));
 router.post('/resend-verification', registrationLimiter, resendVerification, validateRequest, asyncHandler(controller.resendVerification));
 router.get('/verify-email', verifyEmail, validateRequest, asyncHandler(controller.verifyEmail));
 

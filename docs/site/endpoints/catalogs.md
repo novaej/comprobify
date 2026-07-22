@@ -135,4 +135,4 @@ GET /v1/catalogs/tax-rates
 
 | Código | Estado HTTP | Cuándo ocurre |
 |---|---|---|
-| `UNAUTHORIZED` | 401 | Llave API ausente o inválida |
+| `UNAUTHORIZED` | 401 | API key ausente o inválida |
