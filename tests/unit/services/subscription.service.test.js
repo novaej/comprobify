@@ -5,8 +5,7 @@ jest.mock('../../../src/models/document.model');
 jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/tenant-event.model');
 jest.mock('../../../src/services/tenant-quota.service');
-jest.mock('../../../src/services/notification.service');
-jest.mock('../../../src/services/email.service');
+jest.mock('../../../src/services/pending-effect.service');
 
 const subscriptionModel = require('../../../src/models/subscription.model');
 const paymentModel = require('../../../src/models/payment.model');
@@ -15,20 +14,14 @@ const documentModel = require('../../../src/models/document.model');
 const tenantModel = require('../../../src/models/tenant.model');
 const tenantEventModel = require('../../../src/models/tenant-event.model');
 const tenantQuotaService = require('../../../src/services/tenant-quota.service');
-const notificationService = require('../../../src/services/notification.service');
-const emailService = require('../../../src/services/email.service');
+const pendingEffectService = require('../../../src/services/pending-effect.service');
 const config = require('../../../src/config');
 const subscriptionService = require('../../../src/services/subscription.service');
 
 describe('SubscriptionService', () => {
   beforeEach(() => {
-    notificationService.createPaymentReviewed.mockResolvedValue(null);
-    notificationService.createSubscriptionRenewalDue.mockResolvedValue(null);
-    notificationService.createSubscriptionExpired.mockResolvedValue(null);
-    emailService.sendPaymentProofSubmitted.mockResolvedValue({ sent: false });
-    emailService.sendPaymentReviewed.mockResolvedValue({ sent: true });
-    emailService.sendSubscriptionRenewalDue.mockResolvedValue({ sent: true });
-    emailService.sendSubscriptionExpired.mockResolvedValue({ sent: true });
+    pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-x', effect_type: 'X' });
+    pendingEffectService.dispatch.mockResolvedValue();
   });
 
   afterEach(() => {
@@ -563,14 +556,12 @@ describe('SubscriptionService', () => {
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'RENEWAL_DUE', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000040', tier: 'STARTER', currentPeriodEnd: periodEnd,
       });
-      expect(notificationService.createSubscriptionRenewalDue).toHaveBeenCalledWith(
-        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
-        { id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20, purpose: 'RENEWAL' },
-      );
-      expect(emailService.sendSubscriptionRenewalDue).toHaveBeenCalledWith(
-        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
-        { id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20, purpose: 'RENEWAL' },
-      );
+      // Notification + email are both durably enqueued (ADR-022) with the
+      // same {subscriptionId, paymentId} payload rather than called with
+      // the full row objects directly — the effect handler re-fetches them.
+      const renewalDuePayload = { subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000040' };
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION', renewalDuePayload);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SUBSCRIPTION_RENEWAL_DUE_EMAIL', renewalDuePayload);
       expect(result).toEqual({ remindersSent: 1, expired: 0 });
     });
 
@@ -599,8 +590,9 @@ describe('SubscriptionService', () => {
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_EXPIRED', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', previousTier: 'GROWTH',
       });
-      expect(notificationService.createSubscriptionExpired).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH' });
-      expect(emailService.sendSubscriptionExpired).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH' });
+      const expiredPayload = { subscriptionId: '00000000-0000-0000-0000-000000000010' };
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SUBSCRIPTION_EXPIRED_NOTIFICATION', expiredPayload);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SUBSCRIPTION_EXPIRED_EMAIL', expiredPayload);
       expect(result).toEqual({ remindersSent: 0, expired: 1 });
     });
 
@@ -768,12 +760,13 @@ describe('SubscriptionService', () => {
 
       await subscriptionService.submitPaymentProof('00000000-0000-0000-0000-000000000020', '00000000-0000-0000-0000-000000000001', files, 'REF-123');
 
-      expect(emailService.sendPaymentProofSubmitted).toHaveBeenCalledWith(
-        { id: '00000000-0000-0000-0000-000000000020', status: 'REPORTED' },
-        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001' },
-        { id: '00000000-0000-0000-0000-000000000001', email: 'tenant@example.com' },
-        'REF-123',
-      );
+      // Durably enqueued (ADR-022) — the handler re-fetches payment/subscription/tenant.
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('PAYMENT_PROOF_SUBMITTED_EMAIL', {
+        paymentId: '00000000-0000-0000-0000-000000000020',
+        subscriptionId: '00000000-0000-0000-0000-000000000010',
+        tenantId: '00000000-0000-0000-0000-000000000001',
+        referenceNumber: 'REF-123',
+      });
     });
   });
 
@@ -906,12 +899,9 @@ describe('SubscriptionService', () => {
       expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'PAYMENT_RECEIVED');
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'PAYMENT_VERIFIED', { paymentId: '00000000-0000-0000-0000-000000000020' });
       expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'PAYMENT_RECEIVED' });
-      expect(notificationService.createPaymentReviewed).toHaveBeenCalledWith(
-        { id: '00000000-0000-0000-0000-000000000020', status: 'VERIFIED' }, { id: '00000000-0000-0000-0000-000000000010', status: 'PAYMENT_RECEIVED' }, 'VERIFIED',
-      );
-      expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(
-        { id: '00000000-0000-0000-0000-000000000020', status: 'VERIFIED' }, { id: '00000000-0000-0000-0000-000000000010', status: 'PAYMENT_RECEIVED' }, 'VERIFIED',
-      );
+      const reviewedPayload = { paymentId: '00000000-0000-0000-0000-000000000020', subscriptionId: '00000000-0000-0000-0000-000000000010', decision: 'VERIFIED' };
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('PAYMENT_REVIEWED_NOTIFICATION', reviewedPayload);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('PAYMENT_REVIEWED_EMAIL', reviewedPayload);
     });
 
     test('VERIFIED leaves an already-ACTIVE subscription untouched for a TIER_CHANGE payment', async () => {
@@ -949,12 +939,9 @@ describe('SubscriptionService', () => {
       expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'PAYMENT_REJECTED', { paymentId: '00000000-0000-0000-0000-000000000020' });
       expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', status: 'PENDING_PAYMENT' });
-      expect(notificationService.createPaymentReviewed).toHaveBeenCalledWith(
-        { id: '00000000-0000-0000-0000-000000000020', status: 'REJECTED' }, { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', status: 'PENDING_PAYMENT' }, 'REJECTED',
-      );
-      expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(
-        { id: '00000000-0000-0000-0000-000000000020', status: 'REJECTED' }, { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', status: 'PENDING_PAYMENT' }, 'REJECTED',
-      );
+      const reviewedPayload = { paymentId: '00000000-0000-0000-0000-000000000020', subscriptionId: '00000000-0000-0000-0000-000000000010', decision: 'REJECTED' };
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('PAYMENT_REVIEWED_NOTIFICATION', reviewedPayload);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('PAYMENT_REVIEWED_EMAIL', reviewedPayload);
     });
 
     test('rejects REJECTED decision with a missing rejectionReasonCode', async () => {

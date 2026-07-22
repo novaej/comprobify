@@ -1861,7 +1861,7 @@
                 "send"
               ]
             },
-            "description": "Queues the signed XML for submission to the SRI reception service — this is asynchronous, it does not call SRI in-request. Returns 202 with the document in PENDING_SEND status. A standalone worker process (workers/sri-worker.js) picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` or `RETURNED`. Poll Get Document or Get Events to observe that transition."
+            "description": "Queues the signed XML for submission to the SRI reception service — this is asynchronous, it does not call SRI in-request. Returns 202 with the document in PENDING_SEND status. A standalone worker process (workers/worker.js) picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` or `RETURNED`. Poll Get Document or Get Events to observe that transition."
           },
           "event": [
             {

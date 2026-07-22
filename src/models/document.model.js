@@ -17,9 +17,6 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   // Rebuild data — updated only when transitioning back to SIGNED
   'unsigned_xml', 'signed_xml', 'request_payload', 'subtotal', 'total',
   'buyer_id', 'buyer_name', 'buyer_id_type', 'buyer_email',
-  // RabbitMQ dispatch tracking — set on a broker-confirmed publish; read by
-  // the reconciliation job to find stale/never-dispatched documents
-  'send_dispatch_attempted_at', 'authorize_dispatch_attempted_at',
 ]);
 
 async function create({ issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload, buyerEmail, idempotencyKey, payloadHash }, client) {

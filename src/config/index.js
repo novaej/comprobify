@@ -34,7 +34,17 @@ const config = {
     sendStaleMinutes: parseInt(process.env.QUEUE_RECONCILE_SEND_STALE_MINUTES, 10) || 5,
     authorizeCheckDelayMinutes: parseInt(process.env.QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES, 10) || 5,
     authorizeStaleMinutes: parseInt(process.env.QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES, 10) || 5,
+    // Stale-dispatch threshold for every pending_effects row except
+    // SRI_AUTHORIZE, which keeps using authorizeCheckDelayMinutes/
+    // authorizeStaleMinutes above (see queue-reconciliation.service.js).
+    effectStaleMinutes: parseInt(process.env.QUEUE_RECONCILE_EFFECT_STALE_MINUTES, 10) || 5,
     batchLimit: parseInt(process.env.QUEUE_RECONCILE_BATCH_LIMIT, 10) || 100,
+  },
+  // Caps retries for a pending_effects row whose handler keeps throwing —
+  // past this many attempts the row is marked FAILED instead of retried
+  // again by reconciliation (mirrors webhook_deliveries' 3-attempt cap).
+  pendingEffects: {
+    maxAttempts: parseInt(process.env.PENDING_EFFECTS_MAX_ATTEMPTS, 10) || 5,
   },
   email: {
     provider:                 process.env.EMAIL_PROVIDER                 || 'mailgun',

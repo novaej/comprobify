@@ -4,14 +4,22 @@ const config = require('../config');
 // Routing key -> queue name. The routing key is also what callers pass to
 // publishConfirmed() — exported separately as ROUTING_KEYS below so calling
 // code never hardcodes the string literal.
+//
+// Three queues, not one: 'effects' carries every pending_effects side effect
+// except SRI_SEND/SRI_AUTHORIZE, which keep their own dedicated queues. Each
+// gets an independent per-consumer prefetch window in workers/worker.js, so
+// a burst of slow side effects (e.g. WEBHOOK_FANOUT hitting a sluggish
+// third-party endpoint) can never delay SRI message delivery — see ADR-022.
 const QUEUES = {
   send: 'sri.send',
   authorize: 'sri.authorize',
+  effects: 'app.effects',
 };
 
 const ROUTING_KEYS = {
   send: 'send',
   authorize: 'authorize',
+  effects: 'effects',
 };
 
 let channel = null;
@@ -22,7 +30,7 @@ let connectionPromise = null;
 // making it impossible to tell the API's publisher connection apart from
 // the worker's consumer connection. Defaults to the API's name since
 // document-transmission.service.js's queueSend/queueAuthorizationCheck are
-// the only other caller of connect() outside the worker; sri-worker.js
+// the only other caller of connect() outside the worker; worker.js
 // overrides this via setConnectionName() before triggering its own connect.
 let connectionName = 'comprobify-api';
 
@@ -87,7 +95,7 @@ async function getChannel() {
   return channel;
 }
 
-// For consumers only (workers/sri-worker.js). A fresh channel object is
+// For consumers only (workers/worker.js). A fresh channel object is
 // created on every reconnect (amqplib does not transparently re-attach old
 // channels), so a consumer registered via channel.consume() on a
 // since-replaced channel would silently stop receiving messages after any

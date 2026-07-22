@@ -140,7 +140,23 @@ async function fanOut(notification) {
 
   if (!endpoints.length) return;
 
+  // Dedup guard (ADR-022): fanOut is now called from the WEBHOOK_FANOUT
+  // effect handler, which can redeliver the same message at-least-once
+  // (e.g. a worker crash between fanOut() sending and the effect being
+  // marked DONE). Skip any endpoint that already has a delivery row for
+  // this notification so a retry never double-sends.
+  let alreadyDeliveredEndpointIds;
+  try {
+    const existing = await webhookDeliveryModel.findByNotificationId(notification.id);
+    alreadyDeliveredEndpointIds = new Set(existing.map(row => row.webhook_id));
+  } catch (err) {
+    console.warn('[webhook] Failed to check existing deliveries for dedup:', err.message);
+    alreadyDeliveredEndpointIds = new Set();
+  }
+
   for (const endpoint of endpoints) {
+    if (alreadyDeliveredEndpointIds.has(endpoint.id)) continue;
+
     let delivery;
     try {
       delivery = await webhookDeliveryModel.create({

@@ -8,8 +8,8 @@ jest.mock('../../../src/services/sequential.service');
 jest.mock('../../../src/services/tenant-quota.service');
 jest.mock('../../../src/services/crypto.service');
 jest.mock('../../../src/services/certificate.service');
-jest.mock('../../../src/services/email.service');
 jest.mock('../../../src/services/tenant-agreement.service');
+jest.mock('../../../src/services/pending-effect.service');
 
 const db = require('../../../src/config/database');
 const tenantModel = require('../../../src/models/tenant.model');
@@ -21,8 +21,8 @@ const sequentialService = require('../../../src/services/sequential.service');
 const tenantQuotaService = require('../../../src/services/tenant-quota.service');
 const cryptoService = require('../../../src/services/crypto.service');
 const certificateService = require('../../../src/services/certificate.service');
-const emailService = require('../../../src/services/email.service');
 const tenantAgreementService = require('../../../src/services/tenant-agreement.service');
+const pendingEffectService = require('../../../src/services/pending-effect.service');
 const config = require('../../../src/config');
 const registrationService = require('../../../src/services/registration.service');
 
@@ -50,7 +50,8 @@ describe('RegistrationService', () => {
     tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
     tenantQuotaService.getCurrentForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
     tenantAgreementService.validateTermsVersion.mockResolvedValue(undefined);
-    tenantAgreementService.generateForTenant.mockResolvedValue(undefined);
+    pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-x', effect_type: 'X' });
+    pendingEffectService.dispatch.mockResolvedValue(undefined);
     certificateService.parseCertificate.mockReturnValue({
       privateKeyPem: 'PRIVATE_KEY_PEM',
       certPem: 'CERT_PEM',
@@ -61,7 +62,6 @@ describe('RegistrationService', () => {
     issuerDocumentTypeModel.bulkCreate.mockResolvedValue(undefined);
     sequentialService.initialize.mockResolvedValue(undefined);
     apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999' });
-    emailService.sendVerificationEmail.mockResolvedValue({ messageId: 'mg-id-1' });
     tenantModel.updateVerificationEmailSent.mockResolvedValue(undefined);
     tenantModel.updateVerificationToken.mockResolvedValue(undefined);
     tenantEventModel.create.mockResolvedValue(undefined);
@@ -186,7 +186,13 @@ describe('RegistrationService', () => {
         certificatePem: 'CERT_PEM',
         requiredAccounting: 'NO',
       }));
-      expect(tenantAgreementService.generateForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', createdIssuer);
+      // Legal-document generation and the verification email are both
+      // durably enqueued as pending_effects rows (ADR-022) rather than
+      // called directly — the handlers (src/effects/index.js) do the
+      // actual work later.
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
+        'TENANT_AGREEMENT_GENERATE', { tenantId: '00000000-0000-0000-0000-000000000002' }
+      );
       expect(issuerDocumentTypeModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', ['01']);
       expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', baseFields.branchCode, baseFields.issuePointCode, '01', 1, true);
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({
@@ -194,11 +200,15 @@ describe('RegistrationService', () => {
         label: 'Initial sandbox key',
         environment: 'sandbox',
       }));
-      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
-        baseFields.email,
-        expect.any(String),
-        null,
-        'es'
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
+        'VERIFICATION_EMAIL_SEND',
+        expect.objectContaining({
+          tenantId: '00000000-0000-0000-0000-000000000002',
+          email: baseFields.email,
+          verificationToken: expect.any(String),
+          redirectUrl: null,
+          language: 'es',
+        })
       );
 
       expect(result.recovered).toBeUndefined();
@@ -249,29 +259,18 @@ describe('RegistrationService', () => {
         config.email.provider = originalProvider;
       }
 
-      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalledWith('VERIFICATION_EMAIL_SEND', expect.anything());
     });
 
-    test('registration does not fail even if the verification email send later rejects', async () => {
+    test('registration does not wait on effect dispatch (the RabbitMQ publish) before returning', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       issuerModel.findByRuc.mockResolvedValue(null);
       tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
       issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', branch_code: '001', issue_point_code: '001' });
-      emailService.sendVerificationEmail.mockRejectedValue(new Error('Mailgun down'));
-
-      await expect(registrationService.register(baseFields, p12Buffer, p12Password)).resolves.toBeDefined();
-
-      // allow the fire-and-forget rejection chain to settle so it doesn't leak into another test
-      await new Promise((resolve) => setImmediate(resolve));
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 'VERIFICATION_EMAIL_FAILED', { error: 'Mailgun down' });
-    });
-
-    test('registration does not block on generateForTenant failing (fire-and-forget)', async () => {
-      tenantModel.findByEmail.mockResolvedValue(null);
-      issuerModel.findByRuc.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
-      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', branch_code: '001', issue_point_code: '001' });
-      tenantAgreementService.generateForTenant.mockRejectedValue(new Error('template missing'));
+      // Never resolves — if register() awaited dispatch() anywhere, this
+      // test would hang/time out instead of resolving. enqueue() (the
+      // durable insert) is what must be awaited, not dispatch (best-effort).
+      pendingEffectService.dispatch.mockReturnValue(new Promise(() => {}));
 
       await expect(registrationService.register(baseFields, p12Buffer, p12Password)).resolves.toBeDefined();
     });
@@ -318,7 +317,7 @@ describe('RegistrationService', () => {
       expect(result.apiKey).toBeUndefined();
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
       expect(apiKeyModel.create).not.toHaveBeenCalled();
-      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalledWith('VERIFICATION_EMAIL_SEND', expect.anything());
     });
 
     test('returns the same generic response when the tenant has no issuer (inconsistent state)', async () => {
@@ -346,7 +345,7 @@ describe('RegistrationService', () => {
       expect(result).toEqual({ ok: true, message: expect.any(String) });
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
       expect(apiKeyModel.create).not.toHaveBeenCalled();
-      expect(emailService.sendVerificationEmail).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalledWith('VERIFICATION_EMAIL_SEND', expect.anything());
     });
 
     test('rejects with ACCOUNT_SUSPENDED when the certificate matches but the tenant is suspended', async () => {
@@ -396,25 +395,30 @@ describe('RegistrationService', () => {
       expect(result.environment).toBe('production');
     });
 
-    test('matched: fires a fresh verification email as a fire-and-forget notification', async () => {
+    test('matched: durably enqueues a fresh verification email effect as an out-of-band notice', async () => {
       tenantModel.findByEmail.mockResolvedValue(existingTenant);
       issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
 
       await registrationService.recover(baseFields.email, p12Buffer, p12Password);
-      await new Promise((resolve) => setImmediate(resolve));
 
       expect(tenantModel.updateVerificationToken).toHaveBeenCalledWith(
         existingTenant.id,
         expect.any(String),
         expect.any(Date)
       );
-      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
-        baseFields.email,
-        expect.any(String),
-        existingTenant.verification_redirect_url,
-        existingTenant.preferred_language
+      // Sending, stamping verification_email_sent_at, and logging
+      // VERIFICATION_EMAIL_SENT/FAILED all happen in the effect handler
+      // (src/effects/index.js) now, not here — see ADR-022.
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
+        'VERIFICATION_EMAIL_SEND',
+        {
+          tenantId: existingTenant.id,
+          email: baseFields.email,
+          verificationToken: expect.any(String),
+          redirectUrl: existingTenant.verification_redirect_url,
+          language: existingTenant.preferred_language,
+        }
       );
-      expect(tenantEventModel.create).toHaveBeenCalledWith(existingTenant.id, 'VERIFICATION_EMAIL_SENT');
     });
   });
 
@@ -465,7 +469,10 @@ describe('RegistrationService', () => {
       await registrationService.resendVerification(baseFields.email);
 
       expect(tenantModel.updateVerificationToken).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', expect.any(String), expect.any(Date));
-      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(baseFields.email, expect.any(String), null, 'es');
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
+        'VERIFICATION_EMAIL_SEND',
+        expect.objectContaining({ email: baseFields.email, redirectUrl: null, language: 'es' })
+      );
     });
 
     test('sends the first verification email when none has been sent before (no cooldown to check)', async () => {
@@ -492,8 +499,9 @@ describe('RegistrationService', () => {
       await registrationService.resendVerification(baseFields.email, 'https://new.example.com/verify');
 
       expect(tenantModel.updateVerificationRedirectUrl).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'https://new.example.com/verify');
-      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
-        baseFields.email, expect.any(String), 'https://new.example.com/verify', 'es'
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
+        'VERIFICATION_EMAIL_SEND',
+        expect.objectContaining({ email: baseFields.email, redirectUrl: 'https://new.example.com/verify', language: 'es' })
       );
     });
 
@@ -508,8 +516,9 @@ describe('RegistrationService', () => {
       await registrationService.resendVerification(baseFields.email);
 
       expect(tenantModel.updateVerificationRedirectUrl).not.toHaveBeenCalled();
-      expect(emailService.sendVerificationEmail).toHaveBeenCalledWith(
-        baseFields.email, expect.any(String), 'https://stored.example.com/verify', 'es'
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
+        'VERIFICATION_EMAIL_SEND',
+        expect.objectContaining({ email: baseFields.email, redirectUrl: 'https://stored.example.com/verify', language: 'es' })
       );
     });
   });

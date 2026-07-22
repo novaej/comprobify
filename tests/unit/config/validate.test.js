@@ -282,7 +282,7 @@ describe('validateCoreConfig', () => {
 
   // These vars are only ever touched by API-only routes/services (admin
   // auth, certificate encryption, billing, inbound webhook verification) —
-  // workers/sri-worker.js's message handlers never reach them, so
+  // workers/worker.js's message handlers never reach them, so
   // validateCoreConfig must not require any of them.
   test('does not throw when ENCRYPTION_KEY, ADMIN_SECRET, APP_BASE_URL, BANK_TRANSFER_*, ADMIN_NOTIFICATION_EMAIL, and MAILGUN_WEBHOOK_SIGNING_KEY are all missing', () => {
     const config = validConfig({

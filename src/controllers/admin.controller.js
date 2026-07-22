@@ -264,7 +264,7 @@ const runQuotaJobs = async (req, res) => {
  *
  * Re-publishes to RabbitMQ any document whose send/authorize-check dispatch
  * was never confirmed or has gone stale (see ADR-019) — never calls
- * SRI itself, only ensures a message exists for workers/sri-worker.js to
+ * SRI itself, only ensures a message exists for workers/worker.js to
  * eventually pick up. See queue-reconciliation.service.js.
  *
  * Designed to be called by an external scheduler hourly — more frequent

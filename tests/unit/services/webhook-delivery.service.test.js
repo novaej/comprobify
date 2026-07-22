@@ -68,6 +68,12 @@ describe('WebhookDeliveryService', () => {
       created_at: new Date('2026-01-01T00:00:00Z'),
     };
 
+    beforeEach(() => {
+      // No prior deliveries by default — the dedup guard (ADR-022) only
+      // skips endpoints that already have a row for this notification.
+      webhookDeliveryModel.findByNotificationId.mockResolvedValue([]);
+    });
+
     test('does nothing when the endpoint query fails (swallows the error)', async () => {
       webhookEndpointModel.findSubscribedByTenantIdAndType.mockRejectedValue(new Error('DB down'));
 
@@ -177,6 +183,41 @@ describe('WebhookDeliveryService', () => {
       expect(global.fetch).toHaveBeenCalledTimes(2);
       expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000055',expect.any(Object));
       expect(webhookDeliveryModel.markSuccess).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000056', expect.any(Object));
+    });
+
+    test('dedup guard: skips an endpoint that already has a delivery row for this notification', async () => {
+      // Simulates a WEBHOOK_FANOUT effect retried after a worker crash
+      // between the first fanOut() sending and the effect being marked
+      // DONE — endpoint 007 already delivered, 008 has not.
+      webhookEndpointModel.findSubscribedByTenantIdAndType.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000007', url: 'https://example.com/hook-a', secret: 'sekret-a' },
+        { id: '00000000-0000-0000-0000-000000000008', url: 'https://example.com/hook-b', secret: 'sekret-b' },
+      ]);
+      webhookDeliveryModel.findByNotificationId.mockResolvedValue([
+        { webhook_id: '00000000-0000-0000-0000-000000000007', status: 'SUCCESS' },
+      ]);
+      webhookDeliveryModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000056', attempt_count: 0 });
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve('ok') });
+
+      await webhookDeliveryService.fanOut(notification);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledWith('https://example.com/hook-b', expect.anything());
+      expect(webhookDeliveryModel.create).toHaveBeenCalledTimes(1);
+      expect(webhookDeliveryModel.create).toHaveBeenCalledWith(expect.objectContaining({ webhookId: '00000000-0000-0000-0000-000000000008' }));
+    });
+
+    test('dedup guard: falls back to delivering to everyone if the existing-deliveries lookup itself fails', async () => {
+      webhookEndpointModel.findSubscribedByTenantIdAndType.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000007', url: 'https://example.com/hook-a', secret: 'sekret-a' },
+      ]);
+      webhookDeliveryModel.findByNotificationId.mockRejectedValue(new Error('DB down'));
+      webhookDeliveryModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000055', attempt_count: 0 });
+      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve('ok') });
+
+      await webhookDeliveryService.fanOut(notification);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     test('skips an endpoint whose delivery row creation fails, but continues to the next one', async () => {

@@ -1,16 +1,17 @@
 jest.mock('../../../src/models/notification.model');
 jest.mock('../../../src/models/notification-preference.model');
 jest.mock('../../../src/models/issuer.model');
-jest.mock('../../../src/services/webhook-delivery.service');
+jest.mock('../../../src/services/pending-effect.service');
 
 const notificationModel = require('../../../src/models/notification.model');
 const notificationPreferenceModel = require('../../../src/models/notification-preference.model');
-const webhookDeliveryService = require('../../../src/services/webhook-delivery.service');
+const pendingEffectService = require('../../../src/services/pending-effect.service');
 const notificationService = require('../../../src/services/notification.service');
 
 describe('NotificationService', () => {
   beforeEach(() => {
-    webhookDeliveryService.fanOut.mockResolvedValue();
+    pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-fanout-1', effect_type: 'WEBHOOK_FANOUT' });
+    pendingEffectService.dispatch.mockResolvedValue();
   });
 
   afterEach(() => {
@@ -48,7 +49,7 @@ describe('NotificationService', () => {
           purpose: 'INITIAL', amount: 20, rejectionReasonCode: null,
         }),
       }));
-      expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000100', type: 'PAYMENT_VERIFIED' });
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', { notificationId: '00000000-0000-0000-0000-000000000100' });
       expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000100', type: 'PAYMENT_VERIFIED' });
     });
 
@@ -119,7 +120,7 @@ describe('NotificationService', () => {
         severity: 'WARNING',
         metadata: expect.objectContaining({ subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000040', tier: 'GROWTH', amount: 79, currentPeriodEnd: periodEnd }),
       }));
-      expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000102', type: 'SUBSCRIPTION_RENEWAL_DUE' });
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', { notificationId: '00000000-0000-0000-0000-000000000102' });
       expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000102', type: 'SUBSCRIPTION_RENEWAL_DUE' });
     });
   });
@@ -146,7 +147,7 @@ describe('NotificationService', () => {
         severity: 'ERROR',
         metadata: { subscriptionId: '00000000-0000-0000-0000-000000000010', previousTier: 'GROWTH' },
       }));
-      expect(webhookDeliveryService.fanOut).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000103', type: 'SUBSCRIPTION_EXPIRED' });
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', { notificationId: '00000000-0000-0000-0000-000000000103' });
       expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000103', type: 'SUBSCRIPTION_EXPIRED' });
     });
   });

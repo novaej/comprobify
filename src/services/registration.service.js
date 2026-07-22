@@ -7,10 +7,11 @@ const sequentialService = require('./sequential.service');
 const tenantQuotaService = require('./tenant-quota.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
-const emailService = require('./email.service');
 const tenantEventModel = require('../models/tenant-event.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const tenantAgreementService = require('./tenant-agreement.service');
+const pendingEffectService = require('./pending-effect.service');
+const { EffectTypes } = require('../constants/effect-types');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const { TIERS } = require('../constants/subscription-tiers');
@@ -20,6 +21,21 @@ const config = require('../config');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+// Durable-enqueue + best-effort-dispatch a VERIFICATION_EMAIL_SEND effect
+// (see ADR-022) — replaces the old unawaited .then()/.catch() chain at each
+// of this file's 3 call sites (register/recover/resendVerification). The
+// handler (src/effects/index.js) sends the email, stamps
+// verification_email_sent_at/message_id on success, and logs
+// VERIFICATION_EMAIL_SENT/FAILED tenant events — identical outcome to the
+// old inline chain, just durable and retried by reconciliation on failure
+// instead of a one-shot in-process attempt.
+async function queueVerificationEmail(tenantId, email, verificationToken, redirectUrl, language) {
+  const effect = await pendingEffectService.enqueue(EffectTypes.VERIFICATION_EMAIL_SEND, {
+    tenantId, email, verificationToken, redirectUrl, language,
+  });
+  pendingEffectService.dispatch(effect);
 }
 
 function formatTenant(row, quotaRow = null) {
@@ -115,10 +131,13 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
 
   // Generate per-tenant legal document instances (PENDING) after the issuer
   // exists so we can substitute {{cliente.razonSocial}} etc. into the DPA.
-  // Fire-and-forget pattern: failure does not block registration, and the
-  // admin can backfill via POST /v1/admin/tenants/:id/agreements.
-  tenantAgreementService.generateForTenant(tenant.id, issuer)
-    .catch((err) => console.warn('[registration] generateForTenant failed:', err.message));
+  // Durably enqueued (see ADR-022) — registration still succeeds if
+  // generation fails or is delayed; the admin can also backfill via
+  // POST /v1/admin/tenants/:id/agreements.
+  {
+    const effect = await pendingEffectService.enqueue(EffectTypes.TENANT_AGREEMENT_GENERATE, { tenantId: tenant.id });
+    pendingEffectService.dispatch(effect);
+  }
 
   const documentTypes = Array.isArray(fields.documentTypes) && fields.documentTypes.length > 0
     ? [...new Set(fields.documentTypes)]
@@ -150,14 +169,10 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
     environment: 'sandbox',
   });
 
-  // Fire-and-forget — don't fail registration if email sending fails
+  // Durably enqueued (see ADR-022/queueVerificationEmail) — doesn't fail
+  // registration if email sending fails or is delayed.
   if (config.email.provider !== 'none') {
-    emailService.sendVerificationEmail(fields.email, verificationToken, fields.verificationRedirectUrl || null, fields.language || 'es')
-      .then(({ messageId }) => Promise.all([
-        tenantModel.updateVerificationEmailSent(tenant.id, messageId),
-        tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),
-      ]))
-      .catch((err) => tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_FAILED', { error: err.message }).catch(() => {}));
+    await queueVerificationEmail(tenant.id, fields.email, verificationToken, fields.verificationRedirectUrl || null, fields.language || 'es');
   }
 
   return {
@@ -218,21 +233,16 @@ async function recover(email, p12Buffer, p12Password) {
     environment,
   });
 
-  // Fire-and-forget a fresh verification email as an out-of-band notice,
-  // reusing the existing token/email/redemption machinery instead of a
-  // parallel one — harmless no-op if clicked by an already-ACTIVE tenant;
-  // the value is the email itself landing in the inbox as a signal that
-  // recovery just happened.
+  // A fresh verification email as an out-of-band notice, reusing the
+  // existing token/email/redemption machinery instead of a parallel one —
+  // harmless no-op if clicked by an already-ACTIVE tenant; the value is the
+  // email itself landing in the inbox as a signal that recovery just
+  // happened. Durably enqueued (see ADR-022/queueVerificationEmail).
   if (config.email.provider !== 'none') {
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const verificationTokenExpiresAt = new Date(Date.now() + config.verificationTokenTtlHours * 60 * 60 * 1000);
-    tenantModel.updateVerificationToken(tenant.id, verificationToken, verificationTokenExpiresAt)
-      .then(() => emailService.sendVerificationEmail(email, verificationToken, tenant.verification_redirect_url || null, tenant.preferred_language || 'es'))
-      .then(({ messageId }) => Promise.all([
-        tenantModel.updateVerificationEmailSent(tenant.id, messageId),
-        tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),
-      ]))
-      .catch((err) => tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_FAILED', { error: err.message }).catch(() => {}));
+    await tenantModel.updateVerificationToken(tenant.id, verificationToken, verificationTokenExpiresAt);
+    await queueVerificationEmail(tenant.id, email, verificationToken, tenant.verification_redirect_url || null, tenant.preferred_language || 'es');
   }
 
   const quotaRow = await tenantQuotaService.getCurrentForTenant(tenant.id);
@@ -290,12 +300,7 @@ async function resendVerification(email, verificationRedirectUrl) {
   }
 
   if (config.email.provider !== 'none') {
-    emailService.sendVerificationEmail(email, verificationToken, effectiveRedirectUrl, tenant.preferred_language || 'es')
-      .then(({ messageId }) => Promise.all([
-        tenantModel.updateVerificationEmailSent(tenant.id, messageId),
-        tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_SENT'),
-      ]))
-      .catch((err) => tenantEventModel.create(tenant.id, 'VERIFICATION_EMAIL_FAILED', { error: err.message }).catch(() => {}));
+    await queueVerificationEmail(tenant.id, email, verificationToken, effectiveRedirectUrl, tenant.preferred_language || 'es');
   }
 }
 
