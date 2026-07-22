@@ -9,10 +9,17 @@ const db = require('../config/database');
  */
 async function create(effectType, payload, dedupKey = null) {
   if (dedupKey) {
+    // The ON CONFLICT predicate below must match idx_pending_effects_dedup's
+    // index predicate EXACTLY (including dedup_key IS NOT NULL) — Postgres's
+    // arbiter-index inference for a partial unique index requires the two
+    // WHERE clauses to be syntactically identical, not just "compatible".
+    // Omitting `dedup_key IS NOT NULL` here causes 42P10 ("no unique or
+    // exclusion constraint matching the ON CONFLICT specification") even
+    // though the index exists and would otherwise apply.
     const { rows } = await db.query(
       `INSERT INTO pending_effects (effect_type, payload, dedup_key)
        VALUES ($1, $2, $3)
-       ON CONFLICT (dedup_key) WHERE status IN ('PENDING', 'DISPATCHED')
+       ON CONFLICT (dedup_key) WHERE dedup_key IS NOT NULL AND status IN ('PENDING', 'DISPATCHED')
        DO UPDATE SET attempt_count = pending_effects.attempt_count
        RETURNING *`,
       [effectType, payload, dedupKey]
