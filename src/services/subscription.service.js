@@ -139,9 +139,9 @@ async function createSubscriptionForTenant(tenantId, tier, billingInterval = 'MO
 // the current period just runs out as already paid for, and the new cadence
 // starts its own fresh, fully-paid period.
 //
-// No automated billing gateway exists yet (NEXT_STEPS.md #9), so this rides
-// the same manual proof/review pipeline as createSubscription rather than
-// charging anything automatically.
+// No automated billing gateway exists yet (see NEXT_STEPS.md's "Payment Gateway
+// Integration" item), so this rides the same manual proof/review pipeline as
+// createSubscription rather than charging anything automatically.
 async function requestTierChange(tenantId, tier, billingInterval) {
   if (!PAID_TIERS.includes(tier)) {
     throw new AppError(
@@ -748,8 +748,8 @@ async function activateIfLinked(documentId) {
 
   // Stamp the period onto the payment that funded this cycle too — subscriptions'
   // current_period_start/end gets overwritten every renewal, so without this the
-  // per-cycle history would be lost (see NEXT_STEPS.md #9: payments now support
-  // many rows per subscription, one per billing cycle).
+  // per-cycle history would be lost. payments supports many rows per
+  // subscription, one per billing cycle.
   const payments = await paymentModel.findBySubscriptionId(subscription.id);
   const fundingPayment = payments.find((p) => p.status === 'VERIFIED' && !p.period_start);
   if (fundingPayment) {

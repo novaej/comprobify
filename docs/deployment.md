@@ -497,7 +497,7 @@ curl https://api.comprobify.com/health
 curl https://api.comprobify.com/v1/admin/tenants \
   -H "Authorization: Bearer YOUR_ADMIN_SECRET"
 ```
-- [ ] `xmllint` available — attempt a document creation and check Render logs for XSD validation errors. On paid Render tiers, check via Shell: `which xmllint`. If missing, a Dockerfile is needed (see NEXT_STEPS.md item 5).
+- [ ] `xmllint` available — attempt a document creation and check Render logs for XSD validation errors. On paid Render tiers, check via Shell: `which xmllint`. If missing, a Dockerfile installing `libxml2-utils` is needed.
 
 ### 8. Pipeline smoke test
 - [ ] Push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) and confirm `Release to Staging` workflow runs and fast-forwards the `staging` branch, then `Deploy Staging` fires automatically

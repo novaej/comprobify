@@ -2,7 +2,8 @@
 // addDocumentType / createBranch (src/services/issuer.service.js). Only '01' and
 // '04' are implemented today (see SUPPORTED_TYPES in src/builders/index.js) — update
 // these lists (not just the commented full distribution below) as each new builder
-// in NEXT_STEPS.md #1 ships, or new types will be silently unreachable on Growth/Business.
+// in NEXT_STEPS.md's "Additional Document Types" item ships, or new types will be
+// silently unreachable on Growth/Business.
 //
 // priceMonthlyUsd / priceYearlyUsd are IVA-inclusive all-in amounts — the exact
 // figure a tenant transfers via SPI and what appears as the invoice total. The
@@ -12,7 +13,7 @@
 //
 // priceYearlyUsd = priceMonthlyUsd × 10 (2 months free — standard SaaS yearly
 // discount). overagePerDocumentUsd is not enforced yet (no payment gateway —
-// NEXT_STEPS.md #9).
+// see NEXT_STEPS.md's "Payment Gateway Integration" item).
 
 const config = require('../config');
 
@@ -75,9 +76,9 @@ const TIERS = {
 };
 
 // Indicative full distribution once all SRI document types have builders
-// (NEXT_STEPS.md #1: 07 retención, 05 nota de débito, 03 liquidación, 06 guía de
-// remisión). Not live — copy individual entries into the tiers above as each
-// type ships.
+// (see NEXT_STEPS.md's "Additional Document Types" item: 07 retención, 05 nota de
+// débito, 03 liquidación, 06 guía de remisión). Not live — copy individual entries
+// into the tiers above as each type ships.
 //
 // FREE:     allowedDocumentTypes: ['01'],
 // STARTER:  allowedDocumentTypes: ['01'],

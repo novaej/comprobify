@@ -37,12 +37,12 @@ A second design question was where tier selection should live. `POST /v1/tenants
 - `review` being one endpoint instead of two halves the admin API surface for that action and matches how an operator actually thinks about it ("approve or reject this proof").
 
 ### Negative
-- The activation hook is fire-and-forget inside an existing service function rather than a generic event system — adding a second consumer of "subscription activated" later means either growing that function or introducing an abstraction at that point, not before.
-- There's no tenant-facing read endpoint for subscription/payment status yet (NEXT_STEPS.md #12) — a tenant currently has to poll `GET /v1/tenants/me` and infer completion from `subscriptionTier` changing, with no visibility into the in-between states or rejection reasons.
-- Renewals are schema-ready (`payments.period_start/end` stamped per cycle) but not automated — there's no job that initiates a new billing cycle when one ends (NEXT_STEPS.md #10).
+- The activation hook is fire-and-forget inside an existing service function rather than a generic event system — adding a second consumer of "subscription activated" later means either growing that function or introducing an abstraction at that point, not before. (This has since moved onto the `pending_effects` outbox — see ADR-022 — but remains a direct call from `linkInvoice`/the reconciliation scan rather than a generic event bus.)
+- ~~There's no tenant-facing read endpoint for subscription/payment status yet~~ — closed: `GET /v1/subscriptions/me` now returns the tenant's full subscription/payment history.
+- ~~Renewals are schema-ready but not automated~~ — closed, see the 2026-06-29 addendum below.
 
 ### Mitigation
-The fire-and-forget hook follows the exact precedent already in `document-transmission.service.js` (notification + email side effects), so it's a one-line addition to a pattern reviewers already understand, not a new pattern to learn. The missing tenant-facing status endpoint and renewal automation are both explicitly tracked in NEXT_STEPS.md rather than silently deferred, and both are additive — building them later doesn't require changing anything already shipped.
+The fire-and-forget hook follows the exact precedent already in `document-transmission.service.js` (notification + email side effects), so it's a one-line addition to a pattern reviewers already understand, not a new pattern to learn. The missing tenant-facing status endpoint and renewal automation were both explicitly tracked in NEXT_STEPS.md rather than silently deferred, and both were additive — building them later didn't require changing anything already shipped. Both have since been built (see above).
 
 ### Alternatives Considered
 - **Activate on payment confirmation alone**: simpler, one fewer state, no dependency on the document pipeline. Rejected — this is the exact gap (paid access with no valid invoice) the product exists to prevent for everyone else.
@@ -73,7 +73,7 @@ The original design activated a subscription once and never revisited `current_p
 
 **The operator-facing "proof submitted" email is deliberately not a `notifications` row.** Every other notification in this system belongs to a tenant — it's read via `GET /v1/notifications`, fanned to the tenant's own webhooks, gated by the tenant's own preferences. None of that exists for "the comprobify operator," who isn't a tenant. Forcing this into the tenant notification model would mean inventing a fictional tenant-like recipient for one event; a plain fire-and-forget email to `config.adminNotificationEmail` (optional, mirrors `SENTRY_DSN`) is the proportionate amount of infrastructure for a single internal recipient.
 
-**Renewals deliberately do not touch `tenants.document_count`.** This billing cycle answers "is the subscription paid for," not "has document usage reset" — those need independent clocks, since a YEARLY-billed tenant renews their subscription once a year but the published quota is still meant to be a *monthly* figure. Today neither cycle actually resets `document_count` (it remains a lifetime counter — see `NEXT_STEPS.md` #10); building that reset is out of scope here and deliberately not derived from `current_period_end`, so it isn't coupled to `billing_interval` when it eventually lands.
+**Renewals deliberately do not touch document-usage tracking.** This billing cycle answers "is the subscription paid for," not "has document usage reset" — those need independent clocks, since a YEARLY-billed tenant renews their subscription once a year but the published quota is still meant to be a *monthly* figure. At the time this was written, `tenants.document_count` was a lifetime counter with no reset mechanism at all; it has since been replaced entirely by `tenant_quotas` (migration 073), which resets on its own independent monthly clock regardless of `billing_interval` — see CLAUDE.md's "Document quota enforcement" entry.
 
 ## Addendum (2026-07-02): billing-interval changes, and reading back the tenant event log
 
