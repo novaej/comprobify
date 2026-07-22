@@ -233,22 +233,32 @@ async function recover(email, p12Buffer, p12Password) {
     environment,
   });
 
-  // A fresh verification email as an out-of-band notice, reusing the
-  // existing token/email/redemption machinery instead of a parallel one —
-  // harmless no-op if clicked by an already-ACTIVE tenant; the value is the
-  // email itself landing in the inbox as a signal that recovery just
-  // happened. Durably enqueued (see ADR-022/queueVerificationEmail).
+  // Extra validation: a matching certificate proves possession of the P12,
+  // but not control of the registered email inbox. Force re-verification —
+  // demote to PENDING_VERIFICATION with a fresh token — until the tenant
+  // clicks the link, same restrictions a freshly-registered tenant already
+  // has (sandbox document creation still works via the reissued key; branch
+  // creation, promotion, subscriptions, and minting additional named keys
+  // do not, until verified). Reuses the exact same token/email/redemption
+  // machinery as resendVerification() — GET /v1/verify-email reactivates via
+  // tenantModel.activate(), no separate confirm flow needed.
+  const verificationToken = crypto.randomBytes(32).toString('hex');
+  const verificationTokenExpiresAt = new Date(Date.now() + config.verificationTokenTtlHours * 60 * 60 * 1000);
+  const demoted = await tenantModel.demoteToPendingVerification(tenant.id, verificationToken, verificationTokenExpiresAt);
+
+  // Durably enqueued (see ADR-022/queueVerificationEmail) — the demotion
+  // above still happens even if EMAIL_PROVIDER=none (matches register()'s
+  // unconditional PENDING_VERIFICATION default); only the actual send is
+  // conditional. A tenant stuck this way is recoverable via the existing
+  // admin override, POST /v1/admin/tenants/:id/verify.
   if (config.email.provider !== 'none') {
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenExpiresAt = new Date(Date.now() + config.verificationTokenTtlHours * 60 * 60 * 1000);
-    await tenantModel.updateVerificationToken(tenant.id, verificationToken, verificationTokenExpiresAt);
     await queueVerificationEmail(tenant.id, email, verificationToken, tenant.verification_redirect_url || null, tenant.preferred_language || 'es');
   }
 
   const quotaRow = await tenantQuotaService.getCurrentForTenant(tenant.id);
   return {
     ok: true,
-    tenant: formatTenant(tenant, quotaRow),
+    tenant: formatTenant(demoted, quotaRow),
     issuer: {
       id: issuer.id,
       ruc: issuer.ruc,

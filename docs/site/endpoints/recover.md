@@ -39,7 +39,7 @@ La API key actual para el entorno vigente de la cuenta (sandbox o producción) s
     "id": "00000000-0000-0000-0000-000000000001",
     "email": "you@company.com",
     "subscriptionTier": "FREE",
-    "status": "ACTIVE",
+    "status": "PENDING_VERIFICATION",
     "documentQuota": 100,
     "documentCount": 12
   },
@@ -60,7 +60,7 @@ La API key actual para el entorno vigente de la cuenta (sandbox o producción) s
 
 `environment` refleja el entorno **real y actual** de la cuenta (`"sandbox"` o `"production"`) — un tenant ya promovido a producción recupera su llave de producción, no una de sandbox.
 
-Adicionalmente, se envía en segundo plano un correo de verificación como aviso — no bloquea esta respuesta y no afecta la llave ya emitida.
+**Como validación adicional, la cuenta también vuelve a `PENDING_VERIFICATION`** — que el certificado coincida solo prueba que tienes el archivo P12, no que controlas el correo registrado. Se envía en segundo plano un correo de verificación con un enlace nuevo (no bloquea esta respuesta). La llave devuelta ya funciona para crear comprobantes en sandbox, pero las acciones que requieren una cuenta `ACTIVE` — crear una sucursal, promover a producción, iniciar una suscripción, o generar llaves adicionales — quedan bloqueadas hasta hacer clic en el enlace de ese correo. Ver [`GET /v1/verify-email`](./verify-email.md).
 
 ### 200 OK — cualquier otro caso
 
@@ -97,4 +97,5 @@ Los errores de certificado (archivo corrupto, contraseña incorrecta, certificad
 ## Notas
 
 - No confundir con `POST /v1/register` — ese endpoint es solo para cuentas nuevas; si el correo ya existe, rechaza con `409 CONFLICT` y no revoca ni emite ninguna llave.
-- El correo de aviso reutiliza el mismo mecanismo de `POST /v1/resend-verification` (mismo token, misma plantilla) — para una cuenta ya `ACTIVE`, hacer clic en el enlace simplemente reconfirma el estado sin efecto adicional.
+- El correo de aviso reutiliza el mismo mecanismo de `POST /v1/resend-verification` (mismo token, misma plantilla) y el mismo endpoint de redención, `GET /v1/verify-email`, que devuelve la cuenta a `ACTIVE`. Si no tienes acceso al correo, un administrador también puede verificar la cuenta manualmente.
+- Este requisito de reverificación aplica incluso si la cuenta ya estaba `ACTIVE` antes de la recuperación — que el certificado coincida ya no es suficiente por sí solo para conservar todos los privilegios de la cuenta sin también confirmar el acceso al correo.

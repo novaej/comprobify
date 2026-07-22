@@ -64,6 +64,9 @@ describe('RegistrationService', () => {
     apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999' });
     tenantModel.updateVerificationEmailSent.mockResolvedValue(undefined);
     tenantModel.updateVerificationToken.mockResolvedValue(undefined);
+    tenantModel.demoteToPendingVerification.mockImplementation((id) =>
+      Promise.resolve({ id, email: baseFields.email, status: 'PENDING_VERIFICATION' })
+    );
     tenantEventModel.create.mockResolvedValue(undefined);
   });
 
@@ -395,17 +398,31 @@ describe('RegistrationService', () => {
       expect(result.environment).toBe('production');
     });
 
+    test('matched: forces re-verification by demoting the tenant to PENDING_VERIFICATION with a fresh token', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+
+      // A matching certificate proves possession of the P12, not control of
+      // the email inbox — extra validation demotes the tenant until the
+      // fresh verification link is clicked (same restrictions any newly
+      // registered PENDING_VERIFICATION tenant already has).
+      expect(tenantModel.demoteToPendingVerification).toHaveBeenCalledWith(
+        existingTenant.id,
+        expect.any(String),
+        expect.any(Date)
+      );
+      expect(tenantModel.updateVerificationToken).not.toHaveBeenCalled();
+      expect(result.tenant.status).toBe('PENDING_VERIFICATION');
+    });
+
     test('matched: durably enqueues a fresh verification email effect as an out-of-band notice', async () => {
       tenantModel.findByEmail.mockResolvedValue(existingTenant);
       issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
 
       await registrationService.recover(baseFields.email, p12Buffer, p12Password);
 
-      expect(tenantModel.updateVerificationToken).toHaveBeenCalledWith(
-        existingTenant.id,
-        expect.any(String),
-        expect.any(Date)
-      );
       // Sending, stamping verification_email_sent_at, and logging
       // VERIFICATION_EMAIL_SENT/FAILED all happen in the effect handler
       // (src/effects/index.js) now, not here — see ADR-022.
@@ -419,6 +436,22 @@ describe('RegistrationService', () => {
           language: existingTenant.preferred_language,
         }
       );
+    });
+
+    test('matched, EMAIL_PROVIDER=none: still demotes to PENDING_VERIFICATION even though no email can be sent', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      const originalProvider = config.email.provider;
+      config.email.provider = 'none';
+
+      try {
+        const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+        expect(tenantModel.demoteToPendingVerification).toHaveBeenCalled();
+        expect(result.tenant.status).toBe('PENDING_VERIFICATION');
+        expect(pendingEffectService.enqueue).not.toHaveBeenCalledWith('VERIFICATION_EMAIL_SEND', expect.anything());
+      } finally {
+        config.email.provider = originalProvider;
+      }
     });
   });
 

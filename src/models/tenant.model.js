@@ -62,6 +62,24 @@ async function activate(id) {
   return rows[0] || null;
 }
 
+// Opposite of activate() — used by recover() to force re-verification as an
+// extra validation step: a matching certificate proves possession of the
+// P12, but not control of the registered email inbox, so recovery now also
+// requires clicking the fresh verification link before the account regains
+// ACTIVE-gated privileges (branch creation, promotion, subscriptions, minting
+// additional named keys — sandbox document creation is unaffected, same as
+// any newly-registered PENDING_VERIFICATION tenant).
+async function demoteToPendingVerification(id, token, expiresAt) {
+  const { rows } = await db.query(
+    `UPDATE tenants
+     SET status = $1, verification_token = $2, verification_token_expires_at = $3, updated_at = NOW()
+     WHERE id = $4
+     RETURNING *`,
+    [TenantStatus.PENDING_VERIFICATION, token, expiresAt, id]
+  );
+  return rows[0] || null;
+}
+
 async function updateTier(id, tier) {
   const { rows } = await db.query(
     `UPDATE tenants SET subscription_tier = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
@@ -161,4 +179,4 @@ async function countIssuePointsByBranch(tenantId, branchCode) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, findAllActive, activate, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, updateAgreementAcceptance, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, findAllActive, activate, demoteToPendingVerification, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, updateAgreementAcceptance, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
