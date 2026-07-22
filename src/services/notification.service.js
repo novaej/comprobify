@@ -40,6 +40,8 @@ const notificationPreferenceModel = require('../models/notification-preference.m
 const issuerModel = require('../models/issuer.model');
 const NotificationTypes = require('../constants/notification-types');
 const NotificationSeverity = require('../constants/notification-severity');
+const pendingEffectService = require('./pending-effect.service');
+const { EffectTypes } = require('../constants/effect-types');
 
 const PAYMENT_PURPOSE_LABELS = { INITIAL: 'subscription', TIER_CHANGE: 'tier change', RENEWAL: 'renewal' };
 const REJECTION_REASON_LABELS = {
@@ -76,14 +78,18 @@ function formatSequential(document) {
 }
 
 /**
- * Fan out a notification to webhook subscribers (fire-and-forget).
- * Import lazily to avoid circular dependency (webhook-delivery-service → notification-model → here).
+ * Durably enqueue a WEBHOOK_FANOUT effect for a notification (ADR-022) —
+ * replaces the old direct, unawaited webhookDeliveryService.fanOut() call.
+ * The actual fan-out runs in the effect handler (src/effects/index.js),
+ * which also breaks the circular dependency this used to need a lazy
+ * require for (webhook-delivery-service → notification-model → here).
+ *
+ * Awaited by callers so the enqueue (durable insert) lands before the
+ * caller returns — dispatch (the RabbitMQ publish) stays best-effort.
  */
-function fireWebhookFanOut(notification) {
-  // Lazy require breaks the circular dependency at runtime
-  const webhookDeliveryService = require('./webhook-delivery.service');
-  webhookDeliveryService.fanOut(notification)
-    .catch(err => console.warn('[notification] Webhook fan-out error:', err.message));
+async function fireWebhookFanOut(notification) {
+  const effect = await pendingEffectService.enqueue(EffectTypes.WEBHOOK_FANOUT, notification.tenant_id, { notificationId: notification.id });
+  pendingEffectService.dispatch(effect);
 }
 
 // ---------------------------------------------------------------------------
@@ -153,7 +159,7 @@ async function createDocumentAuthorized(document, issuer) {
     });
   }
 
-  if (notification) fireWebhookFanOut(notification);
+  if (notification) await fireWebhookFanOut(notification);
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +210,7 @@ async function createPaymentReviewed(payment, subscription, decision) {
     },
   });
 
-  if (notification) fireWebhookFanOut(notification);
+  if (notification) await fireWebhookFanOut(notification);
   return notification;
 }
 
@@ -237,7 +243,7 @@ async function createSubscriptionRenewalDue(subscription, payment) {
     },
   });
 
-  if (notification) fireWebhookFanOut(notification);
+  if (notification) await fireWebhookFanOut(notification);
   return notification;
 }
 
@@ -262,7 +268,7 @@ async function createSubscriptionExpired(subscription) {
     metadata: { subscriptionId: subscription.id, previousTier: subscription.tier },
   });
 
-  if (notification) fireWebhookFanOut(notification);
+  if (notification) await fireWebhookFanOut(notification);
   return notification;
 }
 
@@ -313,7 +319,7 @@ async function runCertChecksForTenant(tenantId, prefs) {
       notification = await notificationModel.create({ tenantId, issuerId: issuer.id, ...alertData });
     }
 
-    if (notification) fireWebhookFanOut(notification);
+    if (notification) await fireWebhookFanOut(notification);
   }
 }
 

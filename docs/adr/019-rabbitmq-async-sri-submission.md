@@ -28,7 +28,7 @@ The obvious fix — a message broker — introduces a new failure mode of its ow
 
 Migration `074_pending_send_status.sql` had to update **two independent places** that both encode the transition graph: the JS state machine (`src/constants/document-state-machine.js`) and the PostgreSQL trigger function `enforce_document_state_transition()` (ADR-008, migration 027) — the DB trigger hardcodes the same graph on its own and is not derived from the JS constants, so updating only one would have passed application-level validation while Postgres rejected the write. See CLAUDE.md Common Mistake #39.
 
-Phase 2 (migrating the existing fire-and-forget side effects listed above onto this same publish/confirm/reconcile mechanism) is deliberately out of scope for this ADR.
+Phase 2 (migrating the existing fire-and-forget side effects listed above onto this same publish/confirm/reconcile mechanism) is deliberately out of scope for this ADR — see ADR-022, which also generalizes this ADR's own dispatch-tracking columns (`send_dispatch_attempted_at`/`authorize_dispatch_attempted_at`) onto the same generic `pending_effects` mechanism it introduces for everything else.
 
 ## Consequences
 

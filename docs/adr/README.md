@@ -106,3 +106,4 @@ YYYY-MM-DD
 | [019](019-rabbitmq-async-sri-submission.md) | RabbitMQ-Backed Async SRI Submission | Accepted | 2026-07-13 |
 | [020](020-uuid-primary-keys.md) | UUID Primary Keys | Accepted | 2026-07-21 |
 | [021](021-account-recovery-flow.md) | Synchronous, Certificate-Verified Account Recovery | Accepted | 2026-07-21 |
+| [022](022-effects-outbox.md) | pending_effects — a Generic Outbox for All Async Side Effects | Accepted | 2026-07-22 |

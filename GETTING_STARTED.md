@@ -114,7 +114,7 @@ ADMIN_SECRET=               # see step 5
 
 # RabbitMQ — required. The document send/authorize pipeline is fully async:
 # POST /:key/send and GET /:key/authorize always queue and return 202;
-# workers/sri-worker.js is the only process that calls SRI. For local dev,
+# workers/worker.js is the only process that calls SRI. For local dev,
 # the fastest option is the official Docker image (no account needed):
 #   docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 # then RABBITMQ_URL=amqp://guest:guest@localhost:5672

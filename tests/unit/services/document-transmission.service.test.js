@@ -2,24 +2,18 @@ jest.mock('../../../src/models/document.model');
 jest.mock('../../../src/models/document-event.model');
 jest.mock('../../../src/services/sri.service');
 jest.mock('../../../src/models/sri-response.model');
-jest.mock('../../../src/services/email.service');
-jest.mock('../../../src/services/notification.service');
-jest.mock('../../../src/services/subscription.service');
-jest.mock('../../../src/services/queue.service');
+jest.mock('../../../src/services/pending-effect.service');
 
 const documentModel = require('../../../src/models/document.model');
 const documentEventModel = require('../../../src/models/document-event.model');
 const sriService = require('../../../src/services/sri.service');
 const sriResponseModel = require('../../../src/models/sri-response.model');
-const emailService = require('../../../src/services/email.service');
-const notificationService = require('../../../src/services/notification.service');
-const subscriptionService = require('../../../src/services/subscription.service');
-const queueService = require('../../../src/services/queue.service');
+const pendingEffectService = require('../../../src/services/pending-effect.service');
 const documentTransmission = require('../../../src/services/document-transmission.service');
 
 const ACCESS_KEY = '1234567890123456789012345678901234567890123456789';
 
-const mockIssuer = { id: '00000000-0000-0000-0000-000000000001', sandbox: false };
+const mockIssuer = { id: '00000000-0000-0000-0000-000000000001', tenant_id: '00000000-0000-0000-0000-000000000900', sandbox: false };
 
 function baseDoc(overrides = {}) {
   return {
@@ -46,6 +40,10 @@ describe('DocumentTransmissionService', () => {
   });
 
   describe('sendToSri', () => {
+    beforeEach(() => {
+      pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-1', effect_type: 'SRI_AUTHORIZE' });
+    });
+
     test('throws NotFoundError when the document does not exist', async () => {
       documentModel.findByAccessKey.mockResolvedValue(null);
 
@@ -63,9 +61,10 @@ describe('DocumentTransmissionService', () => {
     });
 
     test('logs an ERROR event and rethrows when sriService.sendReceipt throws', async () => {
-      // sendToSri is only ever called (by the worker) on a PENDING_SEND
-      // document — SIGNED -> RECEIVED/RETURNED is no longer a valid direct
-      // transition since the send/authorize pipeline went async-only.
+      // sendToSri is only ever called (by the SRI_SEND effect handler) on a
+      // PENDING_SEND document — SIGNED -> RECEIVED/RETURNED is no longer a
+      // valid direct transition since the send/authorize pipeline went
+      // async-only.
       const doc = baseDoc({ status: 'PENDING_SEND' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       const sriErr = new Error('network down');
@@ -79,14 +78,16 @@ describe('DocumentTransmissionService', () => {
         null, mockIssuer.id, mockIssuer.sandbox
       );
       expect(documentModel.updateStatus).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalled();
     });
 
-    test('sets RECEIVED when SRI returns RECIBIDA', async () => {
+    test('sets RECEIVED when SRI returns RECIBIDA and durably enqueues (but does not dispatch) SRI_AUTHORIZE', async () => {
       const doc = baseDoc({ status: 'PENDING_SEND' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       sriService.sendReceipt.mockResolvedValue({ status: 'RECIBIDA', messages: [], rawResponse: '<raw/>' });
       sriResponseModel.create.mockResolvedValue({});
-      documentModel.updateStatus.mockResolvedValue(baseDoc({ status: 'RECEIVED' }));
+      const receivedDoc = baseDoc({ status: 'RECEIVED' });
+      documentModel.updateStatus.mockResolvedValue(receivedDoc);
       documentEventModel.create.mockResolvedValue({});
 
       const result = await documentTransmission.sendToSri(ACCESS_KEY, mockIssuer);
@@ -98,6 +99,18 @@ describe('DocumentTransmissionService', () => {
       expect(documentEventModel.create).toHaveBeenCalledWith(
         doc.id, 'SENT', 'PENDING_SEND', 'RECEIVED', { sriStatus: 'RECIBIDA' }, null, mockIssuer.id, mockIssuer.sandbox
       );
+      // Becoming RECEIVED guarantees an SRI_AUTHORIZE effect exists even if
+      // the client never calls GET /:key/authorize — but it's enqueued
+      // only, never dispatched here (see ADR-022: the first dispatch is
+      // left to reconciliation's authorizeCheckDelayMinutes window, or to
+      // queueAuthorizationCheck if the client asks explicitly).
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
+        'SRI_AUTHORIZE',
+        mockIssuer.tenant_id,
+        { documentId: receivedDoc.id, accessKey: receivedDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox },
+        `sri-authorize:${receivedDoc.id}`
+      );
+      expect(pendingEffectService.dispatch).not.toHaveBeenCalled();
       expect(result.status).toBe('RECEIVED');
       expect(result.sriStatus).toBe('RECIBIDA');
       expect(result.processingRetry).toBeUndefined();
@@ -123,10 +136,11 @@ describe('DocumentTransmissionService', () => {
         expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
         null, mockIssuer.id, mockIssuer.sandbox
       );
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SRI_AUTHORIZE', mockIssuer.tenant_id, expect.any(Object), expect.any(String));
       expect(result.processingRetry).toBe(true);
     });
 
-    test('sets RETURNED for a non-70 DEVUELTA response', async () => {
+    test('sets RETURNED for a non-70 DEVUELTA response and does not enqueue SRI_AUTHORIZE', async () => {
       const doc = baseDoc({ status: 'PENDING_SEND' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       const messages = [{ identifier: '43', message: 'SOME OTHER ERROR' }];
@@ -138,6 +152,7 @@ describe('DocumentTransmissionService', () => {
       const result = await documentTransmission.sendToSri(ACCESS_KEY, mockIssuer);
 
       expect(documentModel.updateStatus).toHaveBeenCalledWith(doc.id, 'RETURNED', {}, mockIssuer.id, mockIssuer.sandbox);
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalled();
       expect(result.status).toBe('RETURNED');
       expect(result.processingRetry).toBeUndefined();
       expect(result.sriMessages).toEqual(messages);
@@ -146,13 +161,8 @@ describe('DocumentTransmissionService', () => {
 
   describe('checkAuthorization', () => {
     beforeEach(() => {
-      // Fire-and-forget side effects call `.catch`/`.then` on these directly —
-      // they must resolve to a promise even when a test doesn't care about them.
-      notificationService.createDocumentAuthorized.mockResolvedValue({});
-      subscriptionService.activateIfLinked.mockResolvedValue();
-      subscriptionService.applyTierChangeIfLinked.mockResolvedValue();
-      subscriptionService.applyRenewalIfLinked.mockResolvedValue();
-      emailService.sendInvoiceAuthorized.mockResolvedValue({ sent: true, messageId: 'msg-1' });
+      pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-x', effect_type: 'X' });
+      pendingEffectService.dispatch.mockResolvedValue();
     });
 
     test('throws NotFoundError when the document does not exist', async () => {
@@ -185,7 +195,7 @@ describe('DocumentTransmissionService', () => {
       expect(documentModel.updateStatus).not.toHaveBeenCalled();
     });
 
-    test('returns the unchanged document (no update, no event) when SRI reports pending', async () => {
+    test('returns { requeue: true } (no update, no event, no effects) when SRI reports pending', async () => {
       const doc = baseDoc({ status: 'RECEIVED' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       sriService.checkAuthorization.mockResolvedValue({ pending: true, status: null, messages: [], rawResponse: '<raw/>' });
@@ -195,10 +205,11 @@ describe('DocumentTransmissionService', () => {
 
       expect(documentModel.updateStatus).not.toHaveBeenCalled();
       expect(documentEventModel.create).not.toHaveBeenCalled();
-      expect(result.status).toBe('RECEIVED');
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalled();
+      expect(result).toEqual({ requeue: true });
     });
 
-    test('sets NOT_AUTHORIZED and does not fire any authorization side effects', async () => {
+    test('sets NOT_AUTHORIZED and does not enqueue any post-authorization effect', async () => {
       const doc = baseDoc({ status: 'RECEIVED' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       sriService.checkAuthorization.mockResolvedValue({
@@ -217,14 +228,10 @@ describe('DocumentTransmissionService', () => {
         null, mockIssuer.id, mockIssuer.sandbox
       );
       expect(result.status).toBe('NOT_AUTHORIZED');
-      expect(notificationService.createDocumentAuthorized).not.toHaveBeenCalled();
-      expect(subscriptionService.activateIfLinked).not.toHaveBeenCalled();
-      expect(subscriptionService.applyTierChangeIfLinked).not.toHaveBeenCalled();
-      expect(subscriptionService.applyRenewalIfLinked).not.toHaveBeenCalled();
-      expect(emailService.sendInvoiceAuthorized).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalled();
     });
 
-    test('sets AUTHORIZED, stores authorization fields, and fires every fire-and-forget side effect', async () => {
+    test('sets AUTHORIZED, stores authorization fields, and durably enqueues every post-authorization effect', async () => {
       const doc = baseDoc({ status: 'RECEIVED' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       sriService.checkAuthorization.mockResolvedValue({
@@ -255,118 +262,25 @@ describe('DocumentTransmissionService', () => {
       );
       expect(result.status).toBe('AUTHORIZED');
 
-      // Fire-and-forget calls are issued synchronously (not awaited) — they
-      // must already have been invoked by the time checkAuthorization resolves.
-      expect(notificationService.createDocumentAuthorized).toHaveBeenCalledWith(updatedDoc, mockIssuer);
-      expect(subscriptionService.activateIfLinked).toHaveBeenCalledWith(updatedDoc.id);
-      expect(subscriptionService.applyTierChangeIfLinked).toHaveBeenCalledWith(updatedDoc.id);
-      expect(subscriptionService.applyRenewalIfLinked).toHaveBeenCalledWith(updatedDoc.id);
-      expect(emailService.sendInvoiceAuthorized).toHaveBeenCalledWith(updatedDoc);
-    });
-
-    test('checkAuthorization does not await the fire-and-forget email side effect before returning', async () => {
-      const doc = baseDoc({ status: 'RECEIVED' });
-      documentModel.findByAccessKey.mockResolvedValue(doc);
-      sriService.checkAuthorization.mockResolvedValue({
-        pending: false, status: 'AUTORIZADO', messages: [], rawResponse: '<raw/>',
-      });
-      sriResponseModel.create.mockResolvedValue({});
-      const updatedDoc = baseDoc({ status: 'AUTHORIZED' });
-      // First updateStatus call (the STATUS_CHANGED transition) resolves immediately;
-      // any later call would be the email-side-effect follow-up.
-      documentModel.updateStatus.mockResolvedValue(updatedDoc);
-      documentEventModel.create.mockResolvedValue({});
-      let resolveEmail;
-      emailService.sendInvoiceAuthorized.mockReturnValue(new Promise((resolve) => { resolveEmail = resolve; }));
-
-      await documentTransmission.checkAuthorization(ACCESS_KEY, mockIssuer);
-
-      // Only the initial STATUS_CHANGED update has landed — the email promise
-      // is still pending, proving the function returned without awaiting it.
-      expect(documentModel.updateStatus).toHaveBeenCalledTimes(1);
-
-      resolveEmail({ sent: true, messageId: 'msg-1' });
-      await new Promise((resolve) => setImmediate(resolve));
-      await new Promise((resolve) => setImmediate(resolve));
-    });
-
-    test('records SENT email status and an EMAIL_SENT event once the fire-and-forget email succeeds', async () => {
-      const doc = baseDoc({ status: 'RECEIVED' });
-      documentModel.findByAccessKey.mockResolvedValue(doc);
-      sriService.checkAuthorization.mockResolvedValue({
-        pending: false, status: 'AUTORIZADO', messages: [], rawResponse: '<raw/>',
-      });
-      sriResponseModel.create.mockResolvedValue({});
-      const updatedDoc = baseDoc({ status: 'AUTHORIZED', issuer_id: mockIssuer.id });
-      documentModel.updateStatus.mockResolvedValue(updatedDoc);
-      documentEventModel.create.mockResolvedValue({});
-      emailService.sendInvoiceAuthorized.mockResolvedValue({ sent: true, messageId: 'msg-42' });
-
-      await documentTransmission.checkAuthorization(ACCESS_KEY, mockIssuer);
-      // Flush the microtask queue so the fire-and-forget .then() chain settles.
-      await new Promise((resolve) => setImmediate(resolve));
-      await new Promise((resolve) => setImmediate(resolve));
-
-      expect(documentModel.updateStatus).toHaveBeenCalledWith(
-        updatedDoc.id, updatedDoc.status,
-        expect.objectContaining({ email_status: 'SENT', email_message_id: 'msg-42', email_sent_at: expect.any(Date) }),
-        updatedDoc.issuer_id, mockIssuer.sandbox
-      );
-      expect(documentEventModel.create).toHaveBeenCalledWith(
-        updatedDoc.id, 'EMAIL_SENT', null, null, { to: updatedDoc.buyer_email }, null, updatedDoc.issuer_id, mockIssuer.sandbox
-      );
-    });
-
-    test('records FAILED email status and an EMAIL_FAILED event when the fire-and-forget email rejects', async () => {
-      const doc = baseDoc({ status: 'RECEIVED' });
-      documentModel.findByAccessKey.mockResolvedValue(doc);
-      sriService.checkAuthorization.mockResolvedValue({
-        pending: false, status: 'AUTORIZADO', messages: [], rawResponse: '<raw/>',
-      });
-      sriResponseModel.create.mockResolvedValue({});
-      const updatedDoc = baseDoc({ status: 'AUTHORIZED', issuer_id: mockIssuer.id });
-      documentModel.updateStatus.mockResolvedValue(updatedDoc);
-      documentEventModel.create.mockResolvedValue({});
-      emailService.sendInvoiceAuthorized.mockRejectedValue(new Error('mailgun unreachable'));
-
-      await documentTransmission.checkAuthorization(ACCESS_KEY, mockIssuer);
-      await new Promise((resolve) => setImmediate(resolve));
-      await new Promise((resolve) => setImmediate(resolve));
-
-      expect(documentModel.updateStatus).toHaveBeenCalledWith(
-        updatedDoc.id, updatedDoc.status,
-        expect.objectContaining({ email_status: 'FAILED', email_error: 'mailgun unreachable' }),
-        updatedDoc.issuer_id, mockIssuer.sandbox
-      );
-      expect(documentEventModel.create).toHaveBeenCalledWith(
-        updatedDoc.id, 'EMAIL_FAILED', null, null, { error: 'mailgun unreachable' }, null, updatedDoc.issuer_id, mockIssuer.sandbox
-      );
-    });
-
-    test('records SKIPPED email status and an EMAIL_SKIPPED event when the email is intentionally skipped (e.g. no buyer_email)', async () => {
-      const doc = baseDoc({ status: 'RECEIVED' });
-      documentModel.findByAccessKey.mockResolvedValue(doc);
-      sriService.checkAuthorization.mockResolvedValue({
-        pending: false, status: 'AUTORIZADO', messages: [], rawResponse: '<raw/>',
-      });
-      sriResponseModel.create.mockResolvedValue({});
-      const updatedDoc = baseDoc({ status: 'AUTHORIZED', issuer_id: mockIssuer.id });
-      documentModel.updateStatus.mockResolvedValue(updatedDoc);
-      documentEventModel.create.mockResolvedValue({});
-      emailService.sendInvoiceAuthorized.mockResolvedValue({ sent: false });
-
-      await documentTransmission.checkAuthorization(ACCESS_KEY, mockIssuer);
-      await new Promise((resolve) => setImmediate(resolve));
-      await new Promise((resolve) => setImmediate(resolve));
-
-      expect(documentModel.updateStatus).toHaveBeenCalledWith(
-        updatedDoc.id, updatedDoc.status,
-        { email_status: 'SKIPPED' },
-        updatedDoc.issuer_id, mockIssuer.sandbox
-      );
-      expect(documentEventModel.create).toHaveBeenCalledWith(
-        updatedDoc.id, 'EMAIL_SKIPPED', null, null, { to: updatedDoc.buyer_email }, null, updatedDoc.issuer_id, mockIssuer.sandbox
-      );
+      // The INSERT (enqueue) for every effect must be awaited before
+      // checkAuthorization returns — a crash right after must not lose any
+      // of these (see ADR-022). Dispatch (the RabbitMQ publish) stays
+      // best-effort/unawaited, same as document-transmission's other
+      // producer call sites.
+      // No SUBSCRIPTION_* effects — that reconciliation moved to a periodic
+      // scan in POST /v1/admin/jobs/subscriptions (see ADR-022's addendum),
+      // not a RabbitMQ effect fired on every document authorization.
+      const expectedPayload = {
+        documentId: updatedDoc.id, accessKey: updatedDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
+      };
+      for (const type of [
+        'DOCUMENT_AUTHORIZED_NOTIFICATION',
+        'INVOICE_AUTHORIZED_EMAIL',
+      ]) {
+        expect(pendingEffectService.enqueue).toHaveBeenCalledWith(type, mockIssuer.tenant_id, expectedPayload, null);
+      }
+      expect(pendingEffectService.enqueue).toHaveBeenCalledTimes(2);
+      expect(pendingEffectService.dispatch).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -376,7 +290,7 @@ describe('DocumentTransmissionService', () => {
 
       await expect(documentTransmission.queueSend(ACCESS_KEY, mockIssuer))
         .rejects.toMatchObject({ statusCode: 404 });
-      expect(queueService.publishConfirmed).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalled();
     });
 
     test('throws on an invalid state transition (e.g. already PENDING_SEND)', async () => {
@@ -384,47 +298,29 @@ describe('DocumentTransmissionService', () => {
 
       await expect(documentTransmission.queueSend(ACCESS_KEY, mockIssuer))
         .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_STATE_TRANSITION' });
-      expect(queueService.publishConfirmed).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalled();
     });
 
-    test('moves SIGNED -> PENDING_SEND, publishes, and stamps send_dispatch_attempted_at on a confirmed publish', async () => {
+    test('moves SIGNED -> PENDING_SEND, durably enqueues, and best-effort dispatches an SRI_SEND effect', async () => {
       const doc = baseDoc({ status: 'SIGNED' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
       const pendingDoc = baseDoc({ status: 'PENDING_SEND' });
       documentModel.updateStatus.mockResolvedValue(pendingDoc);
       documentEventModel.create.mockResolvedValue({});
-      queueService.ROUTING_KEYS = { send: 'send', authorize: 'authorize' };
-      queueService.publishConfirmed.mockResolvedValue();
+      const effectRow = { id: 'effect-send-1', effect_type: 'SRI_SEND' };
+      pendingEffectService.enqueue.mockResolvedValue(effectRow);
 
       const result = await documentTransmission.queueSend(ACCESS_KEY, mockIssuer);
 
-      expect(documentModel.updateStatus).toHaveBeenNthCalledWith(1, doc.id, 'PENDING_SEND', {}, mockIssuer.id, mockIssuer.sandbox);
+      expect(documentModel.updateStatus).toHaveBeenCalledWith(doc.id, 'PENDING_SEND', {}, mockIssuer.id, mockIssuer.sandbox);
       expect(documentEventModel.create).toHaveBeenCalledWith(
         doc.id, 'STATUS_CHANGED', 'SIGNED', 'PENDING_SEND', {}, null, mockIssuer.id, mockIssuer.sandbox
       );
-      expect(queueService.publishConfirmed).toHaveBeenCalledWith('send', {
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SRI_SEND', mockIssuer.tenant_id, {
         documentId: pendingDoc.id, accessKey: pendingDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
-      });
-      expect(documentModel.updateStatus).toHaveBeenNthCalledWith(2,
-        pendingDoc.id, 'PENDING_SEND', { send_dispatch_attempted_at: expect.any(Date) }, mockIssuer.id, mockIssuer.sandbox
-      );
+      }, null);
+      expect(pendingEffectService.dispatch).toHaveBeenCalledWith(effectRow);
       expect(result.status).toBe('PENDING_SEND');
-    });
-
-    test('still returns the PENDING_SEND document when the publish fails (reconciliation picks it up later)', async () => {
-      const doc = baseDoc({ status: 'SIGNED' });
-      documentModel.findByAccessKey.mockResolvedValue(doc);
-      const pendingDoc = baseDoc({ status: 'PENDING_SEND' });
-      documentModel.updateStatus.mockResolvedValue(pendingDoc);
-      documentEventModel.create.mockResolvedValue({});
-      queueService.publishConfirmed.mockRejectedValue(new Error('broker unreachable'));
-
-      const result = await documentTransmission.queueSend(ACCESS_KEY, mockIssuer);
-
-      expect(result.status).toBe('PENDING_SEND');
-      // Only the SIGNED -> PENDING_SEND update happened — the dispatch
-      // timestamp was never stamped since the publish failed.
-      expect(documentModel.updateStatus).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -441,35 +337,26 @@ describe('DocumentTransmissionService', () => {
 
       await expect(documentTransmission.queueAuthorizationCheck(ACCESS_KEY, mockIssuer))
         .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_STATE_TRANSITION' });
-      expect(queueService.publishConfirmed).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalled();
     });
 
-    test('publishes and stamps authorize_dispatch_attempted_at without changing status', async () => {
+    test('finds-or-creates the SRI_AUTHORIZE row via dedup_key and dispatches it immediately, without changing status', async () => {
       const doc = baseDoc({ status: 'RECEIVED' });
       documentModel.findByAccessKey.mockResolvedValue(doc);
-      documentModel.updateStatus.mockResolvedValue(doc);
-      queueService.publishConfirmed.mockResolvedValue();
+      const effectRow = { id: 'effect-auth-1', effect_type: 'SRI_AUTHORIZE' };
+      pendingEffectService.enqueue.mockResolvedValue(effectRow);
 
       const result = await documentTransmission.queueAuthorizationCheck(ACCESS_KEY, mockIssuer);
 
-      expect(queueService.publishConfirmed).toHaveBeenCalledWith('authorize', {
-        documentId: doc.id, accessKey: doc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
-      });
-      expect(documentModel.updateStatus).toHaveBeenCalledWith(
-        doc.id, 'RECEIVED', { authorize_dispatch_attempted_at: expect.any(Date) }, mockIssuer.id, mockIssuer.sandbox
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
+        'SRI_AUTHORIZE',
+        mockIssuer.tenant_id,
+        { documentId: doc.id, accessKey: doc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox },
+        `sri-authorize:${doc.id}`
       );
-      expect(result.status).toBe('RECEIVED');
-    });
-
-    test('still returns the document when the publish fails (reconciliation picks it up later)', async () => {
-      const doc = baseDoc({ status: 'RECEIVED' });
-      documentModel.findByAccessKey.mockResolvedValue(doc);
-      queueService.publishConfirmed.mockRejectedValue(new Error('broker unreachable'));
-
-      const result = await documentTransmission.queueAuthorizationCheck(ACCESS_KEY, mockIssuer);
-
-      expect(result.status).toBe('RECEIVED');
+      expect(pendingEffectService.dispatch).toHaveBeenCalledWith(effectRow);
       expect(documentModel.updateStatus).not.toHaveBeenCalled();
+      expect(result.status).toBe('RECEIVED');
     });
   });
 });

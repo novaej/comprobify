@@ -32,7 +32,7 @@ Node.js REST API for generating, digitally signing, and submitting electronic in
      └────────────┘   └────────────┘   └──────────┘
 
      ┌──────────────────────────────────────────────┐
-     │   RabbitMQ  ──▶  workers/sri-worker.js        │   Standalone consumer process
+     │   RabbitMQ  ──▶  workers/worker.js        │   Standalone consumer process
      │   (SRI send/authorize dispatch — see ADR-019) │   (npm run worker), not the API
      └──────────────────────────────────────────────┘
 ```
@@ -118,7 +118,7 @@ The unsigned XML is validated against the official SRI schema for the document t
 Both SRI SOAP calls (`sendReceipt`, `checkAuthorization`) use exponential-backoff retry (1 s → 2 s → 4 s, 3 attempts) on network-level failures only — HTTP-level SRI responses are never retried.
 
 **Async SRI submission via RabbitMQ**
-`POST /:key/send` and `GET /:key/authorize` never block on SRI's SOAP response — both queue a message and return `202` immediately. A standalone worker process (`workers/sri-worker.js`, started via `npm run worker`) is the only code that actually calls SRI. Postgres remains the source of truth throughout (a `PENDING_SEND` status plus dispatch-tracking columns); RabbitMQ is purely a confirmed-dispatch signal, and `POST /v1/admin/jobs/queue-reconciliation` re-publishes anything whose dispatch was never confirmed or has gone stale — it never calls SRI itself. See [ADR-019](docs/adr/019-rabbitmq-async-sri-submission.md).
+`POST /:key/send` and `GET /:key/authorize` never block on SRI's SOAP response — both queue a message and return `202` immediately. A standalone worker process (`workers/worker.js`, started via `npm run worker`) is the only code that actually calls SRI. Postgres remains the source of truth throughout (a `PENDING_SEND` status plus dispatch-tracking columns); RabbitMQ is purely a confirmed-dispatch signal, and `POST /v1/admin/jobs/queue-reconciliation` re-publishes anything whose dispatch was never confirmed or has gone stale — it never calls SRI itself. See [ADR-019](docs/adr/019-rabbitmq-async-sri-submission.md).
 
 **Audit trail**
 Every lifecycle transition writes a row to `document_events` (type, from/to status, detail JSON), giving a full tamper-evident history of each document.
@@ -172,7 +172,7 @@ Unexpected `5xx` failures are reported to [Sentry](https://sentry.io) via `@sent
 │   ├── access-key-generator.js  49-digit SRI access key + Module 11 check digit
 │   └── ride-builder.js        PDFKit A4 RIDE renderer (Code 128 barcode via bwip-js)
 ├── workers/
-│   └── sri-worker.js          Standalone RabbitMQ consumer (npm run worker) — the only code that calls SRI
+│   └── worker.js          Standalone RabbitMQ consumer (npm run worker) — the only code that calls SRI
 ├── db/
 │   ├── migrate.js             Migration runner
 │   └── migrations/            SQL migration files (001–074)
@@ -231,7 +231,7 @@ See **[GETTING_STARTED.md](GETTING_STARTED.md)** for full local setup instructio
 - [ ] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard
 - [ ] Webhook endpoint (`/v1/mailgun/webhook`) publicly reachable via HTTPS
 - [ ] `RABBITMQ_URL` set to a dedicated vhost/credentials for this environment; without it the async send/authorize pipeline can never dispatch a queued document
-- [ ] `workers/sri-worker.js` (`npm run worker`) deployed as its own long-running process, separate from the API — it is not started by `npm start`
+- [ ] `workers/worker.js` (`npm run worker`) deployed as its own long-running process, separate from the API — it is not started by `npm start`
 - [ ] `POST /v1/admin/jobs/queue-reconciliation` scheduled on external cron (recommended hourly)
 
 ---

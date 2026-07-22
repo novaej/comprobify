@@ -7,7 +7,7 @@ The four admin-triggered jobs are date-driven — each one scans for rows whose 
 | Notifications | `POST /v1/admin/jobs/notifications` | every 5 min | `issuers.cert_expiry`, `webhook_deliveries.next_retry_at` |
 | Subscriptions | `POST /v1/admin/jobs/subscriptions` | daily | `subscriptions.current_period_end`, `pending_tier` |
 | Quota | `POST /v1/admin/jobs/quota` | daily | `tenant_quotas.period_end` |
-| Queue reconciliation | `POST /v1/admin/jobs/queue-reconciliation` | hourly | `documents.send_dispatch_attempted_at`/`authorize_dispatch_attempted_at` (both `public` and `sandbox` schemas) |
+| Queue reconciliation | `POST /v1/admin/jobs/queue-reconciliation` | hourly | `pending_effects.dispatch_attempted_at` (all 14 effect types, one table — not schema-scoped) |
 
 All four are **idempotent** — re-running them when nothing is due is always safe and a no-op. Unlike the other three, the queue reconciliation job requires an actual RabbitMQ connection (`RABBITMQ_URL`) to do anything useful — it publishes real messages, it doesn't just read/write Postgres.
 
@@ -80,7 +80,22 @@ SELECT status, attempt_count, next_retry_at, last_response FROM webhook_deliveri
 
 ## 2. Subscriptions job
 
-Runs `applyScheduledTierChanges()` then `processDueRenewals()`, in that order (order matters — a downgrade must roll its period forward before the expiry check runs, or it would look freshly expired).
+Runs `applyPendingInvoiceLinks()`, then `applyScheduledTierChanges()`, then `processDueRenewals()`, in that order (order matters — a renewal/tier-change applied by the first step extends `current_period_end`, which the downgrade/expiry steps below need to see in the same tick; a downgrade must also roll its period forward before the expiry check runs, or it would look freshly expired).
+
+### 2a0. Pending invoice link (the reverse-ordering case — see ADR-022's addendum)
+```sql
+-- Simulate an admin having linked an invoice before SRI authorized it —
+-- linkInvoice() itself only applies immediately when the document is
+-- already AUTHORIZED at link time.
+UPDATE subscriptions SET status = 'INVOICE_PROCESSING', initial_invoice_document_id = '<DOCUMENT_ID>'
+WHERE id = <SUB_ID>;
+UPDATE documents SET status = 'AUTHORIZED' WHERE id = '<DOCUMENT_ID>';
+```
+Run the subscriptions job — expect `invoiceLinksActivated: 1` in the response, and the subscription to be `ACTIVE` with a fresh `current_period_start`/`current_period_end`:
+```sql
+SELECT status, current_period_start, current_period_end FROM subscriptions WHERE id = <SUB_ID>;
+```
+The same pattern applies to a pending `TIER_CHANGE`/`RENEWAL` payment — set `payments.invoice_document_id` to an `AUTHORIZED` document with `period_start IS NULL`, `status = 'VERIFIED'`, and the matching `purpose`; expect `invoiceLinksTierChangesApplied`/`invoiceLinksRenewalsApplied` to include it.
 
 ### 2a. Scheduled downgrade
 ```sql
@@ -152,37 +167,45 @@ Any tier change (upgrade, downgrade, expiry-to-FREE, admin override via `PATCH /
 
 ## 4. Queue reconciliation job
 
-Requires a real RabbitMQ connection (`RABBITMQ_URL` in `.env`) — this job publishes actual messages, so watch the queue depth/message count in your broker's management UI (e.g. CloudAMQP) to confirm a re-publish happened, alongside the SQL checks below.
+Requires a real RabbitMQ connection (`RABBITMQ_URL` in `.env`) — this job publishes actual messages, so watch the queue depth/message count in your broker's management UI (e.g. CloudAMQP) to confirm a re-publish happened, alongside the SQL checks below. Since ADR-022, this job scans one table, `pending_effects`, covering all 14 effect types (SRI send/authorize included) — no more `documents`-column or `public`/`sandbox` schema split. Subscription activation/tier-change/renewal reconciliation is handled separately, by a periodic scan inside the subscriptions job (section 2 below), not via `pending_effects`.
 
-### 4a. Stuck `PENDING_SEND` (never dispatched, or broker was down)
+First find the effect row for the document you want to test:
 ```sql
--- Simulate a document that was queued but never confirmed-dispatched — e.g. RabbitMQ
+SELECT id, effect_type, status, dispatch_attempted_at, attempt_count
+FROM pending_effects
+WHERE payload->>'documentId' = '<DOCUMENT_ID>'
+ORDER BY created_at DESC;
+```
+
+### 4a. Stuck `SRI_SEND` (never dispatched, or broker was down)
+```sql
+-- Simulate an effect that was enqueued but never confirmed-dispatched — e.g. RabbitMQ
 -- was unreachable when POST /:key/send tried to publish.
-UPDATE documents SET status = 'PENDING_SEND', send_dispatch_attempted_at = NULL
-WHERE id = <DOCUMENT_ID>;
+UPDATE pending_effects SET dispatch_attempted_at = NULL
+WHERE id = <EFFECT_ID> AND effect_type = 'SRI_SEND';
 ```
-Run the reconciliation job — expect `sendRepublished` to include this document, and `send_dispatch_attempted_at` to be set afterward:
+Run the reconciliation job — expect `republished` to include this row, and `dispatch_attempted_at`/`status` to update afterward:
 ```sql
-SELECT status, send_dispatch_attempted_at FROM documents WHERE id = <DOCUMENT_ID>;
+SELECT status, dispatch_attempted_at FROM pending_effects WHERE id = <EFFECT_ID>;
 ```
-With `workers/sri-worker.js` running (`npm run worker`), the document should shortly move to `RECEIVED`/`RETURNED` on its own — the reconciliation job itself never touches SRI.
+With `workers/worker.js` running (`npm run worker`), the document should shortly move to `RECEIVED`/`RETURNED` on its own — the reconciliation job itself never runs a handler.
 
 ### 4b. Stale dispatch (published once, but nothing ever consumed it)
 ```sql
-UPDATE documents SET status = 'PENDING_SEND', send_dispatch_attempted_at = NOW() - INTERVAL '10 minutes'
-WHERE id = <DOCUMENT_ID>;
+UPDATE pending_effects SET dispatch_attempted_at = NOW() - INTERVAL '10 minutes'
+WHERE id = <EFFECT_ID> AND effect_type = 'SRI_SEND';
 ```
-With the default `QUEUE_RECONCILE_SEND_STALE_MINUTES=5`, this is already past the staleness threshold — the job re-publishes it the same as 4a.
+With the default `QUEUE_RECONCILE_EFFECT_STALE_MINUTES=5`, this is already past the staleness threshold — the job re-publishes it the same as 4a. (`SRI_SEND` uses this generic threshold; `SRI_AUTHORIZE` is the one type with its own pair of thresholds — see 4c.)
 
-### 4c. `RECEIVED` document awaiting its first authorize-check
+### 4c. `SRI_AUTHORIZE` row awaiting its first check
 ```sql
-UPDATE documents SET status = 'RECEIVED', updated_at = NOW() - INTERVAL '10 minutes', authorize_dispatch_attempted_at = NULL
-WHERE id = <DOCUMENT_ID>;
+UPDATE pending_effects SET dispatch_attempted_at = NULL, created_at = NOW() - INTERVAL '10 minutes'
+WHERE id = <EFFECT_ID> AND effect_type = 'SRI_AUTHORIZE';
 ```
-Run the job — expect `authorizeRepublished` to include this document. This is the mechanism that replaces "poll `RECEIVED` documents older than N minutes" from the original design — the job publishes the check request, the worker's `checkAuthorization()` call does the actual SRI query.
+Run the job — expect `republished` to include this row (past the default `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES=5`). This is the mechanism that replaces "poll `RECEIVED` documents older than N minutes" from the original design — the job publishes the check request, the `SRI_AUTHORIZE` effect handler (`checkAuthorization()`) does the actual SRI query. If SRI is still processing, the handler returns `{ requeue: true }` and the row is left exactly as-is for the *next* sweep to pick up again after `QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES`, rather than being marked done or failed.
 
 ### 4d. Nothing due — confirm it's a no-op
-Run the job again immediately after 4a-4c with no further SQL changes — expect `sendRepublished: 0, authorizeRepublished: 0` (both dispatch timestamps are now fresh).
+Run the job again immediately after 4a-4c with no further SQL changes — expect `{ republished: 0 }` (dispatch timestamps are now fresh).
 
 ---
 

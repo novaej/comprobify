@@ -27,56 +27,6 @@ Creation and rebuild services already guard invoice-only logic (e.g. the payment
 
 ---
 
-## 2. Async Worker for SRI Submission (RabbitMQ)
-
-**Priority: Medium — important for production reliability. Phase 1 shipped; Phase 2 remains.**
-
-`POST /:key/send` and `GET /:key/authorize` used to block the HTTP request while waiting for SRI's SOAP response (typically 5–30 s, can time out). Separately, the codebase has a growing list of fire-and-forget side effects (email sends, notification creation, webhook fan-out, subscription activation hooks) that are unawaited promises with only a `.catch(console.warn)` — if the process crashes mid-flight, or the call throws, that work is silently lost with no retry. Both problems share the same fix: a durable, broker-backed queue with **Postgres as the source of truth and RabbitMQ purely as the dispatcher, never the record.** See [ADR-019](docs/adr/019-rabbitmq-async-sri-submission.md) and CLAUDE.md's "Async SRI submission via RabbitMQ" entry for the full design.
-
-**Architecture (as built):**
-- Postgres remains the only durable record of *what needs to happen* — `documents.status`/dispatch-tracking columns, written before any publish attempt. RabbitMQ never originates state; it only carries "go process this" signals.
-- A publisher pushes a message to RabbitMQ and only marks the row dispatched (`send_dispatch_attempted_at`/`authorize_dispatch_attempted_at`) on a **broker-confirmed** publish (`src/services/queue.service.js`'s `publishConfirmed`, amqplib confirm channel).
-- Consumers are the *only* place that does the actual work. `workers/sri-worker.js` is the only code that calls SRI. No duplicate business logic in a DB-side fallback processor.
-- `POST /v1/admin/jobs/queue-reconciliation` (`src/services/queue-reconciliation.service.js`) finds rows stuck without a dispatch confirmation past a threshold and **re-publishes** them — it never processes them itself. A RabbitMQ outage therefore degrades to reconciliation-interval latency, not lost work or failed requests.
-- The worker is idempotent (a state-machine violation on redelivery is `ack`'d as benign, not treated as a failure).
-- Deployed as a single shared CloudAMQP instance (`shared-broker`, AWS us-east-1 to match Render's `virginia` region) rather than one per system, isolated by vhost/credentials — not yet exercised with more than one vhost since the free tier only provisions one.
-
-**Phase 1 — shipped:**
-- Async-only, no sync fallback — no `PROCESSING_MODE` toggle. `POST /:key/send` and `GET /:key/authorize` always queue and return `202`. (The original draft proposed a sync/async toggle as a rollback valve; dropped in favor of this codebase's "no feature flags when you can just change the code" convention — a redeploy is the rollback path if ever needed.)
-- New `PENDING_SEND` status sits between `SIGNED` and `RECEIVED`/`RETURNED` (migration `074_pending_send_status.sql` — also updates the `enforce_document_state_transition()` DB trigger, which hardcodes the transition graph independently of the JS state machine; see CLAUDE.md Common Mistake #39)
-- `workers/sri-worker.js` consumes `sri.send`/`sri.authorize` queues and calls the unchanged `sendToSri`/`checkAuthorization` functions in `document-transmission.service.js`
-- `queue-reconciliation.service.js`'s periodic sweep of `RECEIVED` documents past a delay threshold is what replaces the original "worker polls RECEIVED documents older than N minutes" idea — it publishes an authorize-check message rather than polling SRI directly
-
-**Not yet done (follow-up, not blocking):**
-- `render.yaml` now declares `comprobify-staging-queue-reconciliation` (cron) and `comprobify-staging-sri-worker` (`type: worker`) — but neither has been synced against a real Render deploy yet. The cron entry is low-risk (identical shape to the 3 already-confirmed cron jobs). The worker block's field names (`type: worker`, etc.) are unverified — if the Blueprint sync doesn't behave as expected, fall back to creating the Background Worker by hand in the dashboard first (the same recovery path originally used for the 3 cron jobs), then adjust the block to adopt it by exact name.
-- End-to-end verification against the live broker (CloudAMQP `shared-broker`) has been done manually: queuing a document, the worker consuming and calling SRI, and worker-restart recovery all confirmed working locally. Recovering a document stuck due to a **failed publish** (broker unreachable at request time, not just consumer down) via the reconciliation job has not yet been exercised end-to-end — only unit/design-level so far.
-
-**Phase 2 — migrate existing fire-and-forget side effects onto the same mechanism**, now that Phase 1's publisher/consumer/reconciliation infra exists:
-
-| Call site | Today |
-|---|---|
-| `notificationService.createDocumentAuthorized` (`document-transmission.service.js`) | unawaited, `.catch(console.warn)` |
-| `subscriptionService.activateIfLinked` (`document-transmission.service.js`) | unawaited, `.catch(console.warn)` |
-| `subscriptionService.applyTierChangeIfLinked` (`document-transmission.service.js`) | unawaited, `.catch(console.warn)` |
-| `subscriptionService.applyRenewalIfLinked` (`document-transmission.service.js`) | unawaited, `.catch(console.warn)` |
-| `emailService.sendInvoiceAuthorized` (`document-transmission.service.js`) | unawaited, but already has a durable retry path via `documents.email_status` + `POST /:key/email-retry` — lowest-urgency entry in this list |
-| `tenantAgreementService.generateForTenant` (`registration.service.js`) | unawaited, `.catch(console.warn)` |
-| `emailService.sendVerificationEmail` (`registration.service.js`) | unawaited, logs a `VERIFICATION_EMAIL_FAILED` tenant event on failure |
-| `webhookDeliveryService.fanOut` (`notification.service.js`) | unawaited, `.catch(console.warn)` — fires after every notification create/update |
-| `notificationService.createPaymentReviewed` / `createSubscriptionRenewalDue` / `createSubscriptionExpired` (`subscription.service.js`) | unawaited via the shared `fireAndForget()` helper |
-| `emailService.sendPaymentProofSubmitted` / `sendPaymentReviewed` / `sendSubscriptionRenewalDue` / `sendSubscriptionExpired` (`subscription.service.js`) | unawaited via the same helper |
-
-Each of these needs a status column (new, or reusing an existing one like `documents.email_status`) to record intent before publishing, so the same publish → confirm → reconcile mechanism applies uniformly instead of each call site inventing its own fire-and-forget error handling.
-
-**Explicitly out of scope for this item:**
-- Item 3's planned `api_keys.last_used_at`/`request_count` fire-and-forget update — a single indexed `UPDATE ... WHERE id = $1` per request; routing this through a broker adds latency and complexity for no benefit.
-- Item 11's planned certificate-renewal audit event — a single `tenant_events` INSERT, same reasoning.
-- The admin cron batch jobs (`POST /v1/admin/jobs/notifications`, `/jobs/subscriptions`, `/jobs/quota`) — already decoupled from user-facing requests and run on their own external-cron schedule. Turning each per-tenant/per-subscription unit of work into its own queued message (for parallelism and partial-failure resilience) is a reasonable future follow-up, but is independent of Phases 1–2 and not required by them.
-
-**Effort:** Phase 1 (shipped) was High — RabbitMQ deployment, worker process, new status/dispatch-tracking columns, migration, state machine update, reconciliation job. Phase 2 is Medium — no new infra, just moving each existing fire-and-forget call site onto the publisher/consumer/reconciliation mechanism that already exists.
-
----
-
 ## 3. API Key Usage Tracking
 
 **Priority: Medium — observability for named integrations**
@@ -152,7 +102,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 
 **Note:** log the `keyHash`, never the plaintext token. All sensitive fields (`encrypted_private_key`, cert PEM, passwords) must be excluded.
 
-**Interaction with item 2 (RabbitMQ async worker):** once `POST /:key/send` can return `202` immediately and the actual SRI outcome is produced later by a RabbitMQ consumer, the "what happened" half of the story moves out of the request/response cycle entirely — a request-only logging middleware can no longer show the full picture for an async-processed document. The consumer process(es) from item 2 need to emit the same structured JSON log shape, tagged with a correlation id (the original `requestId`, or the document's `access_key`) that ties consumer-side log lines back to the request that queued them. Sequence this after item 2 Phase 1 lands, or design the log schema with that correlation id from the start so it isn't bolted on later.
+**Interaction with the RabbitMQ async worker:** since `POST /:key/send`/`GET /:key/authorize` now return `202` immediately and the actual SRI outcome is produced later by `workers/worker.js`, the "what happened" half of the story lives outside the request/response cycle — a request-only logging middleware can't show the full picture for an async-processed document. `workers/worker.js` needs to emit the same structured JSON log shape, tagged with a correlation id (the original `requestId`, or the document's `access_key`) that ties consumer-side log lines back to the request that queued them.
 
 **Effort:** Low — one middleware, one external service connection, no migrations.
 
@@ -200,11 +150,11 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 **Priority: Low — blocked, requires a registered legal entity. Every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different vendor. No vendor has been selected yet — not under active consideration until the entity exists.**
 
-The manual subscription/payment pipeline this depends on (`subscriptions`/`payments` tables, promotion-time **or standalone** tier selection via `POST /v1/subscriptions`, tenant-facing proof upload, admin review with required rejection reasons, self-billed invoice linking, recurring renewals with reminder/grace/expiry, payment-review + renewal notifications, `GET /v1/subscriptions/me` status, public `/v1/tiers` catalog) is fully built — see CLAUDE.md's "Subscription + payment pipeline" entry and ADR-017 (including its 2026-06-29 addenda) for the design. This item is now scoped to only the gateway-specific automation that bolts onto it once the company exists and a vendor is chosen:
+The manual subscription/payment pipeline this depends on is already fully built — see CLAUDE.md's "Subscription + payment pipeline" entry and ADR-017 for the design. This item is scoped to only the gateway-specific automation that bolts onto it once the company exists and a vendor is chosen:
 
 - Card collected at whichever of `POST /v1/subscriptions` or `POST /v1/tenants/promote` actually starts the subscription (tier selection no longer only happens at promotion) — sandbox/Free stays card-free either way.
 - A hosted-fields/tokenization widget (whatever the chosen vendor provides) tokenizes client-side; raw card data should never reach Comprobify's servers.
-- If the chosen gateway has native recurring subscriptions, it owns the charge schedule, so for a gateway-paying tenant the manual renewal cron (`subscriptionService.processDueRenewals()`, `POST /v1/admin/jobs/subscriptions` — reminder ~7 days before `current_period_end`, then expiry ~7 days after if unpaid) becomes redundant for that tenant and should be skipped, not run in parallel with the gateway's own schedule. The gateway's webhook (mirrors `mailgun-webhook.controller.js`) would create/update `payments` rows automatically (`REPORTED`→`VERIFIED` near-instantly, no tenant upload or operator review needed, `purpose: 'RENEWAL'` same as the manual flow), then the existing `linkInvoice`/`applyRenewalIfLinked` pipeline takes over from invoice-linking onward unchanged (from the gateway's perspective — the caller is still just `linkInvoice`; if item 2 Phase 2 has landed by then, `applyRenewalIfLinked`/`applyTierChangeIfLinked`/`activateIfLinked` are invoked via a RabbitMQ consumer rather than an in-process fire-and-forget call, but the gateway integration doesn't need to know or care which). Its own migration adds whatever vendor-specific columns (subscription/customer/charge ids) turn out to be needed — `subscriptions`/`payments` don't have them yet, deliberately (see ADR-017's "no payment-gateway-specific schema until a gateway is decided").
+- If the chosen gateway has native recurring subscriptions, it owns the charge schedule, so for a gateway-paying tenant the manual renewal cron (`subscriptionService.processDueRenewals()`, `POST /v1/admin/jobs/subscriptions` — reminder ~7 days before `current_period_end`, then expiry ~7 days after if unpaid) becomes redundant for that tenant and should be skipped, not run in parallel with the gateway's own schedule. The gateway's webhook (mirrors `mailgun-webhook.controller.js`) would create/update `payments` rows automatically (`REPORTED`→`VERIFIED` near-instantly, no tenant upload or operator review needed, `purpose: 'RENEWAL'` same as the manual flow), then the existing `linkInvoice`/`applyRenewalIfLinked` pipeline takes over from invoice-linking onward unchanged (from the gateway's perspective — the caller is still just `linkInvoice`; `applyRenewalIfLinked`/`applyTierChangeIfLinked`/`activateIfLinked` are called synchronously when the invoice is already `AUTHORIZED` at link time, or picked up by the periodic `applyPendingInvoiceLinks()` scan otherwise — see CLAUDE.md's "Async worker: pending_effects outbox" entry — but the gateway integration doesn't need to know or care which). Its own migration adds whatever vendor-specific columns (subscription/customer/charge ids) turn out to be needed — `subscriptions`/`payments` don't have them yet, deliberately (see ADR-017's "no payment-gateway-specific schema until a gateway is decided").
 - Failed recurring charge → `payments` row `REJECTED` (with a system-generated `rejection_reason_code` — the existing enum in `src/constants/rejection-reasons.js` may need a gateway-specific value added, e.g. `CHARGE_DECLINED`, fires the existing `PAYMENT_REJECTED` notification+email unchanged) → on no resolution, downgrade to FREE the same way `subscriptionService.expireSubscription()` already does for an unpaid manual renewal (grace period already built and defaults to 7 days, see `RENEWAL_GRACE_DAYS`) — the gateway's failed-charge webhook should call (or replicate) that same function rather than inventing a second downgrade-to-FREE path. No immediate access suspension.
 - Mid-cycle tier change is now fully built on the manual pipeline (`POST /v1/subscriptions/change-tier`, `subscriptions.pending_tier`, `payments.purpose`/`target_tier` — see CLAUDE.md's "Tier changes" entry): upgrades apply immediately gated on a prorated *manual* payment; downgrades are scheduled, applied at `current_period_end` by `POST /v1/admin/jobs/subscriptions`, and now also roll the period forward for free so the renewal cycle continues at the new tier. What a gateway integration still needs to add here is purely automating the upgrade side — charging the prorated amount through the gateway instead of routing it through proof-upload/admin-review — the scheduling/proration logic itself doesn't change.
 - Config: a gateway-specific private key + webhook signing secret, independent per environment, same rule as `ADMIN_SECRET`/`ENCRYPTION_KEY`. Public key (if any) is frontend-only.
@@ -215,9 +165,7 @@ The manual subscription/payment pipeline this depends on (`subscriptions`/`payme
 
 **Priority: Low — depends on the payment gateway integration (#8)**
 
-The monthly quota reset this item used to require now exists: `tenant_quotas` (migration 073) decouples usage tracking from `tenants` entirely — one row per tenant per period (`period_start`/`period_end`, `document_quota`, `document_count`), with its own `is_current` flag mirroring `agreements`' per-type versioning. `POST /v1/admin/jobs/quota` (`tenant-quota.service.js`'s `resetDuePeriods()`) rolls over every period whose `period_end` has passed, on its own clock — independent of `subscriptions.billing_interval` for exactly the reason this item originally called out (a YEARLY subscriber must still get quota refreshed monthly, not yearly). `document-creation.service.js`'s atomic quota gate now increments/checks against the tenant's current `tenant_quotas` row instead of `tenants.document_count`/`document_quota` (both columns dropped). See CLAUDE.md's "Document quota enforcement" entry for the full design.
-
-What's left is exactly the overage-billing half, still blocked on the payment gateway (#8) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
+The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#8) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
 
 **What:**
 1. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month

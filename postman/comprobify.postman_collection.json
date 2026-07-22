@@ -391,7 +391,7 @@
                 }
               ]
             },
-            "description": "Recovers access to an existing account when the API key was lost. Requires the same P12 certificate used at registration — the API key is only revoked and replaced when the uploaded certificate matches the one on file.\n\nAlways returns 200 with the same generic response shape unless the certificate genuinely matches an existing account (anti-enumeration — a nonexistent email, an account with no issuer, and a mismatched certificate are all indistinguishable). On a real match, the key for the account's actual current environment (sandbox or production) is revoked and reissued immediately, returned in `apiKey`."
+            "description": "Recovers access to an existing account when the API key was lost. Requires the same P12 certificate used at registration — the API key is only revoked and replaced when the uploaded certificate matches the one on file.\n\nAlways returns 200 with the same generic response shape unless the certificate genuinely matches an existing account (anti-enumeration — a nonexistent email, an account with no issuer, and a mismatched certificate are all indistinguishable). On a real match, the key for the account's actual current environment (sandbox or production) is revoked and reissued immediately, returned in `apiKey`.\n\nAs extra validation, the account is also moved back to PENDING_VERIFICATION and a fresh verification email is sent — a certificate match alone no longer keeps full ACTIVE-gated privileges (branch creation, promotion, subscriptions, minting more named keys). The reissued key works immediately for sandbox document creation regardless. Click the emailed link (GET /v1/verify-email) to reactivate."
           },
           "event": [
             {
@@ -1861,7 +1861,7 @@
                 "send"
               ]
             },
-            "description": "Queues the signed XML for submission to the SRI reception service — this is asynchronous, it does not call SRI in-request. Returns 202 with the document in PENDING_SEND status. A standalone worker process (workers/sri-worker.js) picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` or `RETURNED`. Poll Get Document or Get Events to observe that transition."
+            "description": "Queues the signed XML for submission to the SRI reception service — this is asynchronous, it does not call SRI in-request. Returns 202 with the document in PENDING_SEND status. A standalone worker process (workers/worker.js) picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` or `RETURNED`. Poll Get Document or Get Events to observe that transition."
           },
           "event": [
             {

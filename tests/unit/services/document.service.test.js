@@ -11,6 +11,7 @@ jest.mock('../../../src/services/xml-validator.service');
 jest.mock('../../../src/services/sri.service');
 jest.mock('../../../src/models/sri-response.model');
 jest.mock('../../../src/services/email.service');
+jest.mock('../../../src/services/pending-effect.service');
 jest.mock('../../../src/builders');
 
 // Mock the database module so the service can obtain a transaction client
@@ -41,6 +42,7 @@ const sriResponseModel = require('../../../src/models/sri-response.model');
 const documentCreation = require('../../../src/services/document-creation.service');
 const documentTransmission = require('../../../src/services/document-transmission.service');
 const documentQuery = require('../../../src/services/document-query.service');
+const pendingEffectService = require('../../../src/services/pending-effect.service');
 
 const mockIssuer = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -375,8 +377,9 @@ describe('DocumentTransmissionService', () => {
       rawResponse: '<raw/>',
     });
     sriResponseModel.create.mockResolvedValue({});
-    documentModel.updateStatus.mockResolvedValue({ ...doc, status: 'RECEIVED' });
+    documentModel.updateStatus.mockResolvedValue({ ...doc, status: 'RECEIVED', access_key: '1234567890123456789012345678901234567890123456789' });
     documentEventModel.create.mockResolvedValue({});
+    pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-1', effect_type: 'SRI_AUTHORIZE' });
 
     const result = await documentTransmission.sendToSri('1234567890123456789012345678901234567890123456789', mockIssuer);
 
@@ -386,6 +389,16 @@ describe('DocumentTransmissionService', () => {
       expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
       null, mockIssuer.id, mockIssuer.sandbox
     );
+    // Becoming RECEIVED durably enqueues (but does not yet dispatch) an
+    // SRI_AUTHORIZE effect — see ADR-022's "guarantees every RECEIVED
+    // document eventually gets an authorize-check" reasoning.
+    expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
+      'SRI_AUTHORIZE',
+      mockIssuer.tenant_id,
+      expect.objectContaining({ documentId: '00000000-0000-0000-0000-000000000001', issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox }),
+      'sri-authorize:00000000-0000-0000-0000-000000000001'
+    );
+    expect(pendingEffectService.dispatch).not.toHaveBeenCalled();
     expect(result.status).toBe('RECEIVED');
     expect(result.sriStatus).toBe('DEVUELTA');
     expect(result.processingRetry).toBe(true);

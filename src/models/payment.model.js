@@ -109,6 +109,26 @@ async function findPendingRenewalBySubscriptionId(subscriptionId) {
   return rows[0] || null;
 }
 
+// VERIFIED TIER_CHANGE/RENEWAL payments still unapplied (period_start IS
+// NULL — see the comment above for why that's the signal, not
+// invoice_document_id) whose linked invoice has since become AUTHORIZED —
+// the case linkInvoice() couldn't apply immediately because the invoice
+// wasn't authorized yet at link time. Mirrors
+// subscriptionModel.findPendingActivationWithAuthorizedDocument(); see
+// ADR-022's addendum. invoice_document_id only ever references
+// public.documents (never set for sandbox-linked documents).
+async function findPendingApplicationWithAuthorizedDocument() {
+  const { rows } = await db.query(
+    `SELECT p.* FROM payments p
+     JOIN documents d ON d.id = p.invoice_document_id
+     WHERE p.purpose IN ('TIER_CHANGE', 'RENEWAL')
+       AND p.status = 'VERIFIED'
+       AND p.period_start IS NULL
+       AND d.status = 'AUTHORIZED'`
+  );
+  return rows;
+}
+
 async function updateStatus(id, status, extraFields = {}) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
@@ -141,5 +161,6 @@ module.exports = {
   findAllByStatus,
   findPendingTierChangeBySubscriptionId,
   findPendingRenewalBySubscriptionId,
+  findPendingApplicationWithAuthorizedDocument,
   updateStatus,
 };

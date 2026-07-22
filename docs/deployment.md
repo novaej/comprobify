@@ -377,11 +377,11 @@ Monitor each Cron Job's execution log in the Render dashboard for non-zero exit 
 
 ---
 
-## Background worker (`workers/sri-worker.js`)
+## Background worker (`workers/worker.js`)
 
-Unlike the four scheduled jobs above — which are short-lived cron invocations that hit an HTTP endpoint and exit — `workers/sri-worker.js` is a **long-running process** that holds a persistent connection to RabbitMQ and continuously consumes the `sri.send`/`sri.authorize` queues. It is the only code in the system that calls SRI directly (see ADR-019). It cannot be modeled as a Render Cron Job; it needs Render's **Background Worker** service type (or an equivalent persistent-process host), analogous to the existing web service but with no public port and started via `node workers/sri-worker.js` (`npm run worker`).
+Unlike the four scheduled jobs above — which are short-lived cron invocations that hit an HTTP endpoint and exit — `workers/worker.js` is a **long-running process** that holds a persistent connection to RabbitMQ and continuously consumes the `sri.send`/`sri.authorize` queues. It is the only code in the system that calls SRI directly (see ADR-019). It cannot be modeled as a Render Cron Job; it needs Render's **Background Worker** service type (or an equivalent persistent-process host), analogous to the existing web service but with no public port and started via `node workers/worker.js` (`npm run worker`).
 
-Declared in `render.yaml` as `comprobify-staging-sri-worker`, `type: worker` — the one service block in that file not yet synced/confirmed against a real Render deploy (see the file's own header comment). It reads from a dedicated `comprobify-worker-staging` env var group, which only declares the non-secret `APP_ENV` in the YAML; every actual required secret must be added by hand in the Render dashboard, on that group, the same way `ADMIN_SECRET` is handled for the cron jobs' group. The worker runs `validateCoreConfig()` at startup, not the API's full `validateConfig()` — a narrower set (`DB_*`, `RABBITMQ_URL`, `MAILGUN_API_KEY`/`MAILGUN_DOMAIN`/`EMAIL_FROM`), since its message handlers never touch admin auth, certificate encryption, billing, or inbound webhook verification. See CLAUDE.md Common Mistake list / `src/config/validate.js`.
+Declared in `render.yaml` as `comprobify-staging-worker`, `type: worker` — confirmed synced against a real Render deploy (renamed from `comprobify-staging-sri-worker` when the worker's role broadened past SRI-only in ADR-022; see the file's own header comment for the manual re-adoption step that rename required). It reads from a dedicated `comprobify-worker-staging` env var group, which only declares the non-secret `APP_ENV` in the YAML; every actual required secret must be added by hand in the Render dashboard, on that group, the same way `ADMIN_SECRET` is handled for the cron jobs' group. The worker runs `validateCoreConfig()` at startup, not the API's full `validateConfig()` — a narrower set (`DB_*`, `RABBITMQ_URL`, `MAILGUN_API_KEY`/`MAILGUN_DOMAIN`/`EMAIL_FROM`), since its message handlers never touch admin auth, certificate encryption, billing, or inbound webhook verification. See CLAUDE.md Common Mistake list / `src/config/validate.js`.
 
 **Error monitoring:** the worker also requires `instrument.js`, but Sentry's automatic uncaught-exception capture never fires for it — every failure path is already caught by the worker's own code. Two spots call `Sentry.captureException()` explicitly instead: a failure to register consumers after a (re)connect (connected but not consuming — worse than fully down, since it looks alive), and a fatal startup failure (the worker never came up at all, `process.exit(1)`) — the latter also flushes Sentry before exiting, since `captureException()` only queues the event rather than sending it immediately. Per-message SRI failures are deliberately console-only, not sent to Sentry, since they're expected/routine and already covered by the reconciliation job. `SENTRY_DSN` needs to be set on the worker's own env var group for any of this to actually report anywhere — see CLAUDE.md's "Error monitoring (Sentry)" entry for the full design.
 
@@ -497,7 +497,7 @@ curl https://api.comprobify.com/health
 curl https://api.comprobify.com/v1/admin/tenants \
   -H "Authorization: Bearer YOUR_ADMIN_SECRET"
 ```
-- [ ] `xmllint` available — attempt a document creation and check Render logs for XSD validation errors. On paid Render tiers, check via Shell: `which xmllint`. If missing, a Dockerfile is needed (see NEXT_STEPS.md item 5).
+- [ ] `xmllint` available — attempt a document creation and check Render logs for XSD validation errors. On paid Render tiers, check via Shell: `which xmllint`. If missing, a Dockerfile installing `libxml2-utils` is needed.
 
 ### 8. Pipeline smoke test
 - [ ] Push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) and confirm `Release to Staging` workflow runs and fast-forwards the `staging` branch, then `Deploy Staging` fires automatically
@@ -511,7 +511,7 @@ curl https://api.comprobify.com/v1/admin/tenants \
 | Node.js 18+ | LTS recommended |
 | PostgreSQL 14+ | |
 | `xmllint` | `apt install libxml2-utils` (Ubuntu/Debian) · pre-installed on Amazon Linux, macOS |
-| RabbitMQ | External broker (e.g. CloudAMQP) — required for the async SRI send/authorize pipeline. Not an npm dependency; the API and `workers/sri-worker.js` both connect to it as a client (`amqplib`). |
+| RabbitMQ | External broker (e.g. CloudAMQP) — required for the async SRI send/authorize pipeline. Not an npm dependency; the API and `workers/worker.js` both connect to it as a client (`amqplib`). |
 
 ---
 
@@ -545,7 +545,7 @@ All variables are required unless marked optional.
 | `BANK_TRANSFER_ACCOUNT_NUMBER` | No | |
 | `BANK_TRANSFER_ACCOUNT_HOLDER` | No | |
 | `BANK_TRANSFER_IDENTIFICATION` | No | Account holder's RUC/cédula |
-| `RABBITMQ_URL` | Yes | AMQP connection string (e.g. from CloudAMQP), scoped to a dedicated vhost per environment. Required by both the API (publisher) and `workers/sri-worker.js` (consumer) — without it the async SRI send/authorize pipeline can never dispatch a queued document. See "Background worker" below. |
+| `RABBITMQ_URL` | Yes | AMQP connection string (e.g. from CloudAMQP), scoped to a dedicated vhost per environment. Required by both the API (publisher) and `workers/worker.js` (consumer) — without it the async SRI send/authorize pipeline can never dispatch a queued document. See "Background worker" below. |
 | `RABBITMQ_SRI_EXCHANGE` | No | Name of the durable direct exchange used for SRI dispatch (default `sri.direct`) |
 | `QUEUE_RECONCILE_SEND_STALE_MINUTES` | No | Minutes before an unconfirmed `PENDING_SEND` dispatch is considered stale and re-published (default `5`) |
 | `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES` | No | Minimum age of a `RECEIVED` document before its first authorize-check is published (default `5`) |

@@ -2,7 +2,7 @@
  * Config validation — runs at startup to catch misconfiguration early.
  *
  * Split in two: validateCoreConfig() covers vars every comprobify process
- * needs — the API and workers/sri-worker.js alike. RabbitMQ connectivity is
+ * needs — the API and workers/worker.js alike. RabbitMQ connectivity is
  * shared (the API publishes, the worker consumes), and the ability to
  * actually send mail is shared too, since the worker is what sends the
  * invoice-authorized email once a document is authorized. validateConfig()
@@ -29,14 +29,14 @@ function collectCoreMissing(cfg) {
 
   // The document send/authorize pipeline is fully async (see ADR-019) —
   // there is no synchronous fallback. The API needs this to publish, and
-  // workers/sri-worker.js needs it to consume; without it on either side,
+  // workers/worker.js needs it to consume; without it on either side,
   // a document flips to PENDING_SEND but nothing ever dispatches it to SRI.
   if (!cfg.rabbitmq.url) {
     missing.push('RABBITMQ_URL');
   }
 
   // Required to actually send mail when email is enabled (default provider
-  // is 'mailgun', opt out via EMAIL_PROVIDER=none). workers/sri-worker.js
+  // is 'mailgun', opt out via EMAIL_PROVIDER=none). workers/worker.js
   // sends the invoice-authorized email itself on authorization, so it needs
   // these same vars. MAILGUN_WEBHOOK_SIGNING_KEY is deliberately NOT here —
   // verifying an inbound delivery webhook is an API-only route the worker
