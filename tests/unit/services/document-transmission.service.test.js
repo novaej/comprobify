@@ -13,7 +13,7 @@ const documentTransmission = require('../../../src/services/document-transmissio
 
 const ACCESS_KEY = '1234567890123456789012345678901234567890123456789';
 
-const mockIssuer = { id: '00000000-0000-0000-0000-000000000001', sandbox: false };
+const mockIssuer = { id: '00000000-0000-0000-0000-000000000001', tenant_id: '00000000-0000-0000-0000-000000000900', sandbox: false };
 
 function baseDoc(overrides = {}) {
   return {
@@ -106,6 +106,7 @@ describe('DocumentTransmissionService', () => {
       // queueAuthorizationCheck if the client asks explicitly).
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'SRI_AUTHORIZE',
+        mockIssuer.tenant_id,
         { documentId: receivedDoc.id, accessKey: receivedDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox },
         `sri-authorize:${receivedDoc.id}`
       );
@@ -135,7 +136,7 @@ describe('DocumentTransmissionService', () => {
         expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
         null, mockIssuer.id, mockIssuer.sandbox
       );
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SRI_AUTHORIZE', expect.any(Object), expect.any(String));
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SRI_AUTHORIZE', mockIssuer.tenant_id, expect.any(Object), expect.any(String));
       expect(result.processingRetry).toBe(true);
     });
 
@@ -266,20 +267,20 @@ describe('DocumentTransmissionService', () => {
       // of these (see ADR-022). Dispatch (the RabbitMQ publish) stays
       // best-effort/unawaited, same as document-transmission's other
       // producer call sites.
+      // No SUBSCRIPTION_* effects — that reconciliation moved to a periodic
+      // scan in POST /v1/admin/jobs/subscriptions (see ADR-022's addendum),
+      // not a RabbitMQ effect fired on every document authorization.
       const expectedPayload = {
         documentId: updatedDoc.id, accessKey: updatedDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
       };
       for (const type of [
         'DOCUMENT_AUTHORIZED_NOTIFICATION',
-        'SUBSCRIPTION_ACTIVATE_IF_LINKED',
-        'SUBSCRIPTION_APPLY_TIER_CHANGE_IF_LINKED',
-        'SUBSCRIPTION_APPLY_RENEWAL_IF_LINKED',
         'INVOICE_AUTHORIZED_EMAIL',
       ]) {
-        expect(pendingEffectService.enqueue).toHaveBeenCalledWith(type, expectedPayload, null);
+        expect(pendingEffectService.enqueue).toHaveBeenCalledWith(type, mockIssuer.tenant_id, expectedPayload, null);
       }
-      expect(pendingEffectService.enqueue).toHaveBeenCalledTimes(5);
-      expect(pendingEffectService.dispatch).toHaveBeenCalledTimes(5);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledTimes(2);
+      expect(pendingEffectService.dispatch).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -315,7 +316,7 @@ describe('DocumentTransmissionService', () => {
       expect(documentEventModel.create).toHaveBeenCalledWith(
         doc.id, 'STATUS_CHANGED', 'SIGNED', 'PENDING_SEND', {}, null, mockIssuer.id, mockIssuer.sandbox
       );
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SRI_SEND', {
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SRI_SEND', mockIssuer.tenant_id, {
         documentId: pendingDoc.id, accessKey: pendingDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
       }, null);
       expect(pendingEffectService.dispatch).toHaveBeenCalledWith(effectRow);
@@ -349,6 +350,7 @@ describe('DocumentTransmissionService', () => {
 
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'SRI_AUTHORIZE',
+        mockIssuer.tenant_id,
         { documentId: doc.id, accessKey: doc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox },
         `sri-authorize:${doc.id}`
       );

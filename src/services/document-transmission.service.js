@@ -17,8 +17,8 @@ function authorizeDedupKey(documentId) {
 
 // Durable-enqueue + best-effort-dispatch, mirrored at every producer call
 // site in this file (see ADR-022 / pending-effect.service.js).
-async function queueEffect(effectType, payload, dedupKey = null) {
-  const effect = await pendingEffectService.enqueue(effectType, payload, dedupKey);
+async function queueEffect(effectType, tenantId, payload, dedupKey = null) {
+  const effect = await pendingEffectService.enqueue(effectType, tenantId, payload, dedupKey);
   pendingEffectService.dispatch(effect);
   return effect;
 }
@@ -71,7 +71,7 @@ async function sendToSri(accessKey, issuer) {
     // window covers the "SRI needs processing time first" delay. If the
     // client does call GET /:key/authorize before then, queueAuthorizationCheck
     // finds this same row via dedup_key and dispatches it immediately instead.
-    await pendingEffectService.enqueue(EffectTypes.SRI_AUTHORIZE, {
+    await pendingEffectService.enqueue(EffectTypes.SRI_AUTHORIZE, issuer.tenant_id, {
       documentId: updated.id,
       accessKey: updated.access_key,
       issuerId: issuer.id,
@@ -158,12 +158,17 @@ async function checkAuthorization(accessKey, issuer) {
       // itself doesn't await dispatch). Replaces the old unawaited
       // .catch(console.warn) fire-and-forget calls (ADR-022, NEXT_STEPS.md
       // item 2 Phase 2).
+      //
+      // Deliberately NOT here: subscription activation/tier-change/renewal
+      // checks. Those used to fire unconditionally on every authorized
+      // document system-wide; linkInvoice() already applies them
+      // synchronously when the linked invoice is already AUTHORIZED (the
+      // normal case), and the rare reverse ordering is caught by a periodic
+      // scan in POST /v1/admin/jobs/subscriptions instead — see ADR-022's
+      // addendum.
       await Promise.all([
-        queueEffect(EffectTypes.DOCUMENT_AUTHORIZED_NOTIFICATION, payload),
-        queueEffect(EffectTypes.SUBSCRIPTION_ACTIVATE_IF_LINKED, payload),
-        queueEffect(EffectTypes.SUBSCRIPTION_APPLY_TIER_CHANGE_IF_LINKED, payload),
-        queueEffect(EffectTypes.SUBSCRIPTION_APPLY_RENEWAL_IF_LINKED, payload),
-        queueEffect(EffectTypes.INVOICE_AUTHORIZED_EMAIL, payload),
+        queueEffect(EffectTypes.DOCUMENT_AUTHORIZED_NOTIFICATION, issuer.tenant_id, payload),
+        queueEffect(EffectTypes.INVOICE_AUTHORIZED_EMAIL, issuer.tenant_id, payload),
       ]);
     }
   }
@@ -190,7 +195,7 @@ async function queueSend(accessKey, issuer) {
   const updated = await documentModel.updateStatus(document.id, DocumentStatus.PENDING_SEND, {}, issuer.id, issuer.sandbox);
   await documentEventModel.create(document.id, EventType.STATUS_CHANGED, document.status, DocumentStatus.PENDING_SEND, {}, null, issuer.id, issuer.sandbox);
 
-  await queueEffect(EffectTypes.SRI_SEND, {
+  await queueEffect(EffectTypes.SRI_SEND, issuer.tenant_id, {
     documentId: updated.id,
     accessKey: updated.access_key,
     issuerId: issuer.id,
@@ -218,7 +223,7 @@ async function queueAuthorizationCheck(accessKey, issuer) {
   }
   assertTransition(document.status, DocumentStatus.AUTHORIZED);
 
-  await queueEffect(EffectTypes.SRI_AUTHORIZE, {
+  await queueEffect(EffectTypes.SRI_AUTHORIZE, issuer.tenant_id, {
     documentId: document.id,
     accessKey: document.access_key,
     issuerId: issuer.id,

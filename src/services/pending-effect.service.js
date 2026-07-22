@@ -5,7 +5,7 @@
 // included.
 //
 // Every producer call site follows the same two-step shape:
-//   const effect = await pendingEffectService.enqueue(EffectTypes.X, payload);
+//   const effect = await pendingEffectService.enqueue(EffectTypes.X, tenantId, payload);
 //   pendingEffectService.dispatch(effect);
 // enqueue() is a durable, awaited insert — the effect intent survives a
 // crash even if dispatch() below never runs. dispatch() is best-effort (a
@@ -28,8 +28,8 @@ function isBenignStateError(err) {
   return err instanceof AppError && err.statusCode === 400;
 }
 
-async function enqueue(effectType, payload, dedupKey = null) {
-  return pendingEffectModel.create(effectType, payload, dedupKey);
+async function enqueue(effectType, tenantId, payload, dedupKey = null) {
+  return pendingEffectModel.create(effectType, tenantId, payload, dedupKey);
 }
 
 async function dispatch(effectRow) {

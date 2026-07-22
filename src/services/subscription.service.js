@@ -58,8 +58,8 @@ function addBillingPeriod(fromDate, billingInterval) {
 // fireAndForget()/unawaited-promise pattern. Awaited by callers so the
 // enqueue (durable insert) lands before the caller returns; dispatch (the
 // RabbitMQ publish) stays best-effort, same as document-transmission.service.js.
-async function queueEffect(effectType, payload) {
-  const effect = await pendingEffectService.enqueue(effectType, payload);
+async function queueEffect(effectType, tenantId, payload) {
+  const effect = await pendingEffectService.enqueue(effectType, tenantId, payload);
   pendingEffectService.dispatch(effect);
 }
 
@@ -474,7 +474,7 @@ async function submitPaymentProof(paymentId, tenantId, files, referenceNumber) {
   // Let the operator know there's a proof to review. No-op (resolves
   // { sent: false }) if ADMIN_NOTIFICATION_EMAIL isn't configured. Durably
   // enqueued (ADR-022) — the handler re-fetches payment/subscription/tenant fresh.
-  await queueEffect(EffectTypes.PAYMENT_PROOF_SUBMITTED_EMAIL, {
+  await queueEffect(EffectTypes.PAYMENT_PROOF_SUBMITTED_EMAIL, subscription.tenant_id, {
     paymentId: updated.id, subscriptionId: subscription.id, tenantId, referenceNumber,
   });
 
@@ -570,8 +570,8 @@ async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   // (INITIAL, TIER_CHANGE, RENEWAL) uniformly; only the wording adapts.
   // Durably enqueued (ADR-022).
   const reviewedPayload = { paymentId: updatedPayment.id, subscriptionId: updatedSubscription.id, decision };
-  await queueEffect(EffectTypes.PAYMENT_REVIEWED_NOTIFICATION, reviewedPayload);
-  await queueEffect(EffectTypes.PAYMENT_REVIEWED_EMAIL, reviewedPayload);
+  await queueEffect(EffectTypes.PAYMENT_REVIEWED_NOTIFICATION, subscription.tenant_id, reviewedPayload);
+  await queueEffect(EffectTypes.PAYMENT_REVIEWED_EMAIL, subscription.tenant_id, reviewedPayload);
 
   return { payment: updatedPayment, subscription: updatedSubscription };
 }
@@ -866,6 +866,42 @@ async function applyRenewalIfLinked(documentId) {
   return updated;
 }
 
+// Reconciles invoices that were linked to a subscription/payment via
+// linkInvoice() before SRI had authorized them yet. linkInvoice() itself
+// already applies immediately when the invoice is already AUTHORIZED at
+// link time (the common case, since a real deployment issues+authorizes an
+// invoice before linking it) — this only ever matters for the reverse
+// ordering. Deliberately a periodic scan, not a RabbitMQ effect fired on
+// every document authorization system-wide: see ADR-022's addendum for why
+// that was cut. Called first in runSubscriptionJobs, ahead of
+// applyScheduledTierChanges/processDueRenewals, so a renewal or tier change
+// applied here (extending current_period_end) is reflected before the
+// expiry/reminder checks below read it in the same job tick.
+async function applyPendingInvoiceLinks() {
+  let activated = 0;
+  let tierChangesApplied = 0;
+  let renewalsApplied = 0;
+
+  const pendingActivations = await subscriptionModel.findPendingActivationWithAuthorizedDocument();
+  for (const subscription of pendingActivations) {
+    const result = await activateIfLinked(subscription.initial_invoice_document_id);
+    if (result) activated++;
+  }
+
+  const pendingApplications = await paymentModel.findPendingApplicationWithAuthorizedDocument();
+  for (const payment of pendingApplications) {
+    if (payment.purpose === 'TIER_CHANGE') {
+      const result = await applyTierChangeIfLinked(payment.invoice_document_id);
+      if (result) tierChangesApplied++;
+    } else if (payment.purpose === 'RENEWAL') {
+      const result = await applyRenewalIfLinked(payment.invoice_document_id);
+      if (result) renewalsApplied++;
+    }
+  }
+
+  return { invoiceLinksActivated: activated, invoiceLinksTierChangesApplied: tierChangesApplied, invoiceLinksRenewalsApplied: renewalsApplied };
+}
+
 // Applies every downgrade scheduled via requestTierChange whose
 // current_period_end has passed. Called by the admin job (POST
 // /v1/admin/jobs/subscriptions), same pattern as
@@ -972,8 +1008,8 @@ async function createRenewalReminder(subscription) {
   });
 
   const renewalDuePayload = { subscriptionId: subscription.id, paymentId: payment.id };
-  await queueEffect(EffectTypes.SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION, renewalDuePayload);
-  await queueEffect(EffectTypes.SUBSCRIPTION_RENEWAL_DUE_EMAIL, renewalDuePayload);
+  await queueEffect(EffectTypes.SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION, subscription.tenant_id, renewalDuePayload);
+  await queueEffect(EffectTypes.SUBSCRIPTION_RENEWAL_DUE_EMAIL, subscription.tenant_id, renewalDuePayload);
 }
 
 async function expireSubscription(subscription) {
@@ -987,8 +1023,8 @@ async function expireSubscription(subscription) {
   });
 
   const expiredPayload = { subscriptionId: subscription.id };
-  await queueEffect(EffectTypes.SUBSCRIPTION_EXPIRED_NOTIFICATION, expiredPayload);
-  await queueEffect(EffectTypes.SUBSCRIPTION_EXPIRED_EMAIL, expiredPayload);
+  await queueEffect(EffectTypes.SUBSCRIPTION_EXPIRED_NOTIFICATION, subscription.tenant_id, expiredPayload);
+  await queueEffect(EffectTypes.SUBSCRIPTION_EXPIRED_EMAIL, subscription.tenant_id, expiredPayload);
 
   return updated;
 }
@@ -1059,6 +1095,7 @@ module.exports = {
   activateIfLinked,
   applyTierChangeIfLinked,
   applyRenewalIfLinked,
+  applyPendingInvoiceLinks,
   applyScheduledTierChanges,
   processDueRenewals,
   cancelSubscription,

@@ -7,7 +7,7 @@ The four admin-triggered jobs are date-driven — each one scans for rows whose 
 | Notifications | `POST /v1/admin/jobs/notifications` | every 5 min | `issuers.cert_expiry`, `webhook_deliveries.next_retry_at` |
 | Subscriptions | `POST /v1/admin/jobs/subscriptions` | daily | `subscriptions.current_period_end`, `pending_tier` |
 | Quota | `POST /v1/admin/jobs/quota` | daily | `tenant_quotas.period_end` |
-| Queue reconciliation | `POST /v1/admin/jobs/queue-reconciliation` | hourly | `pending_effects.dispatch_attempted_at` (all 17 effect types, one table — not schema-scoped) |
+| Queue reconciliation | `POST /v1/admin/jobs/queue-reconciliation` | hourly | `pending_effects.dispatch_attempted_at` (all 14 effect types, one table — not schema-scoped) |
 
 All four are **idempotent** — re-running them when nothing is due is always safe and a no-op. Unlike the other three, the queue reconciliation job requires an actual RabbitMQ connection (`RABBITMQ_URL`) to do anything useful — it publishes real messages, it doesn't just read/write Postgres.
 
@@ -80,7 +80,22 @@ SELECT status, attempt_count, next_retry_at, last_response FROM webhook_deliveri
 
 ## 2. Subscriptions job
 
-Runs `applyScheduledTierChanges()` then `processDueRenewals()`, in that order (order matters — a downgrade must roll its period forward before the expiry check runs, or it would look freshly expired).
+Runs `applyPendingInvoiceLinks()`, then `applyScheduledTierChanges()`, then `processDueRenewals()`, in that order (order matters — a renewal/tier-change applied by the first step extends `current_period_end`, which the downgrade/expiry steps below need to see in the same tick; a downgrade must also roll its period forward before the expiry check runs, or it would look freshly expired).
+
+### 2a0. Pending invoice link (the reverse-ordering case — see ADR-022's addendum)
+```sql
+-- Simulate an admin having linked an invoice before SRI authorized it —
+-- linkInvoice() itself only applies immediately when the document is
+-- already AUTHORIZED at link time.
+UPDATE subscriptions SET status = 'INVOICE_PROCESSING', initial_invoice_document_id = '<DOCUMENT_ID>'
+WHERE id = <SUB_ID>;
+UPDATE documents SET status = 'AUTHORIZED' WHERE id = '<DOCUMENT_ID>';
+```
+Run the subscriptions job — expect `invoiceLinksActivated: 1` in the response, and the subscription to be `ACTIVE` with a fresh `current_period_start`/`current_period_end`:
+```sql
+SELECT status, current_period_start, current_period_end FROM subscriptions WHERE id = <SUB_ID>;
+```
+The same pattern applies to a pending `TIER_CHANGE`/`RENEWAL` payment — set `payments.invoice_document_id` to an `AUTHORIZED` document with `period_start IS NULL`, `status = 'VERIFIED'`, and the matching `purpose`; expect `invoiceLinksTierChangesApplied`/`invoiceLinksRenewalsApplied` to include it.
 
 ### 2a. Scheduled downgrade
 ```sql
@@ -152,7 +167,7 @@ Any tier change (upgrade, downgrade, expiry-to-FREE, admin override via `PATCH /
 
 ## 4. Queue reconciliation job
 
-Requires a real RabbitMQ connection (`RABBITMQ_URL` in `.env`) — this job publishes actual messages, so watch the queue depth/message count in your broker's management UI (e.g. CloudAMQP) to confirm a re-publish happened, alongside the SQL checks below. Since ADR-022, this job scans one table, `pending_effects`, covering all 17 effect types (SRI send/authorize included) — no more `documents`-column or `public`/`sandbox` schema split.
+Requires a real RabbitMQ connection (`RABBITMQ_URL` in `.env`) — this job publishes actual messages, so watch the queue depth/message count in your broker's management UI (e.g. CloudAMQP) to confirm a re-publish happened, alongside the SQL checks below. Since ADR-022, this job scans one table, `pending_effects`, covering all 14 effect types (SRI send/authorize included) — no more `documents`-column or `public`/`sandbox` schema split. Subscription activation/tier-change/renewal reconciliation is handled separately, by a periodic scan inside the subscriptions job (section 2 below), not via `pending_effects`.
 
 First find the effect row for the document you want to test:
 ```sql

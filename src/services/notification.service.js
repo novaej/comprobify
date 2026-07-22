@@ -88,7 +88,7 @@ function formatSequential(document) {
  * caller returns — dispatch (the RabbitMQ publish) stays best-effort.
  */
 async function fireWebhookFanOut(notification) {
-  const effect = await pendingEffectService.enqueue(EffectTypes.WEBHOOK_FANOUT, { notificationId: notification.id });
+  const effect = await pendingEffectService.enqueue(EffectTypes.WEBHOOK_FANOUT, notification.tenant_id, { notificationId: notification.id });
   pendingEffectService.dispatch(effect);
 }
 

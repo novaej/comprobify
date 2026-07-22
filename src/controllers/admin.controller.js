@@ -219,7 +219,15 @@ const runNotificationJobs = async (req, res) => {
 /**
  * POST /api/admin/jobs/subscriptions
  *
- * Applies every subscription downgrade scheduled via the tenant-facing
+ * First, reconciles subscriptions/payments that were linked to a self-billed
+ * invoice (via the admin link-invoice endpoint) before SRI had authorized it
+ * yet — linkInvoice() itself already applies immediately when the invoice is
+ * already AUTHORIZED at link time, so this only ever matters for admins who
+ * link before authorization completes. See ADR-022's addendum for why this
+ * is a periodic scan rather than a RabbitMQ effect fired on every document
+ * authorization system-wide.
+ *
+ * Then applies every subscription downgrade scheduled via the tenant-facing
  * change-tier endpoint whose current_period_end has passed (and rolls that
  * subscription's period forward so it re-enters the renewal cycle at its new
  * tier). Upgrades apply immediately on invoice authorization and need no
@@ -234,9 +242,15 @@ const runNotificationJobs = async (req, res) => {
  * for the minute-level frequency the notification job uses).
  */
 const runSubscriptionJobs = async (req, res) => {
+  // Must run first: reconciles subscriptions/payments linked to an invoice
+  // that wasn't authorized yet at link time (see ADR-022's addendum) — a
+  // renewal/tier-change applied here extends current_period_end, which
+  // applyScheduledTierChanges/processDueRenewals below need to see before
+  // their own due/expiry checks run in this same tick.
+  const invoiceLinks = await subscriptionService.applyPendingInvoiceLinks();
   const tierChanges = await subscriptionService.applyScheduledTierChanges();
   const renewals = await subscriptionService.processDueRenewals();
-  res.json({ ok: true, ...tierChanges, ...renewals });
+  res.json({ ok: true, ...invoiceLinks, ...tierChanges, ...renewals });
 };
 
 /**

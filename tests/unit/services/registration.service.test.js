@@ -194,7 +194,7 @@ describe('RegistrationService', () => {
       // called directly — the handlers (src/effects/index.js) do the
       // actual work later.
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
-        'TENANT_AGREEMENT_GENERATE', { tenantId: '00000000-0000-0000-0000-000000000002' }
+        'TENANT_AGREEMENT_GENERATE', '00000000-0000-0000-0000-000000000002', { tenantId: '00000000-0000-0000-0000-000000000002' }
       );
       expect(issuerDocumentTypeModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', ['01']);
       expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', baseFields.branchCode, baseFields.issuePointCode, '01', 1, true);
@@ -205,6 +205,7 @@ describe('RegistrationService', () => {
       }));
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'VERIFICATION_EMAIL_SEND',
+        '00000000-0000-0000-0000-000000000002',
         expect.objectContaining({
           tenantId: '00000000-0000-0000-0000-000000000002',
           email: baseFields.email,
@@ -428,6 +429,7 @@ describe('RegistrationService', () => {
       // (src/effects/index.js) now, not here — see ADR-022.
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'VERIFICATION_EMAIL_SEND',
+        existingTenant.id,
         {
           tenantId: existingTenant.id,
           email: baseFields.email,
@@ -504,6 +506,7 @@ describe('RegistrationService', () => {
       expect(tenantModel.updateVerificationToken).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', expect.any(String), expect.any(Date));
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'VERIFICATION_EMAIL_SEND',
+        '00000000-0000-0000-0000-000000000001',
         expect.objectContaining({ email: baseFields.email, redirectUrl: null, language: 'es' })
       );
     });
@@ -534,6 +537,7 @@ describe('RegistrationService', () => {
       expect(tenantModel.updateVerificationRedirectUrl).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'https://new.example.com/verify');
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'VERIFICATION_EMAIL_SEND',
+        '00000000-0000-0000-0000-000000000001',
         expect.objectContaining({ email: baseFields.email, redirectUrl: 'https://new.example.com/verify', language: 'es' })
       );
     });
@@ -551,6 +555,7 @@ describe('RegistrationService', () => {
       expect(tenantModel.updateVerificationRedirectUrl).not.toHaveBeenCalled();
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'VERIFICATION_EMAIL_SEND',
+        '00000000-0000-0000-0000-000000000001',
         expect.objectContaining({ email: baseFields.email, redirectUrl: 'https://stored.example.com/verify', language: 'es' })
       );
     });

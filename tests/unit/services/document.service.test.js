@@ -394,6 +394,7 @@ describe('DocumentTransmissionService', () => {
     // document eventually gets an authorize-check" reasoning.
     expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
       'SRI_AUTHORIZE',
+      mockIssuer.tenant_id,
       expect.objectContaining({ documentId: '00000000-0000-0000-0000-000000000001', issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox }),
       'sri-authorize:00000000-0000-0000-0000-000000000001'
     );

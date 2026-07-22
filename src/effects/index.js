@@ -72,17 +72,13 @@ const handlers = {
     await notificationService.createDocumentAuthorized(document, issuer);
   },
 
-  [EffectTypes.SUBSCRIPTION_ACTIVATE_IF_LINKED]: async (payload) => {
-    await subscriptionService.activateIfLinked(payload.documentId);
-  },
-
-  [EffectTypes.SUBSCRIPTION_APPLY_TIER_CHANGE_IF_LINKED]: async (payload) => {
-    await subscriptionService.applyTierChangeIfLinked(payload.documentId);
-  },
-
-  [EffectTypes.SUBSCRIPTION_APPLY_RENEWAL_IF_LINKED]: async (payload) => {
-    await subscriptionService.applyRenewalIfLinked(payload.documentId);
-  },
+  // No SUBSCRIPTION_ACTIVATE_IF_LINKED / _APPLY_TIER_CHANGE_IF_LINKED /
+  // _APPLY_RENEWAL_IF_LINKED here — see effect-types.js's comment. linkInvoice()
+  // in subscription.service.js still calls activateIfLinked/
+  // applyTierChangeIfLinked/applyRenewalIfLinked directly and synchronously
+  // when the invoice being linked is already AUTHORIZED; the reverse ordering
+  // is caught by a periodic scan in POST /v1/admin/jobs/subscriptions instead
+  // of a queued effect.
 
   [EffectTypes.INVOICE_AUTHORIZED_EMAIL]: async (payload) => {
     const { document, issuer } = await resolveDocument(payload);

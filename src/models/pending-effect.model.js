@@ -7,7 +7,7 @@ const db = require('../config/database');
  * calling GET /:key/authorize never creates duplicate open rows for the same
  * document (see idx_pending_effects_dedup).
  */
-async function create(effectType, payload, dedupKey = null) {
+async function create(effectType, tenantId, payload, dedupKey = null) {
   if (dedupKey) {
     // The ON CONFLICT predicate below must match idx_pending_effects_dedup's
     // index predicate EXACTLY (including dedup_key IS NOT NULL) — Postgres's
@@ -17,19 +17,19 @@ async function create(effectType, payload, dedupKey = null) {
     // exclusion constraint matching the ON CONFLICT specification") even
     // though the index exists and would otherwise apply.
     const { rows } = await db.query(
-      `INSERT INTO pending_effects (effect_type, payload, dedup_key)
-       VALUES ($1, $2, $3)
+      `INSERT INTO pending_effects (effect_type, tenant_id, payload, dedup_key)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (dedup_key) WHERE dedup_key IS NOT NULL AND status IN ('PENDING', 'DISPATCHED')
        DO UPDATE SET attempt_count = pending_effects.attempt_count
        RETURNING *`,
-      [effectType, payload, dedupKey]
+      [effectType, tenantId, payload, dedupKey]
     );
     return rows[0];
   }
 
   const { rows } = await db.query(
-    `INSERT INTO pending_effects (effect_type, payload) VALUES ($1, $2) RETURNING *`,
-    [effectType, payload]
+    `INSERT INTO pending_effects (effect_type, tenant_id, payload) VALUES ($1, $2, $3) RETURNING *`,
+    [effectType, tenantId, payload]
   );
   return rows[0];
 }

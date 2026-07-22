@@ -140,6 +140,23 @@ async function findExpiredPastGrace(graceDays) {
   return rows;
 }
 
+// Subscriptions still sitting at INVOICE_PROCESSING whose linked initial
+// invoice has since become AUTHORIZED — the case linkInvoice() itself
+// couldn't apply immediately because the invoice wasn't authorized yet at
+// link time (see ADR-022's addendum: no per-document RabbitMQ effect fires
+// this anymore, this periodic scan is the reconciling path instead).
+// Joins documents directly since initial_invoice_document_id only ever
+// references public.documents (sandbox documents never set this FK — see
+// linkSandboxDocument).
+async function findPendingActivationWithAuthorizedDocument() {
+  const { rows } = await db.query(
+    `SELECT s.* FROM subscriptions s
+     JOIN documents d ON d.id = s.initial_invoice_document_id
+     WHERE s.status = 'INVOICE_PROCESSING' AND d.status = 'AUTHORIZED'`
+  );
+  return rows;
+}
+
 async function updateStatus(id, status, extraFields = {}) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
@@ -175,5 +192,6 @@ module.exports = {
   findDuePendingDowngrades,
   findDueForRenewalReminder,
   findExpiredPastGrace,
+  findPendingActivationWithAuthorizedDocument,
   updateStatus,
 };

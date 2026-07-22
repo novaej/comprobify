@@ -347,17 +347,19 @@ checkAuthorization:
 7. documentModel.updateStatus(id, newStatus, extraFields)
    extraFields [AUTHORIZED]: authorization_number, authorization_date, authorization_xml
 8. documentEventModel.create('STATUS_CHANGED', ...)
-9. [AUTHORIZED] durably enqueue 5 effects (awaited via Promise.all, so all 5 rows exist before this
-   function returns), then best-effort dispatch each:
-   DOCUMENT_AUTHORIZED_NOTIFICATION, SUBSCRIPTION_ACTIVATE_IF_LINKED,
-   SUBSCRIPTION_APPLY_TIER_CHANGE_IF_LINKED, SUBSCRIPTION_APPLY_RENEWAL_IF_LINKED,
-   INVOICE_AUTHORIZED_EMAIL
+9. [AUTHORIZED] durably enqueue 2 effects (awaited via Promise.all, so both rows exist before this
+   function returns), then best-effort dispatch each: DOCUMENT_AUTHORIZED_NOTIFICATION, INVOICE_AUTHORIZED_EMAIL
    → INVOICE_AUTHORIZED_EMAIL's handler (src/effects/index.js) owns the email_status/document_events
      bookkeeping that used to be inline here:
        On success: updateStatus({ email_status: 'SENT' }) + EMAIL_SENT event
        On no email: updateStatus({ email_status: 'SKIPPED' })
        On failure: updateStatus({ email_status: 'FAILED', email_error }) + EMAIL_FAILED event, rethrows
          so the effect is retried by reconciliation rather than silently dropped
+   → Deliberately NOT enqueued here: subscription activation/tier-change/renewal checks. Those used
+     to fire on every authorized document system-wide; linkInvoice() (subscription.service.js)
+     already applies them synchronously when the linked invoice is already AUTHORIZED (the normal
+     case), and the rare reverse ordering is caught by a periodic scan in
+     POST /v1/admin/jobs/subscriptions instead — see ADR-022's addendum.
 10. Return formatDocument(updated)
 ```
 
@@ -803,10 +805,11 @@ workers/worker.js   (standalone process, npm run worker — NOT part of the API 
                     │           ├── [still pending] return { requeue: true }   — row left as-is, not DONE
                     │           ├── documentModel.updateStatus(AUTHORIZED | NOT_AUTHORIZED)
                     │           ├── documentEventModel.create(STATUS_CHANGED)
-                    │           └── [AUTHORIZED] enqueue+dispatch 5 more effects (awaited enqueue):
-                    │                 DOCUMENT_AUTHORIZED_NOTIFICATION, SUBSCRIPTION_ACTIVATE_IF_LINKED,
-                    │                 SUBSCRIPTION_APPLY_TIER_CHANGE_IF_LINKED,
-                    │                 SUBSCRIPTION_APPLY_RENEWAL_IF_LINKED, INVOICE_AUTHORIZED_EMAIL
+                    │           └── [AUTHORIZED] enqueue+dispatch 2 more effects (awaited enqueue):
+                    │                 DOCUMENT_AUTHORIZED_NOTIFICATION, INVOICE_AUTHORIZED_EMAIL
+                    │                 (deliberately NOT here: subscription activation/tier-change/
+                    │                  renewal checks — linkInvoice() applies those directly and
+                    │                  synchronously instead; see ADR-022's addendum)
                     │
                     │     [INVOICE_AUTHORIZED_EMAIL] → emailService.sendInvoiceAuthorized(document)
                     │           ├── rideService.generate()     → PDF Buffer
@@ -814,9 +817,9 @@ workers/worker.js   (standalone process, npm run worker — NOT part of the API 
                     │           ├── mailgunProvider.send(to, attachments)
                     │           └── documentModel.updateStatus({ email_status }) + EMAIL_SENT/SKIPPED/FAILED event
                     │
-                    │     [DOCUMENT_AUTHORIZED_NOTIFICATION / SUBSCRIPTION_* / WEBHOOK_FANOUT / etc.]
-                    │           → thin delegation to notificationService/subscriptionService/
-                    │             webhookDeliveryService — see CLAUDE.md's effect-type catalogue
+                    │     [DOCUMENT_AUTHORIZED_NOTIFICATION / WEBHOOK_FANOUT / etc.]
+                    │           → thin delegation to notificationService/webhookDeliveryService —
+                    │             see CLAUDE.md's effect-type catalogue
                     │
                     ├── [resolved normally] markDone(effect) + COMMIT
                     ├── [resolved { requeue: true }] COMMIT, leave row as-is (SRI_AUTHORIZE only)

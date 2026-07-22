@@ -32,7 +32,7 @@ function sha256Hex(value) {
 // old inline chain, just durable and retried by reconciliation on failure
 // instead of a one-shot in-process attempt.
 async function queueVerificationEmail(tenantId, email, verificationToken, redirectUrl, language) {
-  const effect = await pendingEffectService.enqueue(EffectTypes.VERIFICATION_EMAIL_SEND, {
+  const effect = await pendingEffectService.enqueue(EffectTypes.VERIFICATION_EMAIL_SEND, tenantId, {
     tenantId, email, verificationToken, redirectUrl, language,
   });
   pendingEffectService.dispatch(effect);
@@ -135,7 +135,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   // generation fails or is delayed; the admin can also backfill via
   // POST /v1/admin/tenants/:id/agreements.
   {
-    const effect = await pendingEffectService.enqueue(EffectTypes.TENANT_AGREEMENT_GENERATE, { tenantId: tenant.id });
+    const effect = await pendingEffectService.enqueue(EffectTypes.TENANT_AGREEMENT_GENERATE, tenant.id, { tenantId: tenant.id });
     pendingEffectService.dispatch(effect);
   }
 
