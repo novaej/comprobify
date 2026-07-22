@@ -55,6 +55,7 @@ Esta lista de proveedores puede actualizarse conforme evolucione la infraestruct
 - **Cifrado AES-256-GCM** de la clave privada de firma; la clave de cifrado se gestiona fuera de la base de datos.
 - **TLS** en todas las comunicaciones con la API.
 - **Acceso administrativo** restringido mediante mecanismos de autenticación independientes de las credenciales de los Clientes.
+- **Recuperación de cuenta verificada por certificado** — una nueva llave API solo se emite si el certificado digital presentado coincide con el certificado ya registrado para la cuenta; conocer el correo electrónico de la cuenta, por sí solo, no es suficiente para obtener acceso.
 - La cuenta de base de datos utilizada por la aplicación no tiene privilegios de superusuario, y las políticas de RLS están diseñadas para impedir su elusión desde la capa de aplicación.
 
 ## 6. Registros (logs)
