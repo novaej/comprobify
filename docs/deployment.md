@@ -297,7 +297,7 @@ Idempotent. Runs every 5 minutes — the same cadence as the Notifications job, 
 
 ### Where the schedule actually lives now
 
-Defined in `terraform/modules/droplet/cloud-init.yaml.tftpl` as a `/etc/cron.d/comprobify-jobs` file, written to the droplet at first boot. Full mechanics — why it runs inside the `api` container instead of needing Node on the bare host, how it picks up `ADMIN_SECRET`, monitoring via `journalctl -t comprobify-cron` — are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
+Defined in `terraform/modules/droplet/cloud-init.yaml.tftpl` as a `/etc/cron.d/comprobify-jobs` file, written to the droplet at first boot. Full mechanics — why it runs inside the `api` container instead of needing Node on the bare host, how it picks up `ADMIN_SECRET`, monitoring via per-job `journalctl -t comprobify-cron-<name>` tags — are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
 
 Reference table (schedule matches the Render Cron Job days except Queue Reconciliation, tightened from hourly since self-hosted cron has no per-invocation cost — see above):
 
@@ -359,7 +359,7 @@ Queue reconciliation job:
 }
 ```
 
-Monitor via `journalctl -t comprobify-cron` on the droplet for non-zero exit codes — see `docs/terraform-digitalocean-setup.md`. A sustained failure usually means `ADMIN_SECRET` has drifted out of sync between the container's `.env` and what's expected, or the `api` container itself is down.
+Monitor via `journalctl -t comprobify-cron-notifications` / `-subscriptions` / `-quota` / `-queue-reconciliation` on the droplet for non-zero exit codes — see `docs/terraform-digitalocean-setup.md`. A sustained failure usually means `ADMIN_SECRET` has drifted out of sync between the container's `.env` and what's expected, or the `api` container itself is down.
 
 ---
 
