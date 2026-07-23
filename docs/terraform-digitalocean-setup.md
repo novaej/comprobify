@@ -554,6 +554,12 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             chmod 600 /opt/comprobify/.env
             cd /opt/comprobify
             export IMAGE_TAG=${{ github.sha }}
+            # docker/login-action earlier only authenticates the runner's own daemon (so
+            # it can push) - the droplet's daemon, pulling over this SSH session, needs
+            # its own separate login. Reuses this job's GITHUB_TOKEN (already scoped
+            # packages: write, which covers pulling too) rather than a separate long-lived
+            # PAT - it's re-issued fresh every run, nothing to rotate later.
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
             docker compose up -d
 ```

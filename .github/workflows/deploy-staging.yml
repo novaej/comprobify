@@ -81,5 +81,12 @@ jobs:
             chmod 600 /opt/comprobify/.env
             cd /opt/comprobify
             export IMAGE_TAG=${{ github.sha }}
+            # The docker/login-action step earlier only authenticates the GitHub Actions
+            # runner's own Docker daemon (so it can push) - the droplet's daemon, pulling
+            # over this SSH session, has never logged into GHCR and needs its own login.
+            # Reuses this job's own GITHUB_TOKEN (already scoped packages: write, which
+            # covers pulling too) rather than a separate long-lived PAT - it's re-issued
+            # fresh every run anyway, so there's nothing to rotate later.
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
             docker compose up -d
