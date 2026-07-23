@@ -22,7 +22,7 @@ module "staging" {
   region              = var.region
   droplet_size        = var.droplet_size
   ssh_public_key_path = var.ssh_public_key_path
-  admin_ip_cidr       = var.admin_ip_cidr
+  deploy_username     = var.deploy_username
   cloudflare_zone_id  = var.cloudflare_zone_id
   subdomain           = var.subdomain
 }

@@ -25,12 +25,13 @@ variable "droplet_size" {
 variable "ssh_public_key_path" {
   description = "Path to the public half of the dedicated infra SSH key"
   type        = string
-  default     = "~/.ssh/comprobify_infra.pub"
+  default     = "~/.ssh/comprobify_deploy.pub"
 }
 
-variable "admin_ip_cidr" {
-  description = "Your public IP, as a /32 CIDR, allowed to reach the droplet over SSH"
+variable "deploy_username" {
+  description = "Unprivileged Linux user for SSH access (personal and CD alike) - not a guessable name like \"deploy\"/\"admin\"/\"ubuntu\""
   type        = string
+  default     = "cpfydeploy9x"
 }
 
 variable "cloudflare_zone_id" {

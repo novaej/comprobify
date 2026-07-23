@@ -28,8 +28,8 @@ variable "ssh_public_key_path" {
   type        = string
 }
 
-variable "admin_ip_cidr" {
-  description = "CIDR allowed to reach the droplet over SSH (port 22), e.g. \"203.0.113.4/32\""
+variable "deploy_username" {
+  description = "Unprivileged Linux user created on the droplet for SSH access (personal and CD alike) - deliberately not root, and deliberately not a guessable name like \"deploy\"/\"admin\"/\"ubuntu\". Granted docker group membership only, no sudo; see cloud-init.yaml.tftpl."
   type        = string
 }
 

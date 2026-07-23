@@ -16,23 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get this runner's public IP
-        id: runner_ip
-        run: echo "ip=$(curl -s https://ifconfig.me)" >> "$GITHUB_OUTPUT"
-
-      - uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DEPLOY_DO_TOKEN }}
-
-      # DO's Cloud Firewall only allows SSH from a fixed admin IP - GitHub-hosted runners
-      # have no static IP to permanently allowlist, so this deploy's own runner IP is
-      # granted access just for the duration of this job, then revoked below (`if: always()`
-      # on the removal step so it still runs even if a later step fails).
-      - name: Allow this runner through the firewall
-        run: |
-          doctl compute firewall add-rules ${{ vars.STAGING_FIREWALL_ID }} \
-            --inbound-rules "protocol:tcp,ports:22,address:${{ steps.runner_ip.outputs.ip }}/32"
-
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -44,11 +27,17 @@ jobs:
           docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
           docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
 
+      # username here must match `deploy_username` in
+      # terraform/environments/staging/terraform.tfvars - this is the unprivileged user
+      # cloud-init creates on the droplet (docker group only, no sudo, no root login at
+      # all). SSH itself is open to the internet (see main.tf's inbound_rule for port 22
+      # and terraform-digitalocean-setup.md's "SSH access model" for why) - defense is
+      # key-only auth + this privilege separation + fail2ban, not IP restriction.
       - name: Copy compose files to droplet
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: root
+          username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           source: "deploy/docker-compose.yml,deploy/Caddyfile"
           target: /opt/comprobify
@@ -58,7 +47,7 @@ jobs:
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: root
+          username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           script: |
             cat > /opt/comprobify/.env <<'EOF'
@@ -94,9 +83,3 @@ jobs:
             export IMAGE_TAG=${{ github.sha }}
             docker compose pull
             docker compose up -d
-
-      - name: Revoke this runner's firewall access
-        if: always()
-        run: |
-          doctl compute firewall remove-rules ${{ vars.STAGING_FIREWALL_ID }} \
-            --inbound-rules "protocol:tcp,ports:22,address:${{ steps.runner_ip.outputs.ip }}/32"

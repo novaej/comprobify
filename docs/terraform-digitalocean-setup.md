@@ -48,13 +48,13 @@ Everything this setup touches, in one place — what each thing is and what it's
 | **DigitalOcean (DO)** | Cloud provider | Hosts the actual server. Comparable to AWS/GCP, aimed at simpler, cheaper setups like this one. |
 | **Droplet** | DO's name for a virtual machine | The actual computer our containers run on. One per environment. |
 | **DO Spaces** | DO's S3-compatible object storage | Used for exactly one thing here: storing Terraform's state file remotely, so it's not just a file on your laptop. Not used for anything app-related. |
-| **DO Cloud Firewall** | Network-level firewall, managed by DO outside the droplet itself | Controls which IPs/ports can reach the droplet at all — the 80/443-restricted-to-Cloudflare and 22-restricted-to-your-IP rules. Distinct from a host-level firewall like `ufw`, which we deliberately don't run (checked and confirmed inactive) — this is the one and only line of defense at the network level. |
+| **DO Cloud Firewall** | Network-level firewall, managed by DO outside the droplet itself | Controls which IPs/ports can reach the droplet at all — 80/443 restricted to Cloudflare's ranges; 22 (SSH) deliberately left open, since defense there is layered at the identity level instead (see "SSH access model" below). Distinct from a host-level firewall like `ufw`, which we deliberately don't run (checked and confirmed inactive). |
 | **Cloudflare** | DNS + reverse proxy/CDN service | Owns the domain's DNS (which IP `api-staging.comprobify.com` resolves to) and proxies all public traffic, so clients never see the droplet's real IP directly — also gives free DDoS/WAF protection in front of it. |
 | **cloud-init** | Standard first-boot configuration tool, supported by most cloud providers | Runs once, automatically, the very first time a droplet boots — reads the `user_data` Terraform hands it and executes it. Ours installs Docker, hardens SSH, and starts `fail2ban`. Never runs again after that first boot, even across reboots. |
 | **Docker** | Container runtime | Runs the app as an isolated "container" — a packaged unit with everything the app needs to run, independent of whatever else is on the machine. |
 | **Docker Compose** | Tool for running multiple containers together as one unit | Defines `api`, `worker`, and `caddy` as one coordinated stack in `deploy/docker-compose.yml` — one command (`docker compose up -d`) starts/updates all three together. |
 | **Caddy** | Web server / reverse proxy | The only container with ports actually exposed to the internet (80/443). Forwards incoming requests to the `api` container internally, and automatically obtains/renews the HTTPS certificate with zero manual config. |
-| **fail2ban** | Intrusion-prevention tool | Watches for repeated failed SSH login attempts and temporarily bans the offending IP at the firewall level — protects against brute-force attacks even though we also restrict SSH by source IP. |
+| **fail2ban** | Intrusion-prevention tool | Watches for repeated failed SSH login attempts and temporarily bans the offending IP at the firewall level — the main defense against brute-force attempts now that SSH is open to any source IP. |
 | **unattended-upgrades** | Automatic security patching | Installs OS security patches in the background on a schedule, without anyone needing to SSH in and run `apt upgrade` by hand. |
 | **GitHub Actions** | CI/CD automation built into GitHub | Runs workflows automatically on events like a push — building the Docker image, pushing it, and telling the droplet to pull and restart. |
 | **GHCR (GitHub Container Registry)** | Docker image registry, part of GitHub | Where the built app image gets pushed to after every deploy-triggering push, so the droplet has somewhere to pull it from. |
@@ -69,11 +69,11 @@ Everything this setup touches, in one place — what each thing is and what it's
 |---|---|---|
 | DigitalOcean API token | DO dashboard → API → Generate New Token (read+write) | Terraform's `digitalocean` provider |
 | **Two** Cloudflare API tokens — `comprobify-terraform-staging` and `comprobify-terraform-production` | Cloudflare dashboard → My Profile → API Tokens → Create Token → Custom, scoped to the `comprobify.com` zone only, with `Zone:DNS:Edit` + `Zone:Zone:Read`. Keep this separate from any token used for other purposes (e.g. docs site deploys), and don't share one token across both environments — Cloudflare tokens scope permissions at the zone level, not per-record, so this isn't a hard technical wall between environments, but it does mean a leaked staging token can be revoked without touching production's. | Terraform's `cloudflare` provider, one per environment |
-| SSH key pair, dedicated to this infra | Generate one below — don't reuse a personal key | Droplet access, referenced by Terraform |
+| SSH key pair, dedicated to this infra | Generate one below — don't reuse a personal key | Access for the unprivileged deploy user cloud-init creates (see "SSH access model" below) — not root |
 | DO Spaces access key, scoped to the state bucket only | DO dashboard → API → Spaces Keys | Terraform remote state backend |
 
 ```bash
-ssh-keygen -t ed25519 -C "comprobify-infra" -f ~/.ssh/comprobify_infra
+ssh-keygen -t ed25519 -C "comprobify-deploy" -f ~/.ssh/comprobify_deploy
 ```
 
 ### Local tools (macOS)
@@ -230,7 +230,9 @@ resource "digitalocean_droplet" "this" {
   image     = var.image_slug         # plain base OS image — see note below
   ssh_keys  = [digitalocean_ssh_key.infra.id]
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
-    environment = var.environment
+    environment     = var.environment
+    deploy_username = var.deploy_username
+    ssh_public_key  = file(pathexpand(var.ssh_public_key_path))
   })
 }
 
@@ -261,10 +263,11 @@ resource "digitalocean_firewall" "this" {
     port_range       = "80"
     source_addresses = local.cloudflare_ipv4_ranges
   }
+  # SSH open to the internet, deliberately - see "SSH access model" below for why.
   inbound_rule {
     protocol         = "tcp"
     port_range       = "22"
-    source_addresses = [var.admin_ip_cidr]   # your own IP — update if it changes
+    source_addresses = ["0.0.0.0/0"]
   }
   # Both protocols outbound — TCP alone would silently break DNS resolution
   # (UDP/53), which everything from `apt` to `docker pull` depends on.
@@ -300,6 +303,13 @@ The DNS record's `content` referencing `digitalocean_droplet.this.ipv4_address` 
 
 ```yaml
 #cloud-config
+users:
+  - name: ${deploy_username}
+    lock_passwd: true
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
 write_files:
   - path: /etc/comprobify-environment
     content: |
@@ -309,9 +319,24 @@ write_files:
   - path: /etc/apt/sources.list.d/docker.list
     content: |
       deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable
+  # SSH hardening as a drop-in file, loaded via the main sshd_config's own
+  # `Include /etc/ssh/sshd_config.d/*.conf` (standard on Ubuntu/Debian) - avoids
+  # sed-editing the main file, which is brittle against a base image's exact
+  # commented-out defaults.
+  - path: /etc/ssh/sshd_config.d/99-comprobify-hardening.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+      ChallengeResponseAuthentication no
+      UsePAM yes
+      MaxAuthTries 3
+      LoginGraceTime 30
+      AllowUsers ${deploy_username}
 
 runcmd:
   - mkdir -p /opt/comprobify
+  - chown ${deploy_username}:${deploy_username} /opt/comprobify
   # All package installation happens here in runcmd, not via cloud-init's own
   # package_update/packages directives - those can't be given a lock-wait timeout, so a
   # background apt-daily timer grabbing the dpkg lock right after boot can make that
@@ -327,13 +352,16 @@ runcmd:
   - chmod a+r /etc/apt/keyrings/docker.asc
   - apt-get -o DPkg::Lock::Timeout=120 update
   - apt-get -o DPkg::Lock::Timeout=120 install -y fail2ban unattended-upgrades docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  # The "docker" group is created by the docker-ce package install above, so this
+  # can't happen earlier in the users: block, which runs before runcmd.
+  - usermod -aG docker ${deploy_username}
   - systemctl enable --now fail2ban
   - dpkg-reconfigure -f noninteractive unattended-upgrades
-  - sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
-  - sed -i 's/#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
-  - systemctl restart sshd
+  - systemctl restart ssh
   - systemctl enable --now docker
 ```
+
+(`systemctl restart ssh`, not `sshd` — Ubuntu names the OpenSSH systemd unit `ssh.service`. An earlier version of this file used `sshd` here, which may have been silently failing this whole time — confirmed via `systemctl status ssh` on the actual droplet before catching it, since we'd always been using key-only auth anyway and never explicitly verified the restart itself succeeded.)
 
 **Keep this file strictly ASCII — no em-dashes, curly quotes, or other multi-byte characters, even in comments.** A single em-dash in a comment here once caused cloud-init to reject the *entire* `user_data` with `Failed loading yaml blob: unacceptable character #x0080`, silently falling back to an empty config — `cloud-init status` still reported `done` (nothing failed, because nothing ran: not `write_files`, not `runcmd`, not even `mkdir -p /opt/comprobify`, the very first command). The droplet came up looking healthy while doing none of the setup it was supposed to. `extended_status: degraded done` (visible via `cloud-init status --long`, not the plain `cloud-init status`) is the tell — check that field first if a freshly-created droplet is missing anything cloud-init was supposed to set up. Before trusting a `.tftpl` edit here, verify it's pure ASCII:
 ```bash
@@ -344,6 +372,27 @@ No output means clean.
 **All package installation deliberately lives in `runcmd`, not cloud-init's `package_update`/`packages` directives.** An earlier version used those directives for `fail2ban`/`unattended-upgrades`/`ca-certificates`/`curl`, and hit a second, separate `degraded done` cause: `apt-get update` exit code 100 from apt/dpkg lock contention with Ubuntu's background `apt-daily` timer racing it right after boot. That specific run didn't actually lose anything (the base image's package index happened to be fresh enough that later installs succeeded anyway, confirmed by checking `fail2ban`'s status and `dpkg -l` directly) — but that was luck, not a guarantee the next base image or timing would repeat it. `DPkg::Lock::Timeout=120` on every `apt-get` call here means a lock held by `apt-daily` gets waited out for up to two minutes instead of failing the command outright, which cloud-init's own package module can't be configured to do.
 
 Deliberately does **not** set up the app's `docker-compose.yml` or secrets — only the empty target directory. Everything inside it is pushed by the CD pipeline, covered next. Terraform's job ends at "droplet exists, hardened, Docker installed, directory ready."
+
+---
+
+## SSH access model
+
+**SSH is open to the internet (`0.0.0.0/0`) on this droplet, deliberately — not an oversight.** Worth explaining how this decision was actually reached, since it wasn't the starting point.
+
+**What was tried first:** SSH restricted to a single `/32` — the admin's own IP. This held up fine for personal access, once an initial scare (a connection timeout that looked exactly like a firewall drop) turned out to just be a newly-created firewall rule needing a moment to propagate, not an actual problem with the restriction. But it created a second, harder problem: the CD pipeline also needs to reach port 22, and GitHub-hosted runners have no fixed IP to permanently allowlist the way a personal connection does.
+
+**Second attempt: a just-in-time firewall rule**, added by the deploy workflow at the start of each run (granting that run's own IP) and removed at the end. More secure in principle — SSH stayed closed to everyone except the admin's `/32` and, briefly, whichever IP a deploy happened to run from. In practice, this added real, ongoing fragility for a small setup to carry: a separate narrowly-scoped DO token to create and keep valid, a Terraform output (`firewall_id`) that needed manual re-syncing to GitHub after certain kinds of recreate, and two real failures in a row (a missing token, then a missing firewall ID) before it ever completed a deploy successfully.
+
+**Where it landed: open SSH, with defense moved to the identity/privilege layer instead of the network layer.** The reasoning: key-only auth already means brute-forcing in is not possible regardless of who can reach port 22 — the real value IP-restriction adds on top of that is (a) less scanning noise reaching sshd at all, and (b) protection against a hypothetical unpatched sshd vulnerability being reachable from anywhere. `unattended-upgrades` already mitigates (b) by keeping sshd itself patched automatically, and the layers below more than compensate for (a):
+
+- **No root login at all** (`PermitRootLogin no`) — SSH never grants a root shell directly, full stop.
+- **A single unprivileged deploy user**, `cpfydeploy9x` (deliberately not a guessable name like `deploy`/`admin`/`ubuntu`) — the only account SSH will accept (`AllowUsers`). It's a member of the `docker` group (enough to run `docker`/`docker compose` without elevation) and **has no sudo access at all** — not "sudo for a narrow set of commands," genuinely none. A compromised key gets an attacker a low-privilege shell with no built-in path to root.
+- **`MaxAuthTries 3` / `LoginGraceTime 30`** — caps how many auth attempts a single connection gets and how long an unauthenticated connection can be held open, reducing the cost of scanning noise.
+- **`fail2ban`** — as before, bans an IP outright after repeated failed attempts.
+
+**If you genuinely need root** (inspecting/editing system config, debugging something `docker`-group access can't reach) — DigitalOcean's browser-based Droplet Console (Droplet → Access → Launch Droplet Console) gives a real root shell through DO's own infrastructure, entirely independent of sshd and everything above. It was always the documented emergency fallback for lockout scenarios; it's now also the *normal* path for anything requiring true root, not just a last resort.
+
+**What this changes for you day to day:** personal SSH access is now `ssh -i ~/.ssh/comprobify_deploy cpfydeploy9x@<ip>`, not `root@<ip>` — `sudo` won't work from this account, so use the Console for anything that genuinely needs it. The CD workflow's `username:` fields changed to match.
 
 ---
 
@@ -462,7 +511,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
       - uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: root
+          username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           source: "deploy/docker-compose.yml,deploy/Caddyfile"
           target: /opt/comprobify
@@ -471,7 +520,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
       - uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.STAGING_DROPLET_IP }}
-          username: root
+          username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           script: |
             cat > /opt/comprobify/.env <<'EOF'
@@ -533,7 +582,7 @@ Rotation, for either kind: update the value in the GitHub Environment, then trig
 6. `terraform init` — downloads providers, connects to the remote state backend. If this fails with a `403 InvalidClientTokenId` / "AWS account ID not previously found" error, see the `skip_requesting_account_id` note under "Remote state" above — that's a backend config issue, not a credentials problem.
 7. `terraform plan` — review what will be created. Nothing exists yet, so expect a full "create" plan for the droplet, firewall, SSH key, DNS record, and Project. **Read this output before typing yes** — it's the one moment you see exactly what's about to happen.
 8. `terraform apply`, confirm with `yes`. Takes roughly a minute; droplet boots, cloud-init hardens it.
-9. Verify: `terraform output` shows the new IP; `ssh -i ~/.ssh/comprobify_infra root@<ip>` connects; `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
+9. Verify: `terraform output` shows the new IP; `ssh -i ~/.ssh/comprobify_deploy cpfydeploy9x@<ip>` connects (not `root@` — see "SSH access model" above); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
 10. Add the CD pipeline's secrets to the GitHub `staging` Environment (`STAGING_DROPLET_IP` = the Terraform output IP, `INFRA_SSH_PRIVATE_KEY` = the private half of the key from step 2, plus every app secret/variable from `deployment.md`'s env var table, split as above). Run the app deploy workflow once (push to `staging`, or `workflow_dispatch`) — it pushes `docker-compose.yml`/`Caddyfile`, writes `.env`, and starts the containers. No manual droplet setup step needed beyond this.
 11. Repeat steps 3–10 for `environments/production` — separate state, separate apply, same module, its own droplet, its own GitHub `production` Environment secrets, its own `comprobify-terraform-production` tokens.
 
@@ -590,41 +639,9 @@ Production gets a near-identical second `plan`/`apply` pair pointed at `environm
 
 ### App deploy workflow — `.github/workflows/deploy-staging.yml`
 
-Full file lives in the repo; the shape is checkout → get the runner's own IP → **temporarily allow that IP through the firewall on port 22** → build/push the image → SCP the compose files → SSH in to write `.env` and restart containers → **revoke the firewall access again**.
+Full file lives in the repo; the shape is checkout → build/push the image to GHCR → SCP the compose files → SSH in (as `cpfydeploy9x`, not root — see "SSH access model" above) to write `.env` and restart containers. No firewall dance needed — SSH is open, so the runner just connects directly, same as the Terraform-managed pieces below it in the module. An earlier version of this workflow briefly added/removed a just-in-time firewall rule per deploy instead of relying on open SSH; see "SSH access model" for why that approach was tried and then abandoned.
 
-That firewall add/remove pair exists because of a real constraint: DO's Cloud Firewall only allows SSH from your own fixed admin IP (see "When `admin_ip_cidr` stops matching" under Day-2 operations) — but GitHub-hosted runners have no static IP to permanently allowlist the way yours is. Rather than opening SSH to the entire internet just so CI can reach it, each deploy run grants access to *only that run's own* IP, for *only the duration of the job*:
-
-```yaml
-      - name: Get this runner's public IP
-        id: runner_ip
-        run: echo "ip=$(curl -s https://ifconfig.me)" >> "$GITHUB_OUTPUT"
-
-      - uses: digitalocean/action-doctl@v2
-        with:
-          token: ${{ secrets.DEPLOY_DO_TOKEN }}
-
-      - name: Allow this runner through the firewall
-        run: |
-          doctl compute firewall add-rules ${{ vars.STAGING_FIREWALL_ID }} \
-            --inbound-rules "protocol:tcp,ports:22,address:${{ steps.runner_ip.outputs.ip }}/32"
-
-      # ...build/push image, scp compose files, ssh in to deploy (see "The application
-      # stack" above)...
-
-      - name: Revoke this runner's firewall access
-        if: always()
-        run: |
-          doctl compute firewall remove-rules ${{ vars.STAGING_FIREWALL_ID }} \
-            --inbound-rules "protocol:tcp,ports:22,address:${{ steps.runner_ip.outputs.ip }}/32"
-```
-
-`if: always()` on the removal step is load-bearing — without it, a failed deploy (bad image, SSH hiccup, whatever) would leave that IP's access granted indefinitely, since a normal step only runs if everything before it succeeded.
-
-This needs two things not covered elsewhere in this doc:
-- **`DEPLOY_DO_TOKEN`** (GitHub secret, `staging` Environment) — a DO API token scoped as narrowly as the DO console allows to just Firewall access, separate from the `comprobify-terraform-staging` token Terraform uses (which has much broader Droplet/Project/SSH-key scope this workflow has no business holding). Same reasoning as every other credential in this setup: distinct purpose, distinct token, smaller blast radius if one leaks.
-- **`STAGING_FIREWALL_ID`** (GitHub variable, not secret — an ID isn't sensitive) — from `terraform output firewall_id`. Like `STAGING_DROPLET_IP`, this needs manual re-syncing if the firewall itself ever gets destroyed and recreated (a full `terraform destroy`/`apply`, not a `-replace` targeted at just the droplet, which leaves the firewall's own ID untouched).
-
-The `production` equivalent triggers on push to the `production` branch, matching the same branch/tag/release pipeline documented in `deployment.md`, and needs its own `DEPLOY_DO_TOKEN`/`STAGING_FIREWALL_ID`-equivalent pair scoped to production.
+The `production` equivalent triggers on push to the `production` branch, matching the same branch/tag/release pipeline documented in `deployment.md`.
 
 ---
 
@@ -652,21 +669,40 @@ gh secret set STAGING_DROPLET_IP --env staging --repo novaej/comprobify
 ```
 (A fancier version of this — the Terraform CI workflow auto-pushing the new IP via the GitHub API right after `apply` — is possible, but not worth building until Terraform itself runs in CI rather than locally.)
 
-**`STAGING_FIREWALL_ID` needs the same treatment, but only after a *full* `terraform destroy`/`apply`** (see "CI/CD" above for what it's for) — a targeted `-replace` of just the droplet leaves the firewall itself, and its ID, untouched, so no update is needed after that kind of recreate:
-```bash
-gh variable set STAGING_FIREWALL_ID --env staging --repo novaej/comprobify --body "$(terraform output -raw firewall_id)"
-```
-
 **Resize:**
 Change `droplet_size` in `terraform.tfvars`, `terraform plan` to confirm it shows an in-place resize (DO supports live resizing for most size changes — the plan output will tell you if a particular change instead requires destroy/recreate), then `terraform apply`.
 
-**Rotate the SSH key:**
-Point `ssh_public_key_path` at the new key, `terraform apply` — updates the `digitalocean_ssh_key` resource, but existing droplets need a manual `authorized_keys` update too, since SSH keys are only injected at *first* boot via cloud-init, not re-pushed on every apply.
+**Rotating the SSH key:**
 
-**When `admin_ip_cidr` stops matching:**
-The SSH firewall rule is scoped to a single `/32` — your own public IP — on the reasoning that key-only auth + `fail2ban` is good defense, but a second, narrower layer (only one IP can even attempt to connect) is worth the small maintenance cost of updating it occasionally. If SSH suddenly times out with no response at all (not a refusal — a silent drop), first re-check `curl -s ifconfig.me` against the current value in `terraform.tfvars`. If they match and the DO dashboard confirms the firewall rule is correct with no pending changes, the likely cause is CGNAT (Carrier-Grade NAT) — some ISPs route different outbound connections through different public IPs from a shared pool, so the IP a checker reports isn't guaranteed to be the exact IP DigitalOcean's firewall sees for a *different* connection moments later.
+The key is baked into `user_data` at first boot (via the `users:` block in cloud-init — see "SSH access model" above), and `user_data` can only be set when a droplet is created, not changed on a running one. So rotating the key always means recreating the droplet — there's no in-place "swap the key" path. Since a recreate is already required, this is also a reasonable moment to do it if you're not rotating for any specific urgent reason (e.g. suspected key exposure) — no need to wait for one.
 
-This is a real tradeoff to make deliberately, not something to change without discussing it first: tightening to a `/32` gives a genuine extra layer, but on a network where the outbound IP can't be reliably captured, it may cause SSH to silently fail even when correctly configured. If that happens, the options are (a) find the ISP's actual allocated netblock via a WHOIS/RDAP lookup on the reported IP and scope to that wider-but-still-bounded range instead of the internet at large, or (b) accept `0.0.0.0/0` and rely on key-only auth + `fail2ban` alone. Either way, DigitalOcean's dashboard has a browser-based Droplet Console as a fallback if you ever do get locked out (Droplet → Access → Launch Droplet Console) — it doesn't route through the same network path as SSH.
+1. Generate a new pair, with a name that won't collide with the old one:
+   ```bash
+   ssh-keygen -t ed25519 -C "comprobify-deploy" -f ~/.ssh/comprobify_deploy_new
+   ```
+2. Point `terraform.tfvars` at it:
+   ```hcl
+   ssh_public_key_path = "~/.ssh/comprobify_deploy_new.pub"
+   ```
+3. `terraform plan` — expect it to show both `digitalocean_ssh_key.infra` (replaced — DO's API treats a key's `public_key` as immutable, so a change forces a new resource, and Terraform deletes the old one from your DO account automatically as part of that) and `digitalocean_droplet.this` (replaced, since `user_data` changed) needing replacement, plus everything downstream that depends on the droplet (firewall, project assignment, DNS record) updating to reference the new one.
+4. `terraform apply`, confirm with `yes`.
+5. Verify the new key actually works before touching anything else:
+   ```bash
+   ssh -i ~/.ssh/comprobify_deploy_new cpfydeploy9x@$(terraform output -raw droplet_ip)
+   ```
+6. Update the two GitHub values this affects — the droplet's IP changed too, from the recreate:
+   ```bash
+   gh secret set STAGING_DROPLET_IP --env staging --repo novaej/comprobify --body "$(terraform output -raw droplet_ip)"
+   gh secret set INFRA_SSH_PRIVATE_KEY --env staging --repo novaej/comprobify < ~/.ssh/comprobify_deploy_new
+   ```
+7. Trigger a deploy (`workflow_dispatch`, or push to `staging`) to confirm the CD pipeline works end-to-end with the new key before considering this done.
+8. Only now, with everything confirmed working, clean up the old key — it's no longer referenced by Terraform state, GitHub, or the (now-destroyed) old droplet, so there's nothing left depending on it:
+   ```bash
+   rm ~/.ssh/comprobify_infra ~/.ssh/comprobify_infra.pub   # or whatever the old pair was named
+   ```
+   Then, if you'd rather not keep the "_new" suffix permanently, rename the current pair (`mv ~/.ssh/comprobify_deploy_new ~/.ssh/comprobify_deploy` and the `.pub` alongside it) and update `ssh_public_key_path` in `terraform.tfvars` to match — this doesn't need another droplet recreate, since the key *content* isn't changing, only its path on your laptop.
+
+Steps 5 and 7 are both worth doing before step 8 specifically — deleting the old key before confirming the new one works end to end (both for interactive access and for CI) is how you'd end up locked out with no way back except the DO Console.
 
 ---
 

@@ -19,7 +19,9 @@ resource "digitalocean_droplet" "this" {
   ssh_keys = [digitalocean_ssh_key.infra.id]
 
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
-    environment = var.environment
+    environment     = var.environment
+    deploy_username = var.deploy_username
+    ssh_public_key  = file(pathexpand(var.ssh_public_key_path))
   })
 }
 
@@ -53,10 +55,16 @@ resource "digitalocean_firewall" "this" {
     source_addresses = local.cloudflare_ipv4_ranges
   }
 
+  # SSH open to the internet, deliberately - both personal access and the CD
+  # pipeline (GitHub-hosted runners with no fixed IP) need to reach it, and IP
+  # restriction here proved unreliable in practice (see terraform-digitalocean-setup.md's
+  # SSH access model section for why). Defense is layered elsewhere instead: key-only
+  # auth, no root login, an unprivileged deploy user with no sudo, fail2ban, and
+  # MaxAuthTries/LoginGraceTime limits - all in cloud-init.yaml.tftpl's sshd hardening.
   inbound_rule {
     protocol         = "tcp"
     port_range       = "22"
-    source_addresses = [var.admin_ip_cidr]
+    source_addresses = ["0.0.0.0/0"]
   }
 
   # Both protocols outbound — TCP alone would silently break DNS resolution
