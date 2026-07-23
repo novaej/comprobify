@@ -1,0 +1,6 @@
+# Staging only for now. When production is provisioned, this needs to become either a
+# second file (Caddyfile.production, picked by the production deploy workflow) or a
+# {$PUBLIC_DOMAIN} env-substituted single file — revisit before the first production deploy.
+api-staging.comprobify.com {
+    reverse_proxy api:8080
+}

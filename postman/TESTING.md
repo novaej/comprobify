@@ -19,7 +19,7 @@ Import both collections into Postman. Set these **collection variables** before 
 
 | Variable | Where to get it |
 |---|---|
-| `base_url` | Your API URL — e.g. `https://your-api.onrender.com` or `http://localhost:8080` |
+| `base_url` | Your API URL — e.g. `https://api-staging.comprobify.com` or `http://localhost:8080` |
 | `admin_secret` | `ADMIN_SECRET` env var value (needed for the pre-flight admin agreement publish step) |
 
 Everything else (`api_key`, `issuer_id`, `access_key`, etc.) is auto-captured by test scripts.

@@ -1,5 +1,7 @@
 # Deployment
 
+Staging was originally hosted on Render; it now runs on DigitalOcean droplets provisioned by Terraform. This file covers the parts that don't depend on the hosting platform (branching strategy, git workflow, environment variables, migrations, SRI environments, certificate management). For everything about how the compute layer itself actually works — the droplet, the CD pipeline, scheduled jobs, the background worker, secrets — see `docs/terraform-digitalocean-setup.md`.
+
 ---
 
 ## Branching strategy
@@ -30,8 +32,8 @@ Two long-lived branches map to deployed environments. They are **automation-owne
 | Branch | Environment | Promoted by |
 |--------|-------------|-------------|
 | `main` | — (trunk; CI only, no deploy) | PR merge |
-| `staging` | Staging (Render) | `release-staging.yml` — fast-forwarded on tag push `vX.Y.Z` |
-| `production` | Production (Render) — *not yet provisioned, pipeline disabled* | `release-production.yml` — fast-forwarded when a GitHub Release is published |
+| `staging` | Staging (DigitalOcean droplet, formerly Render) | `release-staging.yml` — fast-forwarded on tag push `vX.Y.Z` |
+| `production` | Production (DigitalOcean, planned) — *not yet provisioned, pipeline disabled* | `release-production.yml` — fast-forwarded when a GitHub Release is published |
 
 **Rules:**
 - All development happens in feature/fix branches off `main`, merged via PR (1 approval required)
@@ -103,7 +105,7 @@ Once the tag has been validated in staging, promotion is a single deliberate act
 
 `release-production.yml` then fast-forwards `production` to that commit and triggers `deploy-production.yml`.
 
-> **Currently disabled** — the production Render service, `production` branch, and secrets don't exist yet. See "Production status" below for what's needed to enable this.
+> **Currently disabled** — the production droplet, `production` branch, and secrets don't exist yet. See "Production status" below for what's needed to enable this.
 
 ### Hotfix flow
 
@@ -152,29 +154,29 @@ git push origin main
 | File | Trigger | Effect |
 |------|---------|--------|
 | `.github/workflows/release-staging.yml` | Push of tag `vX.Y.Z` | Fast-forwards `staging` to the tagged commit and pushes it |
-| `.github/workflows/deploy-staging.yml` | Push to `staging` | Calls the Render deploy hook for `comprobify-staging` |
+| `.github/workflows/deploy-staging.yml` | Push to `staging` | Builds the image, pushes to GHCR, deploys to the staging droplet over SSH — see `docs/terraform-digitalocean-setup.md` |
 | `.github/workflows/release-production.yml` | *(disabled)* GitHub Release published | Fast-forwards `production` to the released commit and pushes it |
-| `.github/workflows/deploy-production.yml` | *(disabled)* Push to `production` | Calls the Render deploy hook for `comprobify-production` |
+| `.github/workflows/deploy-production.yml` | *(disabled)* Push to `production` | Mirrors `deploy-staging.yml` once production is provisioned |
 
 ### Pipeline stages (staging)
 
 1. **Tag pushed** (`vX.Y.Z`) — `release-staging.yml` checks out the tag and fast-forward-merges `staging` to it, then pushes
-2. **Push to `staging`** — `deploy-staging.yml` calls the `RENDER_DEPLOY_HOOK_URL` for `comprobify-staging`
+2. **Push to `staging`** — `deploy-staging.yml` builds the Docker image, pushes it to GHCR, then deploys it to the staging droplet over SSH (pulls the image, writes `.env` from GitHub Secrets/Variables, restarts the containers)
 
-Render handles the rest: builds the Docker image (which installs `libxml2-utils` and runs `npm ci --omit=dev`), then starts the container. Migrations run automatically at startup — `app.js` calls `migrate()` before the server begins accepting requests.
+Migrations run automatically at startup — `app.js` calls `migrate()` before the server begins accepting requests. Full mechanics (the droplet, the compose stack, exactly how the deploy step works) are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
 
 ### Production status
 
-The production pipeline is **written but disabled** — `release-production.yml` and `deploy-production.yml` exist in the repo with their triggers commented out and an `if: false` guard on their jobs, because the production Render service, `production` branch, database, domain, and secrets don't exist yet.
+The production pipeline is **written but disabled** — `release-production.yml` and `deploy-production.yml` exist in the repo with their triggers commented out and an `if: false` guard on their jobs, because the production droplet, `production` branch, database, domain, and secrets don't exist yet. Production is deliberately on standby — staging validated the DigitalOcean/Terraform setup first.
 
-To enable production once it's provisioned:
+To enable production once it's ready to provision:
 1. Create the `production` branch (fast-forwarded only by the automation, same invariant as `staging`)
-2. Provision the `comprobify-production` Render web service + a production **Neon** Postgres project (own project, `public` + `sandbox` schemas — see `docs/infrastructure-costs.md`'s "Stack" table for the full production platform decision), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
-3. Add `RENDER_DEPLOY_HOOK_URL` as a secret on the `production` GitHub environment (and `STAGING_API_BASE_URL` / `ADMIN_SECRET` if mirroring the notification scheduler too)
+2. Provision the production droplet via Terraform (`terraform/environments/production`, mirroring `staging`'s setup — see `docs/terraform-digitalocean-setup.md`'s "First-time setup" steps) + a production **Neon** Postgres project (own project, `public` + `sandbox` schemas), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
+3. Set up the `production` GitHub Environment's Secrets/Variables (same full set as `staging` — see `docs/terraform-digitalocean-setup.md`'s env var reference table)
 4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
-5. In `deploy-production.yml`: uncomment the `push: branches: [production]` trigger and remove the `if: false` guard on the `deploy` job
+5. In `deploy-production.yml`: rewrite to mirror `deploy-staging.yml` (build/push/SSH-deploy), uncomment the `push: branches: [production]` trigger, remove the `if: false` guard
 6. Add branch protection to `production` (restrict who can push to the automation only; no force pushes) — see GitHub repository setup below
-7. Add a `comprobify-cron-production` env var group (`API_BASE_URL` only — `ADMIN_SECRET` is never declared in the file, see below) and three `branch: production` cron services to `render.yaml` (mirroring the existing staging ones), then sync the Blueprint. As brand-new resources with no prior environment assignment, they will need one manual step afterward to move them into the Production environment of the Comprobify project in the dashboard. Also manually add `ADMIN_SECRET` to the new `comprobify-cron-production` group in the dashboard (same pattern as staging) — after that one-time step, all three production cron jobs inherit it automatically — see "Render Cron Job setup" under Scheduled jobs below
+7. Extend the droplet's `cron.d` schedule for the production instance too (same 4 jobs, same schedules — see `docs/terraform-digitalocean-setup.md`'s "Scheduled jobs" section)
 
 ---
 
@@ -252,9 +254,9 @@ This leaves Email Obfuscation active on the marketing site (`comprobify.com`, `s
 
 ## Scheduled jobs
 
-The API has four scheduled jobs that must be triggered externally — none is self-scheduled. Both **staging** and **production** use a **Render Cron Job**, in the same workspace as the matching web service, so the scheduler is billed per execution-second and its logs sit alongside the API's own rather than depending on a third-party service with no SLA hitting an admin-protected endpoint. See `docs/infrastructure-costs.md` for the cost rationale. See `docs/guides/testing-scheduled-jobs.md` for how to exercise each job's scenarios locally by pushing dates into the past.
+The API has four scheduled jobs that must be triggered externally — none is self-scheduled. These previously ran as Render Cron Job services; staging now runs them via a `cron.d` schedule on the droplet itself, calling `scripts/run-admin-job.js` inside the already-running `api` container (`docker compose exec`) rather than needing a separate scheduler service — see `docs/terraform-digitalocean-setup.md`'s "Scheduled jobs" section for the actual mechanics (the schedule file, why no host-level Node install is needed, monitoring via `journalctl`). See `docs/guides/testing-scheduled-jobs.md` for how to exercise each job's scenarios locally by pushing dates into the past.
 
-> Staging previously used [cron-job.org](https://cron-job.org) for the notifications job. It has been replaced by a Render Cron Job for the same reason production uses one, so both environments now follow the same pattern.
+> Staging's history: cron-job.org (third-party, no SLA) → Render Cron Job → the current droplet `cron.d` schedule. Each move kept the same underlying jobs and cadence, just changed who triggers them.
 
 ### `POST /v1/admin/jobs/notifications`
 
@@ -293,27 +295,11 @@ Both sweeps run independently against `public.documents` and `sandbox.documents`
 
 Idempotent. Needs a **shorter cadence than the other three jobs** — hourly, since this is the recovery mechanism for a temporarily unreachable broker or a publish that timed out. Not tighter than that: CloudAMQP is a managed service that rarely fails outright, and the worker already processes anything actually queued near-instantly — this job only bounds how long a document can sit unprocessed if nothing ever queued a message for it in the first place (a stuck publish, or a `RECEIVED` document nobody polled).
 
-Declared in `render.yaml` as `comprobify-staging-queue-reconciliation`, same shape as the three jobs above, on a `0 * * * *` schedule — not yet synced against a real Render deploy, but low-risk since it's identical in structure to the three already-confirmed cron jobs.
+### Where the schedule actually lives now
 
-### Render Cron Job setup — managed via Blueprint (`render.yaml`)
+Defined in `terraform/modules/droplet/cloud-init.yaml.tftpl` as a `/etc/cron.d/comprobify-jobs` file, written to the droplet at first boot. Full mechanics — why it runs inside the `api` container instead of needing Node on the bare host, how it picks up `ADMIN_SECRET`, monitoring via `journalctl -t comprobify-cron` — are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
 
-The three Cron Jobs are declared as code in `render.yaml` at the repo root, **not** created by hand in the dashboard. The API web services (`comprobify-staging`/`comprobify-production`) are deliberately excluded from this Blueprint and stay on the existing GitHub Actions deploy-hook pipeline above — only the cron jobs (low env-var count, low risk to manage declaratively) are in scope. Render auto-detects the project's `Dockerfile` for each service; the command runs as `node scripts/run-admin-job.js <path>` rather than a raw `curl` invocation, sidestepping the Docker Command field's lack of shell/quoting support (it splits on whitespace, so a `curl` call with a quoted `Authorization` header gets silently truncated — that's the cause if a run ever fails with a `SyntaxError`/truncated command).
-
-**Render project structure:** everything lives in one Render **Project** ("Comprobify"), with a **Staging** environment (the API web service + the 3 cron jobs) today, and a **Production** environment with the same shape once provisioned (see below).
-
-**Connecting the Blueprint (one-time):** In the Render dashboard, **New → Blueprint**, name it `comprobify-cron` (scoped name — this Blueprint only ever manages the cron jobs, not the web services), and connect it to this repo on the **`main`** branch.
-
-The Blueprint's own connected branch (`main`) only controls where Render watches for changes to `render.yaml` itself (the job list/schedule/config) — it does **not** override each service's own `branch:` field below it, which independently controls what code that job actually runs. `main` is picked deliberately: config changes (adding a job, tweaking a schedule) land as soon as a PR merges, with no need to wait for a release/tag cycle, while each cron service still correctly runs from `branch: staging` (or `branch: production` later), matching whatever's actually live in that environment.
-
-**`ADMIN_SECRET` is not declared in `render.yaml` at all — set by hand, directly in the dashboard, on the group.** Render's `envVarGroups` do not support `sync: false`: a secret declared there via YAML is silently dropped (no error, no prompt, it just never appears in the group). `ADMIN_SECRET` is instead added directly to the `comprobify-cron-staging` group in the Render dashboard, outside Blueprint management entirely — only the non-secret `API_BASE_URL` is actually declared in the file. **Confirmed** (not just theorized) to survive a Blueprint sync: a group variable absent from `render.yaml` is left alone, the same "never deletes what's not declared" guarantee Render's docs give for whole resources, now verified to extend to individual keys within a group too. Every current and future cron job referencing this group inherits `ADMIN_SECRET` with zero dashboard steps.
-
-**Adopting the 3 jobs that already exist:** Render matches Blueprint service entries to existing dashboard resources **by exact name** — `render.yaml`'s 3 services are named `comprobify-staging-notifications`, `comprobify-staging-subscriptions`, `comprobify-staging-quota` to match what's already in the dashboard. `render.yaml` declares them at the root `services:` level rather than nested under a `projects`/`environments` block specifically because Render's docs guarantee root-level services "keep their currently assigned environment (if any) after each sync" — confirmed this holds for adoption (matching an existing resource by name preserves its Staging placement). **Confirmed the reverse also holds:** a brand-new resource (no prior assignment — e.g. if the dashboard originals were deleted first, so Render creates fresh ones instead of adopting) does **not** get auto-placed into the Staging environment; it lands ungrouped, needing one manual "move into Staging" step per service in the dashboard afterward. (A name mismatch on adoption would instead create 3 new duplicate services, since syncing never auto-deletes anything.)
-
-**Adding a new scheduled job later:** add a new `type: cron` entry to the `services` list in `render.yaml` (see the existing three for the shape), referencing `comprobify-cron-staging` via `envVars: [{ fromGroup: comprobify-cron-staging }]`. Push to `main` and Render creates it — genuinely zero-touch for both `API_BASE_URL` and `ADMIN_SECRET`, no dashboard step at all, confirmed by the group behavior above.
-
-**Suspending a job individually:** unaffected by Blueprint management — select the one service's checkbox in the dashboard and click Suspend/Resume, same as any Render service.
-
-Reference table (schedules are also in `render.yaml`, this is just for readability):
+Reference table (schedule unchanged from the Render Cron Job days):
 
 | Job | Schedule | Command |
 |---|---|---|
@@ -322,7 +308,7 @@ Reference table (schedules are also in `render.yaml`, this is just for readabili
 | Quota | `10 6 * * *` (daily, just after Subscriptions) | `node scripts/run-admin-job.js /v1/admin/jobs/quota` |
 | Queue reconciliation | `0 * * * *` (hourly) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
 
-Production cron jobs aren't declared in `render.yaml` yet — see the file's own comments; add a `comprobify-cron-production` env var group and four more `branch: production` services (including the worker) once the production web service/branch/secrets exist (see "Production status" above).
+Production's schedule doesn't exist yet — it gets the same 4 entries on its own droplet once production is provisioned (see "Production status" above).
 
 > The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
 
@@ -373,21 +359,21 @@ Queue reconciliation job:
 }
 ```
 
-Monitor each Cron Job's execution log in the Render dashboard for non-zero exit codes (`curl -f` makes a non-2xx HTTP response fail the run). A sustained failure usually means the `ADMIN_SECRET` has rotated or the web service is down.
+Monitor via `journalctl -t comprobify-cron` on the droplet for non-zero exit codes — see `docs/terraform-digitalocean-setup.md`. A sustained failure usually means `ADMIN_SECRET` has drifted out of sync between the container's `.env` and what's expected, or the `api` container itself is down.
 
 ---
 
 ## Background worker (`workers/worker.js`)
 
-Unlike the four scheduled jobs above — which are short-lived cron invocations that hit an HTTP endpoint and exit — `workers/worker.js` is a **long-running process** that holds a persistent connection to RabbitMQ and continuously consumes the `sri.send`/`sri.authorize` queues. It is the only code in the system that calls SRI directly (see ADR-019). It cannot be modeled as a Render Cron Job; it needs Render's **Background Worker** service type (or an equivalent persistent-process host), analogous to the existing web service but with no public port and started via `node workers/worker.js` (`npm run worker`).
+Unlike the four scheduled jobs above — which are short-lived cron invocations that hit an HTTP endpoint and exit — `workers/worker.js` is a **long-running process** that holds a persistent connection to RabbitMQ and continuously consumes the `sri.send`/`sri.authorize` queues. It is the only code in the system that calls SRI directly (see ADR-019).
 
-Declared in `render.yaml` as `comprobify-staging-worker`, `type: worker` — confirmed synced against a real Render deploy (renamed from `comprobify-staging-sri-worker` when the worker's role broadened past SRI-only in ADR-022; see the file's own header comment for the manual re-adoption step that rename required). It reads from a dedicated `comprobify-worker-staging` env var group, which only declares the non-secret `APP_ENV` in the YAML; every actual required secret must be added by hand in the Render dashboard, on that group, the same way `ADMIN_SECRET` is handled for the cron jobs' group. The worker runs `validateCoreConfig()` at startup, not the API's full `validateConfig()` — a narrower set (`DB_*`, `RABBITMQ_URL`, `MAILGUN_API_KEY`/`MAILGUN_DOMAIN`/`EMAIL_FROM`), since its message handlers never touch admin auth, certificate encryption, billing, or inbound webhook verification. See CLAUDE.md Common Mistake list / `src/config/validate.js`.
+Runs as the `worker` service in `deploy/docker-compose.yml`, alongside `api` and `caddy` on the same droplet — same image as `api`, started with `command: node workers/worker.js` instead. It runs `validateCoreConfig()` at startup, not the API's full `validateConfig()` — a narrower set (`DB_*`, `RABBITMQ_URL`, `MAILGUN_API_KEY`/`MAILGUN_DOMAIN`/`EMAIL_FROM`), since its message handlers never touch admin auth, certificate encryption, billing, or inbound webhook verification. See CLAUDE.md Common Mistake list / `src/config/validate.js`. Full compose stack details in `docs/terraform-digitalocean-setup.md`.
 
-**Error monitoring:** the worker also requires `instrument.js`, but Sentry's automatic uncaught-exception capture never fires for it — every failure path is already caught by the worker's own code. Two spots call `Sentry.captureException()` explicitly instead: a failure to register consumers after a (re)connect (connected but not consuming — worse than fully down, since it looks alive), and a fatal startup failure (the worker never came up at all, `process.exit(1)`) — the latter also flushes Sentry before exiting, since `captureException()` only queues the event rather than sending it immediately. Per-message SRI failures are deliberately console-only, not sent to Sentry, since they're expected/routine and already covered by the reconciliation job. `SENTRY_DSN` needs to be set on the worker's own env var group for any of this to actually report anywhere — see CLAUDE.md's "Error monitoring (Sentry)" entry for the full design.
+**Error monitoring:** the worker also requires `instrument.js`, but Sentry's automatic uncaught-exception capture never fires for it — every failure path is already caught by the worker's own code. Two spots call `Sentry.captureException()` explicitly instead: a failure to register consumers after a (re)connect (connected but not consuming — worse than fully down, since it looks alive), and a fatal startup failure (the worker never came up at all, `process.exit(1)`) — the latter also flushes Sentry before exiting, since `captureException()` only queues the event rather than sending it immediately. Per-message SRI failures are deliberately console-only, not sent to Sentry, since they're expected/routine and already covered by the reconciliation job. `SENTRY_DSN` needs to be set for any of this to actually report anywhere — see CLAUDE.md's "Error monitoring (Sentry)" entry for the full design.
 
 Two additional signals worth knowing about, independent of Sentry: CloudAMQP's management UI shows live consumer count per queue (`sri.send`/`sri.authorize` at 0 consumers means the worker isn't connected, full stop), and the reconciliation job's `sendRepublished`/`authorizeRepublished` counts trending up across consecutive runs indicates something downstream of publish isn't keeping up, worker included.
 
-There is no restart/health-check story documented yet for this process beyond whatever Render's Background Worker type provides by default (auto-restart on crash) — revisit once it's actually deployed and observed running for a while.
+Restart-on-crash is handled by Docker Compose's `restart: unless-stopped` policy on the container, not a platform feature — revisit if it needs anything more sophisticated once observed running for a while.
 
 ---
 
@@ -421,21 +407,16 @@ Both branches are **automation-owned** — they only move forward via fast-forwa
 - ✅ Restrict who can push — limit to the automation (e.g. a bot account / `GITHUB_TOKEN` with appropriate permissions, or repository admins only as a fallback)
 - ✅ Do not allow force pushes
 
-### 4. Add secrets (Settings → Secrets and variables → Actions)
+### 4. Add secrets/variables (Settings → Secrets and variables → Actions)
 
-Per-environment secrets, scoped to the matching GitHub Environment (`staging` now, `production` once provisioned):
-
-| Secret | Environment | Used by |
-|---|---|---|
-| `RENDER_DEPLOY_HOOK_URL` | `staging` | `deploy-staging.yml` |
-| `RENDER_DEPLOY_HOOK_URL` | `production` *(when provisioned)* | `deploy-production.yml` |
+Per-environment, scoped to the matching GitHub Environment (`staging` now, `production` once provisioned) — the full set (`DROPLET_IP`, `INFRA_SSH_PRIVATE_KEY`, every app credential/config value, split between Secrets and Variables) is documented in `docs/terraform-digitalocean-setup.md`'s env var reference table rather than duplicated here.
 
 Note `release-staging.yml` / `release-production.yml` don't need extra secrets — they push to branches using the workflow's own `contents: write` permission.
 
-### 5. Render
+### 5. DigitalOcean
 
-- `comprobify-staging` web service already exists, linked to the `staging` branch via deploy hook
-- When ready: create `comprobify-production` (its own web service + a production Neon Postgres project — see `docs/infrastructure-costs.md`), with independent env vars and secrets from staging — see "Production status" above
+- Staging droplet already exists, provisioned via Terraform and deployed to by `deploy-staging.yml` over SSH — see `docs/terraform-digitalocean-setup.md`
+- When ready: provision the production droplet (`terraform/environments/production`) + a production Neon Postgres project, with independent env vars and secrets from staging — see "Production status" above
 - Migrations run automatically at startup via `app.js` — no separate deploy step needed
 
 ---
@@ -454,11 +435,11 @@ ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO comprobify_app;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO comprobify_app;
 ```
 
-### 2. Render service
-- [ ] Set all required env vars before first deploy (see Environment variables table below) — `APP_ENV`, `APP_BASE_URL`, `DB_*`, `ENCRYPTION_KEY`, `ADMIN_SECRET`, `EMAIL_PROVIDER=none`
-- [ ] `APP_BASE_URL` matches the actual Render URL (update after Render assigns one)
-- [ ] Runtime: Docker (Render auto-detects the `Dockerfile` in the repo root)
-- [ ] Confirm first deploy succeeds and all migrations are listed as applied in the startup log
+### 2. Droplet + first deploy
+- [ ] Provision the droplet via Terraform (`terraform/environments/<env>`) — see `docs/terraform-digitalocean-setup.md`'s "First-time setup"
+- [ ] Set all required GitHub Secrets/Variables before the first deploy run (see `docs/terraform-digitalocean-setup.md`'s env var reference table) — `APP_ENV`, `APP_BASE_URL`, `DB_*`, `ENCRYPTION_KEY`, `ADMIN_SECRET` at minimum
+- [ ] `APP_BASE_URL` matches the droplet's actual domain (set once the DNS record/Terraform apply is done)
+- [ ] Confirm first deploy succeeds and all migrations are listed as applied in the container logs (`docker compose logs api`)
 
 ### 3. Sandbox schema grants
 After migrations run, migration 033 creates the `sandbox` schema. Grant access in Neon's SQL Editor:
@@ -475,16 +456,14 @@ FROM information_schema.schemata
 WHERE schema_name IN ('public', 'sandbox');
 ```
 
-### 4. Custom domain (optional but recommended before production)
-- [ ] Add custom domain in Render → service → Settings → Custom Domains (e.g. `api-staging.comprobify.com`)
-- [ ] Add CNAME record in Cloudflare DNS: type `CNAME`, name `staging-api`, target = Render hostname, **proxy off (gray cloud)** initially
-- [ ] Wait for Render to verify the domain and issue the TLS cert, then optionally enable Cloudflare proxy (orange cloud) — set Cloudflare SSL/TLS mode to **Full (strict)**
-- [ ] If enabling the Cloudflare proxy, also add a Configuration Rule disabling Email Obfuscation for this hostname — see "Cloudflare configuration" below
-- [ ] Update `APP_BASE_URL` in Render env vars to the custom domain URL
-- [ ] Update `STAGING_API_BASE_URL` GitHub environment secret to match
+### 4. Custom domain
+Handled automatically by Terraform's `cloudflare_record` resource (part of the same `apply` that creates the droplet) — no manual CNAME step needed. Confirm:
+- [ ] `dig <subdomain>.comprobify.com` resolves through Cloudflare (proxied)
+- [ ] The Cloudflare Configuration Rule disabling Email Obfuscation covers this hostname — see "Cloudflare configuration" below
+- [ ] `APP_BASE_URL` GitHub Variable matches the actual domain
 
-### 6. GitHub secrets
-- [ ] `RENDER_DEPLOY_HOOK_URL` → Render service → Settings → Deploy Hook → copy URL → GitHub environment secret
+### 6. GitHub secrets/variables
+- [ ] `DROPLET_IP` / `INFRA_SSH_PRIVATE_KEY` → from `terraform output droplet_ip` and the deploy SSH key — see `docs/terraform-digitalocean-setup.md`
 - [ ] `RELEASE_PUSH_TOKEN` → GitHub repository secret (fine-grained PAT with `Contents: Read and write` on this repo)
 
 ### 7. Verify
@@ -497,7 +476,7 @@ curl https://api.comprobify.com/health
 curl https://api.comprobify.com/v1/admin/tenants \
   -H "Authorization: Bearer YOUR_ADMIN_SECRET"
 ```
-- [ ] `xmllint` available — attempt a document creation and check Render logs for XSD validation errors. On paid Render tiers, check via Shell: `which xmllint`. If missing, a Dockerfile installing `libxml2-utils` is needed.
+- [ ] `xmllint` available — attempt a document creation and check `docker compose logs api` for XSD validation errors. Check directly via `docker compose exec api which xmllint`. If missing, a Dockerfile change installing `libxml2-utils` is needed.
 
 ### 8. Pipeline smoke test
 - [ ] Push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) and confirm `Release to Staging` workflow runs and fast-forwards the `staging` branch, then `Deploy Staging` fires automatically
@@ -524,6 +503,7 @@ All variables are required unless marked optional.
 | `PORT` | No | HTTP port (default `8080`) |
 | `APP_ENV` | Yes | `staging` or `production`. Controls SRI endpoint routing — staging always uses the SRI test endpoint; production uses the production endpoint for issuers with `sandbox=false`. Default: `staging`. |
 | `APP_BASE_URL` | Yes | Public base URL of this API (e.g. `https://api.yourdomain.com`). Used as the base for verification email links when no per-tenant `verificationRedirectUrl` is set. |
+| `DOCS_BASE_URL` | No | Base URL for the public error-code docs site (e.g. `https://docs.yourdomain.com`). When set, every RFC 7807 error response's `type` field links to `{DOCS_BASE_URL}/errors/{slug}` (`src/middleware/error-handler.js`); when unset, `type` falls back to `about:blank` per the RFC 7807 default. |
 | `VERIFICATION_TOKEN_TTL_HOURS` | No | Email verification token lifetime in hours (default `24`). |
 | `DB_HOST` | Yes | PostgreSQL host |
 | `DB_PORT` | No | PostgreSQL port (default `5432`) |
@@ -533,24 +513,36 @@ All variables are required unless marked optional.
 | `DB_SSL` | Yes | `true` to enable SSL (required in production) |
 | `ENCRYPTION_KEY` | Yes | 64-character hex string — AES-256-GCM key for private key encryption |
 | `ADMIN_SECRET` | Yes | 64-character hex string — protects all `/v1/admin/*` endpoints |
+| `SRI_TEST_BASE_URL` | No | SRI test SOAP endpoint base (default `https://celcer.sri.gob.ec/comprobantes-electronicos-ws`) — override only if SRI changes it |
+| `SRI_PROD_BASE_URL` | No | SRI production SOAP endpoint base (default `https://cel.sri.gob.ec/comprobantes-electronicos-ws`) — override only if SRI changes it |
 | `EMAIL_PROVIDER` | No | Email provider (default `mailgun`; only `mailgun` supported today) |
 | `EMAIL_FROM` | No | Bare sender email address for all non-invoice transactional emails, e.g. `notificaciones@mg.yourdomain.com`. Display name is hardcoded as `Comprobify <EMAIL_FROM>`. |
 | `EMAIL_FROM_DOCUMENTS` | No | Optional separate bare sender address for invoice/document emails only, e.g. `comprobantes@mg.yourdomain.com`. Display name is built dynamically as `{Issuer Business Name} via Comprobify <EMAIL_FROM_DOCUMENTS>`. Falls back to `EMAIL_FROM` when unset. |
 | `MAILGUN_API_KEY` | No | Mailgun private API key |
 | `MAILGUN_DOMAIN` | No | Mailgun sending domain, e.g. `mg.yourdomain.com` |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | No | From Mailgun dashboard → Sending → Webhooks → Webhook signing key |
+| `RATE_LIMIT_WINDOW_MS` | No | Rate limiter window in milliseconds (default `60000`) |
+| `RATE_LIMIT_MAX` | No | Max requests per window per API key on write endpoints (default `60`) — see `src/middleware/rate-limit.js` for how this combines with tier-aware limits |
 | `SENTRY_DSN` | No | Sentry project DSN — enables error monitoring (`@sentry/node`). Leave unset to disable; the client becomes a no-op and nothing is transmitted. Set independently per environment — staging and production should point at the same Sentry project but report distinct `environment` tags (derived from `APP_ENV`). |
 | `BANK_TRANSFER_BANK_NAME` | No | Returned in the subscription-creation response (`POST /v1/tenants/promote` with `tier`, or admin's Create Subscription) so a tenant knows where to send the SPI transfer. Display text only, not a secret. |
 | `BANK_TRANSFER_ACCOUNT_TYPE` | No | e.g. `AHORROS`, `CORRIENTE` |
 | `BANK_TRANSFER_ACCOUNT_NUMBER` | No | |
 | `BANK_TRANSFER_ACCOUNT_HOLDER` | No | |
 | `BANK_TRANSFER_IDENTIFICATION` | No | Account holder's RUC/cédula |
+| `ADMIN_NOTIFICATION_EMAIL` | Yes | Where the operator gets notified that a tenant uploaded payment proof needing review. Without it, proof submissions raise zero notification to anyone — discoverable only by manually polling the admin payments list. Also the fallback source for the `{{soporte.email}}` legal-document token when unset (see `OPERATOR_EMAIL` below and CLAUDE.md's "Legal documents" entry). |
+| `OPERATOR_NAME` | No | Operator's legal business name — substituted into published legal document templates as `{{operador.nombre}}`. Required before calling `POST /v1/admin/agreements`, not validated at startup since no other API path touches it. |
+| `OPERATOR_RUC` | No | Operator's RUC — substituted as `{{operador.ruc}}`. Same "required before publishing, not at startup" rule as `OPERATOR_NAME`. |
+| `OPERATOR_EMAIL` | No | Operator's contact email — substituted as `{{operador.email}}` (used only in the DPA's "Encargado" clause) and as the fallback for `{{soporte.email}}` when `ADMIN_NOTIFICATION_EMAIL` is unset. |
+| `OPERATOR_ADDRESS` | No | Operator's legal domicile — substituted as `{{operador.domicilio}}`. Defaults to `"Domicilio disponible previa solicitud razonable"` if unset, so a publish never bakes in a blank address. |
+| `IVA_RATE` | No | Ecuador's current IVA (VAT) rate as a decimal, applied to subscription pricing (default `0.15`). Kept as an env var, not hardcoded, since Ecuador has changed this rate more than once — a rate change should be a config update + restart, never a code change. |
 | `RABBITMQ_URL` | Yes | AMQP connection string (e.g. from CloudAMQP), scoped to a dedicated vhost per environment. Required by both the API (publisher) and `workers/worker.js` (consumer) — without it the async SRI send/authorize pipeline can never dispatch a queued document. See "Background worker" below. |
 | `RABBITMQ_SRI_EXCHANGE` | No | Name of the durable direct exchange used for SRI dispatch (default `sri.direct`) |
 | `QUEUE_RECONCILE_SEND_STALE_MINUTES` | No | Minutes before an unconfirmed `PENDING_SEND` dispatch is considered stale and re-published (default `5`) |
 | `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES` | No | Minimum age of a `RECEIVED` document before its first authorize-check is published (default `5`) |
 | `QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES` | No | Minutes before an unconfirmed authorize-check dispatch is considered stale and re-published (default `5`) |
+| `QUEUE_RECONCILE_EFFECT_STALE_MINUTES` | No | Stale-dispatch threshold, in minutes, for every `pending_effects` row type except SRI authorize checks, which use `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES`/`QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES` instead (default `5`) |
 | `QUEUE_RECONCILE_BATCH_LIMIT` | No | Max rows processed per schema per reconciliation sweep (default `100`) |
+| `PENDING_EFFECTS_MAX_ATTEMPTS` | No | Caps retries for a `pending_effects` row whose handler keeps throwing — past this many attempts it's marked `FAILED` instead of retried again (default `5`, mirrors `webhook_deliveries`' 3-attempt cap) |
 
 > **Issuer-specific config** (RUC, branch code, issue point, SRI environment, certificate) is stored per-issuer in the `issuers` database table via the Admin API. This enables multiple issuers to be configured independently without changing environment variables.
 
@@ -635,12 +627,12 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [ ] `ENCRYPTION_KEY` is unique per environment — never share between staging and production
 - [ ] `ADMIN_SECRET` is unique per environment and kept behind an internal firewall
 - [ ] `.env` file is not world-readable and never committed
-- [ ] `trust proxy: 1` set in `server.js` — required behind Cloudflare so IP-based rate limiters see the real client IP via `X-Forwarded-For`
+- [ ] `trust proxy` in `server.js` matches the actual number of reverse proxy hops in front of the app (currently `2`: Cloudflare, then Caddy on the droplet) — required for IP-based rate limiters (`adminLimiter`/`registrationLimiter`) to see the real client IP via `X-Forwarded-For` instead of pooling all traffic into one bucket. Re-verify this number if the proxy chain ever changes.
 - [ ] `helmet()` middleware active — sets standard security headers (`X-Content-Type-Options`, `Strict-Transport-Security`, `X-Frame-Options`, etc.)
 - [ ] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /v1/admin/tenants/:id/promote`
-- [ ] API is behind HTTPS — on Render this is handled automatically; custom domain TLS cert issued via Let's Encrypt
+- [ ] API is behind HTTPS — Caddy on the droplet issues/renews the TLS cert automatically via Let's Encrypt (see `docs/terraform-digitalocean-setup.md`'s "The application stack")
 - [ ] PostgreSQL not exposed on a public port
-- [ ] `xmllint` installed on the server (`apt install libxml2-utils`)
+- [ ] `xmllint` installed in the container image (`apt install libxml2-utils`, part of the Dockerfile)
 - [ ] `EMAIL_FROM`, `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` set and verified against a real Mailgun domain (not sandbox)
 - [ ] Mailgun sandbox authorized-recipient restriction removed (sandbox only allows pre-approved addresses)
 - [ ] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard for all 4 event types
@@ -652,9 +644,9 @@ See `GETTING_STARTED.md` for the full admin API reference.
 
 Not all three of `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials are equally safe to rotate — one of them can cause a real outage if done naively.
 
-**`ADMIN_SECRET`** — safe, mechanical. It's only ever compared as a bearer token (`authenticate-admin.js`), never used to encrypt anything at rest. Update the value on the `comprobify-production` (or `-staging`) web service, and update the same value in the `comprobify-cron-production`/`comprobify-cron-staging` env var group in Render (one place per environment now, thanks to the group-based setup — every cron job inherits it, nothing to update per-service). No GitHub Actions secret currently holds a copy (confirmed — nothing in `.github/workflows/*.yml` references it). Old value stops working the moment the new one is saved; brief window where a leaked old secret and the new one might both be "in flight" during the update, but no data-level risk either way.
+**`ADMIN_SECRET`** — safe, mechanical. It's only ever compared as a bearer token (`authenticate-admin.js`), never used to encrypt anything at rest. Update the value in the `staging`/`production` GitHub Environment's Secrets, then trigger a deploy — the CD workflow writes it into the container's `.env` fresh on every run, and the `cron.d` schedule reads it from that same container, so one GitHub-side update covers both the API and the scheduled jobs with no separate step. Old value stops working the moment the container restarts with the new one; brief window where a leaked old secret and the new one might both be "in flight" during the update, but no data-level risk either way.
 
-**DB credentials** — also low-risk. Rotate the password/role at the provider (Neon), update `DB_*` env vars on the web service, restart. No stored data depends on the credential value itself, only on being able to authenticate — a connection-level concern, not a data-level one.
+**DB credentials** — also low-risk. Rotate the password/role at the provider (Neon), update the `DB_*` GitHub Secrets, trigger a deploy. No stored data depends on the credential value itself, only on being able to authenticate — a connection-level concern, not a data-level one.
 
 **`ENCRYPTION_KEY` — dangerous, requires a real migration, do not just swap the env var.** This key is the only thing standing between `issuers.encrypted_private_key` (AES-256-GCM, `crypto.service.js`) and being unreadable garbage. Changing the env var value alone, without re-encrypting existing rows first, permanently breaks every existing issuer's ability to sign documents — a full outage for every already-onboarded tenant, not a gradual degradation. Correct rotation requires: decrypt every `issuers.encrypted_private_key` with the OLD key, re-encrypt with the NEW key, write it back, *then* cut the env var over — ideally as one script run before the restart, not manually. **No such script exists in this repo yet.** If `ENCRYPTION_KEY` is ever suspected compromised, that script needs to be written and tested (ideally against a copy of production data) before rotating for real — don't attempt this live for the first time during an actual incident.
 

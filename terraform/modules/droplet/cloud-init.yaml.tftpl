@@ -1,0 +1,76 @@
+#cloud-config
+users:
+  - name: ${deploy_username}
+    lock_passwd: true
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${ssh_public_key}
+
+write_files:
+  - path: /etc/comprobify-environment
+    content: |
+      ${environment}
+  # Pinned to "noble" (Ubuntu 24.04) since image_slug is fixed to ubuntu-24-04-x64 -
+  # update both together if the base image ever changes.
+  - path: /etc/apt/sources.list.d/docker.list
+    content: |
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable
+  # SSH hardening as a drop-in file, loaded via the main sshd_config's own
+  # `Include /etc/ssh/sshd_config.d/*.conf` (standard on Ubuntu/Debian) - avoids
+  # sed-editing the main file, which is brittle against a base image's exact
+  # commented-out defaults. No sudo is granted to deploy_username anywhere in this
+  # file (see AllowUsers below plus the runcmd section) - it can run docker commands
+  # via group membership only, so a compromised key never has a path to root over
+  # SSH. Real root access, when actually needed, goes through DO's browser Console.
+  - path: /etc/ssh/sshd_config.d/99-comprobify-hardening.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+      PubkeyAuthentication yes
+      ChallengeResponseAuthentication no
+      UsePAM yes
+      MaxAuthTries 3
+      LoginGraceTime 30
+      AllowUsers ${deploy_username}
+  # Replaces the 4 Render Cron Job services (see CLAUDE.md's "Scheduled jobs" /
+  # docs/deployment.md). run-admin-job.js has zero npm dependencies (just Node's
+  # built-in fetch), so it runs via `docker compose exec` inside the already-running
+  # api container instead of needing Node installed on the bare host - it picks up
+  # ADMIN_SECRET automatically from that container's own .env. Runs as
+  # deploy_username, not root - same docker-group access the container itself needs.
+  # Schedules match what Render ran exactly. Harmless no-op if it fires before the
+  # first deploy (api container doesn't exist yet) or during a redeploy.
+  - path: /etc/cron.d/comprobify-jobs
+    permissions: '0644'
+    content: |
+      */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications 2>&1 | logger -t comprobify-cron
+      0 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions 2>&1 | logger -t comprobify-cron
+      10 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota 2>&1 | logger -t comprobify-cron
+      0 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation 2>&1 | logger -t comprobify-cron
+
+runcmd:
+  - mkdir -p /opt/comprobify
+  - chown ${deploy_username}:${deploy_username} /opt/comprobify
+  # All package installation happens here in runcmd, not via cloud-init's own
+  # package_update/packages directives - those can't be given a lock-wait timeout, so a
+  # background apt-daily timer grabbing the dpkg lock right after boot can make that
+  # module fail outright. Every apt-get call below uses DPkg::Lock::Timeout instead, so
+  # it waits out a lock rather than failing if one is briefly held elsewhere.
+  - apt-get -o DPkg::Lock::Timeout=120 update
+  - apt-get -o DPkg::Lock::Timeout=120 install -y ca-certificates curl cron
+  - install -m 0755 -d /etc/apt/keyrings
+  # Docker Engine + Compose plugin from Docker's official apt repo - not the
+  # get.docker.com convenience script, which Docker itself advises against for
+  # anything beyond quick local testing.
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - apt-get -o DPkg::Lock::Timeout=120 update
+  - apt-get -o DPkg::Lock::Timeout=120 install -y fail2ban unattended-upgrades docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  # The "docker" group is created by the docker-ce package install above, so this
+  # can't happen earlier in the users: block, which runs before runcmd.
+  - usermod -aG docker ${deploy_username}
+  - systemctl enable --now fail2ban
+  - dpkg-reconfigure -f noninteractive unattended-upgrades
+  - systemctl restart ssh
+  - systemctl enable --now docker
+  - systemctl enable --now cron

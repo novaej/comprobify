@@ -9,8 +9,90 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: staging
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Trigger Render deploy
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
         run: |
-          curl -s --fail -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
+          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+      # username here must match `deploy_username` in
+      # terraform/environments/staging/terraform.tfvars - this is the unprivileged user
+      # cloud-init creates on the droplet (docker group only, no sudo, no root login at
+      # all). SSH itself is open to the internet (see main.tf's inbound_rule for port 22
+      # and terraform-digitalocean-setup.md's "SSH access model" for why) - defense is
+      # key-only auth + this privilege separation + fail2ban, not IP restriction.
+      - name: Copy compose files to droplet
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: cpfydeploy9x
+          key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
+          source: "deploy/docker-compose.yml,deploy/Caddyfile"
+          target: /opt/comprobify
+          strip_components: 1
+
+      # API_BASE_URL (distinct from APP_BASE_URL, same value) is read only by
+      # scripts/run-admin-job.js, which cron.d/comprobify-jobs on the droplet runs
+      # inside this same api container to trigger the scheduled admin jobs - see
+      # cloud-init.yaml.tftpl and terraform-digitalocean-setup.md's "Scheduled jobs"
+      # section. Not used by the app itself.
+      - name: Write env and restart containers
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DROPLET_IP }}
+          username: cpfydeploy9x
+          key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
+          script: |
+            cat > /opt/comprobify/.env <<'EOF'
+            APP_ENV=${{ vars.APP_ENV }}
+            APP_BASE_URL=${{ vars.APP_BASE_URL }}
+            API_BASE_URL=${{ vars.APP_BASE_URL }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_SSL=${{ vars.DB_SSL }}
+            ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
+            ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
+            EMAIL_FROM=${{ vars.EMAIL_FROM }}
+            MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}
+            MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN }}
+            MAILGUN_WEBHOOK_SIGNING_KEY=${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+            BANK_TRANSFER_BANK_NAME=${{ vars.BANK_TRANSFER_BANK_NAME }}
+            BANK_TRANSFER_ACCOUNT_TYPE=${{ vars.BANK_TRANSFER_ACCOUNT_TYPE }}
+            BANK_TRANSFER_ACCOUNT_NUMBER=${{ vars.BANK_TRANSFER_ACCOUNT_NUMBER }}
+            BANK_TRANSFER_ACCOUNT_HOLDER=${{ vars.BANK_TRANSFER_ACCOUNT_HOLDER }}
+            BANK_TRANSFER_IDENTIFICATION=${{ vars.BANK_TRANSFER_IDENTIFICATION }}
+            ADMIN_NOTIFICATION_EMAIL=${{ vars.ADMIN_NOTIFICATION_EMAIL }}
+            OPERATOR_NAME=${{ vars.OPERATOR_NAME }}
+            OPERATOR_RUC=${{ vars.OPERATOR_RUC }}
+            OPERATOR_EMAIL=${{ vars.OPERATOR_EMAIL }}
+            OPERATOR_ADDRESS=${{ vars.OPERATOR_ADDRESS }}
+            RABBITMQ_URL=${{ secrets.RABBITMQ_URL }}
+            EOF
+            chmod 600 /opt/comprobify/.env
+            cd /opt/comprobify
+            export IMAGE_TAG=${{ github.sha }}
+            # The docker/login-action step earlier only authenticates the GitHub Actions
+            # runner's own Docker daemon (so it can push) - the droplet's daemon, pulling
+            # over this SSH session, has never logged into GHCR and needs its own login.
+            # Reuses this job's own GITHUB_TOKEN (already scoped packages: write, which
+            # covers pulling too) rather than a separate long-lived PAT - it's re-issued
+            # fresh every run anyway, so there's nothing to rotate later.
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose pull
+            docker compose up -d

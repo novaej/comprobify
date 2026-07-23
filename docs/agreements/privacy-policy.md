@@ -33,7 +33,7 @@ El tratamiento se realiza para la ejecución del contrato de servicio (estos Té
 
 Los datos se almacenan y procesan utilizando los siguientes proveedores, todos bajo contrato de confidencialidad correspondiente a su rol de subencargado:
 
-- **Render** — hosting de la API (todos los Clientes).
+- **DigitalOcean** — hosting de la API (todos los Clientes).
 - **Neon** — base de datos PostgreSQL de la API (todos los Clientes), incluida la base de datos independiente de la interfaz web cuando el Cliente la utiliza.
 - **Mailgun** — envío de correos transaccionales (verificación de cuenta, RIDE/PDF de comprobantes autorizados, notificaciones) (todos los Clientes).
 - **Sentry** — monitoreo de errores (configurado para minimizar el tratamiento de datos personales) (todos los Clientes).

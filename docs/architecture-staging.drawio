@@ -26,10 +26,10 @@
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-58" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;API Clients&lt;/b&gt;&lt;br/&gt;tenants / integrations" vertex="1">
           <mxGeometry height="60" width="160" x="60" y="200" as="geometry" />
         </mxCell>
-        <mxCell id="iyyHeRbHeA1ESX64Fu_m-59" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;" value="&lt;b&gt;Cloudflare DNS&lt;/b&gt;&lt;br/&gt;api-staging.comprobify.com&lt;br/&gt;CNAME to Render, proxy on" vertex="1">
+        <mxCell id="iyyHeRbHeA1ESX64Fu_m-59" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;" value="&lt;b&gt;Cloudflare DNS&lt;/b&gt;&lt;br/&gt;api-staging.comprobify.com&lt;br/&gt;A record to DO droplet, proxy on" vertex="1">
           <mxGeometry height="85" width="210" x="300" y="185" as="geometry" />
         </mxCell>
-        <mxCell id="iyyHeRbHeA1ESX64Fu_m-60" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Render — comprobify-staging&lt;/b&gt;&lt;br&gt;Docker · Node.js / Express&lt;br&gt;Branch: staging · Port auto assigned" vertex="1">
+        <mxCell id="iyyHeRbHeA1ESX64Fu_m-60" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;DigitalOcean Droplet&lt;/b&gt;&lt;br&gt;Caddy (TLS, reverse proxy) → api container&lt;br&gt;Docker Compose · Branch: staging *" vertex="1">
           <mxGeometry height="85" width="230" x="590" y="185" as="geometry" />
         </mxCell>
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-61" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Neon&lt;/b&gt;&lt;br/&gt;PostgreSQL 16&lt;br/&gt;schemas: public + sandbox" vertex="1">
@@ -56,16 +56,16 @@
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-67" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#24292e;" value="&lt;b&gt;GitHub&lt;/b&gt;&lt;br/&gt;comprobify repo&lt;br/&gt;branches: main / staging" vertex="1">
           <mxGeometry height="80" width="170" x="270" y="560" as="geometry" />
         </mxCell>
-        <mxCell id="iyyHeRbHeA1ESX64Fu_m-68" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#24292e;align=left;spacingLeft=10;fontSize=10;" value="&lt;b&gt;GitHub Actions&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;release-staging.yml — tag vX.Y.Z  →  fast-forward staging branch&lt;br/&gt;deploy-staging.yml — push to staging  →  Render deploy hook&lt;br/&gt;docs.yml — push to main  →  wrangler deploy to Cloudflare Pages" vertex="1">
+        <mxCell id="iyyHeRbHeA1ESX64Fu_m-68" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#24292e;align=left;spacingLeft=10;fontSize=10;" value="&lt;b&gt;GitHub Actions&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;release-staging.yml — tag vX.Y.Z  →  fast-forward staging branch&lt;br/&gt;deploy-staging.yml — push to staging  →  build+push GHCR, SSH deploy&lt;br/&gt;docs.yml — push to main  →  wrangler deploy to Cloudflare Pages" vertex="1">
           <mxGeometry height="110" width="320" x="520" y="535" as="geometry" />
         </mxCell>
-        <mxCell id="render-cron-node" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" value="&lt;b&gt;Render Cron Job&lt;/b&gt;&lt;br/&gt;/v1/admin/jobs/notifications (5 min)&lt;br/&gt;/v1/admin/jobs/subscriptions (daily)&lt;br/&gt;/v1/admin/jobs/quota (daily)&lt;br/&gt;/v1/admin/jobs/queue-reconciliation (2 min)" vertex="1">
-          <mxGeometry height="95" width="190" x="60" y="330" as="geometry" />
+        <mxCell id="render-cron-node" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" value="&lt;b&gt;Droplet cron.d *&lt;/b&gt;&lt;br/&gt;docker compose exec into api container&lt;br/&gt;/v1/admin/jobs/notifications (5 min)&lt;br/&gt;/v1/admin/jobs/subscriptions (daily)&lt;br/&gt;/v1/admin/jobs/quota (daily)&lt;br/&gt;/v1/admin/jobs/queue-reconciliation (hourly)" vertex="1">
+          <mxGeometry height="112" width="190" x="60" y="313" as="geometry" />
         </mxCell>
         <mxCell id="rabbitmq-node" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;CloudAMQP — shared-broker&lt;/b&gt;&lt;br/&gt;RabbitMQ · AWS us-east-1&lt;br/&gt;queues: sri.send / sri.authorize" vertex="1">
           <mxGeometry height="75" width="220" x="590" y="335" as="geometry" />
         </mxCell>
-        <mxCell id="worker-node" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Render — comprobify-staging-sri-worker&lt;/b&gt;&lt;br&gt;Docker · Background Worker&lt;br&gt;Branch: staging · workers/sri-worker.js&lt;br&gt;only process that calls SRI" vertex="1">
+        <mxCell id="worker-node" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;DigitalOcean Droplet — worker container *&lt;/b&gt;&lt;br&gt;Same droplet as api, own container&lt;br&gt;Docker Compose · workers/worker.js&lt;br&gt;only process that calls SRI" vertex="1">
           <mxGeometry height="90" width="240" x="870" y="330" as="geometry" />
         </mxCell>
         <mxCell id="edge-api-rabbitmq" edge="1" parent="1" source="iyyHeRbHeA1ESX64Fu_m-60" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="rabbitmq-node" value="publish (send/authorize, 202)">
@@ -153,7 +153,7 @@
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-77" edge="1" parent="1" source="iyyHeRbHeA1ESX64Fu_m-67" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="iyyHeRbHeA1ESX64Fu_m-68" value="triggers">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="iyyHeRbHeA1ESX64Fu_m-78" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.35;exitY=0;exitDx=0;exitDy=0;entryX=0.35;entryY=1;entryDx=0;entryDy=0;" value="deploy hook">
+        <mxCell id="iyyHeRbHeA1ESX64Fu_m-78" edge="1" parent="1" style="edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.35;exitY=0;exitDx=0;exitDy=0;entryX=0.35;entryY=1;entryDx=0;entryDy=0;" value="build → GHCR → SSH deploy">
           <mxGeometry relative="1" x="-0.1203" as="geometry">
             <mxPoint as="offset" />
             <mxPoint x="580" y="535" as="sourcePoint" />
@@ -173,6 +173,9 @@
         </mxCell>
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-81" parent="1" style="text;html=1;strokeColor=#cccccc;fillColor=#ffffff;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=10;spacingLeft=8;" value="&lt;b&gt;Legend&lt;/b&gt;   ─── request / data flow     - - -  async / background" vertex="1">
           <mxGeometry height="36" width="370" x="60" y="710" as="geometry" />
+        </mxCell>
+        <mxCell id="do-droplet-footnote" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=10;fontStyle=2;" value="* All three marked boxes (Caddy+api, worker, cron.d) run on the same single DigitalOcean droplet (comprobify-staging) - shown separately here for clarity, not separate machines. See docs/terraform-digitalocean-setup.md." vertex="1">
+          <mxGeometry height="30" width="800" x="60" y="750" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

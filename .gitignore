@@ -10,3 +10,15 @@ cert/token.p12
 
 docs/site/.vitepress/dist
 docs/site/.vitepress/cache
+
+# Terraform
+# .terraform.lock.hcl is intentionally NOT ignored — it pins provider versions/checksums
+# and must be committed so local runs and CI always resolve the same providers.
+terraform/**/.terraform/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
+terraform/**/crash.log
+terraform/**/override.tf
+terraform/**/override.tf.json
+terraform/**/*_override.tf
+terraform/**/*_override.tf.json

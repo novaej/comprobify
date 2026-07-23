@@ -30,6 +30,6 @@ jobs:
 
       - uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          apiToken: ${{ secrets.DOCS_CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.DOCS_CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy docs/site/.vitepress/dist --project-name=comprobify-docs --branch=main

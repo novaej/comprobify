@@ -10,9 +10,15 @@ class Server {
     this.app = express();
     this.port = config.port;
 
-    // Trust the first proxy (Cloudflare / Render's load balancer) so that
-    // req.ip reflects the real client IP for IP-based rate limiting.
-    this.app.set('trust proxy', 1);
+    // Trust exactly 2 hops: Cloudflare, then Caddy (the droplet's reverse proxy in
+    // front of this container - see deploy/docker-compose.yml) - so req.ip reflects
+    // the real client IP for IP-based rate limiting. Was `1` when Render's load
+    // balancer was the only hop; adminLimiter/registrationLimiter in rate-limit.js
+    // key purely off req.ip with no fallback, so getting this wrong silently pools
+    // all traffic into one rate-limit bucket instead of limiting per-client. If the
+    // proxy chain ever changes again, verify by logging req.ip in staging and
+    // confirming it shows real external client IPs, not an internal/edge address.
+    this.app.set('trust proxy', 2);
 
     this.middlewares();
     this.routes();
