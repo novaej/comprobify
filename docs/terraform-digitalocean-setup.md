@@ -626,7 +626,9 @@ Two workflows, gated by path so neither triggers the other.
 
 Full file lives in the repo. Two design points worth calling out, both easy to get wrong:
 
-**Credentials are repository secrets, not GitHub Environment secrets.** GitHub only grants a job access to an Environment's secrets if that job also declares `environment: <name>` — which also means that Environment's protection rules (like a required reviewer) apply to that job. If `DO_TOKEN`/`CLOUDFLARE_TOKEN`/`SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY` lived on an Environment and `plan` declared it too (to get the secrets), a required-reviewer rule would block `plan` from running at all — meaning you'd have to approve blind, before ever seeing what the plan would actually do. Keeping these as plain repository secrets (Settings → Secrets and variables → Actions → Repository secrets) lets `plan` run freely on every push, while `apply` alone opts into the approval gate.
+**Credentials are repository secrets, not GitHub Environment secrets.** GitHub only grants a job access to an Environment's secrets if that job also declares `environment: <name>` — which also means that Environment's protection rules (like a required reviewer) apply to that job. If `TERRAFORM_DO_TOKEN`/`TERRAFORM_CLOUDFLARE_TOKEN`/`TERRAFORM_SPACES_ACCESS_KEY_ID`/`TERRAFORM_SPACES_SECRET_ACCESS_KEY` lived on an Environment and `plan` declared it too (to get the secrets), a required-reviewer rule would block `plan` from running at all — meaning you'd have to approve blind, before ever seeing what the plan would actually do. Keeping these as plain repository secrets (Settings → Secrets and variables → Actions → Repository secrets) lets `plan` run freely on every push, while `apply` alone opts into the approval gate.
+
+**Names are prefixed `TERRAFORM_` to disambiguate from other same-purpose-sounding secrets in this repo.** `docs.yml` (the separate docs-site deploy workflow) has its own, unrelated `DOCS_CLOUDFLARE_API_TOKEN`/`DOCS_CLOUDFLARE_ACCOUNT_ID` pair for publishing to Cloudflare Pages — without a prefix on both, two differently-scoped Cloudflare credentials named the same thing would be impossible to tell apart at a glance in the Secrets list.
 
 **`apply` uses its own `staging-infra` Environment, deliberately not the `staging` one `deploy-staging.yml` uses.** `staging-infra` holds no secrets of its own — it exists purely so a required-reviewer rule can be attached to it (repo Settings → Environments → `staging-infra` → add yourself as a required reviewer) without that rule also gating every routine app deploy, which shares the `staging` Environment name for an unrelated reason (its own app secrets/variables).
 
@@ -647,14 +649,14 @@ jobs:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
       - run: terraform -chdir=terraform/environments/staging plan
         env:
-          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+          TF_VAR_do_token: ${{ secrets.TERRAFORM_DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.TERRAFORM_CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 
   apply:
     needs: plan
@@ -667,14 +669,14 @@ jobs:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
       - run: terraform -chdir=terraform/environments/staging apply -auto-approve
         env:
-          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+          TF_VAR_do_token: ${{ secrets.TERRAFORM_DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.TERRAFORM_CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 ```
 
 Note both `init` steps also need the Spaces credentials, not just `plan`/`apply` — `init` is what actually connects to the remote state backend.

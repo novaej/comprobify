@@ -4,15 +4,21 @@ name: Terraform
 # deploy-staging.yml/deploy-production.yml (those only ship application code, never touch
 # Terraform). See docs/terraform-digitalocean-setup.md's "CI/CD (GitHub Actions)" section.
 #
-# Credentials (DO_TOKEN, CLOUDFLARE_TOKEN, SPACES_ACCESS_KEY_ID, SPACES_SECRET_ACCESS_KEY)
-# are REPOSITORY secrets, not scoped to any GitHub Environment - deliberately, so `plan`
-# can run freely and show its output without needing prior approval. `staging-infra` is
-# an otherwise-empty GitHub Environment that only exists so `apply` can be gated behind
-# it: add a required-reviewer rule there (repo Settings -> Environments -> staging-infra)
-# and `apply` needs a manual approval click, after reading the plan output in this run's
-# logs, before it actually touches infrastructure. Deliberately a different environment
-# name than the `staging` one deploy-staging.yml uses - a reviewer rule here must not also
-# gate every routine app deploy.
+# Credentials (TERRAFORM_DO_TOKEN, TERRAFORM_CLOUDFLARE_TOKEN,
+# TERRAFORM_SPACES_ACCESS_KEY_ID, TERRAFORM_SPACES_SECRET_ACCESS_KEY) are REPOSITORY
+# secrets, not scoped to any GitHub Environment - deliberately, so `plan` can run freely
+# and show its output without needing prior approval. `staging-infra` is an
+# otherwise-empty GitHub Environment that only exists so `apply` can be gated behind it:
+# add a required-reviewer rule there (repo Settings -> Environments -> staging-infra) and
+# `apply` needs a manual approval click, after reading the plan output in this run's logs,
+# before it actually touches infrastructure. Deliberately a different environment name
+# than the `staging` one deploy-staging.yml uses - a reviewer rule here must not also gate
+# every routine app deploy.
+#
+# The TERRAFORM_ prefix (like docs.yml's DOCS_ prefix) exists because this repo also holds
+# an unrelated CLOUDFLARE_API_TOKEN/CLOUDFLARE_ACCOUNT_ID pair for the docs site deploy -
+# without the prefix, two same-named-but-different-scope Cloudflare tokens would be
+# impossible to tell apart at a glance.
 #
 # Production's job pair isn't here yet - terraform/environments/production doesn't exist.
 # Add a near-identical plan/apply pair pointed at it (environment: production-infra) once
@@ -34,18 +40,18 @@ jobs:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
       - run: terraform -chdir=terraform/environments/staging plan
         env:
-          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+          TF_VAR_do_token: ${{ secrets.TERRAFORM_DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.TERRAFORM_CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 
   apply:
     needs: plan
-    environment: staging-infra
+    environment: staging-infra   # empty of secrets - exists only for the optional reviewer gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,11 +60,11 @@ jobs:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
       - run: terraform -chdir=terraform/environments/staging apply -auto-approve
         env:
-          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+          TF_VAR_do_token: ${{ secrets.TERRAFORM_DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.TERRAFORM_CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
