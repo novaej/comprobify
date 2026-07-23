@@ -524,6 +524,7 @@ All variables are required unless marked optional.
 | `PORT` | No | HTTP port (default `8080`) |
 | `APP_ENV` | Yes | `staging` or `production`. Controls SRI endpoint routing — staging always uses the SRI test endpoint; production uses the production endpoint for issuers with `sandbox=false`. Default: `staging`. |
 | `APP_BASE_URL` | Yes | Public base URL of this API (e.g. `https://api.yourdomain.com`). Used as the base for verification email links when no per-tenant `verificationRedirectUrl` is set. |
+| `DOCS_BASE_URL` | No | Base URL for the public error-code docs site (e.g. `https://docs.yourdomain.com`). When set, every RFC 7807 error response's `type` field links to `{DOCS_BASE_URL}/errors/{slug}` (`src/middleware/error-handler.js`); when unset, `type` falls back to `about:blank` per the RFC 7807 default. |
 | `VERIFICATION_TOKEN_TTL_HOURS` | No | Email verification token lifetime in hours (default `24`). |
 | `DB_HOST` | Yes | PostgreSQL host |
 | `DB_PORT` | No | PostgreSQL port (default `5432`) |
@@ -533,24 +534,36 @@ All variables are required unless marked optional.
 | `DB_SSL` | Yes | `true` to enable SSL (required in production) |
 | `ENCRYPTION_KEY` | Yes | 64-character hex string — AES-256-GCM key for private key encryption |
 | `ADMIN_SECRET` | Yes | 64-character hex string — protects all `/v1/admin/*` endpoints |
+| `SRI_TEST_BASE_URL` | No | SRI test SOAP endpoint base (default `https://celcer.sri.gob.ec/comprobantes-electronicos-ws`) — override only if SRI changes it |
+| `SRI_PROD_BASE_URL` | No | SRI production SOAP endpoint base (default `https://cel.sri.gob.ec/comprobantes-electronicos-ws`) — override only if SRI changes it |
 | `EMAIL_PROVIDER` | No | Email provider (default `mailgun`; only `mailgun` supported today) |
 | `EMAIL_FROM` | No | Bare sender email address for all non-invoice transactional emails, e.g. `notificaciones@mg.yourdomain.com`. Display name is hardcoded as `Comprobify <EMAIL_FROM>`. |
 | `EMAIL_FROM_DOCUMENTS` | No | Optional separate bare sender address for invoice/document emails only, e.g. `comprobantes@mg.yourdomain.com`. Display name is built dynamically as `{Issuer Business Name} via Comprobify <EMAIL_FROM_DOCUMENTS>`. Falls back to `EMAIL_FROM` when unset. |
 | `MAILGUN_API_KEY` | No | Mailgun private API key |
 | `MAILGUN_DOMAIN` | No | Mailgun sending domain, e.g. `mg.yourdomain.com` |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | No | From Mailgun dashboard → Sending → Webhooks → Webhook signing key |
+| `RATE_LIMIT_WINDOW_MS` | No | Rate limiter window in milliseconds (default `60000`) |
+| `RATE_LIMIT_MAX` | No | Max requests per window per API key on write endpoints (default `60`) — see `src/middleware/rate-limit.js` for how this combines with tier-aware limits |
 | `SENTRY_DSN` | No | Sentry project DSN — enables error monitoring (`@sentry/node`). Leave unset to disable; the client becomes a no-op and nothing is transmitted. Set independently per environment — staging and production should point at the same Sentry project but report distinct `environment` tags (derived from `APP_ENV`). |
 | `BANK_TRANSFER_BANK_NAME` | No | Returned in the subscription-creation response (`POST /v1/tenants/promote` with `tier`, or admin's Create Subscription) so a tenant knows where to send the SPI transfer. Display text only, not a secret. |
 | `BANK_TRANSFER_ACCOUNT_TYPE` | No | e.g. `AHORROS`, `CORRIENTE` |
 | `BANK_TRANSFER_ACCOUNT_NUMBER` | No | |
 | `BANK_TRANSFER_ACCOUNT_HOLDER` | No | |
 | `BANK_TRANSFER_IDENTIFICATION` | No | Account holder's RUC/cédula |
+| `ADMIN_NOTIFICATION_EMAIL` | Yes | Where the operator gets notified that a tenant uploaded payment proof needing review. Without it, proof submissions raise zero notification to anyone — discoverable only by manually polling the admin payments list. Also the fallback source for the `{{soporte.email}}` legal-document token when unset (see `OPERATOR_EMAIL` below and CLAUDE.md's "Legal documents" entry). |
+| `OPERATOR_NAME` | No | Operator's legal business name — substituted into published legal document templates as `{{operador.nombre}}`. Required before calling `POST /v1/admin/agreements`, not validated at startup since no other API path touches it. |
+| `OPERATOR_RUC` | No | Operator's RUC — substituted as `{{operador.ruc}}`. Same "required before publishing, not at startup" rule as `OPERATOR_NAME`. |
+| `OPERATOR_EMAIL` | No | Operator's contact email — substituted as `{{operador.email}}` (used only in the DPA's "Encargado" clause) and as the fallback for `{{soporte.email}}` when `ADMIN_NOTIFICATION_EMAIL` is unset. |
+| `OPERATOR_ADDRESS` | No | Operator's legal domicile — substituted as `{{operador.domicilio}}`. Defaults to `"Domicilio disponible previa solicitud razonable"` if unset, so a publish never bakes in a blank address. |
+| `IVA_RATE` | No | Ecuador's current IVA (VAT) rate as a decimal, applied to subscription pricing (default `0.15`). Kept as an env var, not hardcoded, since Ecuador has changed this rate more than once — a rate change should be a config update + restart, never a code change. |
 | `RABBITMQ_URL` | Yes | AMQP connection string (e.g. from CloudAMQP), scoped to a dedicated vhost per environment. Required by both the API (publisher) and `workers/worker.js` (consumer) — without it the async SRI send/authorize pipeline can never dispatch a queued document. See "Background worker" below. |
 | `RABBITMQ_SRI_EXCHANGE` | No | Name of the durable direct exchange used for SRI dispatch (default `sri.direct`) |
 | `QUEUE_RECONCILE_SEND_STALE_MINUTES` | No | Minutes before an unconfirmed `PENDING_SEND` dispatch is considered stale and re-published (default `5`) |
 | `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES` | No | Minimum age of a `RECEIVED` document before its first authorize-check is published (default `5`) |
 | `QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES` | No | Minutes before an unconfirmed authorize-check dispatch is considered stale and re-published (default `5`) |
+| `QUEUE_RECONCILE_EFFECT_STALE_MINUTES` | No | Stale-dispatch threshold, in minutes, for every `pending_effects` row type except SRI authorize checks, which use `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES`/`QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES` instead (default `5`) |
 | `QUEUE_RECONCILE_BATCH_LIMIT` | No | Max rows processed per schema per reconciliation sweep (default `100`) |
+| `PENDING_EFFECTS_MAX_ATTEMPTS` | No | Caps retries for a `pending_effects` row whose handler keeps throwing — past this many attempts it's marked `FAILED` instead of retried again (default `5`, mirrors `webhook_deliveries`' 3-attempt cap) |
 
 > **Issuer-specific config** (RUC, branch code, issue point, SRI environment, certificate) is stored per-issuer in the `issuers` database table via the Admin API. This enables multiple issuers to be configured independently without changing environment variables.
 

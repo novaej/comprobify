@@ -410,16 +410,18 @@ Split, using `docs/deployment.md`'s "Environment variables" table as the canonic
 
 | GitHub **Secrets** | GitHub **Variables** |
 |---|---|
-| `ENCRYPTION_KEY` | `APP_ENV` |
-| `ADMIN_SECRET` | `APP_BASE_URL` |
-| `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` (kept together as one group for simplicity, even though a couple of them aren't sensitive alone) | `PORT`, `DB_SSL` |
+| `ENCRYPTION_KEY` | `APP_ENV`, `APP_BASE_URL`, `DOCS_BASE_URL` |
+| `ADMIN_SECRET` | `PORT`, `DB_SSL` |
+| `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` (kept together as one group for simplicity, even though a couple of them aren't sensitive alone) | `SRI_TEST_BASE_URL`, `SRI_PROD_BASE_URL` (only needed if overriding the defaults) |
 | `MAILGUN_API_KEY` | `EMAIL_PROVIDER`, `EMAIL_FROM`, `EMAIL_FROM_DOCUMENTS`, `MAILGUN_DOMAIN` |
-| `MAILGUN_WEBHOOK_SIGNING_KEY` | — |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` | `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX` (only needed if overriding the defaults) |
 | `RABBITMQ_URL` (embeds credentials) | `RABBITMQ_SRI_EXCHANGE` |
-| `SENTRY_DSN` (not catastrophic if leaked, but conventionally kept private — a leaked DSN lets someone spam fake events into your project) | `VERIFICATION_TOKEN_TTL_HOURS`, all four `QUEUE_RECONCILE_*` tuning knobs |
+| `SENTRY_DSN` (not catastrophic if leaked, but conventionally kept private — a leaked DSN lets someone spam fake events into your project) | `VERIFICATION_TOKEN_TTL_HOURS`, all five `QUEUE_RECONCILE_*` tuning knobs, `PENDING_EFFECTS_MAX_ATTEMPTS` |
 | — | `BANK_TRANSFER_BANK_NAME` / `ACCOUNT_TYPE` / `ACCOUNT_NUMBER` / `ACCOUNT_HOLDER` / `IDENTIFICATION` — `deployment.md` already calls these "Display text only, not a secret" |
+| — | `ADMIN_NOTIFICATION_EMAIL`, `OPERATOR_NAME`, `OPERATOR_RUC`, `OPERATOR_EMAIL`, `OPERATOR_ADDRESS` — an email address and public business-registry identity info, not credentials |
+| — | `IVA_RATE` — **must actually be set, not left blank.** Unlike every other var here, `config/index.js` reads it with `!== undefined` instead of `||` for its default, so an empty string (an unset GitHub Variable rendering as `""`) becomes `parseFloat('')` = `NaN`, silently corrupting every tax/pricing calculation rather than falling back safely. Set it to `0.15` to match the code's own default. |
 
-Both stores are scoped per GitHub Environment (`staging`/`production`) — one place per environment, two tabs (Secrets / Variables) within it.
+Both stores are scoped per GitHub Environment (`staging`/`production`) — one place per environment, two tabs (Secrets / Variables) within it. `SRI_TEST_BASE_URL`/`SRI_PROD_BASE_URL`/`RATE_LIMIT_WINDOW_MS`/`RATE_LIMIT_MAX` are genuinely optional — their code defaults are already correct, so it's fine to leave those four Variables unset entirely (an empty override for these safely falls back via `||`, unlike `IVA_RATE`) rather than adding them to the `.env` heredoc below.
 
 On every deploy, the CD workflow's SSH step writes the full set into `/opt/comprobify/.env` on the droplet — overwritten each run, so the file always reflects whatever's currently in GitHub:
 
@@ -443,6 +445,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             APP_ENV=${{ vars.APP_ENV }}
             PORT=${{ vars.PORT }}
             APP_BASE_URL=${{ vars.APP_BASE_URL }}
+            DOCS_BASE_URL=${{ vars.DOCS_BASE_URL }}
             VERIFICATION_TOKEN_TTL_HOURS=${{ vars.VERIFICATION_TOKEN_TTL_HOURS }}
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=${{ secrets.DB_PORT }}
@@ -464,12 +467,20 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             BANK_TRANSFER_ACCOUNT_NUMBER=${{ vars.BANK_TRANSFER_ACCOUNT_NUMBER }}
             BANK_TRANSFER_ACCOUNT_HOLDER=${{ vars.BANK_TRANSFER_ACCOUNT_HOLDER }}
             BANK_TRANSFER_IDENTIFICATION=${{ vars.BANK_TRANSFER_IDENTIFICATION }}
+            ADMIN_NOTIFICATION_EMAIL=${{ vars.ADMIN_NOTIFICATION_EMAIL }}
+            OPERATOR_NAME=${{ vars.OPERATOR_NAME }}
+            OPERATOR_RUC=${{ vars.OPERATOR_RUC }}
+            OPERATOR_EMAIL=${{ vars.OPERATOR_EMAIL }}
+            OPERATOR_ADDRESS=${{ vars.OPERATOR_ADDRESS }}
+            IVA_RATE=${{ vars.IVA_RATE }}
             RABBITMQ_URL=${{ secrets.RABBITMQ_URL }}
             RABBITMQ_SRI_EXCHANGE=${{ vars.RABBITMQ_SRI_EXCHANGE }}
             QUEUE_RECONCILE_SEND_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_SEND_STALE_MINUTES }}
             QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES=${{ vars.QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES }}
             QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES }}
+            QUEUE_RECONCILE_EFFECT_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_EFFECT_STALE_MINUTES }}
             QUEUE_RECONCILE_BATCH_LIMIT=${{ vars.QUEUE_RECONCILE_BATCH_LIMIT }}
+            PENDING_EFFECTS_MAX_ATTEMPTS=${{ vars.PENDING_EFFECTS_MAX_ATTEMPTS }}
             EOF
             chmod 600 /opt/comprobify/.env
             cd /opt/comprobify
