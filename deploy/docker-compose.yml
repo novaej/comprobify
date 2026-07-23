@@ -1,0 +1,33 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  api:
+    image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    command: node app.js
+    expose:
+      - "8080"
+    mem_limit: 300m
+
+  worker:
+    image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    command: node workers/worker.js
+    mem_limit: 150m
+
+volumes:
+  caddy_data:
+  caddy_config:

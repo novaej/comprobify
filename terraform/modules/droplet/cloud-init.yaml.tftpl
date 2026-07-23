@@ -1,0 +1,34 @@
+#cloud-config
+write_files:
+  - path: /etc/comprobify-environment
+    content: |
+      ${environment}
+  # Pinned to "noble" (Ubuntu 24.04) since image_slug is fixed to ubuntu-24-04-x64 -
+  # update both together if the base image ever changes.
+  - path: /etc/apt/sources.list.d/docker.list
+    content: |
+      deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable
+
+runcmd:
+  - mkdir -p /opt/comprobify
+  # All package installation happens here in runcmd, not via cloud-init's own
+  # package_update/packages directives - those can't be given a lock-wait timeout, so a
+  # background apt-daily timer grabbing the dpkg lock right after boot can make that
+  # module fail outright. Every apt-get call below uses DPkg::Lock::Timeout instead, so
+  # it waits out a lock rather than failing if one is briefly held elsewhere.
+  - apt-get -o DPkg::Lock::Timeout=120 update
+  - apt-get -o DPkg::Lock::Timeout=120 install -y ca-certificates curl
+  - install -m 0755 -d /etc/apt/keyrings
+  # Docker Engine + Compose plugin from Docker's official apt repo - not the
+  # get.docker.com convenience script, which Docker itself advises against for
+  # anything beyond quick local testing.
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - apt-get -o DPkg::Lock::Timeout=120 update
+  - apt-get -o DPkg::Lock::Timeout=120 install -y fail2ban unattended-upgrades docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - systemctl enable --now fail2ban
+  - dpkg-reconfigure -f noninteractive unattended-upgrades
+  - sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
+  - sed -i 's/#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+  - systemctl restart sshd
+  - systemctl enable --now docker
