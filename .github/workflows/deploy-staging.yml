@@ -63,10 +63,7 @@ jobs:
           script: |
             cat > /opt/comprobify/.env <<'EOF'
             APP_ENV=${{ vars.APP_ENV }}
-            PORT=${{ vars.PORT }}
             APP_BASE_URL=${{ vars.APP_BASE_URL }}
-            DOCS_BASE_URL=${{ vars.DOCS_BASE_URL }}
-            VERIFICATION_TOKEN_TTL_HOURS=${{ vars.VERIFICATION_TOKEN_TTL_HOURS }}
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=${{ secrets.DB_PORT }}
             DB_NAME=${{ secrets.DB_NAME }}
@@ -75,9 +72,7 @@ jobs:
             DB_SSL=${{ vars.DB_SSL }}
             ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
             ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
-            EMAIL_PROVIDER=${{ vars.EMAIL_PROVIDER }}
             EMAIL_FROM=${{ vars.EMAIL_FROM }}
-            EMAIL_FROM_DOCUMENTS=${{ vars.EMAIL_FROM_DOCUMENTS }}
             MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}
             MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN }}
             MAILGUN_WEBHOOK_SIGNING_KEY=${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
@@ -92,15 +87,7 @@ jobs:
             OPERATOR_RUC=${{ vars.OPERATOR_RUC }}
             OPERATOR_EMAIL=${{ vars.OPERATOR_EMAIL }}
             OPERATOR_ADDRESS=${{ vars.OPERATOR_ADDRESS }}
-            IVA_RATE=${{ vars.IVA_RATE }}
             RABBITMQ_URL=${{ secrets.RABBITMQ_URL }}
-            RABBITMQ_SRI_EXCHANGE=${{ vars.RABBITMQ_SRI_EXCHANGE }}
-            QUEUE_RECONCILE_SEND_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_SEND_STALE_MINUTES }}
-            QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES=${{ vars.QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES }}
-            QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES }}
-            QUEUE_RECONCILE_EFFECT_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_EFFECT_STALE_MINUTES }}
-            QUEUE_RECONCILE_BATCH_LIMIT=${{ vars.QUEUE_RECONCILE_BATCH_LIMIT }}
-            PENDING_EFFECTS_MAX_ATTEMPTS=${{ vars.PENDING_EFFECTS_MAX_ATTEMPTS }}
             EOF
             chmod 600 /opt/comprobify/.env
             cd /opt/comprobify

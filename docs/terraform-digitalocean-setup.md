@@ -399,29 +399,62 @@ api-staging.comprobify.com {
 
 Caddy requests its own Let's Encrypt certificate automatically on first request (no config needed) — this works fine sitting behind Cloudflare's proxy since Cloudflare forwards the ACME HTTP-01 challenge through on port 80, which the firewall already allows from Cloudflare's IP ranges.
 
-### Env vars — secrets vs. plain config
+### Env vars — secrets vs. plain config, and what actually belongs in `.env`
 
 Not every required env var is actually a *secret*. GitHub Actions has two separate per-Environment stores:
 
 - **Secrets** — encrypted, write-only after saving (you can overwrite but never view the value again in the UI), masked as `***` in workflow logs. Use for anything credential-shaped.
 - **Variables** (`vars` context) — plain text, visible and editable in the UI, shown unmasked in logs. Use for everything else — there's no benefit to hiding a value like `APP_ENV=staging`, and a real cost: you can't glance at or tweak a Secret without re-typing it blind.
 
-Split, using `docs/deployment.md`'s "Environment variables" table as the canonical list of what the application needs:
+A second, separate decision: not every var `docs/deployment.md`'s table lists needs to be in GitHub or the `.env` file **at all**. Several have a code-level default in `src/config/index.js` that's already the objectively correct value for any environment — for those, omit them entirely and let the code's own default apply, rather than adding noise for zero benefit. **One deliberate exception: `APP_ENV` stays explicit even though `staging`'s value happens to match its own default** — production's correct value (`production`) does *not* match the code's default (`staging`), so a missing `APP_ENV` on the production droplet would silently run as staging with no error at all. A var whose correct value differs across environments needs to stay explicit even in the one environment where it happens to coincide with the default.
+
+Full reference — every var the app reads, whether it needs to be set explicitly, and why:
+
+| Variable | Set explicitly? | Why |
+|---|---|---|
+| `APP_ENV` | **Yes** | Correct value differs per environment (`staging`/`production`) — see the exception above |
+| `APP_BASE_URL` | **Yes** | No default at all |
+| `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` | **Yes** | Have defaults (`localhost`, `5432`, `comprobify_local`, `postgres`, `''`) but they point at a local dev Postgres that doesn't exist here — not usable defaults for a real deployment |
+| `DB_SSL` | **Yes** | Must be `true` against Neon; default is effectively "off" |
+| `ENCRYPTION_KEY` | **Yes** | No default |
+| `ADMIN_SECRET` | **Yes** | No default |
+| `EMAIL_FROM` | **Yes** | No default, and email is enabled by default (`EMAIL_PROVIDER` defaults to `mailgun`) |
+| `EMAIL_FROM_DOCUMENTS` | No | Falls back to `EMAIL_FROM` when unset — a legitimate, often-desired default (same sender for everything). Only set if you want document emails from a different address. |
+| `MAILGUN_API_KEY` | **Yes** | No default, required while email is enabled |
+| `MAILGUN_DOMAIN` | **Yes** | No default, required while email is enabled |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` | **Yes** | No default, required while email is enabled |
+| `SENTRY_DSN` | **Yes** (recommended) | Default is silently *disabled monitoring* — not a fatal gap like a missing DB credential, but not something you'd actually want in a real deployment either |
+| `BANK_TRANSFER_BANK_NAME`/`ACCOUNT_TYPE`/`ACCOUNT_NUMBER`/`ACCOUNT_HOLDER`/`IDENTIFICATION` | **Yes** | No defaults |
+| `ADMIN_NOTIFICATION_EMAIL` | **Yes** | No default; validated as required at startup — the API won't boot without it |
+| `OPERATOR_NAME` / `OPERATOR_RUC` / `OPERATOR_EMAIL` | **Yes** | No default; needed before `POST /v1/admin/agreements` will produce correct legal documents |
+| `OPERATOR_ADDRESS` | **Yes** (recommended) | Has a generic placeholder default (`"Domicilio disponible previa solicitud razonable"`) that won't crash anything, but isn't your actual address |
+| `RABBITMQ_URL` | **Yes** | No default |
+| `PORT` | No | Default `8080` already matches the Dockerfile's `EXPOSE` |
+| `DOCS_BASE_URL` | No | Default `''` just omits the docs link from error responses — harmless; set it once you have a docs site |
+| `VERIFICATION_TOKEN_TTL_HOURS` | No | Default `24` is fine |
+| `EMAIL_PROVIDER` | No | Default `mailgun` is the only supported provider today |
+| `SRI_TEST_BASE_URL` / `SRI_PROD_BASE_URL` | No | Defaults are the real, correct SRI endpoint URLs |
+| `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` | No | Defaults (`60000`, `60`) are reasonable |
+| `RABBITMQ_SRI_EXCHANGE` | No | Default `sri.direct` is fine |
+| `QUEUE_RECONCILE_SEND_STALE_MINUTES` / `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES` / `QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES` / `QUEUE_RECONCILE_EFFECT_STALE_MINUTES` / `QUEUE_RECONCILE_BATCH_LIMIT` | No | Defaults (`5`, `5`, `5`, `5`, `100`) are reasonable |
+| `PENDING_EFFECTS_MAX_ATTEMPTS` | No | Default `5` is fine |
+| `IVA_RATE` | **No — must actually be omitted, not set to an empty value** | Default `0.15` is Ecuador's current correct rate, but this one reads via `!== undefined` instead of `||`, so a *present-but-empty* value (what an unset GitHub Variable renders as, if referenced in the heredoc at all) produces `parseFloat('')` = `NaN` and silently corrupts every tax/pricing calculation. Leaving the variable out of GitHub entirely — so it's genuinely absent from the environment, not empty — is the only safe way to get the correct default. Only add it if you need to override the actual rate. |
+
+If you already created a GitHub Secret/Variable for anything in the "No" rows while we were still figuring this out (`QUEUE_RECONCILE_EFFECT_STALE_MINUTES`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE`, `DOCS_BASE_URL`), it's safe to delete those now — they're unused by the trimmed `.env` heredoc below and won't be referenced by anything.
+
+Split, for the "Yes" rows only:
 
 | GitHub **Secrets** | GitHub **Variables** |
 |---|---|
-| `ENCRYPTION_KEY` | `APP_ENV`, `APP_BASE_URL`, `DOCS_BASE_URL` |
-| `ADMIN_SECRET` | `PORT`, `DB_SSL` |
-| `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` (kept together as one group for simplicity, even though a couple of them aren't sensitive alone) | `SRI_TEST_BASE_URL`, `SRI_PROD_BASE_URL` (only needed if overriding the defaults) |
-| `MAILGUN_API_KEY` | `EMAIL_PROVIDER`, `EMAIL_FROM`, `EMAIL_FROM_DOCUMENTS`, `MAILGUN_DOMAIN` |
-| `MAILGUN_WEBHOOK_SIGNING_KEY` | `RATE_LIMIT_WINDOW_MS`, `RATE_LIMIT_MAX` (only needed if overriding the defaults) |
-| `RABBITMQ_URL` (embeds credentials) | `RABBITMQ_SRI_EXCHANGE` |
-| `SENTRY_DSN` (not catastrophic if leaked, but conventionally kept private — a leaked DSN lets someone spam fake events into your project) | `VERIFICATION_TOKEN_TTL_HOURS`, all five `QUEUE_RECONCILE_*` tuning knobs, `PENDING_EFFECTS_MAX_ATTEMPTS` |
-| — | `BANK_TRANSFER_BANK_NAME` / `ACCOUNT_TYPE` / `ACCOUNT_NUMBER` / `ACCOUNT_HOLDER` / `IDENTIFICATION` — `deployment.md` already calls these "Display text only, not a secret" |
-| — | `ADMIN_NOTIFICATION_EMAIL`, `OPERATOR_NAME`, `OPERATOR_RUC`, `OPERATOR_EMAIL`, `OPERATOR_ADDRESS` — an email address and public business-registry identity info, not credentials |
-| — | `IVA_RATE` — **must actually be set, not left blank.** Unlike every other var here, `config/index.js` reads it with `!== undefined` instead of `||` for its default, so an empty string (an unset GitHub Variable rendering as `""`) becomes `parseFloat('')` = `NaN`, silently corrupting every tax/pricing calculation rather than falling back safely. Set it to `0.15` to match the code's own default. |
+| `ENCRYPTION_KEY` | `APP_ENV`, `APP_BASE_URL` |
+| `ADMIN_SECRET` | `DB_SSL` |
+| `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` (kept together as one group for simplicity, even though a couple of them aren't sensitive alone) | `EMAIL_FROM`, `MAILGUN_DOMAIN` |
+| `MAILGUN_API_KEY` | `BANK_TRANSFER_BANK_NAME` / `ACCOUNT_TYPE` / `ACCOUNT_NUMBER` / `ACCOUNT_HOLDER` / `IDENTIFICATION` — `deployment.md` already calls these "Display text only, not a secret" |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` | `ADMIN_NOTIFICATION_EMAIL`, `OPERATOR_NAME`, `OPERATOR_RUC`, `OPERATOR_EMAIL`, `OPERATOR_ADDRESS` — an email address and public business-registry identity info, not credentials |
+| `RABBITMQ_URL` (embeds credentials) | — |
+| `SENTRY_DSN` (not catastrophic if leaked, but conventionally kept private — a leaked DSN lets someone spam fake events into your project) | — |
 
-Both stores are scoped per GitHub Environment (`staging`/`production`) — one place per environment, two tabs (Secrets / Variables) within it. `SRI_TEST_BASE_URL`/`SRI_PROD_BASE_URL`/`RATE_LIMIT_WINDOW_MS`/`RATE_LIMIT_MAX` are genuinely optional — their code defaults are already correct, so it's fine to leave those four Variables unset entirely (an empty override for these safely falls back via `||`, unlike `IVA_RATE`) rather than adding them to the `.env` heredoc below.
+Both stores are scoped per GitHub Environment (`staging`/`production`) — one place per environment, two tabs (Secrets / Variables) within it.
 
 On every deploy, the CD workflow's SSH step writes the full set into `/opt/comprobify/.env` on the droplet — overwritten each run, so the file always reflects whatever's currently in GitHub:
 
@@ -443,10 +476,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
           script: |
             cat > /opt/comprobify/.env <<'EOF'
             APP_ENV=${{ vars.APP_ENV }}
-            PORT=${{ vars.PORT }}
             APP_BASE_URL=${{ vars.APP_BASE_URL }}
-            DOCS_BASE_URL=${{ vars.DOCS_BASE_URL }}
-            VERIFICATION_TOKEN_TTL_HOURS=${{ vars.VERIFICATION_TOKEN_TTL_HOURS }}
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=${{ secrets.DB_PORT }}
             DB_NAME=${{ secrets.DB_NAME }}
@@ -455,9 +485,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             DB_SSL=${{ vars.DB_SSL }}
             ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
             ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
-            EMAIL_PROVIDER=${{ vars.EMAIL_PROVIDER }}
             EMAIL_FROM=${{ vars.EMAIL_FROM }}
-            EMAIL_FROM_DOCUMENTS=${{ vars.EMAIL_FROM_DOCUMENTS }}
             MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}
             MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN }}
             MAILGUN_WEBHOOK_SIGNING_KEY=${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
@@ -472,15 +500,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             OPERATOR_RUC=${{ vars.OPERATOR_RUC }}
             OPERATOR_EMAIL=${{ vars.OPERATOR_EMAIL }}
             OPERATOR_ADDRESS=${{ vars.OPERATOR_ADDRESS }}
-            IVA_RATE=${{ vars.IVA_RATE }}
             RABBITMQ_URL=${{ secrets.RABBITMQ_URL }}
-            RABBITMQ_SRI_EXCHANGE=${{ vars.RABBITMQ_SRI_EXCHANGE }}
-            QUEUE_RECONCILE_SEND_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_SEND_STALE_MINUTES }}
-            QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES=${{ vars.QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES }}
-            QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES }}
-            QUEUE_RECONCILE_EFFECT_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_EFFECT_STALE_MINUTES }}
-            QUEUE_RECONCILE_BATCH_LIMIT=${{ vars.QUEUE_RECONCILE_BATCH_LIMIT }}
-            PENDING_EFFECTS_MAX_ATTEMPTS=${{ vars.PENDING_EFFECTS_MAX_ATTEMPTS }}
             EOF
             chmod 600 /opt/comprobify/.env
             cd /opt/comprobify
