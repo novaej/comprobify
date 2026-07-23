@@ -1,6 +1,6 @@
 # Terraform + DigitalOcean — Infrastructure Setup
 
-Reference for how the API/worker compute layer is provisioned and deployed on DigitalOcean: droplets managed by Terraform, application code deployed via a separate GitHub Actions CI/CD pipeline. This is the living "how does our infrastructure actually work" document — for the one-time process of moving off a previous host, see `docs/deployment-digitalocean.md`.
+Reference for how the API/worker compute layer is provisioned and deployed on DigitalOcean: droplets managed by Terraform, application code deployed via a separate GitHub Actions CI/CD pipeline. This is the living "how does our infrastructure actually work" document. Staging was originally hosted on Render; `docs/deployment.md` covers what's unaffected by that move (branching strategy, environment variables, migrations, SRI environments).
 
 **What lives on DigitalOcean:** one droplet per environment (`staging`, `production`), each running the `api` and `worker` containers behind a Caddy reverse proxy.
 
@@ -567,6 +567,30 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
 `${{ secrets.* }}` and `${{ vars.* }}` are both substituted client-side by the Actions runner before the script is sent over SSH, so nothing new is exposed beyond what already sits in GitHub — SSH itself is encrypted in transit. `STAGING_DROPLET_IP`/`INFRA_SSH_PRIVATE_KEY` (used to *reach* the droplet) stay as Secrets even though an IP isn't devastating if leaked — connection details to infrastructure are worth keeping to the stricter default.
 
 Rotation, for either kind: update the value in the GitHub Environment, then trigger the deploy workflow (a push, or `workflow_dispatch`) — no manual SSH step to hand-edit a file on the droplet. The one exception is `ENCRYPTION_KEY`, which needs the careful re-encryption dance documented in `deployment.md`'s "Rotating secrets" section — that danger is about the data itself, independent of which platform hosts the app.
+
+---
+
+## Scheduled jobs
+
+The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — see `deployment.md`'s "Scheduled jobs" section for what each one actually does) previously ran as Render Cron Job services. They now run via a system `cron.d` file, written to the droplet by cloud-init:
+
+```
+# terraform/modules/droplet/cloud-init.yaml.tftpl -> /etc/cron.d/comprobify-jobs
+*/5 * * * * cpfydeploy9x cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications 2>&1 | logger -t comprobify-cron
+0 6 * * * cpfydeploy9x cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions 2>&1 | logger -t comprobify-cron
+10 6 * * * cpfydeploy9x cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota 2>&1 | logger -t comprobify-cron
+0 * * * * cpfydeploy9x cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation 2>&1 | logger -t comprobify-cron
+```
+
+**Why `docker compose exec` instead of installing Node on the droplet:** `scripts/run-admin-job.js` has zero npm dependencies — just Node's built-in `fetch` — so rather than installing Node system-wide on the bare host (one more thing to patch and keep current), the cron entries just run it *inside* the already-running `api` container, reusing the exact deployed script version. This also means it automatically picks up `ADMIN_SECRET` from that container's own `.env` — nothing extra to configure. The only env var this needs that the app itself doesn't is `API_BASE_URL` (distinct name from `APP_BASE_URL`, same value) — see the env var reference table above.
+
+**Runs as `cpfydeploy9x`, not root** — consistent with everything else in "SSH access model" above; this account's `docker` group membership is sufficient, no elevated privileges needed.
+
+**Harmless if it fires before the first deploy or during a redeploy** — `docker compose exec` just fails (no `api` container to exec into yet, or briefly mid-restart), logged and ignored; the next scheduled run tries again.
+
+**Monitoring:** `journalctl -t comprobify-cron` on the droplet shows every run's output, tagged for easy filtering — replaces watching the Render Cron Job dashboard.
+
+**If the schedule itself needs to change:** edit `cloud-init.yaml.tftpl`, then recreate the droplet (`user_data` only applies at first boot, same constraint as everything else in cloud-init — see "Day-2 operations" below). Not something you'd expect to do often.
 
 ---
 

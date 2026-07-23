@@ -32,6 +32,21 @@ write_files:
       MaxAuthTries 3
       LoginGraceTime 30
       AllowUsers ${deploy_username}
+  # Replaces the 4 Render Cron Job services (see CLAUDE.md's "Scheduled jobs" /
+  # docs/deployment.md). run-admin-job.js has zero npm dependencies (just Node's
+  # built-in fetch), so it runs via `docker compose exec` inside the already-running
+  # api container instead of needing Node installed on the bare host - it picks up
+  # ADMIN_SECRET automatically from that container's own .env. Runs as
+  # deploy_username, not root - same docker-group access the container itself needs.
+  # Schedules match what Render ran exactly. Harmless no-op if it fires before the
+  # first deploy (api container doesn't exist yet) or during a redeploy.
+  - path: /etc/cron.d/comprobify-jobs
+    permissions: '0644'
+    content: |
+      */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications 2>&1 | logger -t comprobify-cron
+      0 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions 2>&1 | logger -t comprobify-cron
+      10 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota 2>&1 | logger -t comprobify-cron
+      0 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation 2>&1 | logger -t comprobify-cron
 
 runcmd:
   - mkdir -p /opt/comprobify
@@ -42,7 +57,7 @@ runcmd:
   # module fail outright. Every apt-get call below uses DPkg::Lock::Timeout instead, so
   # it waits out a lock rather than failing if one is briefly held elsewhere.
   - apt-get -o DPkg::Lock::Timeout=120 update
-  - apt-get -o DPkg::Lock::Timeout=120 install -y ca-certificates curl
+  - apt-get -o DPkg::Lock::Timeout=120 install -y ca-certificates curl cron
   - install -m 0755 -d /etc/apt/keyrings
   # Docker Engine + Compose plugin from Docker's official apt repo - not the
   # get.docker.com convenience script, which Docker itself advises against for
@@ -58,3 +73,4 @@ runcmd:
   - dpkg-reconfigure -f noninteractive unattended-upgrades
   - systemctl restart ssh
   - systemctl enable --now docker
+  - systemctl enable --now cron

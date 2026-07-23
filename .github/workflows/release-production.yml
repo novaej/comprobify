@@ -1,6 +1,6 @@
 name: Release to Production
 
-# DISABLED — the production Render service, branch, and secrets do not exist yet.
+# DISABLED — the production droplet, branch, and secrets do not exist yet.
 #
 # Promotes a released tag to the `production` branch by fast-forwarding it to
 # the tag the release was published from. Pushing `production` then triggers

@@ -43,6 +43,11 @@ jobs:
           target: /opt/comprobify
           strip_components: 1
 
+      # API_BASE_URL (distinct from APP_BASE_URL, same value) is read only by
+      # scripts/run-admin-job.js, which cron.d/comprobify-jobs on the droplet runs
+      # inside this same api container to trigger the scheduled admin jobs - see
+      # cloud-init.yaml.tftpl and terraform-digitalocean-setup.md's "Scheduled jobs"
+      # section. Not used by the app itself.
       - name: Write env and restart containers
         uses: appleboy/ssh-action@v1
         with:
@@ -53,6 +58,7 @@ jobs:
             cat > /opt/comprobify/.env <<'EOF'
             APP_ENV=${{ vars.APP_ENV }}
             APP_BASE_URL=${{ vars.APP_BASE_URL }}
+            API_BASE_URL=${{ vars.APP_BASE_URL }}
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=${{ secrets.DB_PORT }}
             DB_NAME=${{ secrets.DB_NAME }}

@@ -1,7 +1,8 @@
 // Standalone RabbitMQ consumer process for the pending_effects outbox
 // (ADR-022, formerly workers/sri-worker.js under ADR-019 Phase 1). Started
-// separately from the API (`npm run worker`), deployed as its own Render
-// service. Consumes all three queues (sri.send, sri.authorize, app.effects)
+// separately from the API (`npm run worker`), running as its own container
+// (see deploy/docker-compose.yml) alongside the API on the same droplet.
+// Consumes all three queues (sri.send, sri.authorize, app.effects)
 // on the same shared confirm channel — each gets its own independent
 // per-consumer prefetch window (RabbitMQ's basic.qos with global=false
 // applies per-consumer despite being set on the channel), so a burst of
@@ -71,7 +72,7 @@ async function start() {
       // since it looks alive. Sentry's automatic uncaught-exception capture
       // never sees this (we're catching it ourselves), so it needs an
       // explicit report or this failure mode is invisible everywhere except
-      // Render's console logs.
+      // the container's own logs (`docker compose logs worker`).
       console.error('[worker] failed to register consumers:', err.message);
       Sentry.captureException(err);
     });

@@ -136,10 +136,10 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 **Priority: Medium — blocks running more than one API instance correctly in production**
 
-`src/middleware/rate-limit.js` uses `express-rate-limit`'s default in-memory store. Each Render instance counts requests independently, so running N instances lets a tenant burst to roughly `limit × N` before any single instance throttles them — the counters aren't shared across instances.
+`src/middleware/rate-limit.js` uses `express-rate-limit`'s default in-memory store. Each API instance counts requests independently, so running N instances lets a tenant burst to roughly `limit × N` before any single instance throttles them — the counters aren't shared across instances.
 
 **What:**
-- Swap the store backing `writeLimiter`/`readLimiter` to a shared one (`rate-limit-redis`, backed by a small Redis instance — Render's own Redis add-on or Upstash) so all instances enforce one counter per `keyHash`
+- Swap the store backing `writeLimiter`/`readLimiter` to a shared one (`rate-limit-redis`, backed by a small Redis instance — Upstash, or a Redis container alongside the others on the droplet) so all instances enforce one counter per `keyHash`
 - No change to the limiter logic or tier-based limits themselves — only the store option
 
 **Effort:** Low — one new dependency, one Redis connection, swap the store option in `rate-limit.js`. Must land before scaling the production API to more than one instance.
