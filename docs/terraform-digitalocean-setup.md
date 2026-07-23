@@ -624,7 +624,13 @@ Two workflows, gated by path so neither triggers the other.
 
 ### Infra workflow — `.github/workflows/terraform.yml`
 
-Full file lives in the repo. Three design points worth calling out, all easy to get wrong:
+**Triggers:** a push to `main` that touches anything under `terraform/**`, or manual `workflow_dispatch`. Deliberately `main`, not `staging` — `staging` only moves when `release-staging.yml` fast-forwards it to a version tag (see "Releasing" in `CLAUDE.md`), which is the app's release cadence, not infra's. Tying this workflow to `staging` would mean an infra-only fix (a firewall rule, a droplet resize) has to wait for a full app version release before it can apply. `main` is where infra PRs are actually reviewed and merged, so that review — plus the `staging-infra` Environment approval on `plan`/`apply` above — is the real gate, independent of whether an app release happens to be in flight.
+
+**This does not create or destroy the droplet on every push.** `terraform apply` is idempotent — it diffs the `.tf`/`.tftpl` files against the last-applied state and only touches what actually changed. A `terraform/**` push that doesn't alter any resource's configuration (a comment, a doc reference inside a `.tf` file) produces a "no changes" plan and applies nothing.
+
+**One real exception: a few resource attributes are Terraform "ForceNew," meaning a change destroys and recreates the droplet instead of updating it in place** — `user_data` (the cloud-init script, so any edit to `cloud-init.yaml.tftpl`) and the SSH key's `public_key` (see "Rotating the SSH key" under Day-2 operations, which walks through this exact replacement manually). Pushing a `cloud-init.yaml.tftpl` change to `main` will make the next CI `apply` tear down and rebuild the running droplet — new IP, everything reprovisioned from scratch, requiring `DROPLET_IP` to be updated and the app redeployed same as after a manual `terraform destroy`/`apply` cycle. Always read the `plan` job's output for "must be replaced" before approving `apply` on a change touching this file.
+
+Full file lives in the repo. Three more design points worth calling out, all easy to get wrong:
 
 **`DO_TOKEN`/`CLOUDFLARE_TOKEN` live in the `staging-infra` GitHub Environment (Settings → Environments → `staging-infra` → Environment secrets), unprefixed — same convention `deploy-staging.yml` already uses for `DB_HOST`/`ADMIN_SECRET`/etc: one secret name, a different value per Environment, not a name per environment.** The `comprobify-terraform-staging` and `comprobify-terraform-production` credentials (see the Prerequisites table above) are deliberately separate tokens, never shared, so a leaked staging credential can be revoked without touching production — `staging-infra` holds the staging value, and the not-yet-created `production-infra` Environment will hold the production value under the exact same secret names once that job pair exists.
 
