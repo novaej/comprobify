@@ -463,7 +463,7 @@ Handled automatically by Terraform's `cloudflare_record` resource (part of the s
 - [ ] `APP_BASE_URL` GitHub Variable matches the actual domain
 
 ### 6. GitHub secrets/variables
-- [ ] `DROPLET_IP` / `INFRA_SSH_PRIVATE_KEY` → from `terraform output droplet_ip` and the deploy SSH key — see `docs/terraform-digitalocean-setup.md`
+- [ ] `DROPLET_IP` / `INFRA_SSH_PRIVATE_KEY` → from `terraform output reserved_ip` (**not** `droplet_ip` — the reserved IP is what survives a droplet replacement) and the deploy SSH key — see `docs/terraform-digitalocean-setup.md`'s "Reserved IP" section
 - [ ] `RELEASE_PUSH_TOKEN` → GitHub repository secret (fine-grained PAT with `Contents: Read and write` on this repo)
 
 ### 7. Verify

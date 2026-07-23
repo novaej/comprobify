@@ -25,6 +25,25 @@ resource "digitalocean_droplet" "this" {
   })
 }
 
+# Deliberately NOT created with droplet_id set inline (the resource supports that, but
+# doing so makes this resource implicitly depend on digitalocean_droplet.this). Kept as
+# its own free-standing, region-scoped resource plus a separate
+# digitalocean_reserved_ip_assignment below, so that a droplet replacement (any "ForceNew"
+# attribute change, e.g. user_data/cloud-init edits, or the SSH key rotation flow in
+# terraform-digitalocean-setup.md) only ever touches the assignment, never this resource —
+# the IP itself survives, and only needs re-pointing at the new droplet id, not
+# re-provisioning or re-registering in DNS/GitHub Secrets. Free of charge as long as it
+# stays assigned to a droplet (DigitalOcean only bills a reserved IP while it's
+# unassigned).
+resource "digitalocean_reserved_ip" "this" {
+  region = var.region
+}
+
+resource "digitalocean_reserved_ip_assignment" "this" {
+  ip_address = digitalocean_reserved_ip.this.ip_address
+  droplet_id = digitalocean_droplet.this.id
+}
+
 # Cloudflare's published IPv4 ranges, fetched live instead of hardcoded — avoids the
 # firewall silently going stale if Cloudflare ever changes the list. See
 # https://www.cloudflare.com/ips-v4
@@ -100,7 +119,9 @@ resource "cloudflare_record" "api" {
   zone_id = var.cloudflare_zone_id
   name    = var.subdomain
   type    = "A"
-  content = digitalocean_droplet.this.ipv4_address
+  # The reserved IP, not digitalocean_droplet.this.ipv4_address — this is the whole
+  # point of the reserved IP: a droplet replacement no longer moves this record.
+  content = digitalocean_reserved_ip.this.ip_address
   proxied = true
   ttl     = 1 # required to be 1 ("automatic") when proxied = true
 }

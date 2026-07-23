@@ -236,6 +236,18 @@ resource "digitalocean_droplet" "this" {
   })
 }
 
+# Free-standing, region-scoped — deliberately not created with droplet_id set inline
+# (the resource supports it, but that makes this implicitly depend on the droplet). See
+# "Reserved IP" below for why.
+resource "digitalocean_reserved_ip" "this" {
+  region = var.region
+}
+
+resource "digitalocean_reserved_ip_assignment" "this" {
+  ip_address = digitalocean_reserved_ip.this.ip_address
+  droplet_id = digitalocean_droplet.this.id
+}
+
 # Cloudflare's published IP ranges, fetched live instead of hardcoded — avoids the
 # firewall silently going stale if Cloudflare ever changes the list.
 data "http" "cloudflare_ipv4" {
@@ -287,15 +299,48 @@ resource "cloudflare_record" "api" {
   zone_id = var.cloudflare_zone_id
   name    = var.subdomain          # "api-staging" or "api"
   type    = "A"
-  content = digitalocean_droplet.this.ipv4_address
+  content = digitalocean_reserved_ip.this.ip_address  # not the droplet's own IP — see "Reserved IP" below
   proxied = true
   ttl     = 1                      # required to be 1 ("automatic") when proxied = true
 }
 ```
 
-The DNS record's `content` referencing `digitalocean_droplet.this.ipv4_address` is what makes destroy/recreate cycles (see Day-2 operations below) update DNS automatically in the same `apply` — no manual step, no stale record.
+The DNS record's `content` referencing `digitalocean_reserved_ip.this.ip_address` is what makes destroy/recreate cycles (see Day-2 operations below) keep DNS — and the CD pipeline's `DROPLET_IP` secret — untouched, since the reserved IP doesn't change across a droplet replacement. See "Reserved IP" immediately below for the full reasoning.
 
 **`ssh_public_key` is the literal OpenSSH-format key content (`"ssh-ed25519 AAAA... comprobify-deploy"`), not a path.** An earlier version read it via `file(pathexpand(var.ssh_public_key_path))`, which worked locally but broke the first real CI run — `terraform.yml`'s runner has no `~/.ssh/comprobify_deploy.pub`, since that file only ever existed on whoever generated the key. A public key confers no access by itself (only the private half does), so it's safe to pass as a plain value and commit directly in `terraform.tfvars` — no GitHub secret needed, and it works identically whether Terraform runs on your laptop or in CI.
+
+### Reserved IP — decoupling the public IP from the droplet's lifecycle
+
+A plain `digitalocean_droplet` gets a new public IPv4 address every time it's replaced — not just an explicit `terraform destroy`/`apply`, but also any `apply` touching a "ForceNew" attribute (`user_data`/cloud-init edits, the SSH key rotation flow — see "Day-2 operations" below). Every such replacement used to mean updating the `DROPLET_IP` GitHub Secret by hand and waiting for Cloudflare's DNS record to catch up, or the next deploy would SSH/SCP to a dead IP.
+
+A DigitalOcean **Reserved IP** (`digitalocean_reserved_ip`) fixes this: it's a standalone, region-scoped resource, independent of any droplet, that can be re-pointed at a different droplet at any time. **It's free of charge for as long as it stays assigned to a droplet** — DigitalOcean only bills a reserved IP while it sits unassigned, which never happens here since `digitalocean_reserved_ip_assignment` keeps it attached continuously (including across a replacement — the assignment resource just gets updated to point at the new droplet id in the same `apply`).
+
+It's created **without** `droplet_id` set inline, even though the resource supports that shorthand — setting it inline would make `digitalocean_reserved_ip` implicitly depend on `digitalocean_droplet.this`, defeating the whole point. Instead, a separate `digitalocean_reserved_ip_assignment` resource holds the droplet pointer, so a droplet replacement only ever touches the assignment, never recreates the reserved IP itself.
+
+**What now points at the reserved IP instead of the droplet's own (ephemeral) address:**
+- `cloudflare_record.api`'s `content` (above)
+- The `reserved_ip` module output (`terraform/modules/droplet/outputs.tf`) — use this, not `droplet_ip`, for the `DROPLET_IP` GitHub Secret and any manual SSH access
+- `droplet_ip` still exists as an output too, but it's now only useful for debugging (confirming the droplet's own address, e.g. to check the reserved IP is actually attached) — never wire it to DNS or `DROPLET_IP` again
+
+**Adopting a Reserved IP on an already-existing droplet** (i.e. one that was provisioned before this resource existed in the config, with `cloudflare_record.api` still pointing at `digitalocean_droplet.this.ipv4_address`): creating the reserved IP through the DigitalOcean dashboard/API first and assigning it to the running droplet works fine as an out-of-band first step, but Terraform then needs to be told about it — otherwise the next `plan` either tries to create a second, conflicting reserved IP or shows a confusing diff. Import both resources into state before running `apply`:
+
+```bash
+cd terraform/environments/staging
+
+# Reserved IP itself — import ID is just the IP address
+terraform import 'module.staging.digitalocean_reserved_ip.this' <RESERVED_IP_ADDRESS>
+
+# The assignment — import ID is "<ip_address>,<droplet_id>"
+# Find the droplet id via `terraform state show module.staging.digitalocean_droplet.this`
+# or `doctl compute droplet list`
+terraform import 'module.staging.digitalocean_reserved_ip_assignment.this' <RESERVED_IP_ADDRESS>,<DROPLET_ID>
+
+terraform plan   # should now show only the cloudflare_record.api content changing
+                  # (from the droplet's old IP to the reserved IP) — nothing to
+                  # create/destroy for the reserved IP or its assignment
+```
+
+After that `apply`, update the `DROPLET_IP` GitHub Secret to the reserved IP's value (`terraform output reserved_ip`) — from this point on, a droplet replacement never requires touching it again.
 
 ### Base image — plain OS, not a Marketplace app image
 
@@ -614,8 +659,8 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 6. `terraform init` — downloads providers, connects to the remote state backend. If this fails with a `403 InvalidClientTokenId` / "AWS account ID not previously found" error, see the `skip_requesting_account_id` note under "Remote state" above — that's a backend config issue, not a credentials problem.
 7. `terraform plan` — review what will be created. Nothing exists yet, so expect a full "create" plan for the droplet, firewall, SSH key, DNS record, and Project. **Read this output before typing yes** — it's the one moment you see exactly what's about to happen.
 8. `terraform apply`, confirm with `yes`. Takes roughly a minute; droplet boots, cloud-init hardens it.
-9. Verify: `terraform output` shows the new IP; `ssh -i ~/.ssh/comprobify_deploy cpfydeploy9x@<ip>` connects (not `root@` — see "SSH access model" above); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
-10. Add the CD pipeline's secrets to the GitHub `staging` Environment (`DROPLET_IP` = the Terraform output IP, `INFRA_SSH_PRIVATE_KEY` = the private half of the key from step 2, plus every app secret/variable from `deployment.md`'s env var table, split as above). Run the app deploy workflow once (push to `staging`, or `workflow_dispatch`) — it pushes `docker-compose.yml`/`Caddyfile`, writes `.env`, and starts the containers. No manual droplet setup step needed beyond this.
+9. Verify: `terraform output` shows both `droplet_ip` (ephemeral) and `reserved_ip` (stable — use this one from here on); `ssh -i ~/.ssh/comprobify_deploy cpfydeploy9x@$(terraform output -raw reserved_ip)` connects (not `root@` — see "SSH access model" above); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
+10. Add the CD pipeline's secrets to the GitHub `staging` Environment (`DROPLET_IP` = the Terraform **`reserved_ip`** output — not `droplet_ip`, see "Reserved IP" above — `INFRA_SSH_PRIVATE_KEY` = the private half of the key from step 2, plus every app secret/variable from `deployment.md`'s env var table, split as above). Run the app deploy workflow once (push to `staging`, or `workflow_dispatch`) — it pushes `docker-compose.yml`/`Caddyfile`, writes `.env`, and starts the containers. No manual droplet setup step needed beyond this.
 11. Repeat steps 3–10 for `environments/production` — separate state, separate apply, same module, its own droplet, its own GitHub `production` Environment secrets, its own `comprobify-terraform-production` tokens.
 
 ---
@@ -630,7 +675,7 @@ Two workflows, gated by path so neither triggers the other.
 
 **This does not create or destroy the droplet on every push.** `terraform apply` is idempotent — it diffs the `.tf`/`.tftpl` files against the last-applied state and only touches what actually changed. A `terraform/**` push that doesn't alter any resource's configuration (a comment, a doc reference inside a `.tf` file) produces a "no changes" plan and applies nothing.
 
-**One real exception: a few resource attributes are Terraform "ForceNew," meaning a change destroys and recreates the droplet instead of updating it in place** — `user_data` (the cloud-init script, so any edit to `cloud-init.yaml.tftpl`) and the SSH key's `public_key` (see "Rotating the SSH key" under Day-2 operations, which walks through this exact replacement manually). Pushing a `cloud-init.yaml.tftpl` change to `main` will make the next CI `apply` tear down and rebuild the running droplet — new IP, everything reprovisioned from scratch, requiring `DROPLET_IP` to be updated and the app redeployed same as after a manual `terraform destroy`/`apply` cycle. Always read the `plan` job's output for "must be replaced" before approving `apply` on a change touching this file.
+**One real exception: a few resource attributes are Terraform "ForceNew," meaning a change destroys and recreates the droplet instead of updating it in place** — `user_data` (the cloud-init script, so any edit to `cloud-init.yaml.tftpl`) and the SSH key's `public_key` (see "Rotating the SSH key" under Day-2 operations, which walks through this exact replacement manually). Pushing a `cloud-init.yaml.tftpl` change to `main` will make the next CI `apply` tear down and rebuild the running droplet — everything reprovisioned from scratch — and the app still needs redeploying afterward, same as after a manual `terraform destroy`/`apply` cycle. Thanks to the Reserved IP (see above), this no longer changes the public address the droplet is reachable at, so `DROPLET_IP` and DNS stay untouched across the replacement. Always read the `plan` job's output for "must be replaced" before approving `apply` on a change touching this file.
 
 **This replacement happens automatically inside `apply` — `terraform destroy` is never needed for it.** `destroy` is a distinct, explicit command with no recreate step (that's what "Destroy staging once you're done testing" below is for). A ForceNew attribute change just makes the plan mark that one resource `-/+ must be replaced`; `apply` performs the destroy-then-create for it as a single atomic step, same run, no separate command.
 
@@ -709,22 +754,17 @@ The `production` equivalent triggers on push to the `production` branch, matchin
 cd terraform/environments/staging
 terraform destroy
 ```
-Billing stops immediately, prorated to the hour actually used. The Cloudflare DNS record is destroyed with it (it's Terraform-managed) — no dangling record pointing at a dead IP.
+Billing stops immediately, prorated to the hour actually used. `terraform destroy` also tears down the reserved IP and its assignment along with everything else Terraform manages for this environment (they're state-tracked resources like any other) — a `destroy` really means "nothing left," not just "droplet gone." The Cloudflare DNS record goes with it too (it's Terraform-managed) — no dangling record pointing at a dead IP.
 
 **Recreate it:**
 ```bash
 terraform apply
 ```
-New droplet, new IP, DNS record automatically re-pointed at the new IP within the same apply — no manual DNS step, no propagation delay to worry about since the record is Cloudflare-proxied.
+New droplet (new *ephemeral* IP, `droplet_ip` output), but the reserved IP is recreated fresh too since `destroy` removed it — so this is the one case where DNS and `DROPLET_IP` genuinely do need updating again afterward, same as before the reserved IP existed. `terraform output reserved_ip` gives the new value; the Cloudflare record updates automatically in the same `apply` since it references that output.
 
-The new droplet has Docker installed (from the image) but nothing running yet — `docker-compose.yml`, `Caddyfile`, and `.env` all live only in GitHub/the CD pipeline, never on disk outside a running droplet (see "The application stack" above), so there's nothing to lose on destroy. Just re-run the app deploy workflow (`workflow_dispatch`, or push an empty commit) against the new droplet once `terraform apply` finishes — it pushes the compose files, writes `.env` fresh from the current GitHub secrets, and starts the containers. Recreate is genuinely two commands: `terraform apply` then a deploy trigger.
+The new droplet has Docker installed (from the image) but nothing running yet — `docker-compose.yml`, `Caddyfile`, and `.env` all live only in GitHub/the CD pipeline, never on disk outside a running droplet (see "The application stack" above), so there's nothing to lose on destroy. Update `DROPLET_IP` (`gh secret set DROPLET_IP --env staging --repo novaej/comprobify --body "$(terraform output -raw reserved_ip)"`), then re-run the app deploy workflow (`workflow_dispatch`, or push an empty commit) against the new droplet — it pushes the compose files, writes `.env` fresh from the current GitHub secrets, and starts the containers.
 
-**Update `DROPLET_IP` before that deploy trigger, though — this step is easy to forget.** Terraform and GitHub Secrets are two completely separate systems with nothing syncing them automatically, so a new droplet's IP has to be pushed to GitHub by hand or the deploy workflow will SSH/SCP to the *old*, now-nonexistent IP and fail:
-```bash
-gh secret set DROPLET_IP --env staging --repo novaej/comprobify
-# paste the value from `terraform output droplet_ip` when prompted
-```
-(A fancier version of this — the Terraform CI workflow auto-pushing the new IP via the GitHub API right after `apply` — is possible, but not worth building until Terraform itself runs in CI rather than locally.)
+**A `terraform apply` that merely *replaces* the droplet — without a preceding `destroy`** (the ForceNew cases: editing `cloud-init.yaml.tftpl`, or the SSH key rotation below) **does not** hit this — the reserved IP and its assignment aren't touched, only re-pointed at the new droplet id in the same `apply`, so `DROPLET_IP`/DNS stay exactly as they were. This distinction — explicit `destroy`+`apply` vs. an in-place `apply` that replaces just the droplet — is the whole reason the reserved IP is worth having.
 
 **Resize:**
 Change `droplet_size` in `terraform.tfvars`, `terraform plan` to confirm it shows an in-place resize (DO supports live resizing for most size changes — the plan output will tell you if a particular change instead requires destroy/recreate), then `terraform apply`.
@@ -741,15 +781,14 @@ The key is baked into `user_data` at first boot (via the `users:` block in cloud
    ```hcl
    ssh_public_key = "ssh-ed25519 AAAA... comprobify-deploy"   # cat ~/.ssh/comprobify_deploy_new.pub
    ```
-3. `terraform plan` — expect it to show both `digitalocean_ssh_key.infra` (replaced — DO's API treats a key's `public_key` as immutable, so a change forces a new resource, and Terraform deletes the old one from your DO account automatically as part of that) and `digitalocean_droplet.this` (replaced, since `user_data` changed) needing replacement, plus everything downstream that depends on the droplet (firewall, project assignment, DNS record) updating to reference the new one.
+3. `terraform plan` — expect it to show both `digitalocean_ssh_key.infra` (replaced — DO's API treats a key's `public_key` as immutable, so a change forces a new resource, and Terraform deletes the old one from your DO account automatically as part of that) and `digitalocean_droplet.this` (replaced, since `user_data` changed) needing replacement, plus `digitalocean_reserved_ip_assignment.this` updating to point at the new droplet id (in-place update, not a replacement) and everything else downstream (firewall, project assignment) updating to reference the new droplet. `digitalocean_reserved_ip.this` itself should show **no change** — that's the reserved IP doing its job.
 4. `terraform apply`, confirm with `yes`.
-5. Verify the new key actually works before touching anything else:
+5. Verify the new key actually works before touching anything else — against the reserved IP, which already points at the new droplet by the time `apply` finishes:
    ```bash
-   ssh -i ~/.ssh/comprobify_deploy_new cpfydeploy9x@$(terraform output -raw droplet_ip)
+   ssh -i ~/.ssh/comprobify_deploy_new cpfydeploy9x@$(terraform output -raw reserved_ip)
    ```
-6. Update the two GitHub values this affects — the droplet's IP changed too, from the recreate:
+6. Update the one GitHub value this affects — just the SSH key; `DROPLET_IP` doesn't change, since the reserved IP survived the replacement:
    ```bash
-   gh secret set DROPLET_IP --env staging --repo novaej/comprobify --body "$(terraform output -raw droplet_ip)"
    gh secret set INFRA_SSH_PRIVATE_KEY --env staging --repo novaej/comprobify < ~/.ssh/comprobify_deploy_new
    ```
 7. Trigger a deploy (`workflow_dispatch`, or push to `staging`) to confirm the CD pipeline works end-to-end with the new key before considering this done.
