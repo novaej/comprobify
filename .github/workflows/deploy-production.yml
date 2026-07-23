@@ -9,7 +9,8 @@ name: Deploy Production
 #   2. Remove the `if: false` guard on the `deploy` job
 #   3. Set up the `production` GitHub Environment's Secrets/Variables (same full set as
 #      `staging` — see docs/terraform-digitalocean-setup.md's env var reference table),
-#      including PRODUCTION_DROPLET_IP and INFRA_SSH_PRIVATE_KEY
+#      including DROPLET_IP and INFRA_SSH_PRIVATE_KEY (same secret names as `staging`'s
+#      Environment — differentiated by which Environment the job declares, not by name)
 #   4. Confirm `username:` below matches `deploy_username` in
 #      terraform/environments/production/terraform.tfvars
 on:
@@ -43,7 +44,7 @@ jobs:
       - name: Copy compose files to droplet
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.PRODUCTION_DROPLET_IP }}
+          host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           source: "deploy/docker-compose.yml,deploy/Caddyfile"
@@ -53,7 +54,7 @@ jobs:
       - name: Write env and restart containers
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.PRODUCTION_DROPLET_IP }}
+          host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           script: |

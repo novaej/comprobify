@@ -36,7 +36,7 @@ jobs:
       - name: Copy compose files to droplet
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
+          host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           source: "deploy/docker-compose.yml,deploy/Caddyfile"
@@ -51,7 +51,7 @@ jobs:
       - name: Write env and restart containers
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
+          host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           script: |

@@ -510,7 +510,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
 ```yaml
       - uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
+          host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           source: "deploy/docker-compose.yml,deploy/Caddyfile"
@@ -519,7 +519,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
 
       - uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.STAGING_DROPLET_IP }}
+          host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           script: |
@@ -564,7 +564,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             docker compose up -d
 ```
 
-`${{ secrets.* }}` and `${{ vars.* }}` are both substituted client-side by the Actions runner before the script is sent over SSH, so nothing new is exposed beyond what already sits in GitHub — SSH itself is encrypted in transit. `STAGING_DROPLET_IP`/`INFRA_SSH_PRIVATE_KEY` (used to *reach* the droplet) stay as Secrets even though an IP isn't devastating if leaked — connection details to infrastructure are worth keeping to the stricter default.
+`${{ secrets.* }}` and `${{ vars.* }}` are both substituted client-side by the Actions runner before the script is sent over SSH, so nothing new is exposed beyond what already sits in GitHub — SSH itself is encrypted in transit. `DROPLET_IP`/`INFRA_SSH_PRIVATE_KEY` (used to *reach* the droplet) stay as Secrets even though an IP isn't devastating if leaked — connection details to infrastructure are worth keeping to the stricter default.
 
 Rotation, for either kind: update the value in the GitHub Environment, then trigger the deploy workflow (a push, or `workflow_dispatch`) — no manual SSH step to hand-edit a file on the droplet. The one exception is `ENCRYPTION_KEY`, which needs the careful re-encryption dance documented in `deployment.md`'s "Rotating secrets" section — that danger is about the data itself, independent of which platform hosts the app.
 
@@ -613,7 +613,7 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 7. `terraform plan` — review what will be created. Nothing exists yet, so expect a full "create" plan for the droplet, firewall, SSH key, DNS record, and Project. **Read this output before typing yes** — it's the one moment you see exactly what's about to happen.
 8. `terraform apply`, confirm with `yes`. Takes roughly a minute; droplet boots, cloud-init hardens it.
 9. Verify: `terraform output` shows the new IP; `ssh -i ~/.ssh/comprobify_deploy cpfydeploy9x@<ip>` connects (not `root@` — see "SSH access model" above); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
-10. Add the CD pipeline's secrets to the GitHub `staging` Environment (`STAGING_DROPLET_IP` = the Terraform output IP, `INFRA_SSH_PRIVATE_KEY` = the private half of the key from step 2, plus every app secret/variable from `deployment.md`'s env var table, split as above). Run the app deploy workflow once (push to `staging`, or `workflow_dispatch`) — it pushes `docker-compose.yml`/`Caddyfile`, writes `.env`, and starts the containers. No manual droplet setup step needed beyond this.
+10. Add the CD pipeline's secrets to the GitHub `staging` Environment (`DROPLET_IP` = the Terraform output IP, `INFRA_SSH_PRIVATE_KEY` = the private half of the key from step 2, plus every app secret/variable from `deployment.md`'s env var table, split as above). Run the app deploy workflow once (push to `staging`, or `workflow_dispatch`) — it pushes `docker-compose.yml`/`Caddyfile`, writes `.env`, and starts the containers. No manual droplet setup step needed beyond this.
 11. Repeat steps 3–10 for `environments/production` — separate state, separate apply, same module, its own droplet, its own GitHub `production` Environment secrets, its own `comprobify-terraform-production` tokens.
 
 ---
@@ -624,13 +624,13 @@ Two workflows, gated by path so neither triggers the other.
 
 ### Infra workflow — `.github/workflows/terraform.yml`
 
-Full file lives in the repo. Two design points worth calling out, both easy to get wrong:
+Full file lives in the repo. Three design points worth calling out, all easy to get wrong:
 
-**Credentials are repository secrets, not GitHub Environment secrets.** GitHub only grants a job access to an Environment's secrets if that job also declares `environment: <name>` — which also means that Environment's protection rules (like a required reviewer) apply to that job. If `TERRAFORM_DO_TOKEN`/`TERRAFORM_CLOUDFLARE_TOKEN`/`TERRAFORM_SPACES_ACCESS_KEY_ID`/`TERRAFORM_SPACES_SECRET_ACCESS_KEY` lived on an Environment and `plan` declared it too (to get the secrets), a required-reviewer rule would block `plan` from running at all — meaning you'd have to approve blind, before ever seeing what the plan would actually do. Keeping these as plain repository secrets (Settings → Secrets and variables → Actions → Repository secrets) lets `plan` run freely on every push, while `apply` alone opts into the approval gate.
+**`DO_TOKEN`/`CLOUDFLARE_TOKEN` live in the `staging-infra` GitHub Environment (Settings → Environments → `staging-infra` → Environment secrets), unprefixed — same convention `deploy-staging.yml` already uses for `DB_HOST`/`ADMIN_SECRET`/etc: one secret name, a different value per Environment, not a name per environment.** The `comprobify-terraform-staging` and `comprobify-terraform-production` credentials (see the Prerequisites table above) are deliberately separate tokens, never shared, so a leaked staging credential can be revoked without touching production — `staging-infra` holds the staging value, and the not-yet-created `production-infra` Environment will hold the production value under the exact same secret names once that job pair exists.
 
-**Names are prefixed `TERRAFORM_` to disambiguate from other same-purpose-sounding secrets in this repo.** `docs.yml` (the separate docs-site deploy workflow) has its own, unrelated `DOCS_CLOUDFLARE_API_TOKEN`/`DOCS_CLOUDFLARE_ACCOUNT_ID` pair for publishing to Cloudflare Pages — without a prefix on both, two differently-scoped Cloudflare credentials named the same thing would be impossible to tell apart at a glance in the Secrets list.
+**Both `plan` and `apply` declare `environment: staging-infra`.** GitHub only grants a job access to an Environment's secrets if that job declares it — which also means that Environment's protection rules (like a required reviewer) apply to that job too. Declaring it on both jobs means adding a required reviewer to `staging-infra` later would gate `plan` as well as `apply`: you'd approve *before* seeing the plan's diff, not after reading it. This was a deliberate trade-off in favor of staying consistent with `deploy-staging.yml`'s single-environment shape, rather than introducing a second, plan-only Environment just to keep `plan` ungated.
 
-**`apply` uses its own `staging-infra` Environment, deliberately not the `staging` one `deploy-staging.yml` uses.** `staging-infra` holds no secrets of its own — it exists purely so a required-reviewer rule can be attached to it (repo Settings → Environments → `staging-infra` → add yourself as a required reviewer) without that rule also gating every routine app deploy, which shares the `staging` Environment name for an unrelated reason (its own app secrets/variables).
+**The Spaces state-backend credentials (`TERRAFORM_SPACES_ACCESS_KEY_ID`/`TERRAFORM_SPACES_SECRET_ACCESS_KEY`) are the one exception and stay as plain repository secrets, not Environment secrets.** Staging and production share one state bucket with different key prefixes (see "Remote state" above) via one Spaces key pair created once — there's only ever one correct value, and every job needs it regardless of which Environment it declares. They keep the `TERRAFORM_` prefix because, as repository secrets, they sit in the same flat Secrets list as `docs.yml`'s unrelated `DOCS_CLOUDFLARE_API_TOKEN`/`DOCS_CLOUDFLARE_ACCOUNT_ID` pair — Environment secrets don't have that collision risk, since they're scoped to their own Environment's page in the GitHub UI, which is why `DO_TOKEN`/`CLOUDFLARE_TOKEN` don't need a prefix.
 
 ```yaml
 on:
@@ -642,6 +642,7 @@ on:
 jobs:
   plan:
     runs-on: ubuntu-latest
+    environment: staging-infra
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -653,14 +654,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
       - run: terraform -chdir=terraform/environments/staging plan
         env:
-          TF_VAR_do_token: ${{ secrets.TERRAFORM_DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.TERRAFORM_CLOUDFLARE_TOKEN }}
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 
   apply:
     needs: plan
-    environment: staging-infra   # empty of secrets - exists only for the optional reviewer gate
+    environment: staging-infra
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -673,17 +674,15 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
       - run: terraform -chdir=terraform/environments/staging apply -auto-approve
         env:
-          TF_VAR_do_token: ${{ secrets.TERRAFORM_DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.TERRAFORM_CLOUDFLARE_TOKEN }}
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 ```
 
 Note both `init` steps also need the Spaces credentials, not just `plan`/`apply` — `init` is what actually connects to the remote state backend.
 
-Production's equivalent pair doesn't exist yet — add it once `terraform/environments/production` does, pointed at that directory, gated behind its own `production-infra` Environment (same reasoning: separate from whatever Environment `deploy-production.yml` ends up using for app secrets).
-
-Production gets a near-identical second `plan`/`apply` pair pointed at `environments/production`, with the `apply` job's `environment: production` gated behind a required reviewer — a deliberate, auditable approval gate before anything touches production infrastructure.
+Production's equivalent pair doesn't exist yet — add it once `terraform/environments/production` does, pointed at that directory, with both jobs declaring `environment: production-infra` and reading the same `DO_TOKEN`/`CLOUDFLARE_TOKEN` names from that Environment (its own distinct values — see above) plus the same shared `TERRAFORM_SPACES_*` repository secrets. Add a required reviewer to `production-infra` for a deliberate, auditable approval gate before anything touches production infrastructure — separate from whatever Environment `deploy-production.yml` ends up using for app secrets.
 
 ### App deploy workflow — `.github/workflows/deploy-staging.yml`
 
@@ -710,9 +709,9 @@ New droplet, new IP, DNS record automatically re-pointed at the new IP within th
 
 The new droplet has Docker installed (from the image) but nothing running yet — `docker-compose.yml`, `Caddyfile`, and `.env` all live only in GitHub/the CD pipeline, never on disk outside a running droplet (see "The application stack" above), so there's nothing to lose on destroy. Just re-run the app deploy workflow (`workflow_dispatch`, or push an empty commit) against the new droplet once `terraform apply` finishes — it pushes the compose files, writes `.env` fresh from the current GitHub secrets, and starts the containers. Recreate is genuinely two commands: `terraform apply` then a deploy trigger.
 
-**Update `STAGING_DROPLET_IP` before that deploy trigger, though — this step is easy to forget.** Terraform and GitHub Secrets are two completely separate systems with nothing syncing them automatically, so a new droplet's IP has to be pushed to GitHub by hand or the deploy workflow will SSH/SCP to the *old*, now-nonexistent IP and fail:
+**Update `DROPLET_IP` before that deploy trigger, though — this step is easy to forget.** Terraform and GitHub Secrets are two completely separate systems with nothing syncing them automatically, so a new droplet's IP has to be pushed to GitHub by hand or the deploy workflow will SSH/SCP to the *old*, now-nonexistent IP and fail:
 ```bash
-gh secret set STAGING_DROPLET_IP --env staging --repo novaej/comprobify
+gh secret set DROPLET_IP --env staging --repo novaej/comprobify
 # paste the value from `terraform output droplet_ip` when prompted
 ```
 (A fancier version of this — the Terraform CI workflow auto-pushing the new IP via the GitHub API right after `apply` — is possible, but not worth building until Terraform itself runs in CI rather than locally.)
@@ -740,7 +739,7 @@ The key is baked into `user_data` at first boot (via the `users:` block in cloud
    ```
 6. Update the two GitHub values this affects — the droplet's IP changed too, from the recreate:
    ```bash
-   gh secret set STAGING_DROPLET_IP --env staging --repo novaej/comprobify --body "$(terraform output -raw droplet_ip)"
+   gh secret set DROPLET_IP --env staging --repo novaej/comprobify --body "$(terraform output -raw droplet_ip)"
    gh secret set INFRA_SSH_PRIVATE_KEY --env staging --repo novaej/comprobify < ~/.ssh/comprobify_deploy_new
    ```
 7. Trigger a deploy (`workflow_dispatch`, or push to `staging`) to confirm the CD pipeline works end-to-end with the new key before considering this done.

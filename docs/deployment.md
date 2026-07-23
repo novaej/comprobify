@@ -409,7 +409,7 @@ Both branches are **automation-owned** — they only move forward via fast-forwa
 
 ### 4. Add secrets/variables (Settings → Secrets and variables → Actions)
 
-Per-environment, scoped to the matching GitHub Environment (`staging` now, `production` once provisioned) — the full set (`STAGING_DROPLET_IP`, `INFRA_SSH_PRIVATE_KEY`, every app credential/config value, split between Secrets and Variables) is documented in `docs/terraform-digitalocean-setup.md`'s env var reference table rather than duplicated here.
+Per-environment, scoped to the matching GitHub Environment (`staging` now, `production` once provisioned) — the full set (`DROPLET_IP`, `INFRA_SSH_PRIVATE_KEY`, every app credential/config value, split between Secrets and Variables) is documented in `docs/terraform-digitalocean-setup.md`'s env var reference table rather than duplicated here.
 
 Note `release-staging.yml` / `release-production.yml` don't need extra secrets — they push to branches using the workflow's own `contents: write` permission.
 
@@ -463,7 +463,7 @@ Handled automatically by Terraform's `cloudflare_record` resource (part of the s
 - [ ] `APP_BASE_URL` GitHub Variable matches the actual domain
 
 ### 6. GitHub secrets/variables
-- [ ] `STAGING_DROPLET_IP` / `INFRA_SSH_PRIVATE_KEY` → from `terraform output droplet_ip` and the deploy SSH key — see `docs/terraform-digitalocean-setup.md`
+- [ ] `DROPLET_IP` / `INFRA_SSH_PRIVATE_KEY` → from `terraform output droplet_ip` and the deploy SSH key — see `docs/terraform-digitalocean-setup.md`
 - [ ] `RELEASE_PUSH_TOKEN` → GitHub repository secret (fine-grained PAT with `Contents: Read and write` on this repo)
 
 ### 7. Verify
