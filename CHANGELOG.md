@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.2] — 2026-07-23
+
+### Changed
+- **Operational note: staging's Queue Reconciliation cron job tightened from hourly to every 5 minutes.** Self-hosted `cron.d` on the droplet has no per-invocation cost, unlike the earlier Render Cron Job setup, so there's no reason to leave the worst-case recovery window for a stuck RabbitMQ dispatch at a full hour while document volume is still low. Matches the Notifications job's cadence.
+- **Operational note: staging droplet now sits behind a DigitalOcean Reserved IP instead of its own ephemeral address.** `cloudflare_record.api` and the CD pipeline's `DROPLET_IP` secret now target a free-standing `digitalocean_reserved_ip`, re-pointed at whichever droplet currently exists via a separate `digitalocean_reserved_ip_assignment`. A droplet replacement (cloud-init edits, SSH key rotation) no longer changes the public address the app is reachable at — DNS and `DROPLET_IP` survive it untouched. See `docs/terraform-digitalocean-setup.md`'s "Reserved IP" section. No API-facing behavior changes.
+
 ## [0.10.1] — 2026-07-23
 
 ### Added
