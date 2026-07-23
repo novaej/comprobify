@@ -16,6 +16,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Get this runner's public IP
+        id: runner_ip
+        run: echo "ip=$(curl -s https://ifconfig.me)" >> "$GITHUB_OUTPUT"
+
+      - uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DEPLOY_DO_TOKEN }}
+
+      # DO's Cloud Firewall only allows SSH from a fixed admin IP - GitHub-hosted runners
+      # have no static IP to permanently allowlist, so this deploy's own runner IP is
+      # granted access just for the duration of this job, then revoked below (`if: always()`
+      # on the removal step so it still runs even if a later step fails).
+      - name: Allow this runner through the firewall
+        run: |
+          doctl compute firewall add-rules ${{ vars.STAGING_FIREWALL_ID }} \
+            --inbound-rules "protocol:tcp,ports:22,address:${{ steps.runner_ip.outputs.ip }}/32"
+
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -81,3 +98,9 @@ jobs:
             export IMAGE_TAG=${{ github.sha }}
             docker compose pull
             docker compose up -d
+
+      - name: Revoke this runner's firewall access
+        if: always()
+        run: |
+          doctl compute firewall remove-rules ${{ vars.STAGING_FIREWALL_ID }} \
+            --inbound-rules "protocol:tcp,ports:22,address:${{ steps.runner_ip.outputs.ip }}/32"

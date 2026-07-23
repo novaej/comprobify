@@ -559,29 +559,41 @@ Production gets a near-identical second `plan`/`apply` pair pointed at `environm
 
 ### App deploy workflow — `.github/workflows/deploy-staging.yml`
 
-```yaml
-on:
-  push:
-    branches: [staging]
+Full file lives in the repo; the shape is checkout → get the runner's own IP → **temporarily allow that IP through the firewall on port 22** → build/push the image → SCP the compose files → SSH in to write `.env` and restart containers → **revoke the firewall access again**.
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
+That firewall add/remove pair exists because of a real constraint: DO's Cloud Firewall only allows SSH from your own fixed admin IP (see "When `admin_ip_cidr` stops matching" under Day-2 operations) — but GitHub-hosted runners have no static IP to permanently allowlist the way yours is. Rather than opening SSH to the entire internet just so CI can reach it, each deploy run grants access to *only that run's own* IP, for *only the duration of the job*:
+
+```yaml
+      - name: Get this runner's public IP
+        id: runner_ip
+        run: echo "ip=$(curl -s https://ifconfig.me)" >> "$GITHUB_OUTPUT"
+
+      - uses: digitalocean/action-doctl@v2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - run: |
-          docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
-          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
-      # ...then the scp + ssh steps shown in "The application stack" section above
-      # (push docker-compose.yml/Caddyfile, write .env from GitHub secrets, pull + up -d)
+          token: ${{ secrets.DEPLOY_DO_TOKEN }}
+
+      - name: Allow this runner through the firewall
+        run: |
+          doctl compute firewall add-rules ${{ vars.STAGING_FIREWALL_ID }} \
+            --inbound-rules "protocol:tcp,ports:22,address:${{ steps.runner_ip.outputs.ip }}/32"
+
+      # ...build/push image, scp compose files, ssh in to deploy (see "The application
+      # stack" above)...
+
+      - name: Revoke this runner's firewall access
+        if: always()
+        run: |
+          doctl compute firewall remove-rules ${{ vars.STAGING_FIREWALL_ID }} \
+            --inbound-rules "protocol:tcp,ports:22,address:${{ steps.runner_ip.outputs.ip }}/32"
 ```
 
-The `production` equivalent triggers on push to the `production` branch, matching the same branch/tag/release pipeline documented in `deployment.md`.
+`if: always()` on the removal step is load-bearing — without it, a failed deploy (bad image, SSH hiccup, whatever) would leave that IP's access granted indefinitely, since a normal step only runs if everything before it succeeded.
+
+This needs two things not covered elsewhere in this doc:
+- **`DEPLOY_DO_TOKEN`** (GitHub secret, `staging` Environment) — a DO API token scoped as narrowly as the DO console allows to just Firewall access, separate from the `comprobify-terraform-staging` token Terraform uses (which has much broader Droplet/Project/SSH-key scope this workflow has no business holding). Same reasoning as every other credential in this setup: distinct purpose, distinct token, smaller blast radius if one leaks.
+- **`STAGING_FIREWALL_ID`** (GitHub variable, not secret — an ID isn't sensitive) — from `terraform output firewall_id`. Like `STAGING_DROPLET_IP`, this needs manual re-syncing if the firewall itself ever gets destroyed and recreated (a full `terraform destroy`/`apply`, not a `-replace` targeted at just the droplet, which leaves the firewall's own ID untouched).
+
+The `production` equivalent triggers on push to the `production` branch, matching the same branch/tag/release pipeline documented in `deployment.md`, and needs its own `DEPLOY_DO_TOKEN`/`STAGING_FIREWALL_ID`-equivalent pair scoped to production.
 
 ---
 
@@ -608,6 +620,11 @@ gh secret set STAGING_DROPLET_IP --env staging --repo novaej/comprobify
 # paste the value from `terraform output droplet_ip` when prompted
 ```
 (A fancier version of this — the Terraform CI workflow auto-pushing the new IP via the GitHub API right after `apply` — is possible, but not worth building until Terraform itself runs in CI rather than locally.)
+
+**`STAGING_FIREWALL_ID` needs the same treatment, but only after a *full* `terraform destroy`/`apply`** (see "CI/CD" above for what it's for) — a targeted `-replace` of just the droplet leaves the firewall itself, and its ID, untouched, so no update is needed after that kind of recreate:
+```bash
+gh variable set STAGING_FIREWALL_ID --env staging --repo novaej/comprobify --body "$(terraform output -raw firewall_id)"
+```
 
 **Resize:**
 Change `droplet_size` in `terraform.tfvars`, `terraform plan` to confirm it shows an in-place resize (DO supports live resizing for most size changes — the plan output will tell you if a particular change instead requires destroy/recreate), then `terraform apply`.

@@ -17,3 +17,8 @@ output "dns_record" {
   description = "Fully-qualified DNS record created for this droplet"
   value       = cloudflare_record.api.hostname
 }
+
+output "firewall_id" {
+  description = "DigitalOcean firewall ID - needed by the CD workflow to add/remove a just-in-time SSH rule for the GitHub Actions runner's IP on each deploy"
+  value       = digitalocean_firewall.this.id
+}

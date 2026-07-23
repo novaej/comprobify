@@ -5,3 +5,7 @@ output "droplet_ip" {
 output "dns_record" {
   value = module.staging.dns_record
 }
+
+output "firewall_id" {
+  value = module.staging.firewall_id
+}
