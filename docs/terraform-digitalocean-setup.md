@@ -602,6 +602,13 @@ New droplet, new IP, DNS record automatically re-pointed at the new IP within th
 
 The new droplet has Docker installed (from the image) but nothing running yet — `docker-compose.yml`, `Caddyfile`, and `.env` all live only in GitHub/the CD pipeline, never on disk outside a running droplet (see "The application stack" above), so there's nothing to lose on destroy. Just re-run the app deploy workflow (`workflow_dispatch`, or push an empty commit) against the new droplet once `terraform apply` finishes — it pushes the compose files, writes `.env` fresh from the current GitHub secrets, and starts the containers. Recreate is genuinely two commands: `terraform apply` then a deploy trigger.
 
+**Update `STAGING_DROPLET_IP` before that deploy trigger, though — this step is easy to forget.** Terraform and GitHub Secrets are two completely separate systems with nothing syncing them automatically, so a new droplet's IP has to be pushed to GitHub by hand or the deploy workflow will SSH/SCP to the *old*, now-nonexistent IP and fail:
+```bash
+gh secret set STAGING_DROPLET_IP --env staging --repo novaej/comprobify
+# paste the value from `terraform output droplet_ip` when prompted
+```
+(A fancier version of this — the Terraform CI workflow auto-pushing the new IP via the GitHub API right after `apply` — is possible, but not worth building until Terraform itself runs in CI rather than locally.)
+
 **Resize:**
 Change `droplet_size` in `terraform.tfvars`, `terraform plan` to confirm it shows an in-place resize (DO supports live resizing for most size changes — the plan output will tell you if a particular change instead requires destroy/recreate), then `terraform apply`.
 

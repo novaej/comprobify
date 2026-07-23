@@ -9,8 +9,75 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: staging
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Trigger Render deploy
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
         run: |
-          curl -s --fail -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+          docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
+          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+
+      - name: Copy compose files to droplet
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.STAGING_DROPLET_IP }}
+          username: root
+          key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
+          source: "deploy/docker-compose.yml,deploy/Caddyfile"
+          target: /opt/comprobify
+          strip_components: 1
+
+      - name: Write env and restart containers
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGING_DROPLET_IP }}
+          username: root
+          key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
+          script: |
+            cat > /opt/comprobify/.env <<'EOF'
+            APP_ENV=${{ vars.APP_ENV }}
+            PORT=${{ vars.PORT }}
+            APP_BASE_URL=${{ vars.APP_BASE_URL }}
+            VERIFICATION_TOKEN_TTL_HOURS=${{ vars.VERIFICATION_TOKEN_TTL_HOURS }}
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=${{ secrets.DB_PORT }}
+            DB_NAME=${{ secrets.DB_NAME }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_SSL=${{ vars.DB_SSL }}
+            ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
+            ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
+            EMAIL_PROVIDER=${{ vars.EMAIL_PROVIDER }}
+            EMAIL_FROM=${{ vars.EMAIL_FROM }}
+            EMAIL_FROM_DOCUMENTS=${{ vars.EMAIL_FROM_DOCUMENTS }}
+            MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}
+            MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN }}
+            MAILGUN_WEBHOOK_SIGNING_KEY=${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
+            SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+            BANK_TRANSFER_BANK_NAME=${{ vars.BANK_TRANSFER_BANK_NAME }}
+            BANK_TRANSFER_ACCOUNT_TYPE=${{ vars.BANK_TRANSFER_ACCOUNT_TYPE }}
+            BANK_TRANSFER_ACCOUNT_NUMBER=${{ vars.BANK_TRANSFER_ACCOUNT_NUMBER }}
+            BANK_TRANSFER_ACCOUNT_HOLDER=${{ vars.BANK_TRANSFER_ACCOUNT_HOLDER }}
+            BANK_TRANSFER_IDENTIFICATION=${{ vars.BANK_TRANSFER_IDENTIFICATION }}
+            RABBITMQ_URL=${{ secrets.RABBITMQ_URL }}
+            RABBITMQ_SRI_EXCHANGE=${{ vars.RABBITMQ_SRI_EXCHANGE }}
+            QUEUE_RECONCILE_SEND_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_SEND_STALE_MINUTES }}
+            QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES=${{ vars.QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES }}
+            QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES=${{ vars.QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES }}
+            QUEUE_RECONCILE_BATCH_LIMIT=${{ vars.QUEUE_RECONCILE_BATCH_LIMIT }}
+            EOF
+            chmod 600 /opt/comprobify/.env
+            cd /opt/comprobify
+            export IMAGE_TAG=${{ github.sha }}
+            docker compose pull
+            docker compose up -d
