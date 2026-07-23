@@ -23,8 +23,8 @@ variable "image_slug" {
   default     = "ubuntu-24-04-x64"
 }
 
-variable "ssh_public_key_path" {
-  description = "Path to the public half of the dedicated infra SSH key (~ is expanded)"
+variable "ssh_public_key" {
+  description = "Public half of the dedicated infra SSH key, as its literal OpenSSH-format content (e.g. \"ssh-ed25519 AAAA... comprobify-deploy\") - not a path. A public key confers no access on its own (that's the private half's job), so it's safe to pass as a plain, non-sensitive value and commit in terraform.tfvars; deliberately not read from a local file path, since that path only exists on whichever machine generated the key and would break every other machine (notably CI, which has no such file) running Terraform against this config."
   type        = string
 }
 

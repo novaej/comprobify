@@ -22,10 +22,9 @@ variable "droplet_size" {
   default     = "s-1vcpu-512mb-10gb"
 }
 
-variable "ssh_public_key_path" {
-  description = "Path to the public half of the dedicated infra SSH key"
+variable "ssh_public_key" {
+  description = "Public half of the dedicated infra SSH key, as its literal OpenSSH-format content - see modules/droplet/variables.tf for why this is a value, not a path"
   type        = string
-  default     = "~/.ssh/comprobify_deploy.pub"
 }
 
 variable "deploy_username" {

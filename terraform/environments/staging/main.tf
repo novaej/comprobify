@@ -18,11 +18,11 @@ provider "cloudflare" {
 module "staging" {
   source = "../../modules/droplet"
 
-  environment         = "staging"
-  region              = var.region
-  droplet_size        = var.droplet_size
-  ssh_public_key_path = var.ssh_public_key_path
-  deploy_username     = var.deploy_username
-  cloudflare_zone_id  = var.cloudflare_zone_id
-  subdomain           = var.subdomain
+  environment        = "staging"
+  region             = var.region
+  droplet_size       = var.droplet_size
+  ssh_public_key     = var.ssh_public_key
+  deploy_username    = var.deploy_username
+  cloudflare_zone_id = var.cloudflare_zone_id
+  subdomain          = var.subdomain
 }
