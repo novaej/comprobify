@@ -37,6 +37,17 @@ resource "digitalocean_droplet" "this" {
 # unassigned).
 resource "digitalocean_reserved_ip" "this" {
   region = var.region
+
+  # This resource's own droplet_id field is Optional, not Computed - leaving it unset
+  # in config (deliberately, per the comment above) otherwise makes Terraform plan to
+  # clear it on every apply, since the real API object has it populated (by whichever
+  # droplet digitalocean_reserved_ip_assignment currently points it at) while our
+  # config declares nothing. Ignoring it here is what actually lets the two resources
+  # coexist without fighting over the same field - digitalocean_reserved_ip_assignment
+  # is the sole owner of the droplet<->IP relationship.
+  lifecycle {
+    ignore_changes = [droplet_id]
+  }
 }
 
 resource "digitalocean_reserved_ip_assignment" "this" {
