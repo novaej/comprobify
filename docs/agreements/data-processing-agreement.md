@@ -43,7 +43,7 @@ El Responsable autoriza el uso de los siguientes subencargados, ya en operación
 
 | Subencargado | Finalidad | Aplica a |
 |---|---|---|
-| Render | Infraestructura y alojamiento del Servicio (API) | Todos los clientes |
+| DigitalOcean | Infraestructura y alojamiento del Servicio (API) | Todos los clientes |
 | Neon | Base de datos del Servicio, incluida la base de datos independiente de la interfaz web cuando el Responsable la utiliza | Todos los clientes |
 | Mailgun | Envío de correos transaccionales | Todos los clientes |
 | Sentry | Monitoreo y diagnóstico de errores | Todos los clientes |

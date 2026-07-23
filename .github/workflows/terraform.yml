@@ -1,0 +1,64 @@
+name: Terraform
+
+# Applies infrastructure changes under terraform/ - separate from and never triggered by
+# deploy-staging.yml/deploy-production.yml (those only ship application code, never touch
+# Terraform). See docs/terraform-digitalocean-setup.md's "CI/CD (GitHub Actions)" section.
+#
+# Credentials (DO_TOKEN, CLOUDFLARE_TOKEN, SPACES_ACCESS_KEY_ID, SPACES_SECRET_ACCESS_KEY)
+# are REPOSITORY secrets, not scoped to any GitHub Environment - deliberately, so `plan`
+# can run freely and show its output without needing prior approval. `staging-infra` is
+# an otherwise-empty GitHub Environment that only exists so `apply` can be gated behind
+# it: add a required-reviewer rule there (repo Settings -> Environments -> staging-infra)
+# and `apply` needs a manual approval click, after reading the plan output in this run's
+# logs, before it actually touches infrastructure. Deliberately a different environment
+# name than the `staging` one deploy-staging.yml uses - a reviewer rule here must not also
+# gate every routine app deploy.
+#
+# Production's job pair isn't here yet - terraform/environments/production doesn't exist.
+# Add a near-identical plan/apply pair pointed at it (environment: production-infra) once
+# it's provisioned, same as deploy-production.yml mirrors deploy-staging.yml.
+
+on:
+  push:
+    branches: [main]
+    paths: ['terraform/**']
+  workflow_dispatch: {}
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+      - run: terraform -chdir=terraform/environments/staging init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      - run: terraform -chdir=terraform/environments/staging plan
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+
+  apply:
+    needs: plan
+    environment: staging-infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+      - run: terraform -chdir=terraform/environments/staging init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
+      - run: terraform -chdir=terraform/environments/staging apply -auto-approve
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}

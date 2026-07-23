@@ -624,6 +624,12 @@ Two workflows, gated by path so neither triggers the other.
 
 ### Infra workflow — `.github/workflows/terraform.yml`
 
+Full file lives in the repo. Two design points worth calling out, both easy to get wrong:
+
+**Credentials are repository secrets, not GitHub Environment secrets.** GitHub only grants a job access to an Environment's secrets if that job also declares `environment: <name>` — which also means that Environment's protection rules (like a required reviewer) apply to that job. If `DO_TOKEN`/`CLOUDFLARE_TOKEN`/`SPACES_ACCESS_KEY_ID`/`SPACES_SECRET_ACCESS_KEY` lived on an Environment and `plan` declared it too (to get the secrets), a required-reviewer rule would block `plan` from running at all — meaning you'd have to approve blind, before ever seeing what the plan would actually do. Keeping these as plain repository secrets (Settings → Secrets and variables → Actions → Repository secrets) lets `plan` run freely on every push, while `apply` alone opts into the approval gate.
+
+**`apply` uses its own `staging-infra` Environment, deliberately not the `staging` one `deploy-staging.yml` uses.** `staging-infra` holds no secrets of its own — it exists purely so a required-reviewer rule can be attached to it (repo Settings → Environments → `staging-infra` → add yourself as a required reviewer) without that rule also gating every routine app deploy, which shares the `staging` Environment name for an unrelated reason (its own app secrets/variables).
+
 ```yaml
 on:
   push:
@@ -640,6 +646,9 @@ jobs:
         with:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
       - run: terraform -chdir=terraform/environments/staging plan
         env:
           TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
@@ -649,7 +658,7 @@ jobs:
 
   apply:
     needs: plan
-    environment: staging   # add a required reviewer here for production's equivalent job
+    environment: staging-infra   # empty of secrets - exists only for the optional reviewer gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -657,6 +666,9 @@ jobs:
         with:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
       - run: terraform -chdir=terraform/environments/staging apply -auto-approve
         env:
           TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
@@ -664,6 +676,10 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
 ```
+
+Note both `init` steps also need the Spaces credentials, not just `plan`/`apply` — `init` is what actually connects to the remote state backend.
+
+Production's equivalent pair doesn't exist yet — add it once `terraform/environments/production` does, pointed at that directory, gated behind its own `production-infra` Environment (same reasoning: separate from whatever Environment `deploy-production.yml` ends up using for app secrets).
 
 Production gets a near-identical second `plan`/`apply` pair pointed at `environments/production`, with the `apply` job's `environment: production` gated behind a required reviewer — a deliberate, auditable approval gate before anything touches production infrastructure.
 
