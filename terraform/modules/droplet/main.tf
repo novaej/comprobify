@@ -8,7 +8,7 @@ terraform {
 
 resource "digitalocean_ssh_key" "infra" {
   name       = "comprobify-infra-${var.environment}"
-  public_key = file(pathexpand(var.ssh_public_key_path))
+  public_key = var.ssh_public_key
 }
 
 resource "digitalocean_droplet" "this" {
@@ -21,7 +21,7 @@ resource "digitalocean_droplet" "this" {
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
     environment     = var.environment
     deploy_username = var.deploy_username
-    ssh_public_key  = file(pathexpand(var.ssh_public_key_path))
+    ssh_public_key  = var.ssh_public_key
   })
 }
 

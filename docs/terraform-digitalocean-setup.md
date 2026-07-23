@@ -220,7 +220,7 @@ One module, reused by both environments with different variable values.
 ```hcl
 resource "digitalocean_ssh_key" "infra" {
   name       = "comprobify-infra-${var.environment}"
-  public_key = file(pathexpand(var.ssh_public_key_path))
+  public_key = var.ssh_public_key
 }
 
 resource "digitalocean_droplet" "this" {
@@ -232,7 +232,7 @@ resource "digitalocean_droplet" "this" {
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
     environment     = var.environment
     deploy_username = var.deploy_username
-    ssh_public_key  = file(pathexpand(var.ssh_public_key_path))
+    ssh_public_key  = var.ssh_public_key
   })
 }
 
@@ -294,6 +294,8 @@ resource "cloudflare_record" "api" {
 ```
 
 The DNS record's `content` referencing `digitalocean_droplet.this.ipv4_address` is what makes destroy/recreate cycles (see Day-2 operations below) update DNS automatically in the same `apply` — no manual step, no stale record.
+
+**`ssh_public_key` is the literal OpenSSH-format key content (`"ssh-ed25519 AAAA... comprobify-deploy"`), not a path.** An earlier version read it via `file(pathexpand(var.ssh_public_key_path))`, which worked locally but broke the first real CI run — `terraform.yml`'s runner has no `~/.ssh/comprobify_deploy.pub`, since that file only ever existed on whoever generated the key. A public key confers no access by itself (only the private half does), so it's safe to pass as a plain value and commit directly in `terraform.tfvars` — no GitHub secret needed, and it works identically whether Terraform runs on your laptop or in CI.
 
 ### Base image — plain OS, not a Marketplace app image
 
@@ -597,7 +599,7 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 ## First-time setup, step by step
 
 1. Install prerequisites (above).
-2. Generate the SSH key pair; note its public key path for `terraform.tfvars`.
+2. Generate the SSH key pair; paste the public half's content (`cat` the `.pub` file) into `ssh_public_key` in `terraform.tfvars`.
 3. Create the DO API token and Cloudflare API token (see Prerequisites table above for exact scopes).
 4. Create the DO Spaces bucket for state (one-time, dashboard or `doctl`; Standard storage, CDN off — see "Remote state" above) and generate a Spaces key pair scoped to just that bucket. DO shows the Access Key ID and Secret Access Key together, once — capture both before closing that screen, or you'll need to regenerate.
 5. In your own terminal (never paste real token/key values into a chat, commit, or anywhere outside your local shell/GitHub Secrets):
@@ -735,9 +737,9 @@ The key is baked into `user_data` at first boot (via the `users:` block in cloud
    ```bash
    ssh-keygen -t ed25519 -C "comprobify-deploy" -f ~/.ssh/comprobify_deploy_new
    ```
-2. Point `terraform.tfvars` at it:
+2. Put its public half's content into `terraform.tfvars`:
    ```hcl
-   ssh_public_key_path = "~/.ssh/comprobify_deploy_new.pub"
+   ssh_public_key = "ssh-ed25519 AAAA... comprobify-deploy"   # cat ~/.ssh/comprobify_deploy_new.pub
    ```
 3. `terraform plan` — expect it to show both `digitalocean_ssh_key.infra` (replaced — DO's API treats a key's `public_key` as immutable, so a change forces a new resource, and Terraform deletes the old one from your DO account automatically as part of that) and `digitalocean_droplet.this` (replaced, since `user_data` changed) needing replacement, plus everything downstream that depends on the droplet (firewall, project assignment, DNS record) updating to reference the new one.
 4. `terraform apply`, confirm with `yes`.
@@ -755,7 +757,7 @@ The key is baked into `user_data` at first boot (via the `users:` block in cloud
    ```bash
    rm ~/.ssh/comprobify_infra ~/.ssh/comprobify_infra.pub   # or whatever the old pair was named
    ```
-   Then, if you'd rather not keep the "_new" suffix permanently, rename the current pair (`mv ~/.ssh/comprobify_deploy_new ~/.ssh/comprobify_deploy` and the `.pub` alongside it) and update `ssh_public_key_path` in `terraform.tfvars` to match — this doesn't need another droplet recreate, since the key *content* isn't changing, only its path on your laptop.
+   Then, if you'd rather not keep the "_new" suffix permanently, rename the current pair (`mv ~/.ssh/comprobify_deploy_new ~/.ssh/comprobify_deploy` and the `.pub` alongside it) — no `terraform.tfvars` change needed for this part, since it holds the key's *content*, not a path, and a local rename doesn't touch that.
 
 Steps 5 and 7 are both worth doing before step 8 specifically — deleting the old key before confirming the new one works end to end (both for interactive access and for CI) is how you'd end up locked out with no way back except the DO Console.
 
