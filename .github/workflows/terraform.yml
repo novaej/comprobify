@@ -46,8 +46,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
@@ -66,8 +66,8 @@ jobs:
     environment: staging-infra
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
