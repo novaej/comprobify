@@ -46,10 +46,10 @@ write_files:
   - path: /etc/cron.d/comprobify-jobs
     permissions: '0644'
     content: |
-      */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications 2>&1 | logger -t comprobify-cron
-      0 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions 2>&1 | logger -t comprobify-cron
-      10 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota 2>&1 | logger -t comprobify-cron
-      */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation 2>&1 | logger -t comprobify-cron
+      */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications 2>&1 | logger -t comprobify-cron-notifications
+      0 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions 2>&1 | logger -t comprobify-cron-subscriptions
+      10 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota 2>&1 | logger -t comprobify-cron-quota
+      */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation 2>&1 | logger -t comprobify-cron-queue-reconciliation
 
 runcmd:
   - mkdir -p /opt/comprobify
