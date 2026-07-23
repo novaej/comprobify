@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-07-23
+
+### Added
+- `GET /health` now includes a `version` field (from `package.json`), so a deployed environment's running version can be checked directly instead of cross-referencing GitHub Actions run history or GHCR image tags against git SHAs.
+
 ## [0.10.0] — 2026-07-23
 
 ### Added
