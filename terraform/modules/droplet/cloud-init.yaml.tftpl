@@ -38,15 +38,18 @@ write_files:
   # api container instead of needing Node installed on the bare host - it picks up
   # ADMIN_SECRET automatically from that container's own .env. Runs as
   # deploy_username, not root - same docker-group access the container itself needs.
-  # Schedules match what Render ran exactly. Harmless no-op if it fires before the
-  # first deploy (api container doesn't exist yet) or during a redeploy.
+  # Harmless no-op if it fires before the first deploy (api container doesn't exist
+  # yet) or during a redeploy. Queue reconciliation runs every 5 minutes rather than
+  # Render's original hourly cadence - self-hosted cron has no per-invocation cost,
+  # so at current (low) document volume there's no reason not to shrink the worst-case
+  # recovery window for a stuck dispatch from up to an hour down to up to 5 minutes.
   - path: /etc/cron.d/comprobify-jobs
     permissions: '0644'
     content: |
       */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications 2>&1 | logger -t comprobify-cron
       0 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions 2>&1 | logger -t comprobify-cron
       10 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota 2>&1 | logger -t comprobify-cron
-      0 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation 2>&1 | logger -t comprobify-cron
+      */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation 2>&1 | logger -t comprobify-cron
 
 runcmd:
   - mkdir -p /opt/comprobify

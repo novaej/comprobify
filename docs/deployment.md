@@ -293,20 +293,20 @@ Runs `queueReconciliationService.runAll()` — see ADR-019 and CLAUDE.md's "Asyn
 
 Both sweeps run independently against `public.documents` and `sandbox.documents` (two `SELECT ... FOR UPDATE SKIP LOCKED` queries per sweep — Postgres disallows `FOR UPDATE` with `UNION`).
 
-Idempotent. Needs a **shorter cadence than the other three jobs** — hourly, since this is the recovery mechanism for a temporarily unreachable broker or a publish that timed out. Not tighter than that: CloudAMQP is a managed service that rarely fails outright, and the worker already processes anything actually queued near-instantly — this job only bounds how long a document can sit unprocessed if nothing ever queued a message for it in the first place (a stuck publish, or a `RECEIVED` document nobody polled).
+Idempotent. Runs every 5 minutes — the same cadence as the Notifications job, and the tightest of the four, since this is the recovery mechanism for a temporarily unreachable broker or a publish that timed out. This job only bounds how long a document can sit unprocessed if nothing ever queued a message for it in the first place (a stuck publish, or a `RECEIVED` document nobody polled); CloudAMQP is a managed service that rarely fails outright and the worker already processes anything actually queued near-instantly, so 5 minutes is about shrinking the worst case, not chasing a real ongoing failure rate. This was hourly under the original Render Cron Job setup and while queue reconciliation still ran externally against a per-invocation-priced scheduler; self-hosted cron on the droplet has no such cost, so at current (low) document volume there's no reason not to run it tighter.
 
 ### Where the schedule actually lives now
 
 Defined in `terraform/modules/droplet/cloud-init.yaml.tftpl` as a `/etc/cron.d/comprobify-jobs` file, written to the droplet at first boot. Full mechanics — why it runs inside the `api` container instead of needing Node on the bare host, how it picks up `ADMIN_SECRET`, monitoring via `journalctl -t comprobify-cron` — are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
 
-Reference table (schedule unchanged from the Render Cron Job days):
+Reference table (schedule matches the Render Cron Job days except Queue Reconciliation, tightened from hourly since self-hosted cron has no per-invocation cost — see above):
 
 | Job | Schedule | Command |
 |---|---|---|
 | Notifications | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/notifications` |
 | Subscriptions | `0 6 * * *` (daily) | `node scripts/run-admin-job.js /v1/admin/jobs/subscriptions` |
 | Quota | `10 6 * * *` (daily, just after Subscriptions) | `node scripts/run-admin-job.js /v1/admin/jobs/quota` |
-| Queue reconciliation | `0 * * * *` (hourly) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
+| Queue reconciliation | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
 
 Production's schedule doesn't exist yet — it gets the same 4 entries on its own droplet once production is provisioned (see "Production status" above).
 
