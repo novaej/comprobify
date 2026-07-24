@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.3] — 2026-07-24
+
+### Changed
+- **Operational note: each of the 4 admin cron jobs now logs under its own syslog identifier** (`comprobify-cron-notifications`, `comprobify-cron-subscriptions`, `comprobify-cron-quota`, `comprobify-cron-queue-reconciliation`) instead of one shared `comprobify-cron` tag, so `journalctl -t <tag>` can filter to a single job's runs without parsing output bodies. No API-facing behavior changes.
+
 ## [0.10.2] — 2026-07-23
 
 ### Changed
