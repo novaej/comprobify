@@ -18,6 +18,13 @@ resource "digitalocean_droplet" "this" {
   image    = var.image_slug
   ssh_keys = [digitalocean_ssh_key.infra.id]
 
+  # Explicit false, overriding the provider's own default of true - a resize that also
+  # grows the disk can never be undone (DigitalOcean allows disk to grow but never shrink,
+  # regardless of this flag), so a future size change here would permanently ratchet up
+  # disk usage/cost even if the CPU/RAM change was only meant to be a temporary test.
+  # false keeps size changes limited to CPU/RAM only, freely reversible in both directions.
+  resize_disk = false
+
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
     environment     = var.environment
     deploy_username = var.deploy_username
