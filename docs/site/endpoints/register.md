@@ -38,7 +38,6 @@ Compartido con `POST /v1/resend-verification` — 5 solicitudes por hora por IP.
 | `initialSequentials` | array | No | Números secuenciales iniciales por tipo de comprobante. Cualquier tipo no listado tiene por defecto `1`. Ver estructura abajo. |
 | `language` | string | No | Idioma para los correos salientes. Soportados: `es` (por defecto), `en`. Se guarda en el tenant y se usa para todos los correos posteriores, incluyendo reenvíos. |
 | `verificationRedirectUrl` | string | No | URL del frontend a la que apuntará el enlace de verificación en el correo. El token se añade como `?token=<token>`. Si se omite, el enlace va directamente al endpoint de verificación de la API. |
-| `termsVersion` | string | Sí | El string `version` del documento TERMS actualmente publicado (de `GET /v1/agreements`). El servidor valida esto antes de aceptar el registro. Si aún no se ha publicado ningún documento, se acepta cualquier string no vacío tal cual (mecanismo de respaldo previo al lanzamiento). |
 
 ### Estructura de `initialSequentials`
 
@@ -111,8 +110,7 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | Campos faltantes o inválidos, o falta el archivo P12 o el `termsVersion` |
-| `400` | `VERSION_MISMATCH` | `termsVersion` no coincide con la versión de TERMS actualmente publicada — vuelve a consultar `GET /v1/agreements` y muestra la versión actual |
+| `400` | `VALIDATION_FAILED` | Campos faltantes o inválidos, o falta el archivo P12 |
 | `400` | `BAD_REQUEST` | El archivo P12 está corrupto o la contraseña del certificado es incorrecta |
 | `400` | `INVALID_FILE_UPLOAD` | El archivo de logo excede los 500 KB |
 | `409` | `CONFLICT` | El RUC ya está registrado bajo otro correo, o el correo ya tiene una cuenta — usa [`POST /v1/recover`](recover.md) para recuperar el acceso |
@@ -124,5 +122,4 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 - Los tenants no verificados pueden usar sandbox pero no pueden promoverse a producción.
 - El token de verificación expira después del TTL configurado (24 horas por defecto). Usa `POST /v1/resend-verification` para emitir uno nuevo.
 - Este endpoint es solo para cuentas nuevas — si el correo ya está registrado, la solicitud se rechaza con `409 CONFLICT` sin importar el estado de la cuenta. Si perdiste tu API key, usa [`POST /v1/recover`](recover.md) en su lugar.
-- Obtén el `termsVersion` actual desde `GET /v1/agreements` justo antes de mostrar la casilla de aceptación, no en la carga de la página — el servidor valida la versión enviada y rechaza las versiones desactualizadas.
-- Los tenants que regresan y cuya versión de aceptación quedó desactualizada (por ejemplo, después de una actualización del DPA) deberían usar `GET /v1/tenants/agreements` para descubrir qué documentos necesitan volver a aceptarse, y `POST /v1/tenants/agreements` para registrar la nueva aceptación. Ver [Agreement Acceptance](agreement-acceptance.md).
+- El registro **no** acepta ningún documento legal — solo crea la cuenta. Instancias personalizadas de TERMS/PRIVACY/DPA para el tenant se generan poco después en segundo plano (estado `PENDING`, aún no aceptadas). La aceptación explícita es un paso posterior y separado: usa `GET /v1/tenants/agreements` para ver qué documentos están pendientes y `POST /v1/tenants/agreements` para aceptarlos — requisito indispensable antes de promover a producción. Ver [Agreement Acceptance](agreement-acceptance.md).

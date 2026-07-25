@@ -17,7 +17,7 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/v1/agreements` | Lista la versión publicada actual de cada tipo de documento (TERMS, PRIVACY, DPA) — lee `version` de aquí y pásalo como `termsVersion` al registrarte |
+| `GET` | `/v1/agreements` | Lista la versión publicada actual de cada tipo de documento (TERMS, PRIVACY, DPA) — lee `version` de aquí y pásalo como `termsVersion` al aceptar vía `POST /v1/tenants/agreements` |
 | `GET` | `/v1/agreements/:type` | Obtiene el documento actual renderizado como HTML — insértalo en un modal o página de tu UI de registro |
 
 ## Planes (público)

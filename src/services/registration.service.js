@@ -9,7 +9,6 @@ const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
 const tenantEventModel = require('../models/tenant-event.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
-const tenantAgreementService = require('./tenant-agreement.service');
 const pendingEffectService = require('./pending-effect.service');
 const { EffectTypes } = require('../constants/effect-types');
 const AppError = require('../errors/app-error');
@@ -65,13 +64,6 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
     throw new ConflictError(`RUC ${fields.ruc} is already registered`);
   }
 
-  // Validate against the published TERMS document, but only once something has
-  // actually been published — pre-launch, before any documents exist via the
-  // admin endpoint, there's nothing authoritative to check against, so
-  // termsVersion is trusted as-is (matches the original "API just records it"
-  // behavior for that case).
-  await tenantAgreementService.validateTermsVersion(fields.termsVersion);
-
   const parsed = certificateService.parseCertificate(p12Buffer, p12Password || '');
   const encryptedPrivateKey = cryptoService.encrypt(parsed.privateKeyPem);
 
@@ -93,7 +85,6 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
         verificationTokenExpiresAt,
         verificationRedirectUrl: fields.verificationRedirectUrl || null,
         preferredLanguage: fields.language || 'es',
-        legalVersion: fields.termsVersion,
       }, client);
       quotaRow = await tenantQuotaService.initializeForTenant(tenant.id, tier.documentQuota, client);
       await client.query('COMMIT');

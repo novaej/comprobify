@@ -8,7 +8,6 @@ jest.mock('../../../src/services/sequential.service');
 jest.mock('../../../src/services/tenant-quota.service');
 jest.mock('../../../src/services/crypto.service');
 jest.mock('../../../src/services/certificate.service');
-jest.mock('../../../src/services/tenant-agreement.service');
 jest.mock('../../../src/services/pending-effect.service');
 
 const db = require('../../../src/config/database');
@@ -21,7 +20,6 @@ const sequentialService = require('../../../src/services/sequential.service');
 const tenantQuotaService = require('../../../src/services/tenant-quota.service');
 const cryptoService = require('../../../src/services/crypto.service');
 const certificateService = require('../../../src/services/certificate.service');
-const tenantAgreementService = require('../../../src/services/tenant-agreement.service');
 const pendingEffectService = require('../../../src/services/pending-effect.service');
 const config = require('../../../src/config');
 const registrationService = require('../../../src/services/registration.service');
@@ -38,7 +36,6 @@ const baseFields = {
   issuePointCode: '001',
   emissionType: 'NORMAL',
   requiredAccounting: false,
-  termsVersion: 1,
 };
 
 describe('RegistrationService', () => {
@@ -49,7 +46,6 @@ describe('RegistrationService', () => {
     db.getClient.mockResolvedValue(mockClient);
     tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
     tenantQuotaService.getCurrentForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
-    tenantAgreementService.validateTermsVersion.mockResolvedValue(undefined);
     pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-x', effect_type: 'X' });
     pendingEffectService.dispatch.mockResolvedValue(undefined);
     certificateService.parseCertificate.mockReturnValue({
@@ -96,20 +92,6 @@ describe('RegistrationService', () => {
       expect(issuerModel.findByTenantId).not.toHaveBeenCalled();
       expect(certificateService.parseCertificate).not.toHaveBeenCalled();
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
-      expect(tenantModel.create).not.toHaveBeenCalled();
-    });
-
-    test('validates termsVersion against the published TERMS agreement before parsing the certificate', async () => {
-      tenantModel.findByEmail.mockResolvedValue(null);
-      issuerModel.findByRuc.mockResolvedValue(null);
-      tenantAgreementService.validateTermsVersion.mockRejectedValue(
-        Object.assign(new Error('Terms version is outdated'), { statusCode: 409, code: 'TERMS_VERSION_OUTDATED' })
-      );
-
-      await expect(registrationService.register(baseFields, p12Buffer, p12Password))
-        .rejects.toMatchObject({ statusCode: 409, code: 'TERMS_VERSION_OUTDATED' });
-
-      expect(certificateService.parseCertificate).not.toHaveBeenCalled();
       expect(tenantModel.create).not.toHaveBeenCalled();
     });
 
@@ -172,13 +154,11 @@ describe('RegistrationService', () => {
 
       const result = await registrationService.register(baseFields, p12Buffer, p12Password);
 
-      expect(tenantAgreementService.validateTermsVersion).toHaveBeenCalledWith(baseFields.termsVersion);
       expect(cryptoService.encrypt).toHaveBeenCalledWith('PRIVATE_KEY_PEM');
       expect(tenantModel.create).toHaveBeenCalledWith(expect.objectContaining({
         email: baseFields.email,
         subscriptionTier: 'FREE',
         status: 'PENDING_VERIFICATION',
-        legalVersion: baseFields.termsVersion,
       }), mockClient);
       expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 5, mockClient);
       expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({

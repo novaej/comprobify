@@ -101,7 +101,6 @@ Fill in the form-data fields before sending:
 | `issuePointCode` | `001` |
 | `emissionType` | `1` |
 | `requiredAccounting` | `false` |
-| `termsVersion` | Auto-filled from `{{agreement_version}}` captured in Step 1 |
 
 ✓ Test script captures: `api_key`, `tenant_id`, `issuer_id`.
 
@@ -322,7 +321,7 @@ All three must use the same `version` string so a single registration checkbox c
 
 ✓ Test script captures `tenant_id`.
 
-Admin-created tenants skip `termsVersion` validation and start with `status: ACTIVE` — no email verification required.
+Admin-created tenants start with `status: ACTIVE` immediately — no email verification required.
 
 ---
 
@@ -350,7 +349,7 @@ Attach the tenant's `.p12` file and fill in `tenantId` (uses `{{tenant_id}}`), R
 
 ### Step 4a — Generate agreements for the tenant (admin-created tenants)
 
-Admin-created tenants skip `termsVersion` validation at creation, so no agreement instances are auto-generated for them. Generate them now:
+Admin-created tenants don't go through the self-service registration flow, so no agreement instances are auto-generated for them (unlike `POST /v1/register`, which always enqueues generation in the background). Generate them now:
 
 **`POST /v1/admin/tenants/{{tenant_id}}/agreements`** *(Admin folder)*
 
@@ -526,7 +525,7 @@ All variables are set at the **collection** level (not environment). Change them
 | `base_url` | You (manual) | Every request |
 | `admin_secret` | You (manual) | All `X-Admin-Secret` headers |
 | `api_key` | ✓ Register / Promote / Mint Key | `Authorization: Bearer {{api_key}}` |
-| `agreement_version` | ✓ List Documents / Publish TERMS | `termsVersion` in Register + Accept Agreements |
+| `agreement_version` | ✓ List Documents / Publish TERMS | `termsVersion` in Accept Agreements |
 | `verification_token` | You (from email) | Verify Email |
 | `issuer_id` | ✓ Register / List Issuers | `X-Issuer-Id` on all document requests |
 | `tenant_id` | ✓ Register / Create Tenant (admin) | Admin tenant routes |

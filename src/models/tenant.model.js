@@ -5,13 +5,13 @@ const EmailStatus = require('../constants/email-status');
 // Accepts an optional external transaction client so the caller can wrap
 // this INSERT and the tenant's first tenant_quotas row in one transaction —
 // see registration.service.js / admin.service.js.
-async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es', legalVersion = null }, client = null) {
+async function create({ email, subscriptionTier = 'FREE', status = TenantStatus.PENDING_VERIFICATION, verificationToken = null, verificationTokenExpiresAt = null, verificationRedirectUrl = null, preferredLanguage = 'es' }, client = null) {
   const conn = client || db;
   const { rows } = await conn.query(
-    `INSERT INTO tenants (email, subscription_tier, status, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language, agreement_accepted_at, agreement_version)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8::TEXT IS NULL THEN NULL ELSE NOW() END, $8)
+    `INSERT INTO tenants (email, subscription_tier, status, verification_token, verification_token_expires_at, verification_redirect_url, preferred_language)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
-    [email, subscriptionTier, status, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage, legalVersion]
+    [email, subscriptionTier, status, verificationToken, verificationTokenExpiresAt, verificationRedirectUrl, preferredLanguage]
   );
   return rows[0];
 }

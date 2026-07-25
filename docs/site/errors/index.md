@@ -120,7 +120,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `SELF_REVOCATION_FORBIDDEN` | No se puede revocar la API key usada para autenticar esta solicitud |
 | `INVALID_FILE_UPLOAD` | El archivo subido falta, es del tipo incorrecto, o excede el límite de tamaño del campo (p. ej. un logo de más de 500 KB) |
 | `PROOF_FILE_LIMIT_REACHED` | El pago ya tiene el número máximo de archivos de comprobante activos (10) — elimina uno antes de subir más |
-| `VERSION_MISMATCH` | `termsVersion` en `POST /v1/register` o `POST /v1/tenants/agreements` no coincide con la versión actualmente publicada del documento TERMS — vuelve a consultar `GET /v1/agreements` y presenta la versión actual antes de pedirle al usuario que acepte de nuevo |
+| `VERSION_MISMATCH` | `termsVersion` en `POST /v1/tenants/agreements` no coincide con la versión actualmente publicada del documento TERMS — vuelve a consultar `GET /v1/agreements` y presenta la versión actual antes de pedirle al usuario que acepte de nuevo |
 | `LAST_ISSUER_CANNOT_BE_REMOVED` | El tenant tiene solo un emisor activo restante — no se puede eliminar |
 | `ISSUER_HAS_DOCUMENTS` | El emisor tiene comprobantes emitidos (en cualquiera de los dos ambientes) y no se puede eliminar |
 | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` no es mayor que el valor actual del contador |

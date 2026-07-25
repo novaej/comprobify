@@ -4,7 +4,7 @@
 
 Comprobify es operado por **{{operador.nombre}}**, persona natural con RUC **{{operador.ruc}}**, domiciliado en {{operador.domicilio}} (en adelante, "Comprobify", "nosotros"). Estos Términos de Servicio ("Términos") rigen el acceso y uso del servicio de facturación electrónica de Comprobify (el "Servicio") por parte de la persona natural o jurídica que se registra ("el Cliente", "usted").
 
-Al registrarse, el Cliente indica la versión vigente de estos Términos. La aceptación expresa de estos Términos, de la **Política de Privacidad** y del **Acuerdo de Procesamiento de Datos** ("DPA") se realiza como un paso posterior a la creación de la cuenta, y es requisito indispensable para activar el Servicio en ambiente de producción. Una vez aceptados, dichos documentos forman parte integrante de la relación contractual entre el Cliente y Comprobify.
+La aceptación expresa de estos Términos, de la **Política de Privacidad** y del **Acuerdo de Procesamiento de Datos** ("DPA") se realiza como un paso posterior a la creación de la cuenta, y es requisito indispensable para activar el Servicio en ambiente de producción. Una vez aceptados, dichos documentos son vinculantes y rigen el uso del Servicio por parte del Cliente.
 
 ## 2. Descripción del Servicio
 

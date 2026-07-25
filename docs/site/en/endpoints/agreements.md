@@ -23,7 +23,7 @@ GET /v1/agreements
 }
 ```
 
-The `version` string is what you pass as `termsVersion` in `POST /v1/register` (or `POST /v1/tenants/agreements`). Always read it from this response rather than hardcoding it — the server validates against whatever is currently published.
+The `version` string is what you pass as `termsVersion` in `POST /v1/tenants/agreements`, the explicit acceptance step that follows registration. Always read it from this response rather than hardcoding it — the server validates against whatever is currently published.
 
 ## Get a document
 
@@ -48,4 +48,4 @@ Returns a complete, self-contained `text/html` page — `<!DOCTYPE html>` with i
 
 - The TERMS and PRIVACY documents together make up the acceptance bundle. The DPA is incorporated by reference in the Terms of Service — there is only one checkbox in the UI, not three.
 - The `version` value from `GET /v1/agreements` is an opaque string token. The server does not interpret its format — it just checks that the version you present at acceptance time matches what was current when the user clicked accept.
-- If nothing has been published yet, `GET /v1/agreements` returns an empty array and registration does not enforce a `termsVersion` match (pre-launch fallback).
+- If nothing has been published yet, `GET /v1/agreements` returns an empty array and `POST /v1/tenants/agreements` has nothing to accept yet.
