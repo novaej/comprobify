@@ -23,7 +23,7 @@ GET /v1/agreements
 }
 ```
 
-El string `version` es lo que se pasa como `termsVersion` en `POST /v1/register` (o `POST /v1/tenants/agreements`). Léelo siempre desde esta respuesta en lugar de codificarlo de forma fija — el servidor valida contra lo que esté actualmente publicado.
+El string `version` es lo que se pasa como `termsVersion` en `POST /v1/tenants/agreements`, el paso explícito de aceptación posterior al registro. Léelo siempre desde esta respuesta en lugar de codificarlo de forma fija — el servidor valida contra lo que esté actualmente publicado.
 
 ## Obtener un documento
 
@@ -48,4 +48,4 @@ Devuelve una página `text/html` completa y autocontenida — `<!DOCTYPE html>` 
 
 - Los documentos TERMS y PRIVACY juntos conforman el paquete de aceptación. El DPA se incorpora por referencia dentro de los Términos de Servicio — solo hay un checkbox en la interfaz, no tres.
 - El valor `version` de `GET /v1/agreements` es un token de string opaco. El servidor no interpreta su formato — solo verifica que la versión presentada al momento de la aceptación coincida con la que estaba vigente cuando el usuario hizo clic en aceptar.
-- Si aún no se ha publicado nada, `GET /v1/agreements` devuelve un arreglo vacío y el registro no exige una coincidencia de `termsVersion` (comportamiento de respaldo previo al lanzamiento).
+- Si aún no se ha publicado nada, `GET /v1/agreements` devuelve un arreglo vacío y `POST /v1/tenants/agreements` no tiene nada que aceptar todavía.

@@ -17,7 +17,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/v1/agreements` | List current published version of each document type (TERMS, PRIVACY, DPA) — read `version` from here and pass it as `termsVersion` on signup |
+| `GET` | `/v1/agreements` | List current published version of each document type (TERMS, PRIVACY, DPA) — read `version` from here and pass it as `termsVersion` when accepting via `POST /v1/tenants/agreements` |
 | `GET` | `/v1/agreements/:type` | Fetch the current document rendered as HTML — embed in a modal or page in your registration UI |
 
 ## Tiers (public)

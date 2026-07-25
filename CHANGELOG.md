@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **`POST /v1/register` no longer accepts or validates a `termsVersion` field.** Nothing is actually accepted at registration time — the tenant's personalized `tenant_agreements` snapshots are generated afterward in the background and stay `PENDING` until the tenant explicitly accepts via `POST /v1/tenants/agreements`, which is the only endpoint that now validates `termsVersion`. `tenants.agreement_accepted_at`/`agreement_version` are stamped only by that acceptance call, never at registration. See ADR-018 addendum.
+
 ## [0.10.3] — 2026-07-24
 
 ### Changed

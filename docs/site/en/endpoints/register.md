@@ -38,7 +38,6 @@ Shared with `POST /v1/resend-verification` — 5 requests per hour per IP.
 | `initialSequentials` | array | No | Starting sequential numbers per document type. Any type not listed defaults to `1`. See structure below. |
 | `language` | string | No | Language for outgoing emails. Supported: `es` (default), `en`. Stored on the tenant and used for all subsequent emails including resends. |
 | `verificationRedirectUrl` | string | No | Frontend URL where the verification link in the email will point. The token is appended as `?token=<token>`. If omitted, the link goes directly to the API's verify endpoint. |
-| `termsVersion` | string | Yes | The `version` string of the currently published TERMS document (from `GET /v1/agreements`). The server validates this before accepting the registration. If no documents have been published yet, any non-empty string is accepted as-is (pre-launch fallback). |
 
 ### `initialSequentials` structure
 
@@ -111,8 +110,7 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | Missing or invalid fields, or missing P12 file or `termsVersion` |
-| `400` | `VERSION_MISMATCH` | `termsVersion` does not match the currently published TERMS version — re-fetch `GET /v1/agreements` and show the current version |
+| `400` | `VALIDATION_FAILED` | Missing or invalid fields, or missing P12 file |
 | `400` | `BAD_REQUEST` | P12 file is corrupt or the certificate password is wrong |
 | `400` | `INVALID_FILE_UPLOAD` | Logo file exceeds 500 KB |
 | `409` | `CONFLICT` | RUC already registered under a different email, or the email already has an account — use [`POST /v1/recover`](recover.md) to regain access |
@@ -124,5 +122,4 @@ https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
 - Unverified tenants can use sandbox but cannot promote to production.
 - The verification token expires after the configured TTL (default 24 hours). Use `POST /v1/resend-verification` to issue a fresh one.
 - This endpoint is for new accounts only — if the email is already registered, the request is rejected with `409 CONFLICT` regardless of account status. If you lost your API key, use [`POST /v1/recover`](recover.md) instead.
-- Fetch the current `termsVersion` from `GET /v1/agreements` immediately before showing the acceptance checkbox, not at page load — the server validates the submitted version and rejects stale ones.
-- Returning tenants whose acceptance version has drifted (e.g. after the DPA is updated) should use `GET /v1/tenants/agreements` to discover which documents need re-accepting, and `POST /v1/tenants/agreements` to record the new acceptance. See [Agreement Acceptance](agreement-acceptance.md).
+- Registration does **not** accept any legal document — it only creates the account. Personalized TERMS/PRIVACY/DPA instances for the tenant are generated shortly after in the background (`PENDING` status, not yet accepted). Explicit acceptance is a separate, later step: use `GET /v1/tenants/agreements` to see what's pending and `POST /v1/tenants/agreements` to accept — required before promoting to production. See [Agreement Acceptance](agreement-acceptance.md).
