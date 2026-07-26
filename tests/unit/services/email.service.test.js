@@ -5,9 +5,6 @@ jest.mock('../../../src/services/email');
 jest.mock('../../../src/services/email/templates/invoice-authorized');
 jest.mock('../../../src/services/email/templates/verify-email');
 jest.mock('../../../src/services/email/templates/payment-proof-submitted');
-jest.mock('../../../src/services/email/templates/payment-reviewed');
-jest.mock('../../../src/services/email/templates/subscription-renewal-due');
-jest.mock('../../../src/services/email/templates/subscription-expired');
 
 jest.mock('../../../src/config', () => ({
   db: { host: 'localhost', port: 5432, database: 'test', user: 'test', password: '', ssl: false },
@@ -26,9 +23,6 @@ const emailFactory = require('../../../src/services/email');
 const invoiceAuthorizedTemplate = require('../../../src/services/email/templates/invoice-authorized');
 const verifyEmailTemplate = require('../../../src/services/email/templates/verify-email');
 const paymentProofSubmittedTemplate = require('../../../src/services/email/templates/payment-proof-submitted');
-const paymentReviewedTemplate = require('../../../src/services/email/templates/payment-reviewed');
-const subscriptionRenewalDueTemplate = require('../../../src/services/email/templates/subscription-renewal-due');
-const subscriptionExpiredTemplate = require('../../../src/services/email/templates/subscription-expired');
 const config = require('../../../src/config');
 const emailService = require('../../../src/services/email.service');
 
@@ -217,25 +211,13 @@ describe('EmailService', () => {
     });
   });
 
-  describe('sendPaymentReviewed', () => {
-    const payment = { id: '00000000-0000-0000-0000-000000000001', subscription_id: '00000000-0000-0000-0000-000000000010' };
-    const subscription = { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020' };
+  describe('sendNotificationEmail', () => {
+    const tenant = { id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' };
+    const rendered = { subject: 'Payment reviewed', text: 'text body', html: '<p>html body</p>' };
 
-    beforeEach(() => {
-      paymentReviewedTemplate.render.mockReturnValue({
-        subject: 'Payment reviewed',
-        text: 'text body',
-        html: '<p>html body</p>',
-      });
-    });
+    test('sends the already-rendered content to the tenant using the platform sender name', async () => {
+      const result = await emailService.sendNotificationEmail(tenant, rendered);
 
-    test('looks up the tenant and sends to their email, using the platform sender name', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
-
-      const result = await emailService.sendPaymentReviewed(payment, subscription, 'VERIFIED');
-
-      expect(tenantModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020');
-      expect(paymentReviewedTemplate.render).toHaveBeenCalledWith(payment, subscription, 'VERIFIED', 'es');
       expect(mockSend).toHaveBeenCalledWith({
         from: 'Comprobify <noreply@comprobify.test>',
         to: 'tenant@example.com',
@@ -245,103 +227,6 @@ describe('EmailService', () => {
         attachments: [],
       });
       expect(result).toEqual({ sent: true });
-    });
-
-    test('passes the REJECTED decision through to the template', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
-
-      await emailService.sendPaymentReviewed(payment, subscription, 'REJECTED');
-
-      expect(paymentReviewedTemplate.render).toHaveBeenCalledWith(payment, subscription, 'REJECTED', 'es');
-    });
-
-    test('falls back to "es" when the tenant has no preferred_language set', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: undefined });
-
-      await emailService.sendPaymentReviewed(payment, subscription, 'VERIFIED');
-
-      expect(paymentReviewedTemplate.render).toHaveBeenCalledWith(payment, subscription, 'VERIFIED', 'es');
-    });
-  });
-
-  describe('sendSubscriptionRenewalDue', () => {
-    const subscription = { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020' };
-    const payment = { id: '00000000-0000-0000-0000-000000000001', purpose: 'RENEWAL' };
-
-    beforeEach(() => {
-      subscriptionRenewalDueTemplate.render.mockReturnValue({
-        subject: 'Renewal due',
-        text: 'text body',
-        html: '<p>html body</p>',
-      });
-    });
-
-    test('looks up the tenant, renders with bank transfer instructions, and sends', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'en' });
-
-      const result = await emailService.sendSubscriptionRenewalDue(subscription, payment);
-
-      expect(tenantModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020');
-      expect(subscriptionRenewalDueTemplate.render).toHaveBeenCalledWith(
-        subscription, payment, config.bankTransfer, 'en'
-      );
-      expect(mockSend).toHaveBeenCalledWith({
-        from: 'Comprobify <noreply@comprobify.test>',
-        to: 'tenant@example.com',
-        subject: 'Renewal due',
-        text: 'text body',
-        html: '<p>html body</p>',
-        attachments: [],
-      });
-      expect(result).toEqual({ sent: true });
-    });
-
-    test('falls back to "es" when the tenant has no preferred_language set', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: null });
-
-      await emailService.sendSubscriptionRenewalDue(subscription, payment);
-
-      expect(subscriptionRenewalDueTemplate.render).toHaveBeenCalledWith(
-        subscription, payment, config.bankTransfer, 'es'
-      );
-    });
-  });
-
-  describe('sendSubscriptionExpired', () => {
-    const subscription = { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020', tier: 'GROWTH' };
-
-    beforeEach(() => {
-      subscriptionExpiredTemplate.render.mockReturnValue({
-        subject: 'Subscription expired',
-        text: 'text body',
-        html: '<p>html body</p>',
-      });
-    });
-
-    test('looks up the tenant and sends the expiry notice', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
-
-      const result = await emailService.sendSubscriptionExpired(subscription);
-
-      expect(tenantModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020');
-      expect(subscriptionExpiredTemplate.render).toHaveBeenCalledWith(subscription, 'es');
-      expect(mockSend).toHaveBeenCalledWith({
-        from: 'Comprobify <noreply@comprobify.test>',
-        to: 'tenant@example.com',
-        subject: 'Subscription expired',
-        text: 'text body',
-        html: '<p>html body</p>',
-        attachments: [],
-      });
-      expect(result).toEqual({ sent: true });
-    });
-
-    test('falls back to "es" when the tenant has no preferred_language set', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: undefined });
-
-      await emailService.sendSubscriptionExpired(subscription);
-
-      expect(subscriptionExpiredTemplate.render).toHaveBeenCalledWith(subscription, 'es');
     });
   });
 
@@ -352,14 +237,9 @@ describe('EmailService', () => {
 
     test('does not alter text/html when appEnv is production', async () => {
       config.appEnv = 'production';
-      subscriptionExpiredTemplate.render.mockReturnValue({
-        subject: 'Subscription expired',
-        text: 'text body',
-        html: '<p>html body</p>',
-      });
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
+      const tenant = { id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' };
 
-      await emailService.sendSubscriptionExpired({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020', tier: 'GROWTH' });
+      await emailService.sendNotificationEmail(tenant, { subject: 'Subscription expired', text: 'text body', html: '<p>html body</p>' });
 
       expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
         text: 'text body',
@@ -369,14 +249,9 @@ describe('EmailService', () => {
 
     test('prepends the banner to a fragment-style template (no <body> tag)', async () => {
       config.appEnv = 'staging';
-      subscriptionExpiredTemplate.render.mockReturnValue({
-        subject: 'Subscription expired',
-        text: 'text body',
-        html: '<p>html body</p>',
-      });
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' });
+      const tenant = { id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' };
 
-      await emailService.sendSubscriptionExpired({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020', tier: 'GROWTH' });
+      await emailService.sendNotificationEmail(tenant, { subject: 'Subscription expired', text: 'text body', html: '<p>html body</p>' });
 
       const sentArgs = mockSend.mock.calls[0][0];
       expect(sentArgs.text).toBe(
@@ -389,14 +264,13 @@ describe('EmailService', () => {
 
     test('inserts the banner right after <body> for a full-document-style template', async () => {
       config.appEnv = 'staging';
-      subscriptionExpiredTemplate.render.mockReturnValue({
+      const tenant = { id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'en' };
+
+      await emailService.sendNotificationEmail(tenant, {
         subject: 'Subscription expired',
         text: 'text body',
         html: '<!DOCTYPE html><html><body style="margin:0;"><p>html body</p></body></html>',
       });
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'en' });
-
-      await emailService.sendSubscriptionExpired({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000020', tier: 'GROWTH' });
 
       const sentArgs = mockSend.mock.calls[0][0];
       expect(sentArgs.html).toBe(

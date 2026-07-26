@@ -1,0 +1,21 @@
+SUBJECT: Your {{tier}} subscription has expired
+---HTML---
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <p>Hello,</p>
+  <p>Your {{tier}} subscription expired without a renewal payment, so your account has been moved to the FREE plan.</p>
+  <p>You can start a new subscription at any time via POST /v1/subscriptions.</p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+  <p style="font-size: 11px; color: #999;">Do not reply — this is an automated message.</p>
+</body>
+</html>
+---TEXT---
+Hello,
+
+Your {{tier}} subscription expired without a renewal payment, so your account has been moved to the FREE plan.
+
+You can start a new subscription at any time via POST /v1/subscriptions.
+
+Do not reply — this is an automated message.

@@ -7,9 +7,9 @@ jest.mock('../../../src/models/payment.model');
 jest.mock('../../../src/models/subscription.model');
 jest.mock('../../../src/models/notification.model');
 jest.mock('../../../src/models/notification-preference.model');
-jest.mock('../../../src/models/tier-price.model');
 jest.mock('../../../src/services/document-transmission.service');
 jest.mock('../../../src/services/email.service');
+jest.mock('../../../src/services/notification-email-template.service');
 jest.mock('../../../src/services/webhook-delivery.service');
 jest.mock('../../../src/services/tenant-agreement.service');
 
@@ -22,9 +22,9 @@ const paymentModel = require('../../../src/models/payment.model');
 const subscriptionModel = require('../../../src/models/subscription.model');
 const notificationModel = require('../../../src/models/notification.model');
 const notificationPreferenceModel = require('../../../src/models/notification-preference.model');
-const tierPriceModel = require('../../../src/models/tier-price.model');
 const documentTransmissionService = require('../../../src/services/document-transmission.service');
 const emailService = require('../../../src/services/email.service');
+const notificationEmailTemplateService = require('../../../src/services/notification-email-template.service');
 const webhookDeliveryService = require('../../../src/services/webhook-delivery.service');
 const tenantAgreementService = require('../../../src/services/tenant-agreement.service');
 const { getHandler } = require('../../../src/effects');
@@ -207,96 +207,52 @@ describe('NOTIFICATION_DISPATCH handler', () => {
     await getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-1' });
 
     expect(notificationPreferenceModel.isEnabled).toHaveBeenCalledWith('tenant-1', 'PAYMENT_VERIFIED', 'EMAIL');
-    expect(emailService.sendPaymentReviewed).not.toHaveBeenCalled();
+    expect(notificationEmailTemplateService.render).not.toHaveBeenCalled();
+    expect(emailService.sendNotificationEmail).not.toHaveBeenCalled();
     expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('notif-1', 'SKIPPED');
   });
 
-  test('PAYMENT_VERIFIED: re-fetches payment + subscription from notification.metadata and sends, then marks SENT', async () => {
-    const payment = { id: 'payment-1' };
-    const subscription = { id: 'sub-1' };
+  test('resolves the tenant, renders via notificationEmailTemplateService using the tenant preferred_language, sends, and marks SENT', async () => {
+    const tenant = { id: 'tenant-1', email: 'tenant@example.com', preferred_language: 'en' };
     const notification = { id: 'notif-1', tenant_id: 'tenant-1', type: 'PAYMENT_VERIFIED', metadata: { paymentId: 'payment-1', subscriptionId: 'sub-1' } };
-    notificationModel.findById.mockResolvedValue(notification);
-    notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-    paymentModel.findById.mockResolvedValue(payment);
-    subscriptionModel.findById.mockResolvedValue(subscription);
-    emailService.sendPaymentReviewed.mockResolvedValue({});
-
-    await getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-1' });
-
-    expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(payment, subscription, 'VERIFIED');
-    expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('notif-1', 'SENT');
-  });
-
-  test('PAYMENT_REJECTED: sends with decision REJECTED', async () => {
-    const payment = { id: 'payment-1' };
-    const subscription = { id: 'sub-1' };
-    const notification = { id: 'notif-2', tenant_id: 'tenant-1', type: 'PAYMENT_REJECTED', metadata: { paymentId: 'payment-1', subscriptionId: 'sub-1' } };
-    notificationModel.findById.mockResolvedValue(notification);
-    notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-    paymentModel.findById.mockResolvedValue(payment);
-    subscriptionModel.findById.mockResolvedValue(subscription);
-    emailService.sendPaymentReviewed.mockResolvedValue({});
-
-    await getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-2' });
-
-    expect(emailService.sendPaymentReviewed).toHaveBeenCalledWith(payment, subscription, 'REJECTED');
-  });
-
-  test('SUBSCRIPTION_RENEWAL_DUE: re-fetches subscription + payment from notification.metadata and sends', async () => {
-    const subscription = { id: 'sub-1', tier: 'GROWTH' };
-    const payment = { id: 'payment-1' };
-    const notification = { id: 'notif-3', tenant_id: 'tenant-1', type: 'SUBSCRIPTION_RENEWAL_DUE', metadata: { subscriptionId: 'sub-1', paymentId: 'payment-1' } };
-    notificationModel.findById.mockResolvedValue(notification);
-    notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-    subscriptionModel.findById.mockResolvedValue(subscription);
-    paymentModel.findById.mockResolvedValue(payment);
-    emailService.sendSubscriptionRenewalDue.mockResolvedValue({});
-
-    await getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-3' });
-
-    expect(emailService.sendSubscriptionRenewalDue).toHaveBeenCalledWith(subscription, payment);
-    expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('notif-3', 'SENT');
-  });
-
-  test('SUBSCRIPTION_EXPIRED: re-fetches the subscription and sends', async () => {
-    const subscription = { id: 'sub-1', tier: 'GROWTH' };
-    const notification = { id: 'notif-4', tenant_id: 'tenant-1', type: 'SUBSCRIPTION_EXPIRED', metadata: { subscriptionId: 'sub-1' } };
-    notificationModel.findById.mockResolvedValue(notification);
-    notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-    subscriptionModel.findById.mockResolvedValue(subscription);
-    emailService.sendSubscriptionExpired.mockResolvedValue({});
-
-    await getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-4' });
-
-    expect(emailService.sendSubscriptionExpired).toHaveBeenCalledWith(subscription);
-    expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('notif-4', 'SENT');
-  });
-
-  test('PRICE_CHANGE_ANNOUNCED: re-fetches tenant + tier price and uses the metadata\'s previousPriceUsd (never recomputes it)', async () => {
-    const tenant = { id: 'tenant-1' };
-    const tierPrice = { id: 'price-1', tier: 'STARTER', billing_interval: 'MONTHLY' };
-    const notification = { id: 'notif-5', tenant_id: 'tenant-1', type: 'PRICE_CHANGE_ANNOUNCED', metadata: { tierPriceId: 'price-1', previousPriceUsd: 20 } };
+    const rendered = { subject: 'Payment verified', text: 'text', html: '<p>html</p>' };
     notificationModel.findById.mockResolvedValue(notification);
     notificationPreferenceModel.isEnabled.mockResolvedValue(true);
     tenantModel.findById.mockResolvedValue(tenant);
-    tierPriceModel.findById.mockResolvedValue(tierPrice);
-    emailService.sendPriceChangeAnnounced.mockResolvedValue({});
+    notificationEmailTemplateService.render.mockResolvedValue(rendered);
+    emailService.sendNotificationEmail.mockResolvedValue({ sent: true });
 
-    await getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-5' });
+    await getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-1' });
 
-    expect(emailService.sendPriceChangeAnnounced).toHaveBeenCalledWith(tenant, tierPrice, 20);
-    expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('notif-5', 'SENT');
+    expect(tenantModel.findById).toHaveBeenCalledWith('tenant-1');
+    expect(notificationEmailTemplateService.render).toHaveBeenCalledWith('PAYMENT_VERIFIED', 'en', notification);
+    expect(emailService.sendNotificationEmail).toHaveBeenCalledWith(tenant, rendered);
+    expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('notif-1', 'SENT');
   });
 
-  test('on send failure, marks FAILED and rethrows (so process() retries it)', async () => {
-    const subscription = { id: 'sub-1', tier: 'GROWTH' };
+  test('falls back to "es" when the tenant has no preferred_language set', async () => {
+    const tenant = { id: 'tenant-1', email: 'tenant@example.com', preferred_language: null };
+    const notification = { id: 'notif-2', tenant_id: 'tenant-1', type: 'SUBSCRIPTION_EXPIRED', metadata: { subscriptionId: 'sub-1' } };
+    notificationModel.findById.mockResolvedValue(notification);
+    notificationPreferenceModel.isEnabled.mockResolvedValue(true);
+    tenantModel.findById.mockResolvedValue(tenant);
+    notificationEmailTemplateService.render.mockResolvedValue({ subject: 's', text: 't', html: '<p>h</p>' });
+    emailService.sendNotificationEmail.mockResolvedValue({ sent: true });
+
+    await getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-2' });
+
+    expect(notificationEmailTemplateService.render).toHaveBeenCalledWith('SUBSCRIPTION_EXPIRED', 'es', notification);
+  });
+
+  test('on render or send failure, marks FAILED and rethrows (so process() retries it)', async () => {
+    const tenant = { id: 'tenant-1', email: 'tenant@example.com', preferred_language: 'es' };
     const notification = { id: 'notif-6', tenant_id: 'tenant-1', type: 'SUBSCRIPTION_EXPIRED', metadata: { subscriptionId: 'sub-1' } };
     notificationModel.findById.mockResolvedValue(notification);
     notificationPreferenceModel.isEnabled.mockResolvedValue(true);
-    subscriptionModel.findById.mockResolvedValue(subscription);
-    emailService.sendSubscriptionExpired.mockRejectedValue(new Error('mailgun down'));
+    tenantModel.findById.mockResolvedValue(tenant);
+    notificationEmailTemplateService.render.mockRejectedValue(new Error('no published template'));
 
-    await expect(getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-6' })).rejects.toThrow('mailgun down');
+    await expect(getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-6' })).rejects.toThrow('no published template');
 
     expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('notif-6', 'FAILED');
   });

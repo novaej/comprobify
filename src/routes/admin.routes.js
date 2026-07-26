@@ -51,6 +51,13 @@ router.get('/agreements/:type/versions', v.listAgreementVersions, validateReques
 router.patch('/agreements/:id/activate', v.activateAgreement, validateRequest, asyncHandler(controller.activateAgreement));
 router.post('/tenants/:id/agreements', v.verifyTenant, validateRequest, asyncHandler(controller.generateTenantAgreements));
 
+// Notification email templates (ADR-024, NEXT_STEPS.md item 13 Phase C)
+router.post('/notification-email-templates', v.publishNotificationEmailTemplate, validateRequest, asyncHandler(controller.publishNotificationEmailTemplate));
+router.get('/notification-email-templates', asyncHandler(controller.listCurrentNotificationEmailTemplates));
+router.get('/notification-email-templates/versions/:id', v.getNotificationEmailTemplateVersion, validateRequest, asyncHandler(controller.getNotificationEmailTemplateVersion));
+router.get('/notification-email-templates/:type/:language/versions', v.listNotificationEmailTemplateVersions, validateRequest, asyncHandler(controller.listNotificationEmailTemplateVersions));
+router.patch('/notification-email-templates/:id/activate', v.activateNotificationEmailTemplate, validateRequest, asyncHandler(controller.activateNotificationEmailTemplate));
+
 // Tier prices
 router.post('/prices',            v.createTierPrice,  validateRequest, asyncHandler(controller.createTierPrice));
 router.get('/prices',             v.listTierPrices,    validateRequest, asyncHandler(controller.listTierPrices));

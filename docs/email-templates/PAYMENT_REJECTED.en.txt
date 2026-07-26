@@ -1,0 +1,32 @@
+SUBJECT: Your {{purposeLabel}} payment needs attention
+---HTML---
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <p>Hello,</p>
+  <p>Your {{purposeLabel}} payment for the {{tier}} plan was rejected.</p>
+  <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Plan</td><td style="padding: 6px 12px;">{{tier}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Billing Frequency</td><td style="padding: 6px 12px;">{{billingInterval}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Amount</td><td style="padding: 6px 12px;">${{amount}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Reason</td><td style="padding: 6px 12px;">{{reasonLabel}}</td></tr>
+  </table>
+  <p>Please review the reason above and submit new proof for the same payment.</p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+  <p style="font-size: 11px; color: #999;">Do not reply — this is an automated message.</p>
+</body>
+</html>
+---TEXT---
+Hello,
+
+Your {{purposeLabel}} payment for the {{tier}} plan was rejected.
+
+  Plan: {{tier}}
+  Billing Frequency: {{billingInterval}}
+  Amount: ${{amount}}
+  Reason: {{reasonLabel}}
+
+Please review the reason above and submit new proof for the same payment.
+
+Do not reply — this is an automated message.

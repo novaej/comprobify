@@ -1,0 +1,30 @@
+SUBJECT: Tu pago de {{purposeLabel}} fue verificado
+---HTML---
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <p>Buenas noticias,</p>
+  <p>Tu pago de {{purposeLabel}} para el plan {{tier}} ha sido verificado.</p>
+  <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Plan</td><td style="padding: 6px 12px;">{{tier}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Frecuencia</td><td style="padding: 6px 12px;">{{billingInterval}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Monto</td><td style="padding: 6px 12px;">${{amount}}</td></tr>
+  </table>
+  <p>No necesitas hacer nada más — tu plan se activará automáticamente una vez que la factura correspondiente sea autorizada por el SRI.</p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+  <p style="font-size: 11px; color: #999;">No responder — este es un mensaje automático.</p>
+</body>
+</html>
+---TEXT---
+Buenas noticias,
+
+Tu pago de {{purposeLabel}} para el plan {{tier}} ha sido verificado.
+
+  Plan: {{tier}}
+  Frecuencia: {{billingInterval}}
+  Monto: ${{amount}}
+
+No necesitas hacer nada más — tu plan se activará automáticamente una vez que la factura correspondiente sea autorizada por el SRI.
+
+No responder — este es un mensaje automático.

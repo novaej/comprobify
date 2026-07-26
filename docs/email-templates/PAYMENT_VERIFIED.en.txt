@@ -1,0 +1,30 @@
+SUBJECT: Your {{purposeLabel}} payment was verified
+---HTML---
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <p>Good news,</p>
+  <p>Your {{purposeLabel}} payment for the {{tier}} plan has been verified.</p>
+  <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Plan</td><td style="padding: 6px 12px;">{{tier}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Billing Frequency</td><td style="padding: 6px 12px;">{{billingInterval}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Amount</td><td style="padding: 6px 12px;">${{amount}}</td></tr>
+  </table>
+  <p>No further action is needed — your plan activates automatically once the corresponding invoice is authorized by SRI.</p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+  <p style="font-size: 11px; color: #999;">Do not reply — this is an automated message.</p>
+</body>
+</html>
+---TEXT---
+Good news,
+
+Your {{purposeLabel}} payment for the {{tier}} plan has been verified.
+
+  Plan: {{tier}}
+  Billing Frequency: {{billingInterval}}
+  Amount: ${{amount}}
+
+No further action is needed — your plan activates automatically once the corresponding invoice is authorized by SRI.
+
+Do not reply — this is an automated message.

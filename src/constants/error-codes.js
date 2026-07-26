@@ -129,6 +129,12 @@ const ErrorCodes = Object.freeze({
   /** All legal documents must be ACCEPTED before promoting to production */
   AGREEMENT_ACCEPTANCE_REQUIRED: 'AGREEMENT_ACCEPTANCE_REQUIRED',
 
+  // --- Notification email templates ---
+  /** No published (current) email template found for a notification_type/language pair */
+  NOTIFICATION_TEMPLATE_NOT_FOUND: 'NOTIFICATION_TEMPLATE_NOT_FOUND',
+  /** docs/email-templates/*.txt (or admin-submitted rawContent) is missing SUBJECT:/---HTML---/---TEXT--- sections */
+  NOTIFICATION_TEMPLATE_MALFORMED: 'NOTIFICATION_TEMPLATE_MALFORMED',
+
   // --- File upload ---
   /** Multipart file upload is malformed or contains an unexpected field */
   INVALID_FILE_UPLOAD: 'INVALID_FILE_UPLOAD',

@@ -5,10 +5,6 @@ const emailFactory = require('./email');
 const invoiceAuthorizedTemplate = require('./email/templates/invoice-authorized');
 const verifyEmailTemplate = require('./email/templates/verify-email');
 const paymentProofSubmittedTemplate = require('./email/templates/payment-proof-submitted');
-const paymentReviewedTemplate = require('./email/templates/payment-reviewed');
-const subscriptionRenewalDueTemplate = require('./email/templates/subscription-renewal-due');
-const subscriptionExpiredTemplate = require('./email/templates/subscription-expired');
-const priceChangeAnnouncedTemplate = require('./email/templates/price-change-announced');
 const config = require('../config');
 
 // When APP_ENV is 'staging', every email carries a visible notice so a
@@ -133,101 +129,21 @@ async function sendPaymentProofSubmitted(payment, subscription, tenant, referenc
 }
 
 /**
- * Tell the tenant their payment proof was verified or rejected.
+ * Send an already-rendered notification email to a tenant (ADR-024,
+ * NEXT_STEPS.md item 13 Phase C) — the generic counterpart of the 4
+ * type-specific send*() functions this replaced (sendPaymentReviewed,
+ * sendSubscriptionRenewalDue, sendSubscriptionExpired,
+ * sendPriceChangeAnnounced). Rendering (which template, which language,
+ * which values) is entirely notificationEmailTemplateService's job now —
+ * this function only applies the staging banner and dispatches through the
+ * provider, exactly like every other send*() function here.
  *
- * @param {object} payment      - DB row from payments table
- * @param {object} subscription - DB row from subscriptions table
- * @param {'VERIFIED'|'REJECTED'} decision
+ * @param {object} tenant - DB row from tenants table (needs .email)
+ * @param {{ subject: string, text: string, html: string }} rendered - from notificationEmailTemplateService.render()
  * @returns {Promise<{ sent: boolean }>}
  */
-async function sendPaymentReviewed(payment, subscription, decision) {
-  const tenant = await tenantModel.findById(subscription.tenant_id);
+async function sendNotificationEmail(tenant, rendered) {
   const language = tenant.preferred_language || 'es';
-  const rendered = paymentReviewedTemplate.render(payment, subscription, decision, language);
-  const { subject } = rendered;
-  const { text, html } = applyStagingBanner(rendered, language);
-  const provider = emailFactory.getProvider();
-
-  await provider.send({
-    from: `Comprobify <${config.email.from}>`,
-    to: tenant.email,
-    subject,
-    text,
-    html,
-    attachments: [],
-  });
-
-  return { sent: true };
-}
-
-/**
- * Tell the tenant their subscription renews soon and a renewal payment is open.
- *
- * @param {object} subscription - DB row from subscriptions table
- * @param {object} payment      - DB row from payments table (purpose RENEWAL)
- * @returns {Promise<{ sent: boolean }>}
- */
-async function sendSubscriptionRenewalDue(subscription, payment) {
-  const tenant = await tenantModel.findById(subscription.tenant_id);
-  const language = tenant.preferred_language || 'es';
-  const rendered = subscriptionRenewalDueTemplate.render(subscription, payment, config.bankTransfer, language);
-  const { subject } = rendered;
-  const { text, html } = applyStagingBanner(rendered, language);
-  const provider = emailFactory.getProvider();
-
-  await provider.send({
-    from: `Comprobify <${config.email.from}>`,
-    to: tenant.email,
-    subject,
-    text,
-    html,
-    attachments: [],
-  });
-
-  return { sent: true };
-}
-
-/**
- * Tell the tenant their subscription expired (no verified renewal payment
- * before the grace period elapsed) and they've been moved to FREE.
- *
- * @param {object} subscription - DB row from subscriptions table (tier = the tier just lost)
- * @returns {Promise<{ sent: boolean }>}
- */
-async function sendSubscriptionExpired(subscription) {
-  const tenant = await tenantModel.findById(subscription.tenant_id);
-  const language = tenant.preferred_language || 'es';
-  const rendered = subscriptionExpiredTemplate.render(subscription, language);
-  const { subject } = rendered;
-  const { text, html } = applyStagingBanner(rendered, language);
-  const provider = emailFactory.getProvider();
-
-  await provider.send({
-    from: `Comprobify <${config.email.from}>`,
-    to: tenant.email,
-    subject,
-    text,
-    html,
-    attachments: [],
-  });
-
-  return { sent: true };
-}
-
-/**
- * Tell the tenant a subscription tier price is changing — sent unconditionally
- * (no notification-preference gate), same as sendPaymentReviewed/
- * sendSubscriptionRenewalDue, since this is the actual 30-day legal notice
- * (docs/agreements/terms-of-service.md), not an optional operational alert.
- *
- * @param {object} tenant - DB row from tenants table
- * @param {object} tierPrice - DB row from tier_prices (PUBLISHED, effective_at in the future)
- * @param {number} previousPriceUsd - the price in effect right now
- * @returns {Promise<{ sent: boolean }>}
- */
-async function sendPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd) {
-  const language = tenant.preferred_language || 'es';
-  const rendered = priceChangeAnnouncedTemplate.render(tierPrice, previousPriceUsd, language);
   const { subject } = rendered;
   const { text, html } = applyStagingBanner(rendered, language);
   const provider = emailFactory.getProvider();
@@ -248,8 +164,5 @@ module.exports = {
   sendInvoiceAuthorized,
   sendVerificationEmail,
   sendPaymentProofSubmitted,
-  sendPaymentReviewed,
-  sendSubscriptionRenewalDue,
-  sendSubscriptionExpired,
-  sendPriceChangeAnnounced,
+  sendNotificationEmail,
 };

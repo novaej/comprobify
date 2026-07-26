@@ -1,0 +1,47 @@
+SUBJECT: Your {{tier}} subscription renews soon
+---HTML---
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <p>Hello,</p>
+  <p>Your {{tier}} subscription renews on {{dueDate}}. Please send the renewal transfer and submit proof to keep your plan active.</p>
+  <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Plan</td><td style="padding: 6px 12px;">{{tier}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Renewal date</td><td style="padding: 6px 12px;">{{dueDate}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Amount due</td><td style="padding: 6px 12px;">${{amount}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Payment ID</td><td style="padding: 6px 12px;">{{paymentId}}</td></tr>
+  </table>
+  <p>Send the transfer to:</p>
+  <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Bank</td><td style="padding: 6px 12px;">{{bankName}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Account type</td><td style="padding: 6px 12px;">{{accountType}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Account number</td><td style="padding: 6px 12px;">{{accountNumber}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Account holder</td><td style="padding: 6px 12px;">{{accountHolder}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Identification</td><td style="padding: 6px 12px;">{{identification}}</td></tr>
+  </table>
+  <p>Once sent, submit proof via PATCH /v1/payments/:id/proof using the Payment ID above.</p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+  <p style="font-size: 11px; color: #999;">Do not reply — this is an automated message.</p>
+</body>
+</html>
+---TEXT---
+Hello,
+
+Your {{tier}} subscription renews on {{dueDate}}. Please send the renewal transfer and submit proof to keep your plan active.
+
+  Plan:      {{tier}}
+  Renewal date:   {{dueDate}}
+  Amount due:    ${{amount}}
+  Payment ID: {{paymentId}}
+
+Send the transfer to:
+  Bank:       {{bankName}}
+  Account type:    {{accountType}}
+  Account number:  {{accountNumber}}
+  Account holder:  {{accountHolder}}
+  Identification: {{identification}}
+
+Once sent, submit proof via PATCH /v1/payments/:id/proof using the Payment ID above.
+
+Do not reply — this is an automated message.

@@ -20,15 +20,14 @@ const paymentModel = require('../models/payment.model');
 const subscriptionModel = require('../models/subscription.model');
 const notificationModel = require('../models/notification.model');
 const notificationPreferenceModel = require('../models/notification-preference.model');
-const tierPriceModel = require('../models/tier-price.model');
 const documentTransmissionService = require('../services/document-transmission.service');
 const emailService = require('../services/email.service');
+const notificationEmailTemplateService = require('../services/notification-email-template.service');
 const webhookDeliveryService = require('../services/webhook-delivery.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
 const { EffectTypes } = require('../constants/effect-types');
 const EmailStatus = require('../constants/email-status');
 const EventType = require('../constants/event-type');
-const NotificationTypes = require('../constants/notification-types');
 const NotificationChannel = require('../constants/notification-channel');
 
 async function resolveIssuer(issuerId, sandbox) {
@@ -151,12 +150,11 @@ const handlers = {
   // in-app row already exists (created synchronously before this was
   // enqueued), and webhook fan-out is its own separate effect.
   //
-  // PHASE B STUB: renders via the existing JS template files
-  // (src/services/email/templates/*.js + emailService.sendX functions),
-  // dispatching per NotificationTypes value below. Phase C (NEXT_STEPS.md
-  // item 13) replaces this dispatch table with a DB-backed template
-  // registry keyed by (type, language) — the surrounding preference-check /
-  // email_status bookkeeping stays the same.
+  // Rendering (which template, which language, which values pulled from
+  // notification.metadata) is entirely notificationEmailTemplateService's
+  // job (Phase C, DB-backed versioned templates — see docs/email-templates/
+  // *.txt) — this handler only gates on the tenant's EMAIL preference,
+  // resolves the tenant for its .email/.preferred_language, and dispatches.
   [EffectTypes.NOTIFICATION_DISPATCH]: async (payload) => {
     const notification = await notificationModel.findById(payload.notificationId);
     if (!notification) return;
@@ -167,54 +165,17 @@ const handlers = {
       return;
     }
 
-    const sender = EMAIL_SENDERS_BY_TYPE[notification.type];
-    if (!sender) return; // shouldn't happen — dispatchNotification only enqueues for types with a supported EMAIL channel
-
     try {
-      await sender(notification);
+      const tenant = await tenantModel.findById(notification.tenant_id);
+      const language = tenant.preferred_language || 'es';
+      const rendered = await notificationEmailTemplateService.render(notification.type, language, notification);
+      await emailService.sendNotificationEmail(tenant, rendered);
       await notificationModel.updateEmailStatus(notification.id, EmailStatus.SENT);
     } catch (err) {
       await notificationModel.updateEmailStatus(notification.id, EmailStatus.FAILED);
       throw err;
     }
   },
-};
-
-// Phase B stub — see NOTIFICATION_DISPATCH's comment above. Each function
-// re-derives whatever emailService.sendX() needs from notification.metadata
-// (already stored at creation time) plus a couple of fresh re-fetches by id.
-async function sendPaymentReviewedFromNotification(notification) {
-  const { payment, subscription } = await resolvePaymentAndSubscription({
-    paymentId: notification.metadata.paymentId,
-    subscriptionId: notification.metadata.subscriptionId,
-  });
-  const decision = notification.type === NotificationTypes.PAYMENT_VERIFIED ? 'VERIFIED' : 'REJECTED';
-  await emailService.sendPaymentReviewed(payment, subscription, decision);
-}
-
-async function sendSubscriptionRenewalDueFromNotification(notification) {
-  const subscription = await subscriptionModel.findById(notification.metadata.subscriptionId);
-  const payment = await paymentModel.findById(notification.metadata.paymentId);
-  await emailService.sendSubscriptionRenewalDue(subscription, payment);
-}
-
-async function sendSubscriptionExpiredFromNotification(notification) {
-  const subscription = await subscriptionModel.findById(notification.metadata.subscriptionId);
-  await emailService.sendSubscriptionExpired(subscription);
-}
-
-async function sendPriceChangeAnnouncedFromNotification(notification) {
-  const tenant = await tenantModel.findById(notification.tenant_id);
-  const tierPrice = await tierPriceModel.findById(notification.metadata.tierPriceId);
-  await emailService.sendPriceChangeAnnounced(tenant, tierPrice, notification.metadata.previousPriceUsd);
-}
-
-const EMAIL_SENDERS_BY_TYPE = {
-  [NotificationTypes.PAYMENT_VERIFIED]: sendPaymentReviewedFromNotification,
-  [NotificationTypes.PAYMENT_REJECTED]: sendPaymentReviewedFromNotification,
-  [NotificationTypes.SUBSCRIPTION_RENEWAL_DUE]: sendSubscriptionRenewalDueFromNotification,
-  [NotificationTypes.SUBSCRIPTION_EXPIRED]: sendSubscriptionExpiredFromNotification,
-  [NotificationTypes.PRICE_CHANGE_ANNOUNCED]: sendPriceChangeAnnouncedFromNotification,
 };
 
 function getHandler(effectType) {

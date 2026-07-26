@@ -4,6 +4,8 @@ const TenantStatus = require('../constants/tenant-status');
 const RejectionReasons = require('../constants/rejection-reasons');
 const { SUPPORTED_TYPES } = require('../builders');
 const agreementService = require('../services/agreement.service');
+const { EMAIL_TEMPLATE_TYPES } = require('../services/notification-email-template.service');
+const { SUPPORTED_LANGUAGES } = require('../locales');
 
 // Tenants
 const createTenant = [
@@ -265,6 +267,41 @@ const getAgreementVersion = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
+// Notification email templates (ADR-024, NEXT_STEPS.md item 13 Phase C)
+const publishNotificationEmailTemplate = [
+  body('notificationType')
+    .isIn(EMAIL_TEMPLATE_TYPES)
+    .withMessage(`notificationType must be one of: ${EMAIL_TEMPLATE_TYPES.join(', ')}`),
+
+  body('language')
+    .isIn(SUPPORTED_LANGUAGES)
+    .withMessage(`language must be one of: ${SUPPORTED_LANGUAGES.join(', ')}`),
+
+  body('version')
+    .notEmpty()
+    .isLength({ max: 50 })
+    .withMessage('version is required and must be max 50 characters'),
+
+  body('rawContent')
+    .optional()
+    .isString()
+    .isLength({ min: 1, max: 50000 })
+    .withMessage('rawContent must be a non-empty string up to 50000 characters'),
+];
+
+const getNotificationEmailTemplateVersion = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+];
+
+const activateNotificationEmailTemplate = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+];
+
+const listNotificationEmailTemplateVersions = [
+  param('type').isIn(EMAIL_TEMPLATE_TYPES).withMessage(`type must be one of: ${EMAIL_TEMPLATE_TYPES.join(', ')}`),
+  param('language').isIn(SUPPORTED_LANGUAGES).withMessage(`language must be one of: ${SUPPORTED_LANGUAGES.join(', ')}`),
+];
+
 // Tier prices
 const createTierPrice = [
   body('tier')
@@ -316,5 +353,7 @@ module.exports = {
   getAgreementVersion,
   activateAgreement: [param('id').isUUID().withMessage('id must be a valid UUID')],
   listAgreementVersions: [param('type').isIn(agreementService.AGREEMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],
+  publishNotificationEmailTemplate, getNotificationEmailTemplateVersion,
+  activateNotificationEmailTemplate, listNotificationEmailTemplateVersions,
   createTierPrice, updateTierPrice, publishTierPrice, listTierPrices, getTierPrice,
 };
