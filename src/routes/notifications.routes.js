@@ -7,7 +7,8 @@ const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const { readLimiter, writeLimiter } = require('../middleware/rate-limit');
 const NotificationTypes = require('../constants/notification-types');
-const NON_SUBSCRIBABLE_TYPES = require('../constants/non-subscribable-notification-types');
+const NotificationChannel = require('../constants/notification-channel');
+const { isMandatory, supportsChannel } = require('../constants/notification-catalog');
 
 const router = Router();
 
@@ -30,12 +31,27 @@ const preferencesValidator = [
     .withMessage('Body must be a non-empty array'),
   body('*.type')
     .isIn(Object.values(NotificationTypes))
-    .withMessage(`Each type must be one of: ${Object.values(NotificationTypes).join(', ')}`)
-    .custom((type) => !NON_SUBSCRIBABLE_TYPES.includes(type))
-    .withMessage(`The following types cannot be individually subscribed to: ${NON_SUBSCRIBABLE_TYPES.join(', ')}`),
+    .withMessage(`Each type must be one of: ${Object.values(NotificationTypes).join(', ')}`),
+  body('*.channel')
+    .isIn(Object.values(NotificationChannel))
+    .withMessage(`Each channel must be one of: ${Object.values(NotificationChannel).join(', ')}`),
   body('*.enabled')
     .isBoolean()
     .withMessage('Each enabled must be a boolean'),
+  // Cross-field: a mandatory type can never be set (sent on every channel
+  // regardless of preference), and a type can only be set for a channel its
+  // catalog entry actually supports (notification-catalog.js).
+  body().custom((updates) => {
+    for (const { type, channel } of updates) {
+      if (isMandatory(type)) {
+        throw new Error(`${type} cannot be individually subscribed to — it is sent on every channel regardless of preference`);
+      }
+      if (!supportsChannel(type, channel)) {
+        throw new Error(`${type} does not support the ${channel} channel`);
+      }
+    }
+    return true;
+  }),
 ];
 
 // ---------------------------------------------------------------------------

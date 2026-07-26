@@ -47,6 +47,12 @@ async function findById(id) {
  * Return active (unexpired) notifications for a tenant, newest first.
  * Both read and unread are included so the client can render a full history.
  *
+ * Excludes rows whose type the tenant has explicitly disabled on the IN_APP
+ * channel (notification_preferences) — creation is unconditional for every
+ * type (NEXT_STEPS.md item 13), so this is the one place IN_APP preference
+ * actually takes effect: visibility, not existence. Mandatory types never
+ * have a preference row, so they're never excluded here.
+ *
  * @param {number}      tenantId
  * @param {number|null} issuerId - When provided, filters to notifications for
  *   that issuer plus tenant-level notifications (issuer_id IS NULL). When null,
@@ -55,7 +61,14 @@ async function findById(id) {
  *   id > sinceId (cursor-based catch-up after downtime).
  */
 async function findActiveByTenantId(tenantId, issuerId = null, sinceId = null) {
-  const conditions = ['tenant_id = $1', '(expires_at IS NULL OR expires_at > NOW())'];
+  const conditions = [
+    'tenant_id = $1',
+    '(expires_at IS NULL OR expires_at > NOW())',
+    `type NOT IN (
+       SELECT type FROM notification_preferences
+       WHERE tenant_id = $1 AND channel = 'IN_APP' AND enabled = false
+     )`,
+  ];
   const values = [tenantId];
   let idx = 2;
 

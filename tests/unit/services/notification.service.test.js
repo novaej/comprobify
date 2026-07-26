@@ -151,4 +151,45 @@ describe('NotificationService', () => {
       expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000103', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'SUBSCRIPTION_EXPIRED' });
     });
   });
+
+  describe('getPreferences', () => {
+    test('defaults every subscribable (type, channel) pair to enabled when nothing is stored', async () => {
+      notificationPreferenceModel.findByTenantId.mockResolvedValue({});
+
+      const prefs = await notificationService.getPreferences('00000000-0000-0000-0000-000000000001');
+
+      // DOCUMENT_AUTHORIZED only supports IN_APP (no tenant-facing email exists for it).
+      expect(prefs).toContainEqual({ type: 'DOCUMENT_AUTHORIZED', channel: 'IN_APP', enabled: true });
+      expect(prefs.find((p) => p.type === 'DOCUMENT_AUTHORIZED' && p.channel === 'EMAIL')).toBeUndefined();
+      // PAYMENT_VERIFIED supports both channels.
+      expect(prefs).toContainEqual({ type: 'PAYMENT_VERIFIED', channel: 'IN_APP', enabled: true });
+      expect(prefs).toContainEqual({ type: 'PAYMENT_VERIFIED', channel: 'EMAIL', enabled: true });
+      // PRICE_CHANGE_ANNOUNCED is mandatory — never appears at all.
+      expect(prefs.find((p) => p.type === 'PRICE_CHANGE_ANNOUNCED')).toBeUndefined();
+    });
+
+    test('reflects a stored explicit disable for one (type, channel) without affecting its sibling channel', async () => {
+      notificationPreferenceModel.findByTenantId.mockResolvedValue({
+        PAYMENT_VERIFIED: { EMAIL: false },
+      });
+
+      const prefs = await notificationService.getPreferences('00000000-0000-0000-0000-000000000001');
+
+      expect(prefs).toContainEqual({ type: 'PAYMENT_VERIFIED', channel: 'EMAIL', enabled: false });
+      expect(prefs).toContainEqual({ type: 'PAYMENT_VERIFIED', channel: 'IN_APP', enabled: true });
+    });
+  });
+
+  describe('updatePreferences', () => {
+    test('upserts then returns the full refreshed list', async () => {
+      notificationPreferenceModel.upsertMany.mockResolvedValue();
+      notificationPreferenceModel.findByTenantId.mockResolvedValue({ PAYMENT_VERIFIED: { EMAIL: false } });
+
+      const updates = [{ type: 'PAYMENT_VERIFIED', channel: 'EMAIL', enabled: false }];
+      const prefs = await notificationService.updatePreferences('00000000-0000-0000-0000-000000000001', updates);
+
+      expect(notificationPreferenceModel.upsertMany).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', updates);
+      expect(prefs).toContainEqual({ type: 'PAYMENT_VERIFIED', channel: 'EMAIL', enabled: false });
+    });
+  });
 });

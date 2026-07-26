@@ -103,7 +103,7 @@ async function publishPrice(id, { noticeDays } = {}) {
 // (effective_at in the future) this tenant has no PRICE_CHANGE_ANNOUNCED
 // notification for yet, and handles each. Safe to call any number of times
 // for the same tenant. Relies on PRICE_CHANGE_ANNOUNCED being "mandatory"
-// (non-subscribable-notification-types.js) — its notifications row is
+// (notification-catalog.js) — its notifications row is
 // created unconditionally, which is what makes checking `notifications`
 // directly (tier-price.model.js's findUnnotifiedPendingForTenant) a safe
 // idempotency source, no dedicated ledger table needed.

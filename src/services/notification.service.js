@@ -40,7 +40,8 @@ const notificationPreferenceModel = require('../models/notification-preference.m
 const issuerModel = require('../models/issuer.model');
 const NotificationTypes = require('../constants/notification-types');
 const NotificationSeverity = require('../constants/notification-severity');
-const NON_SUBSCRIBABLE_TYPES = require('../constants/non-subscribable-notification-types');
+const NotificationChannel = require('../constants/notification-channel');
+const { NOTIFICATION_CATALOG, isMandatory } = require('../constants/notification-catalog');
 const pendingEffectService = require('./pending-effect.service');
 const { EffectTypes } = require('../constants/effect-types');
 
@@ -55,12 +56,20 @@ const REJECTION_REASON_LABELS = {
 };
 
 /**
- * Subscribable notification types — used to populate the preferences list.
- * Excludes "mandatory" types (NON_SUBSCRIBABLE_TYPES) — a tenant can't opt
- * out of those on any channel, so they have no preference row and don't
- * appear in GET/PATCH /v1/notifications/preferences at all.
+ * Every (type, channel) pair a tenant can actually subscribe to — derived
+ * from the catalog, used to populate the preferences list. Excludes
+ * "mandatory" types (a tenant can't opt out of those on any channel, so they
+ * never appear in GET/PATCH /v1/notifications/preferences) and, per type,
+ * only includes the channels its catalog entry actually supports.
  */
-const ALL_TYPES = Object.values(NotificationTypes).filter((type) => !NON_SUBSCRIBABLE_TYPES.includes(type));
+const SUBSCRIBABLE_TYPE_CHANNELS = Object.entries(NOTIFICATION_CATALOG)
+  .filter(([type]) => !isMandatory(type))
+  .flatMap(([type, capabilities]) => {
+    const channels = [];
+    if (capabilities.supportsInApp) channels.push(NotificationChannel.IN_APP);
+    if (capabilities.supportsEmail) channels.push(NotificationChannel.EMAIL);
+    return channels.map((channel) => ({ type, channel }));
+  });
 
 /** Authorisations within this window are merged into one notification row. */
 const AGGREGATION_WINDOW_SECONDS = 60;
@@ -120,7 +129,8 @@ async function fireWebhookFanOut(notification) {
 async function createDocumentAuthorized(document, issuer) {
   const enabled = await notificationPreferenceModel.isEnabled(
     issuer.tenant_id,
-    NotificationTypes.DOCUMENT_AUTHORIZED
+    NotificationTypes.DOCUMENT_AUTHORIZED,
+    NotificationChannel.IN_APP
   );
   if (!enabled) return;
 
@@ -186,7 +196,7 @@ async function createDocumentAuthorized(document, issuer) {
  */
 async function createPaymentReviewed(payment, subscription, decision) {
   const type = decision === 'VERIFIED' ? NotificationTypes.PAYMENT_VERIFIED : NotificationTypes.PAYMENT_REJECTED;
-  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, type);
+  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, type, NotificationChannel.IN_APP);
   if (!enabled) return null;
 
   const purposeLabel = PAYMENT_PURPOSE_LABELS[payment.purpose] || PAYMENT_PURPOSE_LABELS.INITIAL;
@@ -229,7 +239,7 @@ async function createPaymentReviewed(payment, subscription, decision) {
  * @param {object} payment      - DB row from payments table (purpose RENEWAL)
  */
 async function createSubscriptionRenewalDue(subscription, payment) {
-  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, NotificationTypes.SUBSCRIPTION_RENEWAL_DUE);
+  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, NotificationTypes.SUBSCRIPTION_RENEWAL_DUE, NotificationChannel.IN_APP);
   if (!enabled) return null;
 
   const dueDate = moment(subscription.current_period_end).format('DD/MM/YYYY');
@@ -262,7 +272,7 @@ async function createSubscriptionRenewalDue(subscription, payment) {
  * @param {object} subscription - DB row from subscriptions table (tier = the tier just lost)
  */
 async function createSubscriptionExpired(subscription) {
-  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, NotificationTypes.SUBSCRIPTION_EXPIRED);
+  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, NotificationTypes.SUBSCRIPTION_EXPIRED, NotificationChannel.IN_APP);
   if (!enabled) return null;
 
   const notification = await notificationModel.create({
@@ -283,7 +293,7 @@ async function createSubscriptionExpired(subscription) {
  * published tier_prices row still inside its notice window.
  *
  * Unconditional — PRICE_CHANGE_ANNOUNCED is "mandatory"
- * (non-subscribable-notification-types.js): a tenant cannot opt out of the
+ * (notification-catalog.js): a tenant cannot opt out of the
  * 30-day price-change notice, so unlike every other notification type there
  * is no notificationPreferenceModel.isEnabled() gate here. This is also what
  * makes the notifications table a safe idempotency source for this type —
@@ -335,12 +345,12 @@ async function createPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd) {
  * for every non-suspended tenant. Always checks all issuers regardless of any
  * issuer filter — cert checks are a tenant-wide maintenance operation.
  *
- * @param {number}                  tenantId
- * @param {Record<string, boolean>} prefs    - Pre-fetched preferences map.
+ * @param {number}                                    tenantId
+ * @param {Record<string, Record<string, boolean>>}   prefs    - Pre-fetched preferences map (notification-preference.model.js's findByTenantId shape).
  */
 async function runCertChecksForTenant(tenantId, prefs) {
-  const certExpiringEnabled = prefs[NotificationTypes.CERT_EXPIRING] !== false;
-  const certExpiredEnabled  = prefs[NotificationTypes.CERT_EXPIRED]  !== false;
+  const certExpiringEnabled = prefs[NotificationTypes.CERT_EXPIRING]?.[NotificationChannel.IN_APP] !== false;
+  const certExpiredEnabled  = prefs[NotificationTypes.CERT_EXPIRED]?.[NotificationChannel.IN_APP]  !== false;
   if (!certExpiringEnabled && !certExpiredEnabled) return;
 
   const issuers = await issuerModel.findAllByTenantId(tenantId);
@@ -361,7 +371,7 @@ async function runCertChecksForTenant(tenantId, prefs) {
     }
 
     const alertData = buildCertAlertData(issuer, daysRemaining);
-    if (prefs[alertData.type] === false) continue;
+    if (prefs[alertData.type]?.[NotificationChannel.IN_APP] === false) continue;
 
     let notification;
     if (existingAlert) {
@@ -431,17 +441,19 @@ async function markRead(notificationId, tenantId) {
 // ---------------------------------------------------------------------------
 
 /**
- * Return the full preference list for a tenant, including defaults for types
- * the tenant has never explicitly set.
+ * Return the full (type, channel) preference list for a tenant, including
+ * defaults (enabled = true) for pairs the tenant has never explicitly set.
+ * Mandatory types, and channels a type doesn't support, are never included.
  *
  * @param {number} tenantId
- * @returns {Promise<{ type: string, enabled: boolean }[]>}
+ * @returns {Promise<{ type: string, channel: string, enabled: boolean }[]>}
  */
 async function getPreferences(tenantId) {
   const stored = await notificationPreferenceModel.findByTenantId(tenantId);
-  return ALL_TYPES.map(type => ({
+  return SUBSCRIBABLE_TYPE_CHANNELS.map(({ type, channel }) => ({
     type,
-    enabled: stored[type] !== undefined ? stored[type] : true,
+    channel,
+    enabled: stored[type]?.[channel] !== undefined ? stored[type][channel] : true,
   }));
 }
 
@@ -449,8 +461,8 @@ async function getPreferences(tenantId) {
  * Bulk-upsert notification preferences for a tenant.
  *
  * @param {number} tenantId
- * @param {{ type: string, enabled: boolean }[]} updates
- * @returns {Promise<{ type: string, enabled: boolean }[]>} Full updated list.
+ * @param {{ type: string, channel: string, enabled: boolean }[]} updates
+ * @returns {Promise<{ type: string, channel: string, enabled: boolean }[]>} Full updated list.
  */
 async function updatePreferences(tenantId, updates) {
   await notificationPreferenceModel.upsertMany(tenantId, updates);

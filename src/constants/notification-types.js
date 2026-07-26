@@ -14,7 +14,7 @@
  *   SUBSCRIPTION_RENEWAL_DUE — created by subscriptionService.processDueRenewals when a renewal payment is opened.
  *   SUBSCRIPTION_EXPIRED     — created by subscriptionService.processDueRenewals when the grace period elapses unpaid.
  *   PRICE_CHANGE_ANNOUNCED   — created by pricingService.notifyPendingPriceChangesForTenant when a published price change is inside its notice window.
- *                              "Mandatory" — see non-subscribable-notification-types.js — cannot be opted out of on any channel.
+ *                              "Mandatory" — see notification-catalog.js — cannot be opted out of on any channel.
  *
  * Types reserved for future use (CHECK constraint already allows them):
  *   SRI_SUBMISSION_FAILED  — SRI rejected a submission with a permanent error.
