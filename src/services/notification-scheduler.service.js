@@ -26,7 +26,6 @@
  * all tenants; per-tenant logic lives in the notification service.
  */
 const tenantModel = require('../models/tenant.model');
-const notificationPreferenceModel = require('../models/notification-preference.model');
 const webhookDeliveryService = require('./webhook-delivery.service');
 const pricingService = require('./pricing.service');
 
@@ -49,8 +48,10 @@ async function runAll() {
   let tenantsChecked = 0;
   for (const tenant of tenants) {
     try {
-      const prefs = await notificationPreferenceModel.findByTenantId(tenant.id);
-      await notificationService.runCertChecksForTenant(tenant.id, prefs);
+      // runCertChecksForTenant no longer takes a `prefs` argument (ADR-024) —
+      // cert-alert bookkeeping is unconditional now; preference only affects
+      // GET /v1/notifications' read-time visibility.
+      await notificationService.runCertChecksForTenant(tenant.id);
       tenantsChecked++;
     } catch (err) {
       console.error(`[scheduler] Cert check failed for tenant ${tenant.id}:`, err.message);

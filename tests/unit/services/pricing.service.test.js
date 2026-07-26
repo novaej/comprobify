@@ -168,7 +168,7 @@ describe('PricingService', () => {
       expect(pendingEffectService.enqueue).not.toHaveBeenCalled();
     });
 
-    test('creates the in-app notification synchronously and queues only the email effect', async () => {
+    test('creates the in-app notification synchronously — createPriceChangeAnnounced owns dispatching the email effect internally', async () => {
       tierPriceModel.findUnnotifiedPendingForTenant.mockResolvedValue([
         { id: 'price-1', tier: 'STARTER', billing_interval: 'MONTHLY' },
       ]);
@@ -183,8 +183,6 @@ describe('PricingService', () => {
         { id: 'price-1', tier: 'STARTER', billing_interval: 'MONTHLY' },
         20
       );
-      expect(pendingEffectService.enqueue).toHaveBeenCalledTimes(1);
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('PRICE_CHANGE_EMAIL', 'tenant-1', { tenantId: 'tenant-1', tierPriceId: 'price-1', previousPriceUsd: 20 });
     });
 
     // No dedicated ledger — idempotency relies on PRICE_CHANGE_ANNOUNCED being

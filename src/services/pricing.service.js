@@ -1,8 +1,6 @@
 const tierPriceModel = require('../models/tier-price.model');
 const tenantModel = require('../models/tenant.model');
 const notificationService = require('./notification.service');
-const pendingEffectService = require('../services/pending-effect.service');
-const { EffectTypes } = require('../constants/effect-types');
 const TenantStatus = require('../constants/tenant-status');
 const { TIERS } = require('../constants/subscription-tiers');
 const config = require('../config');
@@ -19,11 +17,6 @@ function assertValidTierAndInterval(tier, billingInterval) {
   if (!BILLING_INTERVALS.includes(billingInterval)) {
     throw new AppError(`Invalid billingInterval '${billingInterval}'. Valid values: ${BILLING_INTERVALS.join(', ')}`, 400, ErrorCodes.INVALID_BILLING_INTERVAL);
   }
-}
-
-async function queueEffect(effectType, tenantId, payload) {
-  const effect = await pendingEffectService.enqueue(effectType, tenantId, payload);
-  pendingEffectService.dispatch(effect);
 }
 
 // The historical resolver every real billing call site must use instead of
@@ -112,8 +105,10 @@ async function publishPrice(id, { noticeDays } = {}) {
 // effect — deliberately, so there's no async gap between "checked as
 // pending" and "marked as handled" that a repeated call (the periodic
 // reconciliation sweep runs every 5 minutes) could race and double-enqueue.
-// Only the email is queued, since it's the one part of this genuinely worth
-// async dispatch + retry (an external HTTP call to the email provider).
+// createPriceChangeAnnounced() internally enqueues the NOTIFICATION_DISPATCH
+// effect for the email half — see notification.service.js's
+// dispatchNotification(), which every notification-creating call in the
+// codebase now funnels through.
 async function notifyPendingPriceChangesForTenant(tenantId) {
   const pending = await tierPriceModel.findUnnotifiedPendingForTenant(tenantId);
   if (pending.length === 0) return 0;
@@ -122,7 +117,6 @@ async function notifyPendingPriceChangesForTenant(tenantId) {
   for (const tierPrice of pending) {
     const previousPriceUsd = await getCurrentPrice(tierPrice.tier, tierPrice.billing_interval);
     await notificationService.createPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd);
-    await queueEffect(EffectTypes.PRICE_CHANGE_EMAIL, tenantId, { tenantId, tierPriceId: tierPrice.id, previousPriceUsd });
   }
   return pending.length;
 }

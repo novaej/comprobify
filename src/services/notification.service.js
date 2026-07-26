@@ -1,19 +1,27 @@
 /**
- * Notification service.
+ * Notification service (ADR-024, NEXT_STEPS.md item 13).
  *
  * Responsible for:
  *  - Creating notifications for event-driven conditions (DOCUMENT_AUTHORIZED,
- *    PAYMENT_VERIFIED/REJECTED, SUBSCRIPTION_RENEWAL_DUE, SUBSCRIPTION_EXPIRED).
+ *    PAYMENT_VERIFIED/REJECTED, SUBSCRIPTION_RENEWAL_DUE, SUBSCRIPTION_EXPIRED,
+ *    PRICE_CHANGE_ANNOUNCED).
  *  - Running per-tenant certificate expiry checks (called by the scheduler service).
  *  - Reading and marking notifications for the tenant.
- *  - Managing per-tenant notification preferences (opt-out per type).
+ *  - Managing per-tenant, per-channel notification preferences.
  *
  * Delivery model:
- *   Every time a notification row is created or updated, the webhook-delivery
- *   service fans the event out to all active, subscribed webhook endpoints for
- *   the tenant (fire-and-forget). The frontend backend also polls
- *   GET /api/notifications on a schedule and uses ?sinceId= to catch up after
- *   downtime. There is no server-push mechanism.
+ *   Every create*() function inserts (or, for the aggregation/cert-alert
+ *   cases, updates) a `notifications` row **unconditionally** — creation no
+ *   longer depends on any preference, so the row is a reliable "did this
+ *   happen" record regardless of what a tenant subscribes to. It then calls
+ *   the shared dispatchNotification(notification), which (a) always enqueues
+ *   a WEBHOOK_FANOUT effect, and (b) enqueues one NOTIFICATION_DISPATCH
+ *   effect if the type supports the EMAIL channel — that effect's handler
+ *   (src/effects/index.js) is what actually checks the tenant's EMAIL
+ *   preference before sending. IN_APP preference instead controls
+ *   *visibility*: GET /v1/notifications (notificationModel.findActiveByTenantId)
+ *   filters out types the tenant has explicitly disabled on that channel,
+ *   not existence.
  *
  * Aggregation window (DOCUMENT_AUTHORIZED):
  *   Multiple authorisations within AGGREGATION_WINDOW_SECONDS are merged into a
@@ -32,7 +40,10 @@
  *   Certificate expiry and webhook retries are handled by the notification
  *   scheduler (POST /api/admin/jobs/notifications), which calls
  *   runCertChecksForTenant() for every non-suspended tenant. No sync endpoint
- *   is exposed to tenants — scheduling is API-owned.
+ *   is exposed to tenants — scheduling is API-owned. Creation is unconditional
+ *   here too now, so runCertChecksForTenant() no longer takes a `prefs`
+ *   parameter — cert bookkeeping (upsert, auto-dismiss-on-renewal) always
+ *   runs; only GET /v1/notifications' read-time filter decides visibility.
  */
 const moment = require('moment');
 const notificationModel = require('../models/notification.model');
@@ -41,7 +52,8 @@ const issuerModel = require('../models/issuer.model');
 const NotificationTypes = require('../constants/notification-types');
 const NotificationSeverity = require('../constants/notification-severity');
 const NotificationChannel = require('../constants/notification-channel');
-const { NOTIFICATION_CATALOG, isMandatory } = require('../constants/notification-catalog');
+const EmailStatus = require('../constants/email-status');
+const { NOTIFICATION_CATALOG, isMandatory, supportsChannel } = require('../constants/notification-catalog');
 const pendingEffectService = require('./pending-effect.service');
 const { EffectTypes } = require('../constants/effect-types');
 
@@ -92,6 +104,11 @@ function formatSequential(document) {
   ].join('-');
 }
 
+async function queueEffect(effectType, tenantId, payload) {
+  const effect = await pendingEffectService.enqueue(effectType, tenantId, payload);
+  pendingEffectService.dispatch(effect);
+}
+
 /**
  * Durably enqueue a WEBHOOK_FANOUT effect for a notification (ADR-022) —
  * replaces the old direct, unawaited webhookDeliveryService.fanOut() call.
@@ -103,8 +120,35 @@ function formatSequential(document) {
  * caller returns — dispatch (the RabbitMQ publish) stays best-effort.
  */
 async function fireWebhookFanOut(notification) {
-  const effect = await pendingEffectService.enqueue(EffectTypes.WEBHOOK_FANOUT, notification.tenant_id, { notificationId: notification.id });
-  pendingEffectService.dispatch(effect);
+  await queueEffect(EffectTypes.WEBHOOK_FANOUT, notification.tenant_id, { notificationId: notification.id });
+}
+
+/**
+ * The single place every notification-creating function funnels through
+ * after inserting/updating its row (ADR-024, NEXT_STEPS.md item 13). Fans
+ * out to webhooks (unconditional, same as before) and, if the type supports
+ * the EMAIL channel (notification-catalog.js), enqueues one
+ * NOTIFICATION_DISPATCH effect — the channel-neutral effect whose handler
+ * (src/effects/index.js) checks the tenant's EMAIL preference, renders, and
+ * sends. Stamps email_status = PENDING at enqueue time so a notification
+ * whose email hasn't been attempted yet is distinguishable from one that
+ * was SKIPPED/SENT/FAILED, or one that never supported email at all (stays
+ * NULL forever for those types).
+ *
+ * No-op (returns the notification unchanged) if notification is falsy —
+ * lets every caller write `await dispatchNotification(notification)`
+ * unconditionally instead of an `if (notification)` guard each time, even
+ * though creation is unconditional now and this should always be truthy in
+ * practice (a DB insert either returns a row or throws).
+ */
+async function dispatchNotification(notification) {
+  if (!notification) return notification;
+  await fireWebhookFanOut(notification);
+  if (supportsChannel(notification.type, NotificationChannel.EMAIL)) {
+    await notificationModel.updateEmailStatus(notification.id, EmailStatus.PENDING);
+    await queueEffect(EffectTypes.NOTIFICATION_DISPATCH, notification.tenant_id, { notificationId: notification.id });
+  }
+  return notification;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,28 +156,18 @@ async function fireWebhookFanOut(notification) {
 // ---------------------------------------------------------------------------
 
 /**
- * Create or update a DOCUMENT_AUTHORIZED notification (fire-and-forget).
+ * Create or update a DOCUMENT_AUTHORIZED notification. Unconditional —
+ * either creates a new row or appends to an existing one within the
+ * aggregation window, regardless of preference (IN_APP preference only
+ * controls GET /v1/notifications' visibility, not creation). No EMAIL
+ * dispatch for this type — see notification-catalog.js for why.
  *
  * Called from document-transmission.service after SRI confirms authorisation.
- * Checks the tenant's preference for this type, then either creates a new row
- * or appends to an existing one within the aggregation window.
- *
- * After creating or updating the notification, fans out to all active webhook
- * endpoints subscribed to DOCUMENT_AUTHORIZED.
- *
- * Never throws — failure is logged and swallowed so it cannot affect the HTTP response.
  *
  * @param {object} document - Full document row (after updateStatus).
  * @param {object} issuer   - Resolved issuer (includes tenant_id).
  */
 async function createDocumentAuthorized(document, issuer) {
-  const enabled = await notificationPreferenceModel.isEnabled(
-    issuer.tenant_id,
-    NotificationTypes.DOCUMENT_AUTHORIZED,
-    NotificationChannel.IN_APP
-  );
-  if (!enabled) return;
-
   const sequential = formatSequential(document);
   const docEntry = {
     accessKey:           document.access_key,
@@ -175,7 +209,7 @@ async function createDocumentAuthorized(document, issuer) {
     });
   }
 
-  if (notification) await fireWebhookFanOut(notification);
+  await dispatchNotification(notification);
 }
 
 // ---------------------------------------------------------------------------
@@ -183,8 +217,7 @@ async function createDocumentAuthorized(document, issuer) {
 // ---------------------------------------------------------------------------
 
 /**
- * Create a PAYMENT_VERIFIED or PAYMENT_REJECTED notification (fire-and-forget
- * from the caller's perspective — called awaited here, but never throws).
+ * Create a PAYMENT_VERIFIED or PAYMENT_REJECTED notification. Unconditional.
  *
  * Called from subscriptionService.reviewPayment after the admin's decision is
  * recorded. Covers every payment purpose (INITIAL, TIER_CHANGE, RENEWAL) —
@@ -196,9 +229,6 @@ async function createDocumentAuthorized(document, issuer) {
  */
 async function createPaymentReviewed(payment, subscription, decision) {
   const type = decision === 'VERIFIED' ? NotificationTypes.PAYMENT_VERIFIED : NotificationTypes.PAYMENT_REJECTED;
-  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, type, NotificationChannel.IN_APP);
-  if (!enabled) return null;
-
   const purposeLabel = PAYMENT_PURPOSE_LABELS[payment.purpose] || PAYMENT_PURPOSE_LABELS.INITIAL;
   // For a TIER_CHANGE payment, the subscription still reflects its CURRENT
   // tier/interval — target_tier/target_billing_interval on the payment carry
@@ -226,12 +256,13 @@ async function createPaymentReviewed(payment, subscription, decision) {
     },
   });
 
-  if (notification) await fireWebhookFanOut(notification);
+  await dispatchNotification(notification);
   return notification;
 }
 
 /**
- * Create a SUBSCRIPTION_RENEWAL_DUE notification when a renewal payment is opened.
+ * Create a SUBSCRIPTION_RENEWAL_DUE notification when a renewal payment is
+ * opened. Unconditional.
  *
  * Called from subscriptionService.processDueRenewals, ahead of current_period_end.
  *
@@ -239,9 +270,6 @@ async function createPaymentReviewed(payment, subscription, decision) {
  * @param {object} payment      - DB row from payments table (purpose RENEWAL)
  */
 async function createSubscriptionRenewalDue(subscription, payment) {
-  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, NotificationTypes.SUBSCRIPTION_RENEWAL_DUE, NotificationChannel.IN_APP);
-  if (!enabled) return null;
-
   const dueDate = moment(subscription.current_period_end).format('DD/MM/YYYY');
 
   const notification = await notificationModel.create({
@@ -259,22 +287,20 @@ async function createSubscriptionRenewalDue(subscription, payment) {
     },
   });
 
-  if (notification) await fireWebhookFanOut(notification);
+  await dispatchNotification(notification);
   return notification;
 }
 
 /**
  * Create a SUBSCRIPTION_EXPIRED notification when the renewal grace period
- * elapses with no verified renewal payment and the tenant is downgraded to FREE.
+ * elapses with no verified renewal payment and the tenant is downgraded to
+ * FREE. Unconditional.
  *
  * Called from subscriptionService.processDueRenewals.
  *
  * @param {object} subscription - DB row from subscriptions table (tier = the tier just lost)
  */
 async function createSubscriptionExpired(subscription) {
-  const enabled = await notificationPreferenceModel.isEnabled(subscription.tenant_id, NotificationTypes.SUBSCRIPTION_EXPIRED, NotificationChannel.IN_APP);
-  if (!enabled) return null;
-
   const notification = await notificationModel.create({
     tenantId: subscription.tenant_id,
     type: NotificationTypes.SUBSCRIPTION_EXPIRED,
@@ -284,7 +310,7 @@ async function createSubscriptionExpired(subscription) {
     metadata: { subscriptionId: subscription.id, previousTier: subscription.tier },
   });
 
-  if (notification) await fireWebhookFanOut(notification);
+  await dispatchNotification(notification);
   return notification;
 }
 
@@ -292,18 +318,24 @@ async function createSubscriptionExpired(subscription) {
  * Create a PRICE_CHANGE_ANNOUNCED notification for one tenant about one
  * published tier_prices row still inside its notice window.
  *
- * Unconditional — PRICE_CHANGE_ANNOUNCED is "mandatory"
- * (notification-catalog.js): a tenant cannot opt out of the
- * 30-day price-change notice, so unlike every other notification type there
- * is no notificationPreferenceModel.isEnabled() gate here. This is also what
- * makes the notifications table a safe idempotency source for this type —
- * see tier-price.model.js's findUnnotifiedPendingForTenant.
+ * PRICE_CHANGE_ANNOUNCED is "mandatory" (notification-catalog.js) — a
+ * tenant cannot opt out of the 30-day price-change notice on any channel —
+ * but that's no longer special-cased here: every create*() function is
+ * unconditional now (dispatchNotification's EMAIL enqueue happens for any
+ * type whose catalog entry supports it, mandatory or not; the tenant's
+ * EMAIL preference check — always true for a mandatory type, since one can
+ * never have a preference row — happens in the NOTIFICATION_DISPATCH
+ * effect handler). This is also what makes the `notifications` table a
+ * safe idempotency source for this specific type — see tier-price.model.js's
+ * findUnnotifiedPendingForTenant.
  *
  * Called synchronously by pricingService.notifyPendingPriceChangesForTenant
  * — the initial bulk blast at publish time, the reactivation catch-up path
  * (a tenant who was SUSPENDED/PENDING_VERIFICATION when the change
  * published), and the periodic reconciliation sweep all go through the same
- * call.
+ * call. Unlike the other create*() functions, this one is called directly
+ * (not via a queued *_NOTIFICATION effect) — see ADR-024 for why that's
+ * still the one deliberate exception.
  *
  * @param {object} tenant - DB row from tenants table
  * @param {object} tierPrice - DB row from tier_prices (PUBLISHED, effective_at in the future)
@@ -329,7 +361,7 @@ async function createPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd) {
     },
   });
 
-  if (notification) await fireWebhookFanOut(notification);
+  await dispatchNotification(notification);
   return notification;
 }
 
@@ -339,20 +371,21 @@ async function createPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd) {
 
 /**
  * Check certificate expiry for every active issuer belonging to a tenant and
- * upsert CERT_EXPIRING / CERT_EXPIRED alerts accordingly.
+ * upsert CERT_EXPIRING / CERT_EXPIRED alerts accordingly. Unconditional —
+ * no `prefs` parameter (removed, ADR-024): bookkeeping (upsert, auto-dismiss
+ * on renewal) always runs regardless of preference; only GET /v1/notifications'
+ * read-time IN_APP filter decides what a tenant actually sees. Neither
+ * CERT_EXPIRING nor CERT_EXPIRED supports the EMAIL channel (no template
+ * exists for cert expiry), so dispatchNotification() never enqueues anything
+ * for these beyond the always-unconditional webhook fan-out.
  *
  * Called by the notification scheduler (POST /api/admin/jobs/notifications)
  * for every non-suspended tenant. Always checks all issuers regardless of any
  * issuer filter — cert checks are a tenant-wide maintenance operation.
  *
- * @param {number}                                    tenantId
- * @param {Record<string, Record<string, boolean>>}   prefs    - Pre-fetched preferences map (notification-preference.model.js's findByTenantId shape).
+ * @param {number} tenantId
  */
-async function runCertChecksForTenant(tenantId, prefs) {
-  const certExpiringEnabled = prefs[NotificationTypes.CERT_EXPIRING]?.[NotificationChannel.IN_APP] !== false;
-  const certExpiredEnabled  = prefs[NotificationTypes.CERT_EXPIRED]?.[NotificationChannel.IN_APP]  !== false;
-  if (!certExpiringEnabled && !certExpiredEnabled) return;
-
+async function runCertChecksForTenant(tenantId) {
   const issuers = await issuerModel.findAllByTenantId(tenantId);
   const now = new Date();
   const msPerDay = 1000 * 60 * 60 * 24;
@@ -371,7 +404,6 @@ async function runCertChecksForTenant(tenantId, prefs) {
     }
 
     const alertData = buildCertAlertData(issuer, daysRemaining);
-    if (prefs[alertData.type]?.[NotificationChannel.IN_APP] === false) continue;
 
     let notification;
     if (existingAlert) {
@@ -380,7 +412,7 @@ async function runCertChecksForTenant(tenantId, prefs) {
       notification = await notificationModel.create({ tenantId, issuerId: issuer.id, ...alertData });
     }
 
-    if (notification) await fireWebhookFanOut(notification);
+    await dispatchNotification(notification);
   }
 }
 

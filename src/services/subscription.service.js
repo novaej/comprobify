@@ -7,6 +7,7 @@ const tenantEventModel = require('../models/tenant-event.model');
 const tenantQuotaService = require('./tenant-quota.service');
 const pendingEffectService = require('./pending-effect.service');
 const pricingService = require('./pricing.service');
+const notificationService = require('./notification.service');
 const { EffectTypes } = require('../constants/effect-types');
 const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
@@ -574,10 +575,9 @@ async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   // Tell the tenant the outcome — there's no other notification for this,
   // see GET /v1/subscriptions/me docs. Covers every payment purpose
   // (INITIAL, TIER_CHANGE, RENEWAL) uniformly; only the wording adapts.
-  // Durably enqueued (ADR-022).
-  const reviewedPayload = { paymentId: updatedPayment.id, subscriptionId: updatedSubscription.id, decision };
-  await queueEffect(EffectTypes.PAYMENT_REVIEWED_NOTIFICATION, subscription.tenant_id, reviewedPayload);
-  await queueEffect(EffectTypes.PAYMENT_REVIEWED_EMAIL, subscription.tenant_id, reviewedPayload);
+  // createPaymentReviewed() creates the in-app row synchronously and
+  // durably enqueues the NOTIFICATION_DISPATCH effect for email (ADR-024).
+  await notificationService.createPaymentReviewed(updatedPayment, updatedSubscription, decision);
 
   return { payment: updatedPayment, subscription: updatedSubscription };
 }
@@ -1017,9 +1017,7 @@ async function createRenewalReminder(subscription) {
     currentPeriodEnd: subscription.current_period_end,
   });
 
-  const renewalDuePayload = { subscriptionId: subscription.id, paymentId: payment.id };
-  await queueEffect(EffectTypes.SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION, subscription.tenant_id, renewalDuePayload);
-  await queueEffect(EffectTypes.SUBSCRIPTION_RENEWAL_DUE_EMAIL, subscription.tenant_id, renewalDuePayload);
+  await notificationService.createSubscriptionRenewalDue(subscription, payment);
 }
 
 async function expireSubscription(subscription) {
@@ -1032,9 +1030,7 @@ async function expireSubscription(subscription) {
     previousTier: subscription.tier,
   });
 
-  const expiredPayload = { subscriptionId: subscription.id };
-  await queueEffect(EffectTypes.SUBSCRIPTION_EXPIRED_NOTIFICATION, subscription.tenant_id, expiredPayload);
-  await queueEffect(EffectTypes.SUBSCRIPTION_EXPIRED_EMAIL, subscription.tenant_id, expiredPayload);
+  await notificationService.createSubscriptionExpired(updated);
 
   return updated;
 }

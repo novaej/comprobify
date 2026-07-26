@@ -19,16 +19,17 @@ const tenantEventModel = require('../models/tenant-event.model');
 const paymentModel = require('../models/payment.model');
 const subscriptionModel = require('../models/subscription.model');
 const notificationModel = require('../models/notification.model');
+const notificationPreferenceModel = require('../models/notification-preference.model');
 const tierPriceModel = require('../models/tier-price.model');
 const documentTransmissionService = require('../services/document-transmission.service');
-const notificationService = require('../services/notification.service');
-const subscriptionService = require('../services/subscription.service');
 const emailService = require('../services/email.service');
 const webhookDeliveryService = require('../services/webhook-delivery.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
 const { EffectTypes } = require('../constants/effect-types');
 const EmailStatus = require('../constants/email-status');
 const EventType = require('../constants/event-type');
+const NotificationTypes = require('../constants/notification-types');
+const NotificationChannel = require('../constants/notification-channel');
 
 async function resolveIssuer(issuerId, sandbox) {
   const issuer = await issuerModel.findById(issuerId);
@@ -50,18 +51,6 @@ async function resolvePaymentAndSubscription({ paymentId, subscriptionId }) {
   return { payment, subscription };
 }
 
-// previousPriceUsd travels in the payload rather than being recomputed here
-// — pricingService.notifyPendingPriceChangesForTenant already resolved it
-// (as the price in effect at the moment the announcement was decided) before
-// enqueueing; recomputing "current price" at whatever later moment this
-// queued effect actually runs could disagree if another price became
-// effective in between.
-async function resolveTierPriceAnnouncement({ tenantId, tierPriceId, previousPriceUsd }) {
-  const tenant = await tenantModel.findById(tenantId);
-  const tierPrice = await tierPriceModel.findById(tierPriceId);
-  return { tenant, tierPrice, previousPriceUsd };
-}
-
 const handlers = {
   // --- SRI send/authorize (unchanged behavior, just re-homed onto the registry) ---
 
@@ -80,10 +69,10 @@ const handlers = {
 
   // --- Post-authorization side effects ---
 
-  [EffectTypes.DOCUMENT_AUTHORIZED_NOTIFICATION]: async (payload) => {
-    const { document, issuer } = await resolveDocument(payload);
-    await notificationService.createDocumentAuthorized(document, issuer);
-  },
+  // No DOCUMENT_AUTHORIZED_NOTIFICATION here — that notification is created
+  // synchronously by document-transmission.service.js's checkAuthorization
+  // now (ADR-024). INVOICE_AUTHORIZED_EMAIL below is unrelated to it — it
+  // emails the document's BUYER, not a tenant notification channel.
 
   // No SUBSCRIPTION_ACTIVATE_IF_LINKED / _APPLY_TIER_CHANGE_IF_LINKED /
   // _APPLY_RENEWAL_IF_LINKED here — see effect-types.js's comment. linkInvoice()
@@ -146,17 +135,7 @@ const handlers = {
     await webhookDeliveryService.fanOut(notification);
   },
 
-  // --- Subscription / payment lifecycle ---
-
-  [EffectTypes.PAYMENT_REVIEWED_NOTIFICATION]: async (payload) => {
-    const { payment, subscription } = await resolvePaymentAndSubscription(payload);
-    await notificationService.createPaymentReviewed(payment, subscription, payload.decision);
-  },
-
-  [EffectTypes.PAYMENT_REVIEWED_EMAIL]: async (payload) => {
-    const { payment, subscription } = await resolvePaymentAndSubscription(payload);
-    await emailService.sendPaymentReviewed(payment, subscription, payload.decision);
-  },
+  // --- Payment proof (operator-facing, not a tenant notification channel) ---
 
   [EffectTypes.PAYMENT_PROOF_SUBMITTED_EMAIL]: async (payload) => {
     const { payment, subscription } = await resolvePaymentAndSubscription(payload);
@@ -164,34 +143,78 @@ const handlers = {
     await emailService.sendPaymentProofSubmitted(payment, subscription, tenant, payload.referenceNumber);
   },
 
-  [EffectTypes.SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION]: async (payload) => {
-    const { payment, subscription } = await resolvePaymentAndSubscription(payload);
-    await notificationService.createSubscriptionRenewalDue(subscription, payment);
-  },
+  // --- NOTIFICATION_DISPATCH (ADR-024, NEXT_STEPS.md item 13) ---
+  //
+  // The one channel-neutral effect handling whatever async dispatch a
+  // notification still needs, for every type notificationService's
+  // dispatchNotification() enqueues it for. Today that's always EMAIL — the
+  // in-app row already exists (created synchronously before this was
+  // enqueued), and webhook fan-out is its own separate effect.
+  //
+  // PHASE B STUB: renders via the existing JS template files
+  // (src/services/email/templates/*.js + emailService.sendX functions),
+  // dispatching per NotificationTypes value below. Phase C (NEXT_STEPS.md
+  // item 13) replaces this dispatch table with a DB-backed template
+  // registry keyed by (type, language) — the surrounding preference-check /
+  // email_status bookkeeping stays the same.
+  [EffectTypes.NOTIFICATION_DISPATCH]: async (payload) => {
+    const notification = await notificationModel.findById(payload.notificationId);
+    if (!notification) return;
 
-  [EffectTypes.SUBSCRIPTION_RENEWAL_DUE_EMAIL]: async (payload) => {
-    const { payment, subscription } = await resolvePaymentAndSubscription(payload);
-    await emailService.sendSubscriptionRenewalDue(subscription, payment);
-  },
+    const enabled = await notificationPreferenceModel.isEnabled(notification.tenant_id, notification.type, NotificationChannel.EMAIL);
+    if (!enabled) {
+      await notificationModel.updateEmailStatus(notification.id, EmailStatus.SKIPPED);
+      return;
+    }
 
-  [EffectTypes.SUBSCRIPTION_EXPIRED_NOTIFICATION]: async (payload) => {
-    const subscription = await subscriptionModel.findById(payload.subscriptionId);
-    await notificationService.createSubscriptionExpired(subscription);
-  },
+    const sender = EMAIL_SENDERS_BY_TYPE[notification.type];
+    if (!sender) return; // shouldn't happen — dispatchNotification only enqueues for types with a supported EMAIL channel
 
-  [EffectTypes.SUBSCRIPTION_EXPIRED_EMAIL]: async (payload) => {
-    const subscription = await subscriptionModel.findById(payload.subscriptionId);
-    await emailService.sendSubscriptionExpired(subscription);
+    try {
+      await sender(notification);
+      await notificationModel.updateEmailStatus(notification.id, EmailStatus.SENT);
+    } catch (err) {
+      await notificationModel.updateEmailStatus(notification.id, EmailStatus.FAILED);
+      throw err;
+    }
   },
+};
 
-  // No PRICE_CHANGE_NOTIFICATION handler — that notification is created
-  // synchronously by pricingService.notifyPendingPriceChangesForTenant, not
-  // queued. See migration 076 / effect-types.js for why.
+// Phase B stub — see NOTIFICATION_DISPATCH's comment above. Each function
+// re-derives whatever emailService.sendX() needs from notification.metadata
+// (already stored at creation time) plus a couple of fresh re-fetches by id.
+async function sendPaymentReviewedFromNotification(notification) {
+  const { payment, subscription } = await resolvePaymentAndSubscription({
+    paymentId: notification.metadata.paymentId,
+    subscriptionId: notification.metadata.subscriptionId,
+  });
+  const decision = notification.type === NotificationTypes.PAYMENT_VERIFIED ? 'VERIFIED' : 'REJECTED';
+  await emailService.sendPaymentReviewed(payment, subscription, decision);
+}
 
-  [EffectTypes.PRICE_CHANGE_EMAIL]: async (payload) => {
-    const { tenant, tierPrice, previousPriceUsd } = await resolveTierPriceAnnouncement(payload);
-    await emailService.sendPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd);
-  },
+async function sendSubscriptionRenewalDueFromNotification(notification) {
+  const subscription = await subscriptionModel.findById(notification.metadata.subscriptionId);
+  const payment = await paymentModel.findById(notification.metadata.paymentId);
+  await emailService.sendSubscriptionRenewalDue(subscription, payment);
+}
+
+async function sendSubscriptionExpiredFromNotification(notification) {
+  const subscription = await subscriptionModel.findById(notification.metadata.subscriptionId);
+  await emailService.sendSubscriptionExpired(subscription);
+}
+
+async function sendPriceChangeAnnouncedFromNotification(notification) {
+  const tenant = await tenantModel.findById(notification.tenant_id);
+  const tierPrice = await tierPriceModel.findById(notification.metadata.tierPriceId);
+  await emailService.sendPriceChangeAnnounced(tenant, tierPrice, notification.metadata.previousPriceUsd);
+}
+
+const EMAIL_SENDERS_BY_TYPE = {
+  [NotificationTypes.PAYMENT_VERIFIED]: sendPaymentReviewedFromNotification,
+  [NotificationTypes.PAYMENT_REJECTED]: sendPaymentReviewedFromNotification,
+  [NotificationTypes.SUBSCRIPTION_RENEWAL_DUE]: sendSubscriptionRenewalDueFromNotification,
+  [NotificationTypes.SUBSCRIPTION_EXPIRED]: sendSubscriptionExpiredFromNotification,
+  [NotificationTypes.PRICE_CHANGE_ANNOUNCED]: sendPriceChangeAnnouncedFromNotification,
 };
 
 function getHandler(effectType) {

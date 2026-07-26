@@ -186,6 +186,23 @@ async function updateAggregated(id, { title, message, metadata }) {
 }
 
 /**
+ * Update a notification's email delivery status (migration 078). Only
+ * meaningful for types that support the EMAIL channel (notification-catalog.js)
+ * — set to PENDING by dispatchNotification() the moment the NOTIFICATION_DISPATCH
+ * effect is enqueued, then SENT/FAILED/SKIPPED by that effect's handler.
+ *
+ * @param {string} id
+ * @param {string} emailStatus - EmailStatus value (PENDING/SENT/FAILED/SKIPPED)
+ */
+async function updateEmailStatus(id, emailStatus) {
+  const { rows } = await db.query(
+    `UPDATE notifications SET email_status = $2 WHERE id = $1 RETURNING *`,
+    [id, emailStatus]
+  );
+  return rows[0] || null;
+}
+
+/**
  * Auto-dismiss all unread cert alerts for an issuer.
  * Called by the cert-check job when a cert is renewed and has > 30 days remaining.
  */
@@ -209,6 +226,7 @@ module.exports = {
   findPendingDocumentAuthorized,
   update,
   updateAggregated,
+  updateEmailStatus,
   markAsRead,
   markAllCertAlertsAsRead,
 };

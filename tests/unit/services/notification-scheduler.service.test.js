@@ -1,11 +1,9 @@
 jest.mock('../../../src/models/tenant.model');
-jest.mock('../../../src/models/notification-preference.model');
 jest.mock('../../../src/services/webhook-delivery.service');
 jest.mock('../../../src/services/notification.service');
 jest.mock('../../../src/services/pricing.service');
 
 const tenantModel = require('../../../src/models/tenant.model');
-const notificationPreferenceModel = require('../../../src/models/notification-preference.model');
 const webhookDeliveryService = require('../../../src/services/webhook-delivery.service');
 const notificationService = require('../../../src/services/notification.service');
 const pricingService = require('../../../src/services/pricing.service');
@@ -31,7 +29,6 @@ describe('NotificationSchedulerService', () => {
 
       const result = await notificationSchedulerService.runAll();
 
-      expect(notificationPreferenceModel.findByTenantId).not.toHaveBeenCalled();
       expect(notificationService.runCertChecksForTenant).not.toHaveBeenCalled();
       expect(result).toEqual({
         tenantsChecked: 0,
@@ -40,10 +37,8 @@ describe('NotificationSchedulerService', () => {
       });
     });
 
-    test('runs cert checks for every active tenant using their notification preferences', async () => {
+    test('runs cert checks for every active tenant', async () => {
       tenantModel.findAllActive.mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000002' }]);
-      notificationPreferenceModel.findByTenantId.mockImplementation((tenantId) =>
-        Promise.resolve({ CERT_EXPIRING: tenantId === '00000000-0000-0000-0000-000000000001' }));
       notificationService.runCertChecksForTenant.mockResolvedValue(undefined);
       webhookDeliveryService.processDueRetries.mockResolvedValue({
         attempted: 3, succeeded: 2, failed: 1, exhausted: 0,
@@ -51,10 +46,8 @@ describe('NotificationSchedulerService', () => {
 
       const result = await notificationSchedulerService.runAll();
 
-      expect(notificationPreferenceModel.findByTenantId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
-      expect(notificationPreferenceModel.findByTenantId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002');
-      expect(notificationService.runCertChecksForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', { CERT_EXPIRING: true });
-      expect(notificationService.runCertChecksForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', { CERT_EXPIRING: false });
+      expect(notificationService.runCertChecksForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
+      expect(notificationService.runCertChecksForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002');
       expect(result).toEqual({
         tenantsChecked: 2,
         retries: { attempted: 3, succeeded: 2, failed: 1, exhausted: 0 },
@@ -65,7 +58,6 @@ describe('NotificationSchedulerService', () => {
     test('continues past a tenant whose cert check throws, without counting it as checked', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       tenantModel.findAllActive.mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000002' }]);
-      notificationPreferenceModel.findByTenantId.mockResolvedValue({});
       notificationService.runCertChecksForTenant.mockImplementation((tenantId) => {
         if (tenantId === '00000000-0000-0000-0000-000000000001') return Promise.reject(new Error('boom'));
         return Promise.resolve(undefined);
