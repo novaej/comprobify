@@ -189,6 +189,27 @@ Created automatically by the same scheduled job when a subscription runs about 7
 
 ---
 
+### `PRICE_CHANGE_ANNOUNCED`
+
+Created automatically when the operator publishes a price change for a paid tier, for every active tenant still inside the 30-day notice window. This type is **mandatory** — it cannot be unsubscribed on any channel (see [Get preferences](#get-preferences)) because it is the actual 30-day legal price-change notice, not an optional operational alert. Any renewal due before `effectiveAt` is still billed at the current price.
+
+**Severity:** `INFO`
+
+**Metadata:**
+
+```json
+{
+  "tierPriceId": "00000000-0000-0000-0000-000000000030",
+  "tier": "STARTER",
+  "billingInterval": "MONTHLY",
+  "previousPriceUsd": 20,
+  "newPriceUsd": 25,
+  "effectiveAt": "2026-08-25T00:00:00.000Z"
+}
+```
+
+---
+
 ### Reserved types
 
 The following types are defined in the schema and accepted by the preferences endpoint, but not yet produced by the API. They are reserved for future implementation:
@@ -287,7 +308,9 @@ Marks a single notification as read (`readAt` is set to now). The notification i
 GET /v1/notifications/preferences
 ```
 
-Returns the notification preference for every type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model).
+Returns the notification preference for every subscribable **(type, channel)** pair. Channels are `IN_APP` (controls whether the notification appears in `GET /v1/notifications`) and `EMAIL` (controls whether the matching email is sent, for types that have one). Pairs the tenant has never explicitly configured default to `enabled: true` (opt-out model).
+
+**Mandatory** types (currently only `PRICE_CHANGE_ANNOUNCED`, the 30-day legal notice — see [its section above](#price_change_announced)) never appear in this list — they cannot be unsubscribed on any channel. A type with no matching email (`DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`) only appears with the `IN_APP` channel.
 
 ### Response
 
@@ -296,16 +319,17 @@ Returns the notification preference for every type. Types the tenant has never e
 ```json
 {
   "preferences": [
-    { "type": "DOCUMENT_AUTHORIZED",      "enabled": true  },
-    { "type": "CERT_EXPIRING",            "enabled": true  },
-    { "type": "CERT_EXPIRED",             "enabled": true  },
-    { "type": "SRI_SUBMISSION_FAILED",    "enabled": true  },
-    { "type": "EMAIL_DELIVERY_FAILED",    "enabled": true  },
-    { "type": "QUOTA_WARNING",            "enabled": true  },
-    { "type": "PAYMENT_VERIFIED",         "enabled": true  },
-    { "type": "PAYMENT_REJECTED",         "enabled": true  },
-    { "type": "SUBSCRIPTION_RENEWAL_DUE", "enabled": true  },
-    { "type": "SUBSCRIPTION_EXPIRED",     "enabled": true  }
+    { "type": "DOCUMENT_AUTHORIZED",      "channel": "IN_APP", "enabled": true },
+    { "type": "CERT_EXPIRING",            "channel": "IN_APP", "enabled": true },
+    { "type": "CERT_EXPIRED",             "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_VERIFIED",         "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_VERIFIED",         "channel": "EMAIL",  "enabled": true },
+    { "type": "PAYMENT_REJECTED",         "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_REJECTED",         "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_RENEWAL_DUE", "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_RENEWAL_DUE", "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_EXPIRED",     "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_EXPIRED",     "channel": "EMAIL",  "enabled": true }
   ]
 }
 ```
@@ -318,7 +342,7 @@ Returns the notification preference for every type. Types the tenant has never e
 PATCH /v1/notifications/preferences
 ```
 
-Bulk-upsert one or more preferences. Send only the types you want to change; unmentioned types are unchanged.
+Bulk-upsert one or more (type, channel) preferences. Send only the pairs you want to change; unmentioned pairs are unchanged.
 
 ### Request body
 
@@ -326,16 +350,17 @@ An array of preference objects:
 
 ```json
 [
-  { "type": "DOCUMENT_AUTHORIZED", "enabled": false }
+  { "type": "PAYMENT_VERIFIED", "channel": "EMAIL", "enabled": false }
 ]
 ```
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `type` | string | Yes | One of the valid notification types |
+| `type` | string | Yes | One of the subscribable (non-mandatory) notification types |
+| `channel` | string | Yes | `IN_APP` or `EMAIL` — must be a channel the type supports |
 | `enabled` | boolean | Yes | `true` to enable, `false` to suppress |
 
-When `enabled` is `false` for a type, the API will not create new notifications of that type for the tenant. Existing unread notifications of that type remain in the table and can still be marked as read.
+When `enabled` is `false` for `(type, IN_APP)`, the notification stops appearing in `GET /v1/notifications` for that type — the row is still created internally (e.g. for webhook history), it's just filtered from the list. When `enabled` is `false` for `(type, EMAIL)`, the matching email is not sent for that type, but the in-app notification is unaffected.
 
 ### Response
 
@@ -345,7 +370,7 @@ When `enabled` is `false` for a type, the API will not create new notifications 
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | Body is not an array, or an entry has an invalid `type` or non-boolean `enabled` |
+| `400` | `VALIDATION_FAILED` | Body is not an array, or an entry has an invalid `type`/`channel`, a `channel` that type doesn't support, a mandatory `type` (cannot be unsubscribed), or a non-boolean `enabled` |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 
 ---

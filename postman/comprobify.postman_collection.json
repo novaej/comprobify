@@ -2361,7 +2361,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "[\n  { \"type\": \"DOCUMENT_AUTHORIZED\", \"enabled\": true },\n  { \"type\": \"CERT_EXPIRING\",        \"enabled\": true },\n  { \"type\": \"CERT_EXPIRED\",         \"enabled\": true }\n]",
+              "raw": "[\n  { \"type\": \"PAYMENT_VERIFIED\", \"channel\": \"EMAIL\", \"enabled\": false },\n  { \"type\": \"DOCUMENT_AUTHORIZED\", \"channel\": \"IN_APP\", \"enabled\": true }\n]",
               "options": {
                 "raw": {
                   "language": "json"

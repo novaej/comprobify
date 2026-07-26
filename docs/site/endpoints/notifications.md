@@ -189,6 +189,27 @@ Creada automáticamente por el mismo job programado cuando una suscripción pasa
 
 ---
 
+### `PRICE_CHANGE_ANNOUNCED`
+
+Creada automáticamente cuando el operador publica un cambio de precio para un plan pagado, para cada tenant activo que aún esté dentro de la ventana de aviso de 30 días. Este tipo es **obligatorio** — no puede desuscribirse en ningún canal (ver [Obtener preferencias](#obtener-preferencias)) porque constituye el aviso legal de cambio de precio de 30 días, no una alerta operativa opcional. Cualquier renovación que venza antes de `effectiveAt` sigue facturándose al precio actual.
+
+**Severidad:** `INFO`
+
+**Metadata:**
+
+```json
+{
+  "tierPriceId": "00000000-0000-0000-0000-000000000030",
+  "tier": "STARTER",
+  "billingInterval": "MONTHLY",
+  "previousPriceUsd": 20,
+  "newPriceUsd": 25,
+  "effectiveAt": "2026-08-25T00:00:00.000Z"
+}
+```
+
+---
+
 ### Tipos reservados
 
 Los siguientes tipos están definidos en el esquema y son aceptados por el endpoint de preferencias, pero aún no son producidos por la API. Están reservados para implementación futura:
@@ -287,7 +308,9 @@ Marca una sola notificación como leída (`readAt` se establece al momento actua
 GET /v1/notifications/preferences
 ```
 
-Devuelve la preferencia de notificación para cada tipo. Los tipos que el tenant nunca ha configurado explícitamente tienen por defecto `enabled: true` (modelo de exclusión voluntaria).
+Devuelve la preferencia de notificación para cada combinación **(tipo, canal)** suscribible. Los canales son `IN_APP` (controla si la notificación aparece en `GET /v1/notifications`) y `EMAIL` (controla si se envía el correo equivalente, para los tipos que tienen uno). Las combinaciones que el tenant nunca ha configurado explícitamente tienen por defecto `enabled: true` (modelo de exclusión voluntaria).
+
+Los tipos **obligatorios** (actualmente solo `PRICE_CHANGE_ANNOUNCED`, el aviso legal de 30 días — ver [su sección arriba](#price_change_announced)) nunca aparecen en esta lista: no pueden desuscribirse en ningún canal. Un tipo sin correo equivalente (`DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`) solo aparece con el canal `IN_APP`.
 
 ### Respuesta
 
@@ -296,16 +319,17 @@ Devuelve la preferencia de notificación para cada tipo. Los tipos que el tenant
 ```json
 {
   "preferences": [
-    { "type": "DOCUMENT_AUTHORIZED",      "enabled": true  },
-    { "type": "CERT_EXPIRING",            "enabled": true  },
-    { "type": "CERT_EXPIRED",             "enabled": true  },
-    { "type": "SRI_SUBMISSION_FAILED",    "enabled": true  },
-    { "type": "EMAIL_DELIVERY_FAILED",    "enabled": true  },
-    { "type": "QUOTA_WARNING",            "enabled": true  },
-    { "type": "PAYMENT_VERIFIED",         "enabled": true  },
-    { "type": "PAYMENT_REJECTED",         "enabled": true  },
-    { "type": "SUBSCRIPTION_RENEWAL_DUE", "enabled": true  },
-    { "type": "SUBSCRIPTION_EXPIRED",     "enabled": true  }
+    { "type": "DOCUMENT_AUTHORIZED",      "channel": "IN_APP", "enabled": true },
+    { "type": "CERT_EXPIRING",            "channel": "IN_APP", "enabled": true },
+    { "type": "CERT_EXPIRED",             "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_VERIFIED",         "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_VERIFIED",         "channel": "EMAIL",  "enabled": true },
+    { "type": "PAYMENT_REJECTED",         "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_REJECTED",         "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_RENEWAL_DUE", "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_RENEWAL_DUE", "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_EXPIRED",     "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_EXPIRED",     "channel": "EMAIL",  "enabled": true }
   ]
 }
 ```
@@ -318,7 +342,7 @@ Devuelve la preferencia de notificación para cada tipo. Los tipos que el tenant
 PATCH /v1/notifications/preferences
 ```
 
-Actualiza en lote (upsert) una o más preferencias. Envía solo los tipos que quieres cambiar; los tipos no mencionados permanecen sin cambios.
+Actualiza en lote (upsert) una o más preferencias por (tipo, canal). Envía solo las combinaciones que quieres cambiar; las no mencionadas permanecen sin cambios.
 
 ### Cuerpo de la solicitud
 
@@ -326,16 +350,17 @@ Un arreglo de objetos de preferencia:
 
 ```json
 [
-  { "type": "DOCUMENT_AUTHORIZED", "enabled": false }
+  { "type": "PAYMENT_VERIFIED", "channel": "EMAIL", "enabled": false }
 ]
 ```
 
 | Campo | Tipo | Requerido | Descripción |
 |---|---|---|---|
-| `type` | string | Sí | Uno de los tipos de notificación válidos |
+| `type` | string | Sí | Uno de los tipos de notificación suscribibles (no obligatorios) |
+| `channel` | string | Sí | `IN_APP` o `EMAIL` — debe ser un canal que el tipo soporte |
 | `enabled` | boolean | Sí | `true` para habilitar, `false` para suprimir |
 
-Cuando `enabled` es `false` para un tipo, la API no creará nuevas notificaciones de ese tipo para el tenant. Las notificaciones no leídas existentes de ese tipo permanecen en la tabla y aún pueden marcarse como leídas.
+Cuando `enabled` es `false` para `(type, IN_APP)`, la notificación deja de aparecer en `GET /v1/notifications` para ese tipo — la fila sigue creándose internamente (por ejemplo, para el historial de webhooks), simplemente se filtra de la lista. Cuando `enabled` es `false` para `(type, EMAIL)`, no se envía el correo equivalente para ese tipo, pero la notificación en la app no se ve afectada.
 
 ### Respuesta
 
@@ -345,7 +370,7 @@ Cuando `enabled` es `false` para un tipo, la API no creará nuevas notificacione
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | El cuerpo no es un arreglo, o una entrada tiene un `type` inválido o un `enabled` que no es booleano |
+| `400` | `VALIDATION_FAILED` | El cuerpo no es un arreglo, o una entrada tiene un `type`/`channel` inválido, un `channel` que ese `type` no soporta, un `type` obligatorio (no puede desuscribirse), o un `enabled` que no es booleano |
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 
 ---

@@ -347,8 +347,12 @@ checkAuthorization:
 7. documentModel.updateStatus(id, newStatus, extraFields)
    extraFields [AUTHORIZED]: authorization_number, authorization_date, authorization_xml
 8. documentEventModel.create('STATUS_CHANGED', ...)
-9. [AUTHORIZED] durably enqueue 2 effects (awaited via Promise.all, so both rows exist before this
-   function returns), then best-effort dispatch each: DOCUMENT_AUTHORIZED_NOTIFICATION, INVOICE_AUTHORIZED_EMAIL
+9. [AUTHORIZED] notificationService.createDocumentAuthorized(updated, issuer) — synchronous, not queued
+     (ADR-024): creates the tenant's in-app DOCUMENT_AUTHORIZED notification inline and, inside that
+     call, durably enqueues WEBHOOK_FANOUT (DOCUMENT_AUTHORIZED has no EMAIL channel, so no
+     NOTIFICATION_DISPATCH effect follows it — see notification-catalog.js)
+   then durably enqueue + best-effort dispatch INVOICE_AUTHORIZED_EMAIL (the awaited enqueue must land
+   before this function returns; dispatch itself stays best-effort)
    → INVOICE_AUTHORIZED_EMAIL's handler (src/effects/index.js) owns the email_status/document_events
      bookkeeping that used to be inline here:
        On success: updateStatus({ email_status: 'SENT' }) + EMAIL_SENT event
@@ -365,7 +369,7 @@ checkAuthorization:
 
 `pendingEffectService.process(effectId)` (called by `workers/worker.js` for every message across all 3 queues) is what interprets a handler's outcome: resolves normally → `DONE`; resolves `{ requeue: true }` → left as-is (only `SRI_AUTHORIZE` ever does this); throws a state-machine violation (`AppError` 400 — a redelivery already processed this document, expected under RabbitMQ's at-least-once delivery) → treated as benign, marked `DONE` anyway; throws anything else → `attempt_count` incremented, `FAILED` once `maxAttempts` is reached, and the worker `nack`s the message with `requeue: false` — the message is never retried by RabbitMQ itself, only `POST /v1/admin/jobs/queue-reconciliation` re-publishes, after re-checking Postgres state first.
 
-**Why not just fire-and-forget the email like before?** The buyer notification is a convenience feature — it must never block or fail the effect worker's processing of the authorization message. It still doesn't: `INVOICE_AUTHORIZED_EMAIL` is its own independent `pending_effects` row, processed on its own attempt, unrelated to whether `DOCUMENT_AUTHORIZED_NOTIFICATION` or the subscription hooks succeed or fail. The difference from the old fire-and-forget approach is durability, not blocking behavior: a crash after `checkAuthorization` returns no longer loses the email entirely — the row already exists and reconciliation will dispatch it. Failed sends are also still retried via `POST /email-retry` or `POST /:accessKey/email-retry`, independently of the effect mechanism.
+**Why not just fire-and-forget the email like before?** The buyer notification is a convenience feature — it must never block or fail the effect worker's processing of the authorization message. It still doesn't: `INVOICE_AUTHORIZED_EMAIL` is its own independent `pending_effects` row, processed on its own attempt, unrelated to whether the synchronous in-app notification or the subscription hooks succeed or fail. The difference from the old fire-and-forget approach is durability, not blocking behavior: a crash after `checkAuthorization` returns no longer loses the email entirely — the row already exists and reconciliation will dispatch it. Failed sends are also still retried via `POST /email-retry` or `POST /:accessKey/email-retry`, independently of the effect mechanism.
 
 **Why keep send and authorize as separate API calls?** SRI's offline reception API (`RecepcionComprobantesOffline`) is fire-and-accept: it validates structure and queues the document but does not authorize it immediately. Authorization requires a separate SOAP call to `AutorizacionComprobantesOffline`. The two-step split mirrors SRI's own protocol — the switch to async queuing doesn't change this, it just means each of those two SOAP calls is now made by the worker instead of inline in the request.
 
@@ -805,8 +809,9 @@ workers/worker.js   (standalone process, npm run worker — NOT part of the API 
                     │           ├── [still pending] return { requeue: true }   — row left as-is, not DONE
                     │           ├── documentModel.updateStatus(AUTHORIZED | NOT_AUTHORIZED)
                     │           ├── documentEventModel.create(STATUS_CHANGED)
-                    │           └── [AUTHORIZED] enqueue+dispatch 2 more effects (awaited enqueue):
-                    │                 DOCUMENT_AUTHORIZED_NOTIFICATION, INVOICE_AUTHORIZED_EMAIL
+                    │           └── [AUTHORIZED] notificationService.createDocumentAuthorized(updated,
+                    │                 issuer) — synchronous, not queued (ADR-024) — then enqueue+dispatch
+                    │                 INVOICE_AUTHORIZED_EMAIL (awaited enqueue)
                     │                 (deliberately NOT here: subscription activation/tier-change/
                     │                  renewal checks — linkInvoice() applies those directly and
                     │                  synchronously instead; see ADR-022's addendum)
@@ -817,9 +822,14 @@ workers/worker.js   (standalone process, npm run worker — NOT part of the API 
                     │           ├── mailgunProvider.send(to, attachments)
                     │           └── documentModel.updateStatus({ email_status }) + EMAIL_SENT/SKIPPED/FAILED event
                     │
-                    │     [DOCUMENT_AUTHORIZED_NOTIFICATION / WEBHOOK_FANOUT / etc.]
-                    │           → thin delegation to notificationService/webhookDeliveryService —
-                    │             see CLAUDE.md's effect-type catalogue
+                    │     [NOTIFICATION_DISPATCH] → checks EMAIL preference, renders via
+                    │           notificationEmailTemplateService.render(type, language, notification),
+                    │           emailService.sendNotificationEmail(tenant, rendered) — one channel-neutral
+                    │           handler for every email-capable NotificationTypes value (ADR-024)
+                    │
+                    │     [WEBHOOK_FANOUT / etc.]
+                    │           → thin delegation to webhookDeliveryService — see CLAUDE.md's
+                    │             effect-type catalogue
                     │
                     ├── [resolved normally] markDone(effect) + COMMIT
                     ├── [resolved { requeue: true }] COMMIT, leave row as-is (SRI_AUTHORIZE only)

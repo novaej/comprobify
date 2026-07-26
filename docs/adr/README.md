@@ -108,3 +108,4 @@ YYYY-MM-DD
 | [021](021-account-recovery-flow.md) | Synchronous, Certificate-Verified Account Recovery | Accepted | 2026-07-21 |
 | [022](022-effects-outbox.md) | pending_effects — a Generic Outbox for All Async Side Effects | Accepted | 2026-07-22 |
 | [023](023-tier-price-history.md) | Tier Price History with a 30-Day Change Notice | Accepted | 2026-07-25 |
+| [024](024-unified-notification-service.md) | Unified Notification Service, Per-Channel Preferences, and DB-Backed Email Templates | Accepted | 2026-07-26 |
