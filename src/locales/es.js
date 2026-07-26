@@ -79,5 +79,17 @@ module.exports = {
       nextSteps: 'Puedes iniciar una nueva suscripción en cualquier momento mediante POST /v1/subscriptions.',
       disclaimer: 'No responder — este es un mensaje automático.',
     },
+    priceChangeAnnounced: {
+      subject: (tier) => `Cambio de precio próximo para tu plan ${tier}`,
+      greeting: 'Hola,',
+      body: (tier, effectiveDate) => `Te escribimos para informarte que el precio del plan ${tier} va a cambiar, a partir del ${effectiveDate}.`,
+      labelTier: 'Plan',
+      labelBillingInterval: 'Intervalo de facturación',
+      labelCurrentPrice: 'Precio actual',
+      labelNewPrice: 'Precio nuevo',
+      labelEffectiveDate: 'Fecha de entrada en vigencia',
+      protection: 'Cualquier renovación que venza antes de la fecha de entrada en vigencia indicada arriba se seguirá cobrando al precio actual — el nuevo precio aplicará recién a partir de la primera renovación en o después de esa fecha.',
+      disclaimer: 'No responder — este es un mensaje automático.',
+    },
   },
 };

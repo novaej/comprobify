@@ -35,6 +35,10 @@ Ninguna. Este es un endpoint público, sin autenticación y sin límite de tasa 
       "priceYearlyUsdBase": 0,
       "priceYearlyUsdIva": 0,
       "priceYearlyUsd": 0,
+      "upcomingPriceMonthlyUsd": null,
+      "monthlyPriceEffectiveAt": null,
+      "upcomingPriceYearlyUsd": null,
+      "yearlyPriceEffectiveAt": null,
       "overagePerDocumentUsd": null
     },
     {
@@ -53,6 +57,10 @@ Ninguna. Este es un endpoint público, sin autenticación y sin límite de tasa 
       "priceYearlyUsdBase": 173.91,
       "priceYearlyUsdIva": 26.09,
       "priceYearlyUsd": 200,
+      "upcomingPriceMonthlyUsd": 25,
+      "monthlyPriceEffectiveAt": "2026-08-24T00:00:00.000Z",
+      "upcomingPriceYearlyUsd": null,
+      "yearlyPriceEffectiveAt": null,
       "overagePerDocumentUsd": 0.30
     }
   ]
@@ -62,5 +70,7 @@ Ninguna. Este es un endpoint público, sin autenticación y sin límite de tasa 
 Todos los precios están en USD. `priceMonthlyUsd` y `priceYearlyUsd` son montos totales con IVA incluido — la cifra exacta que un tenant transfiere vía SPI. `priceMonthlyUsdBase` es la base imponible (base imponible en la factura del SRI); `priceMonthlyUsdIva` es la porción correspondiente al 15% de IVA. `ivaRate` se expone tanto a nivel general como por cada plan, de modo que una página de precios pueda mostrar el desglose sin fijar la tasa de impuesto directamente en el código.
 
 `priceYearlyUsd` es el precio anual con descuento (2 meses gratis frente a pagar mensualmente). `maxBranches`/`maxIssuePointsPerBranch` son `null` para BUSINESS, lo que significa ilimitado. `overagePerDocumentUsd` es `null` para FREE — la facturación por excedente aún no se aplica en ningún lugar (no existe pasarela de pago), estas cifras son solo de referencia.
+
+`upcomingPriceMonthlyUsd`/`monthlyPriceEffectiveAt` y `upcomingPriceYearlyUsd`/`yearlyPriceEffectiveAt` reflejan un cambio de precio ya publicado por un administrador pero que todavía no entra en vigencia (siempre con al menos 30 días de aviso, según los Términos de Servicio) — son `null` cuando no hay ningún cambio pendiente para ese plan/intervalo. Una renovación cuyo período actual termine antes de `monthlyPriceEffectiveAt`/`yearlyPriceEffectiveAt` se sigue cobrando al precio vigente (`priceMonthlyUsd`/`priceYearlyUsd`), no al precio nuevo.
 
 Para iniciar realmente una suscripción a un plan, consulta [Promover Tenant a Producción](promote-tenant.md) (autoservicio) o solicita a tu proveedor que use la API de administración.

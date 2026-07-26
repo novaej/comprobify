@@ -40,6 +40,7 @@ const notificationPreferenceModel = require('../models/notification-preference.m
 const issuerModel = require('../models/issuer.model');
 const NotificationTypes = require('../constants/notification-types');
 const NotificationSeverity = require('../constants/notification-severity');
+const NON_SUBSCRIBABLE_TYPES = require('../constants/non-subscribable-notification-types');
 const pendingEffectService = require('./pending-effect.service');
 const { EffectTypes } = require('../constants/effect-types');
 
@@ -53,8 +54,13 @@ const REJECTION_REASON_LABELS = {
   OTHER: 'see proof for details',
 };
 
-/** All defined notification types — used to populate the full preferences list. */
-const ALL_TYPES = Object.values(NotificationTypes);
+/**
+ * Subscribable notification types — used to populate the preferences list.
+ * Excludes "mandatory" types (NON_SUBSCRIBABLE_TYPES) — a tenant can't opt
+ * out of those on any channel, so they have no preference row and don't
+ * appear in GET/PATCH /v1/notifications/preferences at all.
+ */
+const ALL_TYPES = Object.values(NotificationTypes).filter((type) => !NON_SUBSCRIBABLE_TYPES.includes(type));
 
 /** Authorisations within this window are merged into one notification row. */
 const AGGREGATION_WINDOW_SECONDS = 60;
@@ -272,6 +278,51 @@ async function createSubscriptionExpired(subscription) {
   return notification;
 }
 
+/**
+ * Create a PRICE_CHANGE_ANNOUNCED notification for one tenant about one
+ * published tier_prices row still inside its notice window.
+ *
+ * Unconditional — PRICE_CHANGE_ANNOUNCED is "mandatory"
+ * (non-subscribable-notification-types.js): a tenant cannot opt out of the
+ * 30-day price-change notice, so unlike every other notification type there
+ * is no notificationPreferenceModel.isEnabled() gate here. This is also what
+ * makes the notifications table a safe idempotency source for this type —
+ * see tier-price.model.js's findUnnotifiedPendingForTenant.
+ *
+ * Called synchronously by pricingService.notifyPendingPriceChangesForTenant
+ * — the initial bulk blast at publish time, the reactivation catch-up path
+ * (a tenant who was SUSPENDED/PENDING_VERIFICATION when the change
+ * published), and the periodic reconciliation sweep all go through the same
+ * call.
+ *
+ * @param {object} tenant - DB row from tenants table
+ * @param {object} tierPrice - DB row from tier_prices (PUBLISHED, effective_at in the future)
+ * @param {number} previousPriceUsd - the price in effect right now, for the "from -> to" message
+ */
+async function createPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd) {
+  const effectiveDate = moment(tierPrice.effective_at).format('DD/MM/YYYY');
+  const newPrice = parseFloat(tierPrice.price_usd);
+
+  const notification = await notificationModel.create({
+    tenantId: tenant.id,
+    type: NotificationTypes.PRICE_CHANGE_ANNOUNCED,
+    severity: NotificationSeverity.INFO,
+    title: 'Upcoming price change',
+    message: `The ${tierPrice.billing_interval.toLowerCase()} price for ${tierPrice.tier} is changing from $${previousPriceUsd} to $${newPrice} on ${effectiveDate}. Any renewal due before that date is still billed at the current price.`,
+    metadata: {
+      tierPriceId: tierPrice.id,
+      tier: tierPrice.tier,
+      billingInterval: tierPrice.billing_interval,
+      previousPriceUsd,
+      newPriceUsd: newPrice,
+      effectiveAt: tierPrice.effective_at,
+    },
+  });
+
+  if (notification) await fireWebhookFanOut(notification);
+  return notification;
+}
+
 // ---------------------------------------------------------------------------
 // Certificate expiry check
 // ---------------------------------------------------------------------------
@@ -411,6 +462,7 @@ module.exports = {
   createPaymentReviewed,
   createSubscriptionRenewalDue,
   createSubscriptionExpired,
+  createPriceChangeAnnounced,
   runCertChecksForTenant,
   listForTenant,
   markRead,

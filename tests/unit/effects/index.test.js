@@ -6,6 +6,7 @@ jest.mock('../../../src/models/tenant-event.model');
 jest.mock('../../../src/models/payment.model');
 jest.mock('../../../src/models/subscription.model');
 jest.mock('../../../src/models/notification.model');
+jest.mock('../../../src/models/tier-price.model');
 jest.mock('../../../src/services/document-transmission.service');
 jest.mock('../../../src/services/notification.service');
 jest.mock('../../../src/services/subscription.service');
@@ -21,6 +22,7 @@ const tenantEventModel = require('../../../src/models/tenant-event.model');
 const paymentModel = require('../../../src/models/payment.model');
 const subscriptionModel = require('../../../src/models/subscription.model');
 const notificationModel = require('../../../src/models/notification.model');
+const tierPriceModel = require('../../../src/models/tier-price.model');
 const documentTransmissionService = require('../../../src/services/document-transmission.service');
 const notificationService = require('../../../src/services/notification.service');
 const subscriptionService = require('../../../src/services/subscription.service');
@@ -206,5 +208,16 @@ describe('payment/subscription lifecycle handlers', () => {
     await getHandler('SUBSCRIPTION_EXPIRED_EMAIL')({ subscriptionId: 'sub-1' });
 
     expect(emailService.sendSubscriptionExpired).toHaveBeenCalledWith(subscription);
+  });
+
+  test('PRICE_CHANGE_EMAIL re-fetches tenant + tier price and uses the payload\'s previousPriceUsd (never recomputes it)', async () => {
+    const tenant = { id: 'tenant-1' };
+    const tierPrice = { id: 'price-1', tier: 'STARTER', billing_interval: 'MONTHLY' };
+    tenantModel.findById.mockResolvedValue(tenant);
+    tierPriceModel.findById.mockResolvedValue(tierPrice);
+
+    await getHandler('PRICE_CHANGE_EMAIL')({ tenantId: 'tenant-1', tierPriceId: 'price-1', previousPriceUsd: 20 });
+
+    expect(emailService.sendPriceChangeAnnounced).toHaveBeenCalledWith(tenant, tierPrice, 20);
   });
 });

@@ -38,6 +38,10 @@ const EffectTypes = Object.freeze({
   SUBSCRIPTION_RENEWAL_DUE_EMAIL:        'SUBSCRIPTION_RENEWAL_DUE_EMAIL',
   SUBSCRIPTION_EXPIRED_NOTIFICATION:     'SUBSCRIPTION_EXPIRED_NOTIFICATION',
   SUBSCRIPTION_EXPIRED_EMAIL:            'SUBSCRIPTION_EXPIRED_EMAIL',
+  // No PRICE_CHANGE_NOTIFICATION — the in-app notification is created
+  // synchronously by pricingService.notifyPendingPriceChangesForTenant, not
+  // queued. See migration 076's comment for why.
+  PRICE_CHANGE_EMAIL:                    'PRICE_CHANGE_EMAIL',
 });
 
 // Routing key each effect_type publishes under — three queues, not one, so a

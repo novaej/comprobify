@@ -8,6 +8,7 @@ const paymentProofSubmittedTemplate = require('./email/templates/payment-proof-s
 const paymentReviewedTemplate = require('./email/templates/payment-reviewed');
 const subscriptionRenewalDueTemplate = require('./email/templates/subscription-renewal-due');
 const subscriptionExpiredTemplate = require('./email/templates/subscription-expired');
+const priceChangeAnnouncedTemplate = require('./email/templates/price-change-announced');
 const config = require('../config');
 
 // When APP_ENV is 'staging', every email carries a visible notice so a
@@ -213,6 +214,36 @@ async function sendSubscriptionExpired(subscription) {
   return { sent: true };
 }
 
+/**
+ * Tell the tenant a subscription tier price is changing — sent unconditionally
+ * (no notification-preference gate), same as sendPaymentReviewed/
+ * sendSubscriptionRenewalDue, since this is the actual 30-day legal notice
+ * (docs/agreements/terms-of-service.md), not an optional operational alert.
+ *
+ * @param {object} tenant - DB row from tenants table
+ * @param {object} tierPrice - DB row from tier_prices (PUBLISHED, effective_at in the future)
+ * @param {number} previousPriceUsd - the price in effect right now
+ * @returns {Promise<{ sent: boolean }>}
+ */
+async function sendPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd) {
+  const language = tenant.preferred_language || 'es';
+  const rendered = priceChangeAnnouncedTemplate.render(tierPrice, previousPriceUsd, language);
+  const { subject } = rendered;
+  const { text, html } = applyStagingBanner(rendered, language);
+  const provider = emailFactory.getProvider();
+
+  await provider.send({
+    from: `Comprobify <${config.email.from}>`,
+    to: tenant.email,
+    subject,
+    text,
+    html,
+    attachments: [],
+  });
+
+  return { sent: true };
+}
+
 module.exports = {
   sendInvoiceAuthorized,
   sendVerificationEmail,
@@ -220,4 +251,5 @@ module.exports = {
   sendPaymentReviewed,
   sendSubscriptionRenewalDue,
   sendSubscriptionExpired,
+  sendPriceChangeAnnounced,
 };

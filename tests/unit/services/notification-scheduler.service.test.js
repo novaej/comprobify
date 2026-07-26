@@ -2,14 +2,22 @@ jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/notification-preference.model');
 jest.mock('../../../src/services/webhook-delivery.service');
 jest.mock('../../../src/services/notification.service');
+jest.mock('../../../src/services/pricing.service');
 
 const tenantModel = require('../../../src/models/tenant.model');
 const notificationPreferenceModel = require('../../../src/models/notification-preference.model');
 const webhookDeliveryService = require('../../../src/services/webhook-delivery.service');
 const notificationService = require('../../../src/services/notification.service');
+const pricingService = require('../../../src/services/pricing.service');
 const notificationSchedulerService = require('../../../src/services/notification-scheduler.service');
 
+const NO_PRICE_CHANGES = { tenantsChecked: 0, notified: 0 };
+
 describe('NotificationSchedulerService', () => {
+  beforeEach(() => {
+    pricingService.reconcilePendingPriceChangeNotifications.mockResolvedValue(NO_PRICE_CHANGES);
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -28,6 +36,7 @@ describe('NotificationSchedulerService', () => {
       expect(result).toEqual({
         tenantsChecked: 0,
         retries: { attempted: 0, succeeded: 0, failed: 0, exhausted: 0 },
+        priceChangeReconciliation: NO_PRICE_CHANGES,
       });
     });
 
@@ -49,6 +58,7 @@ describe('NotificationSchedulerService', () => {
       expect(result).toEqual({
         tenantsChecked: 2,
         retries: { attempted: 3, succeeded: 2, failed: 1, exhausted: 0 },
+        priceChangeReconciliation: NO_PRICE_CHANGES,
       });
     });
 
@@ -85,6 +95,20 @@ describe('NotificationSchedulerService', () => {
 
       expect(webhookDeliveryService.processDueRetries).toHaveBeenCalledWith();
       expect(result.retries).toBe(retries);
+    });
+
+    test('propagates the price-change reconciliation summary from pricingService', async () => {
+      tenantModel.findAllActive.mockResolvedValue([]);
+      webhookDeliveryService.processDueRetries.mockResolvedValue({
+        attempted: 0, succeeded: 0, failed: 0, exhausted: 0,
+      });
+      const reconciliation = { tenantsChecked: 12, notified: 3 };
+      pricingService.reconcilePendingPriceChangeNotifications.mockResolvedValue(reconciliation);
+
+      const result = await notificationSchedulerService.runAll();
+
+      expect(pricingService.reconcilePendingPriceChangeNotifications).toHaveBeenCalledWith();
+      expect(result.priceChangeReconciliation).toBe(reconciliation);
     });
   });
 });

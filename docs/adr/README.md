@@ -107,3 +107,4 @@ YYYY-MM-DD
 | [020](020-uuid-primary-keys.md) | UUID Primary Keys | Accepted | 2026-07-21 |
 | [021](021-account-recovery-flow.md) | Synchronous, Certificate-Verified Account Recovery | Accepted | 2026-07-21 |
 | [022](022-effects-outbox.md) | pending_effects — a Generic Outbox for All Async Side Effects | Accepted | 2026-07-22 |
+| [023](023-tier-price-history.md) | Tier Price History with a 30-Day Change Notice | Accepted | 2026-07-25 |

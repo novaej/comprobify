@@ -8,6 +8,7 @@ const tenantEventModel = require('../models/tenant-event.model');
 const { formatTenantEvent } = require('../presenters/tenant-event.presenter');
 const sequentialService = require('./sequential.service');
 const tenantQuotaService = require('./tenant-quota.service');
+const pricingService = require('./pricing.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
 const AppError = require('../errors/app-error');
@@ -116,6 +117,18 @@ async function updateTenantStatus(id, status, reason = null) {
   // suspension, even though both use the same status value (see NEXT_STEPS
   // item 11 — account closure is intentionally not a separate status).
   await tenantEventModel.create(id, 'STATUS_CHANGED', { from: previous.status, to: status, reason });
+
+  // Catch-up: a tenant reactivated out of SUSPENDED (e.g. after settling an
+  // irregular payment) may have missed a price change that published while
+  // they were suspended — best-effort, never fails the status update itself.
+  if (status === TenantStatus.ACTIVE && previous.status !== TenantStatus.ACTIVE) {
+    try {
+      await pricingService.notifyPendingPriceChangesForTenant(id);
+    } catch (err) {
+      console.error(`[admin] Failed to notify tenant ${id} of pending price changes:`, err.message);
+    }
+  }
+
   return formatTenant(row, quotaRow);
 }
 
@@ -123,6 +136,13 @@ async function verifyTenant(id) {
   const row = await tenantModel.activate(id);
   if (!row) throw new NotFoundError('Tenant');
   const quotaRow = await tenantQuotaService.getCurrentForTenant(id);
+
+  try {
+    await pricingService.notifyPendingPriceChangesForTenant(id);
+  } catch (err) {
+    console.error(`[admin] Failed to notify tenant ${id} of pending price changes:`, err.message);
+  }
+
   return formatTenant(row, quotaRow);
 }
 

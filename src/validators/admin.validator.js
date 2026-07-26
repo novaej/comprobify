@@ -265,6 +265,49 @@ const getAgreementVersion = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
+// Tier prices
+const createTierPrice = [
+  body('tier')
+    .isIn(Object.keys(TIERS))
+    .withMessage(`tier must be one of: ${Object.keys(TIERS).join(', ')}`),
+
+  body('billingInterval')
+    .isIn(['MONTHLY', 'YEARLY'])
+    .withMessage('billingInterval must be one of: MONTHLY, YEARLY'),
+
+  body('priceUsd')
+    .isFloat({ min: 0 })
+    .withMessage('priceUsd must be a non-negative number'),
+];
+
+const updateTierPrice = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+
+  body('priceUsd')
+    .isFloat({ min: 0 })
+    .withMessage('priceUsd must be a non-negative number'),
+];
+
+const publishTierPrice = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+
+  body('noticeDays')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('noticeDays must be a positive integer'),
+];
+
+const listTierPrices = [
+  query('tier')
+    .optional()
+    .isIn(Object.keys(TIERS))
+    .withMessage(`tier must be one of: ${Object.keys(TIERS).join(', ')}`),
+];
+
+const getTierPrice = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+];
+
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
@@ -273,4 +316,5 @@ module.exports = {
   getAgreementVersion,
   activateAgreement: [param('id').isUUID().withMessage('id must be a valid UUID')],
   listAgreementVersions: [param('type').isIn(agreementService.AGREEMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],
+  createTierPrice, updateTierPrice, publishTierPrice, listTierPrices, getTierPrice,
 };

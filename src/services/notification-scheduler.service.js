@@ -9,6 +9,14 @@
  *      active issuers and upserts CERT_EXPIRING / CERT_EXPIRED alerts.
  *   2. Webhook retries — processes all RETRYING delivery rows past their
  *      scheduled next_retry_at time.
+ *   3. Price-change notification reconciliation — re-scans every ACTIVE
+ *      tenant for a published tier price still inside its notice window they
+ *      haven't been notified of yet. A safety net for the event-driven hooks
+ *      (registration/admin services call this on every tenant->ACTIVE
+ *      transition) — this catches an ACTIVE tenant who was skipped during
+ *      the publish-time bulk blast (e.g. a transient failure) and would
+ *      otherwise never be revisited, since nothing else re-checks a tenant
+ *      who doesn't change status. See pricing.service.js.
  *
  * The caller (admin endpoint) triggers this on a schedule (e.g. cron). It is
  * idempotent — running it multiple times is safe.
@@ -20,6 +28,7 @@
 const tenantModel = require('../models/tenant.model');
 const notificationPreferenceModel = require('../models/notification-preference.model');
 const webhookDeliveryService = require('./webhook-delivery.service');
+const pricingService = require('./pricing.service');
 
 // Import private function via the notification service
 const notificationService = require('./notification.service');
@@ -29,7 +38,8 @@ const notificationService = require('./notification.service');
  *
  * @returns {Promise<{
  *   tenantsChecked: number,
- *   retries: { attempted: number, succeeded: number, failed: number, exhausted: number }
+ *   retries: { attempted: number, succeeded: number, failed: number, exhausted: number },
+ *   priceChangeReconciliation: { tenantsChecked: number, notified: number }
  * }>}
  */
 async function runAll() {
@@ -50,7 +60,10 @@ async function runAll() {
   // --- 2. Webhook retries ---
   const retries = await webhookDeliveryService.processDueRetries();
 
-  return { tenantsChecked, retries };
+  // --- 3. Price-change notification reconciliation ---
+  const priceChangeReconciliation = await pricingService.reconcilePendingPriceChangeNotifications();
+
+  return { tenantsChecked, retries, priceChangeReconciliation };
 }
 
 module.exports = { runAll };

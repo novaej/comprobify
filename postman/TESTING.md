@@ -515,6 +515,34 @@ All three are idempotent — safe to run manually at any time for testing. None 
 
 ---
 
+### Step 14 — Manage tier prices (30-day change notice)
+
+**`POST /v1/admin/prices`** *(Admin folder — "Create Tier Price (Draft)")*
+
+```json
+{ "tier": "STARTER", "billingInterval": "MONTHLY", "priceUsd": 25 }
+```
+
+✓ Test script captures `tier_price_id`. Creates a `DRAFT` row — not visible to tenants, no notice clock running yet.
+
+Optionally adjust it before publishing: **`PATCH /v1/admin/prices/{{tier_price_id}}`** *("Update Tier Price (Draft)")* — only works while still `DRAFT` (`400 PRICE_NOT_DRAFT` once published).
+
+**`POST /v1/admin/prices/{{tier_price_id}}/publish`** *("Publish Tier Price")*
+
+```json
+{}
+```
+
+Confirms the price: sets `effectiveAt = now + noticeDays` (omit `noticeDays` to use the `PRICE_CHANGE_MIN_NOTICE_DAYS` floor, default 30 — matches the Terms of Service's "at least 30 days" clause) and notifies every currently-`ACTIVE` tenant (in-app `PRICE_CHANGE_ANNOUNCED` notification + email). Irreversible — a published price is immutable.
+
+> A renewal or deferred plan/interval change due before `effectiveAt` is still billed at the old price automatically — this is the actual protection the notice period grants, not just the notification. See CLAUDE.md's "Price history + 30-day change notice" and ADR-023.
+
+**`GET /v1/admin/prices`** *("List Tier Prices")* — full history, newest first (optional `?tier=` filter). **`GET /v1/admin/prices/{{tier_price_id}}`** *("Get Tier Price")* — one row.
+
+`GET /v1/tiers` *(Tiers folder)* reflects the change immediately as `upcomingPriceMonthlyUsd`/`monthlyPriceEffectiveAt` (or the yearly equivalents) until `effectiveAt` passes, at which point it becomes the plain `priceMonthlyUsd`/`priceYearlyUsd`.
+
+---
+
 ## Variable reference
 
 All variables are set at the **collection** level (not environment). Change them under
@@ -526,6 +554,7 @@ All variables are set at the **collection** level (not environment). Change them
 | `admin_secret` | You (manual) | All `X-Admin-Secret` headers |
 | `api_key` | ✓ Register / Promote / Mint Key | `Authorization: Bearer {{api_key}}` |
 | `agreement_version` | ✓ List Documents / Publish TERMS | `termsVersion` in Accept Agreements |
+| `tier_price_id` | ✓ Create Tier Price (Draft) / List Tier Prices | Update / Publish / Get Tier Price |
 | `verification_token` | You (from email) | Verify Email |
 | `issuer_id` | ✓ Register / List Issuers | `X-Issuer-Id` on all document requests |
 | `tenant_id` | ✓ Register / Create Tenant (admin) | Admin tenant routes |

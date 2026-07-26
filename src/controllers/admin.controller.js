@@ -5,6 +5,7 @@ const tenantQuotaService = require('../services/tenant-quota.service');
 const queueReconciliationService = require('../services/queue-reconciliation.service');
 const agreementService = require('../services/agreement.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
+const pricingService = require('../services/pricing.service');
 const rideService = require('../services/ride.service');
 const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
@@ -197,6 +198,50 @@ const getAgreementVersion = async (req, res) => {
   });
 };
 
+// Tier prices
+
+function formatTierPrice(row) {
+  return {
+    id: row.id,
+    tier: row.tier,
+    billingInterval: row.billing_interval,
+    priceUsd: parseFloat(row.price_usd),
+    status: row.status,
+    effectiveAt: row.effective_at,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+  };
+}
+
+const createTierPrice = async (req, res) => {
+  const row = await pricingService.createDraft({
+    tier: req.body.tier,
+    billingInterval: req.body.billingInterval,
+    priceUsd: req.body.priceUsd,
+  });
+  res.status(201).json({ ok: true, price: formatTierPrice(row) });
+};
+
+const updateTierPrice = async (req, res) => {
+  const row = await pricingService.updateDraft(req.params.id, req.body.priceUsd);
+  res.json({ ok: true, price: formatTierPrice(row) });
+};
+
+const publishTierPrice = async (req, res) => {
+  const row = await pricingService.publishPrice(req.params.id, { noticeDays: req.body.noticeDays });
+  res.json({ ok: true, price: formatTierPrice(row) });
+};
+
+const listTierPrices = async (req, res) => {
+  const rows = await pricingService.listPrices({ tier: req.query.tier });
+  res.json({ ok: true, prices: rows.map(formatTierPrice) });
+};
+
+const getTierPrice = async (req, res) => {
+  const row = await pricingService.getPriceById(req.params.id);
+  res.json({ ok: true, price: formatTierPrice(row) });
+};
+
 // Jobs
 
 /**
@@ -309,4 +354,5 @@ module.exports = {
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments,
   publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion, generateTenantAgreements,
   getDocumentRide,
+  createTierPrice, updateTierPrice, publishTierPrice, listTierPrices, getTierPrice,
 };

@@ -7,6 +7,7 @@ const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const { readLimiter, writeLimiter } = require('../middleware/rate-limit');
 const NotificationTypes = require('../constants/notification-types');
+const NON_SUBSCRIBABLE_TYPES = require('../constants/non-subscribable-notification-types');
 
 const router = Router();
 
@@ -29,7 +30,9 @@ const preferencesValidator = [
     .withMessage('Body must be a non-empty array'),
   body('*.type')
     .isIn(Object.values(NotificationTypes))
-    .withMessage(`Each type must be one of: ${Object.values(NotificationTypes).join(', ')}`),
+    .withMessage(`Each type must be one of: ${Object.values(NotificationTypes).join(', ')}`)
+    .custom((type) => !NON_SUBSCRIBABLE_TYPES.includes(type))
+    .withMessage(`The following types cannot be individually subscribed to: ${NON_SUBSCRIBABLE_TYPES.join(', ')}`),
   body('*.enabled')
     .isBoolean()
     .withMessage('Each enabled must be a boolean'),

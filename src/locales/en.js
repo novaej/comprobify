@@ -79,5 +79,17 @@ module.exports = {
       nextSteps: 'You can start a new subscription at any time via POST /v1/subscriptions.',
       disclaimer: 'Do not reply — this is an automated message.',
     },
+    priceChangeAnnounced: {
+      subject: (tier) => `Upcoming price change for your ${tier} plan`,
+      greeting: 'Hello,',
+      body: (tier, effectiveDate) => `We're writing to let you know the price for the ${tier} plan is changing, effective ${effectiveDate}.`,
+      labelTier: 'Plan',
+      labelBillingInterval: 'Billing interval',
+      labelCurrentPrice: 'Current price',
+      labelNewPrice: 'New price',
+      labelEffectiveDate: 'Effective date',
+      protection: 'Any renewal due before the effective date above is still billed at the current price — the new price only applies starting with the first renewal on or after that date.',
+      disclaimer: 'Do not reply — this is an automated message.',
+    },
   },
 };

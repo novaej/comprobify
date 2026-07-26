@@ -5,6 +5,7 @@ const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const sequentialService = require('./sequential.service');
 const tenantQuotaService = require('./tenant-quota.service');
+const pricingService = require('./pricing.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
 const tenantEventModel = require('../models/tenant-event.model');
@@ -316,6 +317,15 @@ async function verifyEmail(token) {
   }
   await tenantModel.activate(tenant.id);
   await tenantEventModel.create(tenant.id, 'EMAIL_VERIFIED');
+
+  // Catch-up: a price change may have published while this tenant was still
+  // PENDING_VERIFICATION — best-effort, never fails verification itself.
+  try {
+    await pricingService.notifyPendingPriceChangesForTenant(tenant.id);
+  } catch (err) {
+    console.error(`[registration] Failed to notify tenant ${tenant.id} of pending price changes:`, err.message);
+  }
+
   return { email: tenant.email };
 }
 

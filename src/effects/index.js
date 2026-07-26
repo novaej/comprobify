@@ -19,6 +19,7 @@ const tenantEventModel = require('../models/tenant-event.model');
 const paymentModel = require('../models/payment.model');
 const subscriptionModel = require('../models/subscription.model');
 const notificationModel = require('../models/notification.model');
+const tierPriceModel = require('../models/tier-price.model');
 const documentTransmissionService = require('../services/document-transmission.service');
 const notificationService = require('../services/notification.service');
 const subscriptionService = require('../services/subscription.service');
@@ -47,6 +48,18 @@ async function resolvePaymentAndSubscription({ paymentId, subscriptionId }) {
   const payment = paymentId ? await paymentModel.findById(paymentId) : null;
   const subscription = await subscriptionModel.findById(subscriptionId);
   return { payment, subscription };
+}
+
+// previousPriceUsd travels in the payload rather than being recomputed here
+// — pricingService.notifyPendingPriceChangesForTenant already resolved it
+// (as the price in effect at the moment the announcement was decided) before
+// enqueueing; recomputing "current price" at whatever later moment this
+// queued effect actually runs could disagree if another price became
+// effective in between.
+async function resolveTierPriceAnnouncement({ tenantId, tierPriceId, previousPriceUsd }) {
+  const tenant = await tenantModel.findById(tenantId);
+  const tierPrice = await tierPriceModel.findById(tierPriceId);
+  return { tenant, tierPrice, previousPriceUsd };
 }
 
 const handlers = {
@@ -169,6 +182,15 @@ const handlers = {
   [EffectTypes.SUBSCRIPTION_EXPIRED_EMAIL]: async (payload) => {
     const subscription = await subscriptionModel.findById(payload.subscriptionId);
     await emailService.sendSubscriptionExpired(subscription);
+  },
+
+  // No PRICE_CHANGE_NOTIFICATION handler — that notification is created
+  // synchronously by pricingService.notifyPendingPriceChangesForTenant, not
+  // queued. See migration 076 / effect-types.js for why.
+
+  [EffectTypes.PRICE_CHANGE_EMAIL]: async (payload) => {
+    const { tenant, tierPrice, previousPriceUsd } = await resolveTierPriceAnnouncement(payload);
+    await emailService.sendPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd);
   },
 };
 

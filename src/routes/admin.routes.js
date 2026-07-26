@@ -51,6 +51,13 @@ router.get('/agreements/:type/versions', v.listAgreementVersions, validateReques
 router.patch('/agreements/:id/activate', v.activateAgreement, validateRequest, asyncHandler(controller.activateAgreement));
 router.post('/tenants/:id/agreements', v.verifyTenant, validateRequest, asyncHandler(controller.generateTenantAgreements));
 
+// Tier prices
+router.post('/prices',            v.createTierPrice,  validateRequest, asyncHandler(controller.createTierPrice));
+router.get('/prices',             v.listTierPrices,    validateRequest, asyncHandler(controller.listTierPrices));
+router.get('/prices/:id',         v.getTierPrice,      validateRequest, asyncHandler(controller.getTierPrice));
+router.patch('/prices/:id',       v.updateTierPrice,   validateRequest, asyncHandler(controller.updateTierPrice));
+router.post('/prices/:id/publish', v.publishTierPrice, validateRequest, asyncHandler(controller.publishTierPrice));
+
 // Jobs
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));
 router.post('/jobs/subscriptions', asyncHandler(controller.runSubscriptionJobs));

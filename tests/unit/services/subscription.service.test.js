@@ -6,6 +6,7 @@ jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/tenant-event.model');
 jest.mock('../../../src/services/tenant-quota.service');
 jest.mock('../../../src/services/pending-effect.service');
+jest.mock('../../../src/services/pricing.service');
 
 const subscriptionModel = require('../../../src/models/subscription.model');
 const paymentModel = require('../../../src/models/payment.model');
@@ -15,13 +16,28 @@ const tenantModel = require('../../../src/models/tenant.model');
 const tenantEventModel = require('../../../src/models/tenant-event.model');
 const tenantQuotaService = require('../../../src/services/tenant-quota.service');
 const pendingEffectService = require('../../../src/services/pending-effect.service');
+const pricingService = require('../../../src/services/pricing.service');
 const config = require('../../../src/config');
 const subscriptionService = require('../../../src/services/subscription.service');
+
+// Same figures the old TIERS[tier].priceMonthlyUsd/priceYearlyUsd constants
+// used to carry, now served by a mocked pricingService — every test below
+// that doesn't care about price history keeps working against these fixed
+// values regardless of asOfDate. Tests that DO care about date-based
+// resolution (the 30-day protection) override getPriceAsOf per-call instead.
+const PRICES = {
+  FREE:     { MONTHLY: 0,   YEARLY: 0 },
+  STARTER:  { MONTHLY: 20,  YEARLY: 200 },
+  GROWTH:   { MONTHLY: 90,  YEARLY: 900 },
+  BUSINESS: { MONTHLY: 230, YEARLY: 2300 },
+};
 
 describe('SubscriptionService', () => {
   beforeEach(() => {
     pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-x', effect_type: 'X' });
     pendingEffectService.dispatch.mockResolvedValue();
+    pricingService.getCurrentPrice.mockImplementation(async (tier, interval) => PRICES[tier][interval]);
+    pricingService.getPriceAsOf.mockImplementation(async (tier, interval) => PRICES[tier][interval]);
   });
 
   afterEach(() => {
@@ -278,6 +294,9 @@ describe('SubscriptionService', () => {
       // Full yearly-GROWTH sticker price (900), not prorated against the
       // remaining monthly period.
       expect(createArgs.totalAmount).toBe(900);
+      // Priced as of current_period_end (when the new cadence's period
+      // actually starts), not "now" — the 30-day protection applies here too.
+      expect(pricingService.getPriceAsOf).toHaveBeenCalledWith('GROWTH', 'YEARLY', periodEnd);
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGE_REQUESTED', expect.objectContaining({
         subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'GROWTH', toTier: 'GROWTH',
         fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY', effectiveAt: periodEnd,
@@ -653,6 +672,9 @@ describe('SubscriptionService', () => {
       const renewalDuePayload = { subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000040' };
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION', '00000000-0000-0000-0000-000000000001', renewalDuePayload);
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SUBSCRIPTION_RENEWAL_DUE_EMAIL', '00000000-0000-0000-0000-000000000001', renewalDuePayload);
+      // Priced as of current_period_end (when the renewal period actually
+      // starts), not "now" — this is the 30-day price-change protection.
+      expect(pricingService.getPriceAsOf).toHaveBeenCalledWith('STARTER', 'MONTHLY', periodEnd);
       expect(result).toEqual({ remindersSent: 1, expired: 0 });
     });
 
@@ -665,6 +687,28 @@ describe('SubscriptionService', () => {
       await subscriptionService.processDueRenewals();
 
       expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 782.61, ivaRate: 0.15, ivaAmount: 117.39, totalAmount: 900, purpose: 'RENEWAL' });
+    });
+
+    test('a renewal due before a published price change\'s effective_at is still billed at the old price', async () => {
+      // Simulates the 30-day protection end to end: getPriceAsOf resolves
+      // whatever was in effect on current_period_end, not the "now" price.
+      const periodEnd = new Date('2026-08-15T00:00:00Z');
+      const newPriceEffectiveAt = new Date('2026-09-01T00:00:00Z');
+      pricingService.getPriceAsOf.mockImplementation(async (tier, interval, asOfDate) => {
+        if (tier === 'STARTER' && interval === 'MONTHLY') {
+          return asOfDate < newPriceEffectiveAt ? 20 : 25;
+        }
+        return PRICES[tier][interval];
+      });
+      subscriptionModel.findDueForRenewalReminder.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
+      ]);
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000040' });
+
+      await subscriptionService.processDueRenewals();
+
+      // periodEnd is before the new price's effective_at -> still $20, not $25.
+      expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ totalAmount: 20 }));
     });
 
     test('downgrades an expired subscription to FREE, logs SUBSCRIPTION_EXPIRED, and notifies the tenant', async () => {

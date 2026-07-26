@@ -84,6 +84,12 @@
       "type": "string"
     },
     {
+      "key": "tier_price_id",
+      "value": "",
+      "description": "Tier price row id — copy from Create Tier Price (Draft) or List Tier Prices response. Used by Update/Publish/Get Tier Price.",
+      "type": "string"
+    },
+    {
       "key": "verification_token",
       "value": "",
       "description": "Email verification token — copy from the verification email link (?token=...)",
@@ -3190,6 +3196,225 @@
               ]
             },
             "description": "Re-activates a previously published version as current for its document_type — e.g. to undo a bad edit without republishing. Does not delete or alter any other version; every row from every publish attempt is retained."
+          }
+        },
+        {
+          "name": "Create Tier Price (Draft)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.price?.id) { pm.collectionVariables.set('tier_price_id', r.price.id); console.log('Created DRAFT price', r.price.id, 'for', r.price.tier, r.price.billingInterval, '$' + r.price.priceUsd); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"STARTER\",\n  \"billingInterval\": \"MONTHLY\",\n  \"priceUsd\": 25\n}"
+            },
+            "description": "Creates a DRAFT tier_prices row — not visible to tenants yet, no notice clock running. Edit it with 'Update Tier Price (Draft)' before confirming with 'Publish Tier Price'."
+          }
+        },
+        {
+          "name": "Update Tier Price (Draft)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.price) console.log('Updated DRAFT price', r.price.id, 'to $' + r.price.priceUsd);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices/{{tier_price_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices",
+                "{{tier_price_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priceUsd\": 27.50\n}"
+            },
+            "description": "Only works while the price is still DRAFT (400 PRICE_NOT_DRAFT once published)."
+          }
+        },
+        {
+          "name": "Publish Tier Price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.price) console.log('Published price', r.price.id, '— effective', r.price.effectiveAt, '— every ACTIVE tenant is now being notified.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices/{{tier_price_id}}/publish",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices",
+                "{{tier_price_id}}",
+                "publish"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Confirms the DRAFT price: starts the notice clock (effectiveAt = now + noticeDays, floor is PRICE_CHANGE_MIN_NOTICE_DAYS, default 30 — omit noticeDays in the body to use the default, or pass e.g. { \"noticeDays\": 45 } for longer notice) and notifies every currently-ACTIVE tenant (in-app PRICE_CHANGE_ANNOUNCED notification + email). Irreversible — a published price is immutable."
+          }
+        },
+        {
+          "name": "List Tier Prices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.prices?.length) console.log(r.prices.length, 'price row(s) — most recent id', r.prices[0].id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices?tier=STARTER",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices"
+              ],
+              "query": [
+                {
+                  "key": "tier",
+                  "value": "STARTER"
+                }
+              ]
+            },
+            "description": "Full price history, newest first. Optional ?tier= filter (FREE/STARTER/GROWTH/BUSINESS); remove the query param to list every tier."
+          }
+        },
+        {
+          "name": "Get Tier Price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.price) console.log('Fetched price', r.price.id, r.price.tier, r.price.billingInterval, r.price.status, '$' + r.price.priceUsd);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices/{{tier_price_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices",
+                "{{tier_price_id}}"
+              ]
+            },
+            "description": "Fetches one specific price row by id."
           }
         },
         {
