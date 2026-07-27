@@ -795,6 +795,19 @@ async function activateIfLinked(documentId) {
       to: TenantStatus.ACTIVE,
       reason: 'payment_recovered',
     });
+
+    // Catch-up: a price change may have published while this tenant was
+    // PAST_DUE — same pattern as admin.service.js's updateTenantStatus/
+    // verifyTenant and registration.service.js's verifyEmail. Not strictly
+    // required (the periodic reconciliation sweep would catch this tenant
+    // within ~5 minutes regardless, since it re-scans every ACTIVE tenant),
+    // but every other reactivation point notifies immediately rather than
+    // relying on the sweep, so this one does too for consistency.
+    try {
+      await pricingService.notifyPendingPriceChangesForTenant(subscription.tenant_id);
+    } catch (err) {
+      console.error(`[subscription] Failed to notify tenant ${subscription.tenant_id} of pending price changes:`, err.message);
+    }
   }
 
   return updated;

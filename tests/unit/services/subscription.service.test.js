@@ -1265,6 +1265,30 @@ describe('SubscriptionService', () => {
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STATUS_CHANGED', {
         from: 'PAST_DUE', to: 'ACTIVE', reason: 'payment_recovered',
       });
+      // Catch-up: a price change may have published while this tenant was
+      // PAST_DUE — same pattern as every other reactivation point.
+      expect(pricingService.notifyPendingPriceChangesForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
+    });
+
+    test('does not fail activation if the price-change catch-up notification throws', async () => {
+      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
+      });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'PAST_DUE' });
+      pricingService.notifyPendingPriceChangesForTenant.mockRejectedValue(new Error('db hiccup'));
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await subscriptionService.activateIfLinked(999);
+
+      expect(tenantModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'ACTIVE');
+      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to notify tenant 00000000-0000-0000-0000-000000000001 of pending price changes'),
+        'db hiccup'
+      );
+
+      consoleErrorSpy.mockRestore();
     });
 
     test('does not touch tenants.status when the tenant is already ACTIVE', async () => {
@@ -1276,6 +1300,7 @@ describe('SubscriptionService', () => {
       await subscriptionService.activateIfLinked(999);
 
       expect(tenantModel.updateStatus).not.toHaveBeenCalled();
+      expect(pricingService.notifyPendingPriceChangesForTenant).not.toHaveBeenCalled();
     });
   });
 

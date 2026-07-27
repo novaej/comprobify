@@ -42,7 +42,7 @@ El Cliente puede cancelar su suscripción en cualquier momento. El acceso se man
 
 Los pagos no son reembolsables una vez procesado el pago y activado el Servicio, salvo obligación legal aplicable o decisión discrecional de Comprobify.
 
-Comprobify puede suspender cuentas con pagos no verificados o irregulares, previa notificación razonable.
+Comprobify puede suspender cuentas con pagos no verificados o irregulares, previa notificación razonable. El Cliente puede recuperar el acceso a la cuenta iniciando una nueva suscripción y completando el pago correspondiente, sin necesidad de contactar a soporte.
 
 ## 5. Uso aceptable
 
