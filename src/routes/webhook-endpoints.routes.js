@@ -4,6 +4,7 @@ const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
+const requireNotPastDue = require('../middleware/require-past-due');
 const { readLimiter, writeLimiter } = require('../middleware/rate-limit');
 const v = require('../validators/webhook-endpoint.validator');
 
@@ -11,6 +12,7 @@ const router = Router();
 
 router.use(authenticate);
 router.use(requireNotSuspended);
+router.use(requireNotPastDue);
 
 // GET  /api/webhooks        — list active endpoints (secrets excluded)
 // POST /api/webhooks        — register new endpoint (secret shown once)

@@ -125,6 +125,36 @@ async function findDueForRenewalReminder(reminderDays) {
   return rows;
 }
 
+// ACTIVE subscriptions partway through the renewal grace period — past
+// warningDays but not yet past the full graceDays cutoff (findExpiredPastGrace
+// below) — with no scheduled downgrade (same pending_tier IS NULL reasoning
+// as findDueForRenewalReminder: a downgrade that already rolled its period
+// forward this tick, via applyScheduledTierChanges running first, no longer
+// qualifies) and no SUBSCRIPTION_PAST_DUE_WARNING notification already sent
+// for this cycle. Dedup follows ADR-023's "check notifications directly"
+// precedent rather than a new subscriptions column: created_at >=
+// s.current_period_end scopes the check to the CURRENT cycle only — a
+// warning sent for a prior cycle has created_at before the (now rolled
+// forward, via addBillingPeriod) current current_period_end, so it never
+// matches here and the check naturally resets every renewal.
+async function findDueForSuspensionWarning(warningDays, graceDays) {
+  const { rows } = await db.query(
+    `SELECT s.* FROM subscriptions s
+     WHERE s.status = 'ACTIVE'
+       AND s.pending_tier IS NULL
+       AND s.current_period_end <= NOW() - (INTERVAL '1 day' * $1)
+       AND s.current_period_end > NOW() - (INTERVAL '1 day' * $2)
+       AND NOT EXISTS (
+         SELECT 1 FROM notifications n
+         WHERE n.type = 'SUBSCRIPTION_PAST_DUE_WARNING'
+           AND (n.metadata->>'subscriptionId')::uuid = s.id
+           AND n.created_at >= s.current_period_end
+       )`,
+    [warningDays, graceDays]
+  );
+  return rows;
+}
+
 // ACTIVE subscriptions whose current_period_end passed more than graceDays ago
 // with no renewal ever completing — these get downgraded to FREE. A renewal that
 // completed in time always re-stamps current_period_end into the future (see
@@ -191,6 +221,7 @@ module.exports = {
   applyTierChange,
   findDuePendingDowngrades,
   findDueForRenewalReminder,
+  findDueForSuspensionWarning,
   findExpiredPastGrace,
   findPendingActivationWithAuthorizedDocument,
   updateStatus,

@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-ADR-023 shipped `PRICE_CHANGE_ANNOUNCED` as a deliberate, scoped preview of a larger cleanup, flagged as NEXT_STEPS.md item 13 rather than solved in full at the time. The gap it previewed: every notification type before this ADR had two separate, loosely-coupled mechanisms for what is conceptually one event —
+ADR-023 shipped `PRICE_CHANGE_ANNOUNCED` as a deliberate, scoped preview of a larger cleanup, flagged as a follow-up item rather than solved in full at the time. The gap it previewed: every notification type before this ADR had two separate, loosely-coupled mechanisms for what is conceptually one event —
 
 - **In-app creation** (`notificationModel.create()`) was gated by a single flat `notification_preferences.enabled` per `(tenant_id, type)`, itself only checked by some call sites.
 - **Email** was a parallel, separately-triggered `pending_effects` row per type (`PAYMENT_REVIEWED_NOTIFICATION` + `PAYMENT_REVIEWED_EMAIL`, `SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION` + `_EMAIL`, `SUBSCRIPTION_EXPIRED_NOTIFICATION` + `_EMAIL`, `PRICE_CHANGE_EMAIL` — 7 types across 4 events, plus `DOCUMENT_AUTHORIZED_NOTIFICATION` with no email counterpart), rendered from a JS template file pulling strings out of `src/locales/{es,en}.js`, with no preference gate on email at all.
@@ -29,7 +29,7 @@ The catalog lives in its own file rather than reshaping `notification-types.js`'
 
 ### Phase B — Unconditional creation + one channel-neutral dispatch effect
 
-**Creation is unconditional for every type now**, not just `PRICE_CHANGE_ANNOUNCED`. Every `notificationService.createX(...)` function inserts (or, for `DOCUMENT_AUTHORIZED`'s aggregation window and the cert-alert upsert, updates) a `notifications` row regardless of preference. `IN_APP` preference no longer controls *existence* — it controls *visibility*: `notificationModel.findActiveByTenantId()` (`GET /v1/notifications`) now filters out any type the tenant has explicitly disabled on the `IN_APP` channel. This is the same trade ADR-023 made for one type, generalized: it's what makes `notifications` itself a reliable ledger, and per NEXT_STEPS.md item 12/13 planning it's also what other tooling (billing audits, support debugging "did we even notify this tenant") can trust exists regardless of what the tenant muted.
+**Creation is unconditional for every type now**, not just `PRICE_CHANGE_ANNOUNCED`. Every `notificationService.createX(...)` function inserts (or, for `DOCUMENT_AUTHORIZED`'s aggregation window and the cert-alert upsert, updates) a `notifications` row regardless of preference. `IN_APP` preference no longer controls *existence* — it controls *visibility*: `notificationModel.findActiveByTenantId()` (`GET /v1/notifications`) now filters out any type the tenant has explicitly disabled on the `IN_APP` channel. This is the same trade ADR-023 made for one type, generalized: it's what makes `notifications` itself a reliable ledger, which is also what other tooling (billing audits, support debugging "did we even notify this tenant") can trust exists regardless of what the tenant muted.
 
 Every `createX()` funnels through one new shared function, `dispatchNotification(notification)`:
 1. Always durably enqueues `WEBHOOK_FANOUT` (unchanged from before — webhook delivery was never preference-gated and still isn't).
@@ -70,7 +70,7 @@ Admin surface mirrors `/v1/admin/agreements` exactly: `POST`/`GET /v1/admin/noti
 
 ### Negative
 - Breaking change to `GET`/`PATCH /v1/notifications/preferences`'s body shape (`[{type, enabled}]` → `[{type, channel, enabled}]`) — no versioned API, so this ships as a documented breaking change (CHANGELOG) rather than an additive one. Acceptable pre-1.0 with a small integrator base.
-- `render()` throwing when no template is published for a type is a new failure mode that didn't exist when content was baked into JS — mitigated by the `DEFAULT_LANGUAGE` fallback and by the fact that `NOTIFICATION_DISPATCH` failures are retried via reconciliation, not silently lost, but it does mean **every** email-capable type must have at least an `es` template published post-deploy before it can ever send — see the one-time publish step noted in NEXT_STEPS.md item 13's closure.
+- `render()` throwing when no template is published for a type is a new failure mode that didn't exist when content was baked into JS — mitigated by the `DEFAULT_LANGUAGE` fallback and by the fact that `NOTIFICATION_DISPATCH` failures are retried via reconciliation, not silently lost, but it does mean **every** email-capable type must have at least an `es` template published post-deploy before it can ever send — a one-time manual step (`POST /v1/admin/notification-email-templates` per type/language), same operational precedent as publishing the initial `agreements` versions after that table was introduced.
 - A tenant-facing email's exact wording now depends on DB state that isn't in git history the way a JS file's diff was — mitigated by every version being immutable and retained (never hard-deleted, same as `agreements`), so `GET .../versions/:id` is always an audit trail, just not a `git log` one.
 
 ### Alternatives Considered

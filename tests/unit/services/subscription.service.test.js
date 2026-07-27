@@ -133,6 +133,22 @@ describe('SubscriptionService', () => {
       expect(subscriptionModel.create).toHaveBeenCalledWith({ tenantId: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billingInterval: 'MONTHLY' });
       expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
     });
+
+    // PAST_DUE is deliberately allowed through — this is the self-service
+    // recovery path back to ACTIVE (see docs/adr/025-past-due-tenant-status.md).
+    // SUSPENDED is never exercised here since requireNotSuspended already
+    // blocks the route before this service function ever runs.
+    test('creates the subscription when the tenant is PAST_DUE (self-service recovery)', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'PAST_DUE', sandbox: false });
+      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
+      subscriptionModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 19 });
+
+      const result = await subscriptionService.createSubscriptionForTenant(1, 'STARTER');
+
+      expect(subscriptionModel.create).toHaveBeenCalledWith({ tenantId: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billingInterval: 'MONTHLY' });
+      expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
+    });
   });
 
   describe('requestTierChange', () => {
@@ -652,7 +668,11 @@ describe('SubscriptionService', () => {
   describe('processDueRenewals', () => {
     beforeEach(() => {
       subscriptionModel.findDueForRenewalReminder.mockResolvedValue([]);
+      subscriptionModel.findDueForSuspensionWarning.mockResolvedValue([]);
       subscriptionModel.findExpiredPastGrace.mockResolvedValue([]);
+      // Default: an ordinary ACTIVE tenant when expireSubscription fetches it
+      // to decide whether to flip to PAST_DUE. Overridden per test below.
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
     });
 
     test('opens a renewal payment, logs RENEWAL_DUE, and notifies the tenant', async () => {
@@ -679,7 +699,7 @@ describe('SubscriptionService', () => {
       // Priced as of current_period_end (when the renewal period actually
       // starts), not "now" — this is the 30-day price-change protection.
       expect(pricingService.getPriceAsOf).toHaveBeenCalledWith('STARTER', 'MONTHLY', periodEnd);
-      expect(result).toEqual({ remindersSent: 1, expired: 0 });
+      expect(result).toEqual({ remindersSent: 1, pastDueWarningsSent: 0, expired: 0 });
     });
 
     test('prices the renewal from priceYearlyUsd when billing_interval is YEARLY', async () => {
@@ -715,11 +735,12 @@ describe('SubscriptionService', () => {
       expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ totalAmount: 20 }));
     });
 
-    test('downgrades an expired subscription to FREE, logs SUBSCRIPTION_EXPIRED, and notifies the tenant', async () => {
+    test('downgrades an expired subscription to FREE, marks the tenant PAST_DUE, logs SUBSCRIPTION_EXPIRED + STATUS_CHANGED, and notifies the tenant', async () => {
       subscriptionModel.findExpiredPastGrace.mockResolvedValue([
         { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH' },
       ]);
       subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'EXPIRED' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
 
       const result = await subscriptionService.processDueRenewals();
 
@@ -729,14 +750,58 @@ describe('SubscriptionService', () => {
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_EXPIRED', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', previousTier: 'GROWTH',
       });
+      expect(tenantModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'PAST_DUE');
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STATUS_CHANGED', {
+        from: 'ACTIVE', to: 'PAST_DUE', reason: 'unpaid_renewal',
+      });
       expect(notificationService.createSubscriptionExpired).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000010', status: 'EXPIRED' });
-      expect(result).toEqual({ remindersSent: 0, expired: 1 });
+      expect(result).toEqual({ remindersSent: 0, pastDueWarningsSent: 0, expired: 1 });
+    });
+
+    test('does not re-suspend or overwrite the reason when the tenant is already SUSPENDED', async () => {
+      subscriptionModel.findExpiredPastGrace.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH' },
+      ]);
+      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'EXPIRED' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'SUSPENDED' });
+
+      await subscriptionService.processDueRenewals();
+
+      expect(tenantModel.updateStatus).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).not.toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STATUS_CHANGED', expect.anything());
+    });
+
+    test('does not re-flag an already-PAST_DUE tenant (a second subscription lapsing)', async () => {
+      subscriptionModel.findExpiredPastGrace.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH' },
+      ]);
+      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'EXPIRED' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'PAST_DUE' });
+
+      await subscriptionService.processDueRenewals();
+
+      expect(tenantModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    test('opens a PAST_DUE warning notification for a subscription partway through the grace window', async () => {
+      const periodEnd = new Date('2026-07-01T00:00:00Z');
+      subscriptionModel.findDueForSuspensionWarning.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', current_period_end: periodEnd },
+      ]);
+
+      const result = await subscriptionService.processDueRenewals();
+
+      expect(notificationService.createSubscriptionPastDueWarning).toHaveBeenCalledWith(
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', current_period_end: periodEnd },
+        new Date('2026-07-08T00:00:00Z'), // periodEnd + RENEWAL_GRACE_DAYS (7)
+      );
+      expect(result).toEqual({ remindersSent: 0, pastDueWarningsSent: 1, expired: 0 });
     });
 
     test('reports zero/zero when nothing is due either way', async () => {
       const result = await subscriptionService.processDueRenewals();
 
-      expect(result).toEqual({ remindersSent: 0, expired: 0 });
+      expect(result).toEqual({ remindersSent: 0, pastDueWarningsSent: 0, expired: 0 });
       expect(paymentModel.create).not.toHaveBeenCalled();
       expect(tenantModel.updateTier).not.toHaveBeenCalled();
     });
@@ -1110,6 +1175,9 @@ describe('SubscriptionService', () => {
   describe('activateIfLinked', () => {
     beforeEach(() => {
       paymentModel.findBySubscriptionId.mockResolvedValue([]);
+      // Default: an ordinary ACTIVE tenant — no PAST_DUE recovery flip.
+      // Individual tests override this to exercise the recovery path.
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
     });
 
     test('is a no-op when no subscription is linked to the document', async () => {
@@ -1179,6 +1247,35 @@ describe('SubscriptionService', () => {
         period_start: expect.any(Date),
         period_end: expect.any(Date),
       });
+    });
+
+    // Self-service recovery: a tenant who went PAST_DUE and started a fresh
+    // subscription to pay their way back in lands here on that
+    // subscription's first activation. See docs/adr/025-past-due-tenant-status.md.
+    test('flips a PAST_DUE tenant back to ACTIVE and logs STATUS_CHANGED', async () => {
+      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
+      });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'PAST_DUE' });
+
+      await subscriptionService.activateIfLinked(999);
+
+      expect(tenantModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'ACTIVE');
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STATUS_CHANGED', {
+        from: 'PAST_DUE', to: 'ACTIVE', reason: 'payment_recovered',
+      });
+    });
+
+    test('does not touch tenants.status when the tenant is already ACTIVE', async () => {
+      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
+      });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
+
+      await subscriptionService.activateIfLinked(999);
+
+      expect(tenantModel.updateStatus).not.toHaveBeenCalled();
     });
   });
 

@@ -172,9 +172,28 @@ Created automatically by the provider's scheduled job about 7 days before your s
 
 ---
 
+### `SUBSCRIPTION_PAST_DUE_WARNING`
+
+Created automatically by the same scheduled job, later in the grace period than `SUBSCRIPTION_RENEWAL_DUE` (by default, 5 days after `current_period_end`, out of a 7-day total grace period) — a more urgent notice distinct from the renewal reminder, before the account actually becomes `PAST_DUE`. Submit proof for the already-open `RENEWAL` payment via [Submit Payment Proof](submit-payment-proof.md), or start a new subscription via [Create Subscription](create-subscription.md) — both routes stay reachable even after the account becomes `PAST_DUE` (see below).
+
+**Severity:** `WARNING`
+
+**Metadata:**
+
+```json
+{
+  "subscriptionId": "00000000-0000-0000-0000-000000000012",
+  "tier": "STARTER",
+  "currentPeriodEnd": "2026-07-15T00:00:00.000Z",
+  "suspendsAt": "2026-07-22T00:00:00.000Z"
+}
+```
+
+---
+
 ### `SUBSCRIPTION_EXPIRED`
 
-Created automatically by the same scheduled job when a subscription runs about 7 days past `current_period_end` with no renewal ever verified. By the time this fires, the tenant has already been moved to the FREE tier. A matching email explains what happened — start a new subscription any time via [Create Subscription](create-subscription.md).
+Created automatically by the same scheduled job when a subscription runs about 7 days past `current_period_end` with no renewal ever verified. By the time this fires, the tenant has already been moved to the FREE tier **and** their account (`GET /v1/tenants/me`'s `status`) becomes `PAST_DUE` — distinct from `SUSPENDED`: an account that can recover itself by starting a new subscription via [Create Subscription](create-subscription.md) and paying for it, no need to contact support. A matching email explains what happened.
 
 **Severity:** `ERROR`
 
@@ -319,17 +338,19 @@ Returns the notification preference for every subscribable **(type, channel)** p
 ```json
 {
   "preferences": [
-    { "type": "DOCUMENT_AUTHORIZED",      "channel": "IN_APP", "enabled": true },
-    { "type": "CERT_EXPIRING",            "channel": "IN_APP", "enabled": true },
-    { "type": "CERT_EXPIRED",             "channel": "IN_APP", "enabled": true },
-    { "type": "PAYMENT_VERIFIED",         "channel": "IN_APP", "enabled": true },
-    { "type": "PAYMENT_VERIFIED",         "channel": "EMAIL",  "enabled": true },
-    { "type": "PAYMENT_REJECTED",         "channel": "IN_APP", "enabled": true },
-    { "type": "PAYMENT_REJECTED",         "channel": "EMAIL",  "enabled": true },
-    { "type": "SUBSCRIPTION_RENEWAL_DUE", "channel": "IN_APP", "enabled": true },
-    { "type": "SUBSCRIPTION_RENEWAL_DUE", "channel": "EMAIL",  "enabled": true },
-    { "type": "SUBSCRIPTION_EXPIRED",     "channel": "IN_APP", "enabled": true },
-    { "type": "SUBSCRIPTION_EXPIRED",     "channel": "EMAIL",  "enabled": true }
+    { "type": "DOCUMENT_AUTHORIZED",           "channel": "IN_APP", "enabled": true },
+    { "type": "CERT_EXPIRING",                 "channel": "IN_APP", "enabled": true },
+    { "type": "CERT_EXPIRED",                  "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_VERIFIED",              "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_VERIFIED",              "channel": "EMAIL",  "enabled": true },
+    { "type": "PAYMENT_REJECTED",              "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_REJECTED",              "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_RENEWAL_DUE",      "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_RENEWAL_DUE",      "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_PAST_DUE_WARNING", "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_PAST_DUE_WARNING", "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_EXPIRED",          "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_EXPIRED",          "channel": "EMAIL",  "enabled": true }
   ]
 }
 ```

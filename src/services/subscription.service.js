@@ -39,9 +39,14 @@ function breakdownAmount(totalAmount) {
 
 // How far ahead of current_period_end a renewal payment is opened and the
 // tenant is reminded. How long past current_period_end a subscription can go
-// with no verified renewal before it's downgraded to FREE. See processDueRenewals.
+// with no verified renewal before it's downgraded to FREE and the tenant is
+// marked PAST_DUE. See processDueRenewals.
 const RENEWAL_REMINDER_DAYS = 7;
 const RENEWAL_GRACE_DAYS = 7;
+// How far past current_period_end the PAST_DUE warning fires — partway
+// through the grace window above, a second/final notice distinct from the
+// renewal-due reminder. Must stay < RENEWAL_GRACE_DAYS.
+const SUSPENSION_WARNING_DAYS = 5;
 
 // Shared period math for activation, renewal, and the free period-rollover a
 // downgrade gets. Always advances from a fixed anchor date (never "now") so
@@ -115,13 +120,18 @@ async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
 async function createSubscriptionForTenant(tenantId, tier, billingInterval = 'MONTHLY') {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
-  if (tenant.status !== TenantStatus.ACTIVE) {
+  if (tenant.status === TenantStatus.PENDING_VERIFICATION) {
     throw new AppError(
       'Email verification is required before starting a subscription. Check your inbox.',
       403,
       ErrorCodes.EMAIL_VERIFICATION_REQUIRED
     );
   }
+  // PAST_DUE is deliberately allowed through — starting a fresh subscription
+  // and paying is the self-service recovery path back to ACTIVE (see
+  // activateIfLinked's PAST_DUE -> ACTIVE step). SUSPENDED never reaches
+  // here: requireNotSuspended already blocks POST /v1/subscriptions upstream.
+  // See docs/adr/025-past-due-tenant-status.md.
 
   return createSubscription(tenantId, tier, billingInterval);
 }
@@ -772,6 +782,21 @@ async function activateIfLinked(documentId) {
     tier: subscription.tier,
   });
 
+  // Self-service recovery: a tenant who went PAST_DUE (unpaid renewal grace
+  // period lapsed — see expireSubscription) and started a fresh subscription
+  // to pay their way back in lands here on that subscription's first
+  // activation. Flip them back to ACTIVE now that it's actually paid for.
+  // See docs/adr/025-past-due-tenant-status.md.
+  const tenant = await tenantModel.findById(subscription.tenant_id);
+  if (tenant.status === TenantStatus.PAST_DUE) {
+    await tenantModel.updateStatus(subscription.tenant_id, TenantStatus.ACTIVE);
+    await tenantEventModel.create(subscription.tenant_id, 'STATUS_CHANGED', {
+      from: TenantStatus.PAST_DUE,
+      to: TenantStatus.ACTIVE,
+      reason: 'payment_recovered',
+    });
+  }
+
   return updated;
 }
 
@@ -975,14 +1000,24 @@ async function applyScheduledTierChanges() {
 }
 
 // Opens a renewal payment + notifies the tenant ahead of current_period_end,
-// and downgrades to FREE any subscription that ran past its grace period with
-// no verified renewal. Called by the same admin job as applyScheduledTierChanges
+// warns them partway through the grace period that they're about to go
+// PAST_DUE, and downgrades to FREE (+ marks the tenant PAST_DUE) any
+// subscription that ran past its grace period with no verified renewal.
+// Called by the same admin job as applyScheduledTierChanges
 // (POST /v1/admin/jobs/subscriptions) — that one must run first in the same
-// tick so a just-rolled-forward downgrade isn't mistaken for an expired renewal.
+// tick so a just-rolled-forward downgrade isn't mistaken for an expired
+// renewal by either the warning or expiry query below.
 async function processDueRenewals() {
   const dueForReminder = await subscriptionModel.findDueForRenewalReminder(RENEWAL_REMINDER_DAYS);
   for (const subscription of dueForReminder) {
     await createRenewalReminder(subscription);
+  }
+
+  const dueForSuspensionWarning = await subscriptionModel.findDueForSuspensionWarning(SUSPENSION_WARNING_DAYS, RENEWAL_GRACE_DAYS);
+  for (const subscription of dueForSuspensionWarning) {
+    const suspendsAt = new Date(subscription.current_period_end);
+    suspendsAt.setDate(suspendsAt.getDate() + RENEWAL_GRACE_DAYS);
+    await notificationService.createSubscriptionPastDueWarning(subscription, suspendsAt);
   }
 
   const dueForExpiry = await subscriptionModel.findExpiredPastGrace(RENEWAL_GRACE_DAYS);
@@ -990,7 +1025,11 @@ async function processDueRenewals() {
     await expireSubscription(subscription);
   }
 
-  return { remindersSent: dueForReminder.length, expired: dueForExpiry.length };
+  return {
+    remindersSent: dueForReminder.length,
+    pastDueWarningsSent: dueForSuspensionWarning.length,
+    expired: dueForExpiry.length,
+  };
 }
 
 async function createRenewalReminder(subscription) {
@@ -1029,6 +1068,22 @@ async function expireSubscription(subscription) {
     subscriptionId: subscription.id,
     previousTier: subscription.tier,
   });
+
+  // PAST_DUE is a distinct, self-resolving billing status from SUSPENDED
+  // (see docs/adr/025-past-due-tenant-status.md) — idempotent: a tenant
+  // already SUSPENDED (admin-lifted, unrelated reason) or already PAST_DUE
+  // (e.g. a second subscription lapsing while the first hasn't been
+  // resolved yet) is left untouched rather than re-logging a no-op
+  // transition.
+  const tenant = await tenantModel.findById(subscription.tenant_id);
+  if (tenant.status !== TenantStatus.SUSPENDED && tenant.status !== TenantStatus.PAST_DUE) {
+    await tenantModel.updateStatus(subscription.tenant_id, TenantStatus.PAST_DUE);
+    await tenantEventModel.create(subscription.tenant_id, 'STATUS_CHANGED', {
+      from: tenant.status,
+      to: TenantStatus.PAST_DUE,
+      reason: 'unpaid_renewal',
+    });
+  }
 
   await notificationService.createSubscriptionExpired(updated);
 

@@ -5,6 +5,7 @@ const validateRequest = require('../middleware/validate-request');
 const extractIdempotencyKey = require('../middleware/idempotency');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
+const requireNotPastDue = require('../middleware/require-past-due');
 const resolveIssuer = require('../middleware/resolve-issuer');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const selectDocumentValidator = require('../middleware/select-document-validator');
@@ -22,18 +23,18 @@ router.use(asyncHandler(resolveIssuer));
 router.get('/', readLimiter, listDocumentsQuery, validateRequest, asyncHandler(controller.list));
 router.get('/stats', readLimiter, asyncHandler(controller.getStats));
 router.get('/:accessKey', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getByAccessKey));
-router.get('/:accessKey/authorize', readLimiter, requireNotSuspended, accessKeyParam, validateRequest, asyncHandler(controller.checkAuthorization));
+router.get('/:accessKey/authorize', readLimiter, requireNotSuspended, requireNotPastDue, accessKeyParam, validateRequest, asyncHandler(controller.checkAuthorization));
 router.get('/:accessKey/ride', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getRide));
 router.get('/:accessKey/xml', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getXml));
 router.get('/:accessKey/events', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getEvents));
 router.get('/:accessKey/credit-notes', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getCreditNotes));
 router.get('/:accessKey/sri-responses', readLimiter, accessKeyParam, validateRequest, asyncHandler(controller.getSriResponses));
 
-// Write endpoints — all blocked while SUSPENDED.
-router.post('/', writeLimiter, requireNotSuspended, extractIdempotencyKey, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.create));
-router.post('/email-retry', writeLimiter, requireNotSuspended, asyncHandler(controller.retryEmails));
-router.post('/:accessKey/send', writeLimiter, requireNotSuspended, accessKeyParam, validateRequest, asyncHandler(controller.sendToSri));
-router.post('/:accessKey/rebuild', writeLimiter, requireNotSuspended, accessKeyParam, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.rebuild));
-router.post('/:accessKey/email-retry', writeLimiter, requireNotSuspended, accessKeyParam, validateRequest, asyncHandler(controller.retrySingleEmail));
+// Write endpoints — all blocked while SUSPENDED or PAST_DUE.
+router.post('/', writeLimiter, requireNotSuspended, requireNotPastDue, extractIdempotencyKey, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.create));
+router.post('/email-retry', writeLimiter, requireNotSuspended, requireNotPastDue, asyncHandler(controller.retryEmails));
+router.post('/:accessKey/send', writeLimiter, requireNotSuspended, requireNotPastDue, accessKeyParam, validateRequest, asyncHandler(controller.sendToSri));
+router.post('/:accessKey/rebuild', writeLimiter, requireNotSuspended, requireNotPastDue, accessKeyParam, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.rebuild));
+router.post('/:accessKey/email-retry', writeLimiter, requireNotSuspended, requireNotPastDue, accessKeyParam, validateRequest, asyncHandler(controller.retrySingleEmail));
 
 module.exports = router;

@@ -93,7 +93,7 @@ The `documents.issuer_id` column is indexed (`idx_documents_issuer_id`), so the 
 
 - **Application-layer filtering only (status quo):** No additional overhead, but a single code defect is sufficient to expose cross-tenant data. Rejected as insufficient before onboarding paying clients.
 
-- **Separate PostgreSQL schema per tenant:** Each issuer's tables live in a dedicated schema; `search_path` is set to the issuer's schema at request start. Provides strong isolation and allows truncating test data per tenant. Rejected because: schema creation and migration must run per tenant (N issuers × M migrations), DDL becomes operationally complex, and this approach was already evaluated and deferred in the NEXT_STEPS.md sandbox environment discussion (item 4) where per-request `search_path` switching is planned for sandbox vs. production isolation, not tenant isolation.
+- **Separate PostgreSQL schema per tenant:** Each issuer's tables live in a dedicated schema; `search_path` is set to the issuer's schema at request start. Provides strong isolation and allows truncating test data per tenant. Rejected because: schema creation and migration must run per tenant (N issuers × M migrations), DDL becomes operationally complex, and this approach was already evaluated and deferred in the NEXT_STEPS.md sandbox environment discussion where per-request `search_path` switching is planned for sandbox vs. production isolation, not tenant isolation.
 
 - **Separate database per tenant:** Maximum isolation but operationally impractical — each tenant requires its own connection pool, migration pipeline, and backup regime. Connection count grows linearly with tenant count. Rejected for a multi-tenant SaaS context.
 

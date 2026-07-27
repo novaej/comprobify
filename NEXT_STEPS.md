@@ -27,7 +27,7 @@ Creation and rebuild services already guard invoice-only logic (e.g. the payment
 
 ---
 
-## 3. API Key Usage Tracking
+## 2. API Key Usage Tracking
 
 **Priority: Medium — observability for named integrations**
 
@@ -49,7 +49,7 @@ Rate limiting is already per `keyHash` (in-memory, enforces throttling). But the
 - Audit trail: `created_at` + `last_used_at` + `request_count` per key tells the full lifecycle story
 
 **Notes:**
-- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 5) or an APM tool
+- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 4) or an APM tool
 - The background UPDATE is a single indexed write per request (`WHERE id = $1`); acceptable overhead for the observability gain
 - Per-issuer document volume is already derivable from `documents.issuer_id` — this adds the per-integration request-level dimension
 
@@ -57,7 +57,7 @@ Rate limiting is already per `keyHash` (in-memory, enforces throttling). But the
 
 ---
 
-## 4. Reporting
+## 3. Reporting
 
 **Priority: Low — depends on client requirements**
 
@@ -72,7 +72,7 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 ---
 
-## 5. Structured Request Logging
+## 4. Structured Request Logging
 
 **Priority: Medium — important for a B2B API where documents have legal weight**
 
@@ -80,7 +80,7 @@ No log aggregation is currently in place. Without it there is no way to debug a 
 
 **What to log (one JSON line per request):**
 - `timestamp`, `method`, `path`, `statusCode`, `durationMs`
-- `ip` (client IP — needed for item 11's anomaly detection and for tracing unauthenticated-route abuse, e.g. registration recovery attempts, not just for post-hoc key-leak investigation)
+- `ip` (client IP — needed for item 10's anomaly detection and for tracing unauthenticated-route abuse, e.g. registration recovery attempts, not just for post-hoc key-leak investigation)
 - `keyHash` (never the plaintext key), `apiKeyId`, `tenantId`, `issuerId` — `null` on routes that never reach `authenticate` (registration, verification, public agreement/tiers endpoints)
 - `requestId` (UUID injected by middleware for correlation)
 
@@ -93,12 +93,12 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 - **SRI failure investigation** — the document event log captures outcomes but not timing; logs capture slow or intermittently failing SRI SOAP calls
 - **Quota disputes** — per-request audit trail independent of the `document_count` counter
 - **Security** — detect a leaked key used from an unexpected IP before the tenant reports it; especially important given documents have legal standing under Ecuadorian tax law
-- **Traces registration recovery volume** — `path=/v1/recover` + `ip` + `timestamp` gives per-IP/per-time visibility into recovery attempts with no registration-specific code. Note the anti-enumeration design means `statusCode` alone can't distinguish a real match from a no-op (both return `200`) — item 11's anomaly detection is what actually needs to tell those apart, not this logging layer
+- **Traces registration recovery volume** — `path=/v1/recover` + `ip` + `timestamp` gives per-IP/per-time visibility into recovery attempts with no registration-specific code. Note the anti-enumeration design means `statusCode` alone can't distinguish a real match from a no-op (both return `200`) — item 10's anomaly detection is what actually needs to tell those apart, not this logging layer
 
 **Implementation:**
 1. Add `express-winston` (or a thin custom middleware) to emit one structured JSON log line per request after the response is sent, mounted globally (see Scope above) — attach `tenantId`/`issuerId`/`keyHash`/`apiKeyId` from `req` when `authenticate` has run, `null` otherwise
 2. Ship logs to **Datadog** or **Betterstack** (both have free tiers; Betterstack integrates in ~10 lines for Node)
-3. The item 3 `request_count` counter on `api_keys` still has value as a cheap "is this key alive" check without a log query — these two are complementary, not alternatives
+3. The item 2 `request_count` counter on `api_keys` still has value as a cheap "is this key alive" check without a log query — these two are complementary, not alternatives
 
 **Note:** log the `keyHash`, never the plaintext token. All sensitive fields (`encrypted_private_key`, cert PEM, passwords) must be excluded.
 
@@ -108,7 +108,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 
 ---
 
-## 6. API Key Scopes
+## 5. API Key Scopes
 
 **Priority: Low — defer until first concrete use case**
 
@@ -132,7 +132,7 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 7. Shared Rate-Limit Store for Horizontal Scaling
+## 6. Shared Rate-Limit Store for Horizontal Scaling
 
 **Priority: Medium — blocks running more than one API instance correctly in production**
 
@@ -146,7 +146,7 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 8. Payment Gateway Integration
+## 7. Payment Gateway Integration
 
 **Priority: Low — blocked, requires a registered legal entity. Every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different vendor. No vendor has been selected yet — not under active consideration until the entity exists.**
 
@@ -161,11 +161,11 @@ The manual subscription/payment pipeline this depends on is already fully built 
 
 ---
 
-## 9. Overage Billing (Per-Tenant Toggle + Charging)
+## 8. Overage Billing (Per-Tenant Toggle + Charging)
 
-**Priority: Low — depends on the payment gateway integration (#8)**
+**Priority: Low — depends on the payment gateway integration (#7)**
 
-The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#8) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
+The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#7) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
 
 **What:**
 1. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
@@ -178,7 +178,7 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ---
 
-## 10. Audit Certificate Changes
+## 9. Audit Certificate Changes
 
 **Priority: Low — cheap gap, found while reviewing the billing audit-trail design**
 
@@ -190,7 +190,7 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ---
 
-## 11. Generic Repeated-Attempt / Anomaly Detection
+## 10. Generic Repeated-Attempt / Anomaly Detection
 
 **Priority: Medium — reusable security mechanism, first identified while closing the registration recovery account-takeover gap**
 
@@ -205,26 +205,9 @@ That fix (see `CHANGELOG.md`'s Unreleased/Added entry — `POST /v1/recover`) cl
 
 **What:**
 - A small reusable service (e.g. `src/services/attempt-tracker.service.js`) exposing something like `recordFailure(eventType, key)` → returns whether the configured threshold was crossed for that `(eventType, key)` pair within the configured window
-- A pluggable action on threshold-crossed — start with a single WARN-level structured log line (once item 5 ships, this is just another queryable log line, no separate storage needed for the *detection* half); escalate later to an email via the existing `ADMIN_NOTIFICATION_EMAIL`/`emailService` pattern (mirrors `sendPaymentProofSubmitted`'s operator-facing notification) if false-positive rate proves low enough to be worth an inbox ping
-- **Depends on item 7's shared store to be meaningful in production** — an in-memory counter is exactly the per-instance problem item 7 already documents for the rate limiters (`limit × N` across N instances). Either sequence this after item 7, or reuse whatever Redis connection item 7 introduces rather than standing up a second one
+- A pluggable action on threshold-crossed — start with a single WARN-level structured log line (once item 4 ships, this is just another queryable log line, no separate storage needed for the *detection* half); escalate later to an email via the existing `ADMIN_NOTIFICATION_EMAIL`/`emailService` pattern (mirrors `sendPaymentProofSubmitted`'s operator-facing notification) if false-positive rate proves low enough to be worth an inbox ping
+- **Depends on item 6's shared store to be meaningful in production** — an in-memory counter is exactly the per-instance problem item 6 already documents for the rate limiters (`limit × N` across N instances). Either sequence this after item 6, or reuse whatever Redis connection item 6 introduces rather than standing up a second one
 - First wire-up targets: the three call sites listed above — proves the mechanism generalizes before adding a fourth
 
-**Effort:** Medium — the tracker itself is small, but real value depends on item 7 landing first, and touches three separate existing call sites to wire in.
-
----
-
-## 12. Pre-Suspension Renewal Warning + Suspend (Not Just Downgrade) on Non-Payment
-
-**Priority: Medium — closes the gap between the Terms of Service's suspension clause and actual behavior**
-
-Today's non-renewal path (CLAUDE.md's "Recurring renewals") already sends one reminder 7 days before `current_period_end` (`findDueForRenewalReminder`) and, 7 days past it with nothing paid, calls `expireSubscription()` — which downgrades the tenant to FREE and marks the subscription `EXPIRED`, but never touches `tenants.status`. The tenant stays `ACTIVE` and keeps using the Service on the FREE tier; nothing is ever actually suspended, and there's no second warning specifically about suspension being imminent — only the original renewal-due reminder.
-
-**What:**
-1. A second warning stage between the renewal reminder and the grace-period cutoff — e.g. `findDueForSuspensionWarning`, firing partway through the existing grace window (a new `SUSPENSION_WARNING_DAYS` config, smaller than `RENEWAL_GRACE_DAYS`) for `ACTIVE` subscriptions past `current_period_end` with no completed renewal. Fires a new notification type (e.g. `SUBSCRIPTION_SUSPENSION_WARNING`) + email, distinct from the existing `SUBSCRIPTION_RENEWAL_DUE` one — this is the "you will be suspended" notice, not the "please renew" one.
-2. At the end of the grace period, replace (or extend) `expireSubscription()` so it also flips `tenants.status = 'SUSPENDED'` with a `reason` (e.g. `'unpaid_renewal'`) via the same path `admin.service.js`'s `updateTenantStatus` uses — logging `STATUS_CHANGED` to `tenant_events` so a non-payment suspension is distinguishable from a manual/fraud one in the audit trail, same as the existing `reason` field already supports. Decide whether the FREE-tier downgrade still happens alongside suspension (recommended: yes — if the tenant is later reactivated/pays, they should land on the correct tier rather than whatever they were on before lapsing) or is dropped in favor of suspension alone.
-3. A suspended-for-non-payment tenant gets the same read-while-suspended behavior every other `SUSPENDED` tenant already gets (`require-not-suspended.js`) — no new middleware work, this falls out of the existing suspension mechanism for free.
-4. Both new stages go through the same `pending_effects` outbox pattern as `SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION`/`_EMAIL` and `SUBSCRIPTION_EXPIRED_NOTIFICATION`/`_EMAIL` — two more effect types, same shape.
-5. Job wiring: still runs from `POST /v1/admin/jobs/subscriptions`. The new warning scan must respect the existing ordering rule (`applyScheduledTierChanges` → `processDueRenewals`, CLAUDE.md Common Mistake #27) — a subscription whose downgrade was just applied this tick has already rolled its period forward and must not also be flagged for a suspension warning it no longer qualifies for.
-
-**Effort:** Medium — one migration (notification + tenant-event type additions), one new scheduled query + service function, two new effect types/handlers, and a small change to `expireSubscription()` reusing suspension mechanics that already exist.
+**Effort:** Medium — the tracker itself is small, but real value depends on item 6 landing first, and touches three separate existing call sites to wire in.
 

@@ -13,7 +13,7 @@
  * constraint in a migration (mirrors CLAUDE.md Common Mistake #12/#19) and
  * registering a handler in src/effects/index.js.
  *
- * NOTIFICATION_DISPATCH (ADR-024, NEXT_STEPS.md item 13) is a single
+ * NOTIFICATION_DISPATCH (ADR-024) is a single
  * channel-neutral effect replacing what used to be 8 separate
  * type-specific `*_NOTIFICATION`/`*_EMAIL` types (DOCUMENT_AUTHORIZED_NOTIFICATION,
  * PAYMENT_REVIEWED_NOTIFICATION/_EMAIL, SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION/_EMAIL,

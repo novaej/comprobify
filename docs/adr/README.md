@@ -109,3 +109,4 @@ YYYY-MM-DD
 | [022](022-effects-outbox.md) | pending_effects — a Generic Outbox for All Async Side Effects | Accepted | 2026-07-22 |
 | [023](023-tier-price-history.md) | Tier Price History with a 30-Day Change Notice | Accepted | 2026-07-25 |
 | [024](024-unified-notification-service.md) | Unified Notification Service, Per-Channel Preferences, and DB-Backed Email Templates | Accepted | 2026-07-26 |
+| [025](025-past-due-tenant-status.md) | PAST_DUE Tenant Status, Distinct from SUSPENDED | Accepted | 2026-07-27 |

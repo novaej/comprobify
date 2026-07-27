@@ -6,6 +6,7 @@ const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
+const requireNotPastDue = require('../middleware/require-past-due');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
@@ -57,7 +58,11 @@ const handleProofUpload = (req, res, next) => {
 // relevant precisely when the suspension itself is payment-related.
 router.get('/:id/proofs', readLimiter, idParam, validateRequest, asyncHandler(controller.listProofs));
 router.get('/:id/proofs/:proofId', readLimiter, idAndProofIdParams, validateRequest, asyncHandler(controller.downloadProof));
+// PATCH /:id/proof is deliberately NOT gated by requireNotPastDue (still
+// gated by requireNotSuspended) — submitting payment proof is the other half
+// of the self-service recovery path for a PAST_DUE tenant. See
+// docs/adr/025-past-due-tenant-status.md.
 router.patch('/:id/proof', writeLimiter, requireNotSuspended, handleProofUpload, submitProofFields, validateRequest, asyncHandler(controller.submitProof));
-router.delete('/:id/proofs/:proofId', writeLimiter, requireNotSuspended, idAndProofIdParams, validateRequest, asyncHandler(controller.deleteProof));
+router.delete('/:id/proofs/:proofId', writeLimiter, requireNotSuspended, requireNotPastDue, idAndProofIdParams, validateRequest, asyncHandler(controller.deleteProof));
 
 module.exports = router;

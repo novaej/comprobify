@@ -129,8 +129,8 @@ async function sendPaymentProofSubmitted(payment, subscription, tenant, referenc
 }
 
 /**
- * Send an already-rendered notification email to a tenant (ADR-024,
- * NEXT_STEPS.md item 13 Phase C) — the generic counterpart of the 4
+ * Send an already-rendered notification email to a tenant (ADR-024 Phase C)
+ * — the generic counterpart of the 4
  * type-specific send*() functions this replaced (sendPaymentReviewed,
  * sendSubscriptionRenewalDue, sendSubscriptionExpired,
  * sendPriceChangeAnnounced). Rendering (which template, which language,

@@ -1,0 +1,21 @@
+SUBJECT: Tu suscripción {{tier}} está vencida
+---HTML---
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+<body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <p>Hola,</p>
+  <p>Tu suscripción {{tier}} está vencida y aún no hemos recibido tu pago de renovación. Si no recibimos el comprobante antes del {{suspendsAt}}, tu cuenta perderá acceso para emitir comprobantes hasta que se regularice el pago.</p>
+  <p>Envía el comprobante mediante PATCH /v1/payments/:id/proof usando el pago de renovación ya abierto, o inicia una nueva suscripción mediante POST /v1/subscriptions.</p>
+  <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+  <p style="font-size: 11px; color: #999;">No responder — este es un mensaje automático.</p>
+</body>
+</html>
+---TEXT---
+Hola,
+
+Tu suscripción {{tier}} está vencida y aún no hemos recibido tu pago de renovación. Si no recibimos el comprobante antes del {{suspendsAt}}, tu cuenta perderá acceso para emitir comprobantes hasta que se regularice el pago.
+
+Envía el comprobante mediante PATCH /v1/payments/:id/proof usando el pago de renovación ya abierto, o inicia una nueva suscripción mediante POST /v1/subscriptions.
+
+No responder — este es un mensaje automático.

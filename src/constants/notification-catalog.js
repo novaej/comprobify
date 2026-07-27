@@ -1,5 +1,5 @@
 /**
- * Per-type notification capability catalog (NEXT_STEPS.md item 13, ADR-024).
+ * Per-type notification capability catalog (ADR-024).
  *
  * A separate file from notification-types.js on purpose — dozens of call
  * sites do `NotificationTypes.PAYMENT_VERIFIED` directly (the plain string
@@ -43,8 +43,9 @@ const NOTIFICATION_CATALOG = Object.freeze({
   [NotificationTypes.QUOTA_WARNING]:            Object.freeze({ supportsInApp: true, supportsEmail: false, mandatory: false }), // reserved, not yet implemented
   [NotificationTypes.PAYMENT_VERIFIED]:         Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
   [NotificationTypes.PAYMENT_REJECTED]:         Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
-  [NotificationTypes.SUBSCRIPTION_RENEWAL_DUE]: Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
-  [NotificationTypes.SUBSCRIPTION_EXPIRED]:     Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
+  [NotificationTypes.SUBSCRIPTION_RENEWAL_DUE]:      Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
+  [NotificationTypes.SUBSCRIPTION_PAST_DUE_WARNING]: Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
+  [NotificationTypes.SUBSCRIPTION_EXPIRED]:          Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
   [NotificationTypes.PRICE_CHANGE_ANNOUNCED]:   Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: true  }),
 });
 

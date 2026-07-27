@@ -67,7 +67,7 @@ Both documents promise that a buyer-catalog entry (comprobify-web only) is delet
 
 🟡 **Flags, not contradictions:**
 - Subprocessor list matches word-for-word between the DPA and Privacy Policy (good) — but both share the same CloudAMQP omission above, so fixing one without the other would create a new inconsistency. Fix both together.
-- Privacy Policy §6 states "Comprobify no mantiene un registro de la dirección IP de cada solicitud individual a la API" — this is accurate **today** (no request-logging infrastructure exists yet — see `NEXT_STEPS.md` item 6, not yet built). If that item ships, this sentence becomes false and the policy will need a follow-up edit at that time. No action needed now, just noting the tripwire.
+- Privacy Policy §6 states "Comprobify no mantiene un registro de la dirección IP de cada solicitud individual a la API" — this is accurate **today** (no request-logging infrastructure exists yet — see `NEXT_STEPS.md`'s Structured Request Logging item, not yet built). If that item ships, this sentence becomes false and the policy will need a follow-up edit at that time. No action needed now, just noting the tripwire.
 
 ---
 

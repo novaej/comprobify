@@ -49,7 +49,7 @@ async function findById(id) {
  *
  * Excludes rows whose type the tenant has explicitly disabled on the IN_APP
  * channel (notification_preferences) — creation is unconditional for every
- * type (NEXT_STEPS.md item 13), so this is the one place IN_APP preference
+ * type (ADR-024), so this is the one place IN_APP preference
  * actually takes effect: visibility, not existence. Mandatory types never
  * have a preference row, so they're never excluded here.
  *

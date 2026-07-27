@@ -1,6 +1,6 @@
 /**
- * DB-backed, versioned email templates for notifications (Phase C of
- * NEXT_STEPS.md item 13 / ADR-024). Mirrors agreement.service.js's
+ * DB-backed, versioned email templates for notifications (ADR-024 Phase C).
+ * Mirrors agreement.service.js's
  * publish/activateVersion/getCurrent/getById/listVersionsByType shape —
  * see that file for the precedent this follows.
  *
@@ -29,12 +29,13 @@ const { substitute, substituteHtml } = require('../utils/template-placeholders')
 const { DEFAULT_LANGUAGE } = require('../locales');
 const config = require('../config');
 
-// The 5 NotificationTypes with supportsEmail: true in notification-catalog.js
+// The NotificationTypes with supportsEmail: true in notification-catalog.js
 // — the only types that ever get a row in notification_email_templates.
 const EMAIL_TEMPLATE_TYPES = [
   'PAYMENT_VERIFIED',
   'PAYMENT_REJECTED',
   'SUBSCRIPTION_RENEWAL_DUE',
+  'SUBSCRIPTION_PAST_DUE_WARNING',
   'SUBSCRIPTION_EXPIRED',
   'PRICE_CHANGE_ANNOUNCED',
 ];
@@ -163,6 +164,11 @@ function buildValues(notificationType, language, notification) {
         accountNumber: config.bankTransfer.accountNumber,
         accountHolder: config.bankTransfer.accountHolder,
         identification: config.bankTransfer.identification,
+      };
+    case 'SUBSCRIPTION_PAST_DUE_WARNING':
+      return {
+        tier: metadata.tier,
+        suspendsAt: moment(metadata.suspendsAt).format('DD/MM/YYYY'),
       };
     case 'SUBSCRIPTION_EXPIRED':
       return { tier: metadata.previousTier };

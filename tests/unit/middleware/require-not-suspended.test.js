@@ -25,6 +25,15 @@ describe('requireNotSuspended middleware', () => {
     await expect(run(req)).resolves.toBeUndefined();
   });
 
+  // PAST_DUE is a distinct status with its own middleware (require-past-due.js)
+  // — requireNotSuspended only ever checks for SUSPENDED. See
+  // docs/adr/025-past-due-tenant-status.md.
+  test('passes through when the tenant is PAST_DUE', async () => {
+    const req = { tenant: { id: '00000000-0000-0000-0000-000000000001', status: 'PAST_DUE' } };
+
+    await expect(run(req)).resolves.toBeUndefined();
+  });
+
   test('passes through when req.tenant is not set', async () => {
     const req = {};
 

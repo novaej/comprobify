@@ -28,6 +28,8 @@ const ErrorCodes = Object.freeze({
   // --- Account / tenant status ---
   /** The tenant account has been suspended */
   ACCOUNT_SUSPENDED: 'ACCOUNT_SUSPENDED',
+  /** The tenant account is past due on a subscription renewal */
+  ACCOUNT_PAST_DUE: 'ACCOUNT_PAST_DUE',
   /** Operation requires a verified email address */
   EMAIL_VERIFICATION_REQUIRED: 'EMAIL_VERIFICATION_REQUIRED',
   /** Operation is only available to tenants in production (not sandbox) */
