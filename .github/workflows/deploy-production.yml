@@ -68,6 +68,7 @@ jobs:
             DB_USER=${{ secrets.DB_USER }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             DB_SSL=${{ vars.DB_SSL }}
+            DB_SSL_CA=${{ secrets.DB_SSL_CA }}
             ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
             ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
             EMAIL_FROM=${{ vars.EMAIL_FROM }}

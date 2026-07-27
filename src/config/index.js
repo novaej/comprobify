@@ -11,7 +11,13 @@ const config = {
     database: process.env.DB_NAME || 'comprobify_local',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || '',
-    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
+    // DB_SSL_CA is required for providers with a private CA (e.g.
+    // DigitalOcean managed Postgres) — without it, Node's default trusted
+    // root store rejects the cert with SELF_SIGNED_CERT_IN_CHAIN. Providers
+    // with a publicly-trusted chain (e.g. Neon) work fine without it.
+    ssl: process.env.DB_SSL === 'true'
+      ? { rejectUnauthorized: true, ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : {}) }
+      : false,
     // Small managed-Postgres plans (e.g. DigitalOcean's Basic tier) cap total
     // backend connections in the low tens, shared across every process AND
     // every logical database on the same cluster (e.g. staging's cluster is
