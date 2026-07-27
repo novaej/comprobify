@@ -8,7 +8,7 @@ const pool = new Pool({
   user: config.db.user,
   password: config.db.password,
   ssl: config.db.ssl,
-  max: 20,
+  max: config.db.poolMax,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });

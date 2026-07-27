@@ -511,6 +511,7 @@ All variables are required unless marked optional.
 | `DB_USER` | Yes | Database user |
 | `DB_PASSWORD` | Yes | Database password |
 | `DB_SSL` | Yes | `true` to enable SSL (required in production) |
+| `DB_POOL_MAX` | No | Max `pg.Pool` connections for this process (default `5`, a conservative fallback — not a tuned value). Set per-process — the `api` and `worker` containers each open their own pool, and both draw from the same provider connection ceiling as any *other* database sharing that cluster (e.g. comprobify-web's database is planned to share the staging cluster). `deploy/docker-compose.yml` sets `6`/`3` respectively, leaving headroom for that third consumer; re-tune against whatever plan/provider you're actually on. |
 | `ENCRYPTION_KEY` | Yes | 64-character hex string — AES-256-GCM key for private key encryption |
 | `ADMIN_SECRET` | Yes | 64-character hex string — protects all `/v1/admin/*` endpoints |
 | `SRI_TEST_BASE_URL` | No | SRI test SOAP endpoint base (default `https://celcer.sri.gob.ec/comprobantes-electronicos-ws`) — override only if SRI changes it |

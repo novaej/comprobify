@@ -12,6 +12,16 @@ const config = {
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || '',
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : false,
+    // Small managed-Postgres plans (e.g. DigitalOcean's Basic tier) cap total
+    // backend connections in the low tens, shared across every process AND
+    // every logical database on the same cluster (e.g. staging's cluster is
+    // planned to also host comprobify-web's database — see
+    // docs/deployment.md). The API and worker are separate processes with
+    // separate Pools, so this must be set per-process (deploy/docker-
+    // compose.yml sets 6/3) rather than left at one size-fits-all value. This
+    // default (5) is only a fallback for a process nobody's explicitly tuned
+    // yet — not a real production number.
+    poolMax: parseInt(process.env.DB_POOL_MAX, 10) || 5,
   },
   sri: {
     testBaseUrl: process.env.SRI_TEST_BASE_URL || 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws',
