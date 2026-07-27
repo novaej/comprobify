@@ -3,12 +3,14 @@ const controller = require('../controllers/catalog.controller');
 const asyncHandler = require('../middleware/async-handler');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
+const requireNotPastDue = require('../middleware/require-past-due');
 const { readLimiter } = require('../middleware/rate-limit');
 
 const router = Router();
 
 router.use(authenticate);
 router.use(requireNotSuspended);
+router.use(requireNotPastDue);
 
 router.get('/id-types', readLimiter, asyncHandler(controller.listIdTypes));
 router.get('/payment-methods', readLimiter, asyncHandler(controller.listPaymentMethods));

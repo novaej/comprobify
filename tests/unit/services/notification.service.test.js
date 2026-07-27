@@ -102,6 +102,29 @@ describe('NotificationService', () => {
     });
   });
 
+  describe('createSubscriptionPastDueWarning', () => {
+    test('creates a WARNING SUBSCRIPTION_PAST_DUE_WARNING notification, fans it out, and enqueues NOTIFICATION_DISPATCH', async () => {
+      notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000150', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'SUBSCRIPTION_PAST_DUE_WARNING' });
+      const periodEnd = new Date('2026-07-01T00:00:00Z');
+      const suspendsAt = new Date('2026-07-08T00:00:00Z');
+
+      const result = await notificationService.createSubscriptionPastDueWarning(
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', current_period_end: periodEnd },
+        suspendsAt,
+      );
+
+      expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        tenantId: '00000000-0000-0000-0000-000000000001',
+        type: 'SUBSCRIPTION_PAST_DUE_WARNING',
+        severity: 'WARNING',
+        metadata: expect.objectContaining({ subscriptionId: '00000000-0000-0000-0000-000000000010', tier: 'STARTER', currentPeriodEnd: periodEnd, suspendsAt }),
+      }));
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000150' }, null, null);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000150' }, null, 'SUBSCRIPTION_PAST_DUE_WARNING');
+      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000150', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'SUBSCRIPTION_PAST_DUE_WARNING' });
+    });
+  });
+
   describe('createSubscriptionExpired', () => {
     test('creates an ERROR SUBSCRIPTION_EXPIRED notification, fans it out, and enqueues NOTIFICATION_DISPATCH', async () => {
       notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000103', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'SUBSCRIPTION_EXPIRED' });

@@ -211,20 +211,3 @@ That fix (see `CHANGELOG.md`'s Unreleased/Added entry — `POST /v1/recover`) cl
 
 **Effort:** Medium — the tracker itself is small, but real value depends on item 6 landing first, and touches three separate existing call sites to wire in.
 
----
-
-## 11. Pre-Suspension Renewal Warning + Suspend (Not Just Downgrade) on Non-Payment
-
-**Priority: Medium — closes the gap between the Terms of Service's suspension clause and actual behavior**
-
-Today's non-renewal path (CLAUDE.md's "Recurring renewals") already sends one reminder 7 days before `current_period_end` (`findDueForRenewalReminder`) and, 7 days past it with nothing paid, calls `expireSubscription()` — which downgrades the tenant to FREE and marks the subscription `EXPIRED`, but never touches `tenants.status`. The tenant stays `ACTIVE` and keeps using the Service on the FREE tier; nothing is ever actually suspended, and there's no second warning specifically about suspension being imminent — only the original renewal-due reminder.
-
-**What:**
-1. A second warning stage between the renewal reminder and the grace-period cutoff — e.g. `findDueForSuspensionWarning`, firing partway through the existing grace window (a new `SUSPENSION_WARNING_DAYS` config, smaller than `RENEWAL_GRACE_DAYS`) for `ACTIVE` subscriptions past `current_period_end` with no completed renewal. Fires a new notification type (e.g. `SUBSCRIPTION_SUSPENSION_WARNING`) + email, distinct from the existing `SUBSCRIPTION_RENEWAL_DUE` one — this is the "you will be suspended" notice, not the "please renew" one.
-2. At the end of the grace period, replace (or extend) `expireSubscription()` so it also flips `tenants.status = 'SUSPENDED'` with a `reason` (e.g. `'unpaid_renewal'`) via the same path `admin.service.js`'s `updateTenantStatus` uses — logging `STATUS_CHANGED` to `tenant_events` so a non-payment suspension is distinguishable from a manual/fraud one in the audit trail, same as the existing `reason` field already supports. Decide whether the FREE-tier downgrade still happens alongside suspension (recommended: yes — if the tenant is later reactivated/pays, they should land on the correct tier rather than whatever they were on before lapsing) or is dropped in favor of suspension alone.
-3. A suspended-for-non-payment tenant gets the same read-while-suspended behavior every other `SUSPENDED` tenant already gets (`require-not-suspended.js`) — no new middleware work, this falls out of the existing suspension mechanism for free.
-4. Both new stages go through the same `pending_effects` outbox pattern as `SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION`/`_EMAIL` and `SUBSCRIPTION_EXPIRED_NOTIFICATION`/`_EMAIL` — two more effect types, same shape.
-5. Job wiring: still runs from `POST /v1/admin/jobs/subscriptions`. The new warning scan must respect the existing ordering rule (`applyScheduledTierChanges` → `processDueRenewals`, CLAUDE.md Common Mistake #27) — a subscription whose downgrade was just applied this tick has already rolled its period forward and must not also be flagged for a suspension warning it no longer qualifies for.
-
-**Effort:** Medium — one migration (notification + tenant-event type additions), one new scheduled query + service function, two new effect types/handlers, and a small change to `expireSubscription()` reusing suspension mechanics that already exist.
-

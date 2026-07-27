@@ -43,8 +43,9 @@ const NOTIFICATION_CATALOG = Object.freeze({
   [NotificationTypes.QUOTA_WARNING]:            Object.freeze({ supportsInApp: true, supportsEmail: false, mandatory: false }), // reserved, not yet implemented
   [NotificationTypes.PAYMENT_VERIFIED]:         Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
   [NotificationTypes.PAYMENT_REJECTED]:         Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
-  [NotificationTypes.SUBSCRIPTION_RENEWAL_DUE]: Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
-  [NotificationTypes.SUBSCRIPTION_EXPIRED]:     Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
+  [NotificationTypes.SUBSCRIPTION_RENEWAL_DUE]:      Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
+  [NotificationTypes.SUBSCRIPTION_PAST_DUE_WARNING]: Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
+  [NotificationTypes.SUBSCRIPTION_EXPIRED]:          Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: false }),
   [NotificationTypes.PRICE_CHANGE_ANNOUNCED]:   Object.freeze({ supportsInApp: true, supportsEmail: true,  mandatory: true  }),
 });
 

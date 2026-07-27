@@ -142,5 +142,22 @@ describe('NotificationEmailTemplateService', () => {
 
       expect(result.text).toBe(`${config.bankTransfer.bankName} / ${config.bankTransfer.accountNumber}`);
     });
+
+    test('SUBSCRIPTION_PAST_DUE_WARNING values include a formatted suspendsAt date', async () => {
+      notificationEmailTemplateModel.findCurrent.mockResolvedValue({
+        subject_template: '{{tier}} past due',
+        html_template: 'Pay by {{suspendsAt}}',
+        text_template: 'Pay by {{suspendsAt}}',
+      });
+      const warningNotification = {
+        tenant_id: 'tenant-1', type: 'SUBSCRIPTION_PAST_DUE_WARNING',
+        metadata: { subscriptionId: 'sub-1', tier: 'STARTER', currentPeriodEnd: new Date('2026-07-01T12:00:00Z'), suspendsAt: new Date('2026-07-08T12:00:00Z') },
+      };
+
+      const result = await notificationEmailTemplateService.render('SUBSCRIPTION_PAST_DUE_WARNING', 'es', warningNotification);
+
+      expect(result.subject).toBe('STARTER past due');
+      expect(result.text).toBe('Pay by 08/07/2026');
+    });
   });
 });

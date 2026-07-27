@@ -295,6 +295,38 @@ async function createSubscriptionRenewalDue(subscription, payment) {
 }
 
 /**
+ * Create a SUBSCRIPTION_PAST_DUE_WARNING notification partway through the
+ * renewal grace period — before the tenant is actually marked PAST_DUE
+ * (that happens later, at the full grace cutoff, in
+ * subscriptionService.expireSubscription). Unconditional.
+ *
+ * Called from subscriptionService.processDueRenewals.
+ *
+ * @param {object} subscription - DB row from subscriptions table
+ * @param {Date}   suspendsAt   - the date the tenant will actually be marked PAST_DUE if unpaid
+ */
+async function createSubscriptionPastDueWarning(subscription, suspendsAt) {
+  const suspendsAtLabel = moment(suspendsAt).format('DD/MM/YYYY');
+
+  const notification = await notificationModel.create({
+    tenantId: subscription.tenant_id,
+    type: NotificationTypes.SUBSCRIPTION_PAST_DUE_WARNING,
+    severity: NotificationSeverity.WARNING,
+    title: 'Subscription past due',
+    message: `Your ${subscription.tier} subscription is past due. Submit payment proof by ${suspendsAtLabel} to avoid losing access.`,
+    metadata: {
+      subscriptionId: subscription.id,
+      tier: subscription.tier,
+      currentPeriodEnd: subscription.current_period_end,
+      suspendsAt,
+    },
+  });
+
+  await dispatchNotification(notification);
+  return notification;
+}
+
+/**
  * Create a SUBSCRIPTION_EXPIRED notification when the renewal grace period
  * elapses with no verified renewal payment and the tenant is downgraded to
  * FREE. Unconditional.
@@ -508,6 +540,7 @@ module.exports = {
   createDocumentAuthorized,
   createPaymentReviewed,
   createSubscriptionRenewalDue,
+  createSubscriptionPastDueWarning,
   createSubscriptionExpired,
   createPriceChangeAnnounced,
   runCertChecksForTenant,

@@ -172,9 +172,28 @@ Creada automáticamente por el job programado del proveedor unos 7 días antes d
 
 ---
 
+### `SUBSCRIPTION_PAST_DUE_WARNING`
+
+Creada automáticamente por el mismo job programado, más adelante en el período de gracia que `SUBSCRIPTION_RENEWAL_DUE` (por defecto, 5 días después de `current_period_end`, con 7 días de gracia en total) — un aviso más urgente y distinto del recordatorio de renovación, antes de que la cuenta pase efectivamente a estado `PAST_DUE`. Envía el comprobante del pago `RENEWAL` ya abierto vía [Submit Payment Proof](submit-payment-proof.md), o inicia una nueva suscripción vía [Create Subscription](create-subscription.md) — ambas rutas quedan disponibles incluso después de pasar a `PAST_DUE` (ver más abajo).
+
+**Severidad:** `WARNING`
+
+**Metadata:**
+
+```json
+{
+  "subscriptionId": "00000000-0000-0000-0000-000000000012",
+  "tier": "STARTER",
+  "currentPeriodEnd": "2026-07-15T00:00:00.000Z",
+  "suspendsAt": "2026-07-22T00:00:00.000Z"
+}
+```
+
+---
+
 ### `SUBSCRIPTION_EXPIRED`
 
-Creada automáticamente por el mismo job programado cuando una suscripción pasa unos 7 días de `current_period_end` sin que se verifique ninguna renovación. Para cuando esto se dispara, el tenant ya fue movido al plan FREE. Un correo equivalente explica lo ocurrido — inicia una nueva suscripción en cualquier momento vía [Create Subscription](create-subscription.md).
+Creada automáticamente por el mismo job programado cuando una suscripción pasa unos 7 días de `current_period_end` sin que se verifique ninguna renovación. Para cuando esto se dispara, el tenant ya fue movido al plan FREE **y** su cuenta (`GET /v1/tenants/me`'s `status`) pasa a `PAST_DUE` — distinto de `SUSPENDED`: es una cuenta que puede recuperarse por sí misma iniciando una nueva suscripción vía [Create Subscription](create-subscription.md) y pagándola; no requiere contactar soporte. Un correo equivalente explica lo ocurrido.
 
 **Severidad:** `ERROR`
 
@@ -319,17 +338,19 @@ Los tipos **obligatorios** (actualmente solo `PRICE_CHANGE_ANNOUNCED`, el aviso 
 ```json
 {
   "preferences": [
-    { "type": "DOCUMENT_AUTHORIZED",      "channel": "IN_APP", "enabled": true },
-    { "type": "CERT_EXPIRING",            "channel": "IN_APP", "enabled": true },
-    { "type": "CERT_EXPIRED",             "channel": "IN_APP", "enabled": true },
-    { "type": "PAYMENT_VERIFIED",         "channel": "IN_APP", "enabled": true },
-    { "type": "PAYMENT_VERIFIED",         "channel": "EMAIL",  "enabled": true },
-    { "type": "PAYMENT_REJECTED",         "channel": "IN_APP", "enabled": true },
-    { "type": "PAYMENT_REJECTED",         "channel": "EMAIL",  "enabled": true },
-    { "type": "SUBSCRIPTION_RENEWAL_DUE", "channel": "IN_APP", "enabled": true },
-    { "type": "SUBSCRIPTION_RENEWAL_DUE", "channel": "EMAIL",  "enabled": true },
-    { "type": "SUBSCRIPTION_EXPIRED",     "channel": "IN_APP", "enabled": true },
-    { "type": "SUBSCRIPTION_EXPIRED",     "channel": "EMAIL",  "enabled": true }
+    { "type": "DOCUMENT_AUTHORIZED",           "channel": "IN_APP", "enabled": true },
+    { "type": "CERT_EXPIRING",                 "channel": "IN_APP", "enabled": true },
+    { "type": "CERT_EXPIRED",                  "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_VERIFIED",              "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_VERIFIED",              "channel": "EMAIL",  "enabled": true },
+    { "type": "PAYMENT_REJECTED",              "channel": "IN_APP", "enabled": true },
+    { "type": "PAYMENT_REJECTED",              "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_RENEWAL_DUE",      "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_RENEWAL_DUE",      "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_PAST_DUE_WARNING", "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_PAST_DUE_WARNING", "channel": "EMAIL",  "enabled": true },
+    { "type": "SUBSCRIPTION_EXPIRED",          "channel": "IN_APP", "enabled": true },
+    { "type": "SUBSCRIPTION_EXPIRED",          "channel": "EMAIL",  "enabled": true }
   ]
 }
 ```
