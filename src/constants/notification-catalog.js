@@ -1,5 +1,5 @@
 /**
- * Per-type notification capability catalog (NEXT_STEPS.md item 13, ADR-024).
+ * Per-type notification capability catalog (ADR-024).
  *
  * A separate file from notification-types.js on purpose — dozens of call
  * sites do `NotificationTypes.PAYMENT_VERIFIED` directly (the plain string

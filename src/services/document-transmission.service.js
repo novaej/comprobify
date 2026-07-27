@@ -147,7 +147,7 @@ async function checkAuthorization(accessKey, issuer) {
 
     if (newStatus === DocumentStatus.AUTHORIZED) {
       // The DOCUMENT_AUTHORIZED tenant notification is created synchronously
-      // (ADR-024, NEXT_STEPS.md item 13) — createDocumentAuthorized() itself
+      // (ADR-024) — createDocumentAuthorized() itself
       // durably enqueues WEBHOOK_FANOUT internally; it never enqueues
       // NOTIFICATION_DISPATCH for this type since DOCUMENT_AUTHORIZED has no
       // EMAIL channel (see notification-catalog.js — INVOICE_AUTHORIZED_EMAIL
@@ -159,8 +159,7 @@ async function checkAuthorization(accessKey, issuer) {
       // returns, or a crash right after could lose the effect entirely, same
       // failure mode Phase 2 exists to close), then best-effort dispatch
       // (queueEffect itself doesn't await dispatch). Replaces the old
-      // unawaited .catch(console.warn) fire-and-forget calls (ADR-022,
-      // NEXT_STEPS.md item 2 Phase 2).
+      // unawaited .catch(console.warn) fire-and-forget calls (ADR-022 Phase 2).
       //
       // Deliberately NOT here: subscription activation/tier-change/renewal
       // checks. Those used to fire unconditionally on every authorized

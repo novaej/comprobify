@@ -142,7 +142,7 @@ const handlers = {
     await emailService.sendPaymentProofSubmitted(payment, subscription, tenant, payload.referenceNumber);
   },
 
-  // --- NOTIFICATION_DISPATCH (ADR-024, NEXT_STEPS.md item 13) ---
+  // --- NOTIFICATION_DISPATCH (ADR-024) ---
   //
   // The one channel-neutral effect handling whatever async dispatch a
   // notification still needs, for every type notificationService's

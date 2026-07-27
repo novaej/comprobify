@@ -25,8 +25,8 @@ module.exports = {
       disclaimer: 'If you did not sign up for Comprobify, you can ignore this email. Do not reply — this is an automated message.',
     },
     // paymentVerified/paymentRejected/subscriptionRenewalDue/
-    // subscriptionExpired/priceChangeAnnounced removed (ADR-024,
-    // NEXT_STEPS.md item 13 Phase C) — those 5 notification types now render
+    // subscriptionExpired/priceChangeAnnounced removed (ADR-024 Phase C) —
+    // those 5 notification types now render
     // from notification_email_templates (DB, versioned), not this locale
     // file. See docs/email-templates/*.txt for their content.
   },

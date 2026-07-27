@@ -1,5 +1,5 @@
 // Shared {{token}} substitution — extracted from agreement.service.js so
-// notification-email-template.service.js (ADR-024, NEXT_STEPS.md item 13)
+// notification-email-template.service.js (ADR-024)
 // uses the exact same implementation instead of a second copy.
 //
 // Unmatched tokens are left as-is (`{{unknown}}` stays literal) — a missing

@@ -1,5 +1,5 @@
 /**
- * Notification service (ADR-024, NEXT_STEPS.md item 13).
+ * Notification service (ADR-024).
  *
  * Responsible for:
  *  - Creating notifications for event-driven conditions (DOCUMENT_AUTHORIZED,
@@ -125,7 +125,7 @@ async function fireWebhookFanOut(notification) {
 
 /**
  * The single place every notification-creating function funnels through
- * after inserting/updating its row (ADR-024, NEXT_STEPS.md item 13). Fans
+ * after inserting/updating its row (ADR-024). Fans
  * out to webhooks (unconditional, same as before) and, if the type supports
  * the EMAIL channel (notification-catalog.js), enqueues one
  * NOTIFICATION_DISPATCH effect — the channel-neutral effect whose handler

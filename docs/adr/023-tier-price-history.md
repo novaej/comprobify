@@ -32,7 +32,7 @@ Every real billing call site in `subscription.service.js` (`createSubscription`,
 
 ### Notification: `PRICE_CHANGE_ANNOUNCED` is "mandatory" — the first type not gated by preference
 
-Publishing fans out to every tenant with `status = 'ACTIVE'` at that moment (`tenantModel.findAllByStatus`) — an in-app `PRICE_CHANGE_ANNOUNCED` notification and an email. A tenant cannot opt out of the 30-day price-change notice on any channel, so this type is "mandatory": `src/constants/non-subscribable-notification-types.js` lists it, `notificationService.createPriceChangeAnnounced()` skips the `notificationPreferenceModel.isEnabled()` gate every other notification-creating function has, and `GET/PATCH /v1/notifications/preferences` refuse to ever show or accept a preference row for it. This is a deliberate, scoped preview of NEXT_STEPS.md item 13 (full notification-system standardization — a richer catalog with per-channel capability flags and a `mandatory` flag, `notification_preferences` gaining channel granularity, every type's creation eventually becoming unconditional) rather than that whole migration landing at once.
+Publishing fans out to every tenant with `status = 'ACTIVE'` at that moment (`tenantModel.findAllByStatus`) — an in-app `PRICE_CHANGE_ANNOUNCED` notification and an email. A tenant cannot opt out of the 30-day price-change notice on any channel, so this type is "mandatory": `src/constants/non-subscribable-notification-types.js` lists it, `notificationService.createPriceChangeAnnounced()` skips the `notificationPreferenceModel.isEnabled()` gate every other notification-creating function has, and `GET/PATCH /v1/notifications/preferences` refuse to ever show or accept a preference row for it. This is a deliberate, scoped preview of the full notification-system standardization later completed in ADR-024 (a richer catalog with per-channel capability flags and a `mandatory` flag, `notification_preferences` gaining channel granularity, every type's creation eventually becoming unconditional) rather than that whole migration landing at once.
 
 ### Idempotency went through three designs before landing on "check `notifications` directly"
 
@@ -56,13 +56,13 @@ The same idempotent function is called from three places:
 - The as-of-date principle is a single, auditable rule applied uniformly, rather than six separate special cases.
 - No dedicated idempotency table and no misuse of an unrelated outbox table — `notifications` itself is the record, made possible by `PRICE_CHANGE_ANNOUNCED` being mandatory.
 - Three independent paths (initial blast, reactivation hooks, periodic sweep) all converge on notifying every `ACTIVE` tenant eventually, even if any single path fails for a given tenant.
-- The "mandatory" concept and its enforcement points (creation-time gate skip, preference-endpoint rejection) are a small, real, shipped preview of NEXT_STEPS.md item 13 rather than a throwaway one-off.
+- The "mandatory" concept and its enforcement points (creation-time gate skip, preference-endpoint rejection) are a small, real, shipped preview of the notification-system standardization later completed in ADR-024, rather than a throwaway one-off.
 - `GET /v1/tiers` surfaces an announced-but-not-yet-effective price to prospective tenants too, not just existing ones.
 
 ### Negative
 - Every tier-price read that used to be a synchronous constant lookup is now an `async` DB query — `GET /v1/tiers` and every `requestTierChange` branch now do 2-4 extra round trips. Acceptable at current volume; these are all low-frequency, non-hot-path operations (pricing catalog reads, tenant-initiated tier changes, a handful of scheduled-job calls per day).
 - One more effect type and one more notification type add to an already-long catalogue (15 effect types, 11 notification types) — the registry pattern (`src/effects/index.js`) keeps the marginal cost of each addition small.
-- `PRICE_CHANGE_ANNOUNCED` is inconsistent with every other notification type today (unconditional creation vs. preference-gated) until NEXT_STEPS.md item 13 generalizes the pattern — a deliberate, documented, temporary asymmetry, not an oversight.
+- `PRICE_CHANGE_ANNOUNCED` is inconsistent with every other notification type today (unconditional creation vs. preference-gated) until ADR-024 generalizes the pattern — a deliberate, documented, temporary asymmetry, not an oversight.
 
 ### Alternatives Considered
 - **Moving the entire `TIERS` object to the database.** Rejected — no other tier field has ever needed history or a notice period; doing so speculatively would be scope without a corresponding requirement.

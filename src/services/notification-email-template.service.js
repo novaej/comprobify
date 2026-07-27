@@ -1,6 +1,6 @@
 /**
- * DB-backed, versioned email templates for notifications (Phase C of
- * NEXT_STEPS.md item 13 / ADR-024). Mirrors agreement.service.js's
+ * DB-backed, versioned email templates for notifications (ADR-024 Phase C).
+ * Mirrors agreement.service.js's
  * publish/activateVersion/getCurrent/getById/listVersionsByType shape —
  * see that file for the precedent this follows.
  *

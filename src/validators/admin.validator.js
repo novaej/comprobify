@@ -267,7 +267,7 @@ const getAgreementVersion = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
-// Notification email templates (ADR-024, NEXT_STEPS.md item 13 Phase C)
+// Notification email templates (ADR-024 Phase C)
 const publishNotificationEmailTemplate = [
   body('notificationType')
     .isIn(EMAIL_TEMPLATE_TYPES)

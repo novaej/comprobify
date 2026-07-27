@@ -51,7 +51,7 @@ router.get('/agreements/:type/versions', v.listAgreementVersions, validateReques
 router.patch('/agreements/:id/activate', v.activateAgreement, validateRequest, asyncHandler(controller.activateAgreement));
 router.post('/tenants/:id/agreements', v.verifyTenant, validateRequest, asyncHandler(controller.generateTenantAgreements));
 
-// Notification email templates (ADR-024, NEXT_STEPS.md item 13 Phase C)
+// Notification email templates (ADR-024 Phase C)
 router.post('/notification-email-templates', v.publishNotificationEmailTemplate, validateRequest, asyncHandler(controller.publishNotificationEmailTemplate));
 router.get('/notification-email-templates', asyncHandler(controller.listCurrentNotificationEmailTemplates));
 router.get('/notification-email-templates/versions/:id', v.getNotificationEmailTemplateVersion, validateRequest, asyncHandler(controller.getNotificationEmailTemplateVersion));
