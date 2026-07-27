@@ -104,8 +104,8 @@ function formatSequential(document) {
   ].join('-');
 }
 
-async function queueEffect(effectType, tenantId, payload) {
-  const effect = await pendingEffectService.enqueue(effectType, tenantId, payload);
+async function queueEffect(effectType, tenantId, payload, notificationType = null) {
+  const effect = await pendingEffectService.enqueue(effectType, tenantId, payload, null, notificationType);
   pendingEffectService.dispatch(effect);
 }
 
@@ -133,7 +133,10 @@ async function fireWebhookFanOut(notification) {
  * sends. Stamps email_status = PENDING at enqueue time so a notification
  * whose email hasn't been attempted yet is distinguishable from one that
  * was SKIPPED/SENT/FAILED, or one that never supported email at all (stays
- * NULL forever for those types).
+ * NULL forever for those types). The enqueued row also snapshots
+ * notification.type into pending_effects.notification_type — purely for
+ * admin/debug visibility (see migration 080); the handler itself always
+ * re-fetches the real notification row rather than trusting this.
  *
  * No-op (returns the notification unchanged) if notification is falsy —
  * lets every caller write `await dispatchNotification(notification)`
@@ -146,7 +149,7 @@ async function dispatchNotification(notification) {
   await fireWebhookFanOut(notification);
   if (supportsChannel(notification.type, NotificationChannel.EMAIL)) {
     await notificationModel.updateEmailStatus(notification.id, EmailStatus.PENDING);
-    await queueEffect(EffectTypes.NOTIFICATION_DISPATCH, notification.tenant_id, { notificationId: notification.id });
+    await queueEffect(EffectTypes.NOTIFICATION_DISPATCH, notification.tenant_id, { notificationId: notification.id }, notification.type);
   }
   return notification;
 }

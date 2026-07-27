@@ -29,16 +29,24 @@ describe('PendingEffectService', () => {
 
       const result = await pendingEffectService.enqueue('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, 'dedup-1');
 
-      expect(pendingEffectModel.create).toHaveBeenCalledWith('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, 'dedup-1');
+      expect(pendingEffectModel.create).toHaveBeenCalledWith('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, 'dedup-1', null);
       expect(result).toEqual({ id: 'effect-1', effect_type: 'WEBHOOK_FANOUT' });
     });
 
-    test('defaults dedupKey to null when omitted', async () => {
+    test('defaults dedupKey and notificationType to null when omitted', async () => {
       pendingEffectModel.create.mockResolvedValue({ id: 'effect-1' });
 
       await pendingEffectService.enqueue('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' });
 
-      expect(pendingEffectModel.create).toHaveBeenCalledWith('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, null);
+      expect(pendingEffectModel.create).toHaveBeenCalledWith('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, null, null);
+    });
+
+    test('passes notificationType through for NOTIFICATION_DISPATCH', async () => {
+      pendingEffectModel.create.mockResolvedValue({ id: 'effect-1' });
+
+      await pendingEffectService.enqueue('NOTIFICATION_DISPATCH', 'tenant-1', { notificationId: 'n-1' }, null, 'PAYMENT_VERIFIED');
+
+      expect(pendingEffectModel.create).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', 'tenant-1', { notificationId: 'n-1' }, null, 'PAYMENT_VERIFIED');
     });
   });
 

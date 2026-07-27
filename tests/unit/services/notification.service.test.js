@@ -38,9 +38,9 @@ describe('NotificationService', () => {
           purpose: 'INITIAL', amount: 20, rejectionReasonCode: null,
         }),
       }));
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000100' });
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000100' }, null, null);
       expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000100', 'PENDING');
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000100' });
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000100' }, null, 'PAYMENT_VERIFIED');
       expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000100', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'PAYMENT_VERIFIED' });
     });
 
@@ -96,8 +96,8 @@ describe('NotificationService', () => {
         severity: 'WARNING',
         metadata: expect.objectContaining({ subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000040', tier: 'GROWTH', amount: 79, currentPeriodEnd: periodEnd }),
       }));
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000102' });
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000102' });
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000102' }, null, null);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000102' }, null, 'SUBSCRIPTION_RENEWAL_DUE');
       expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000102', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'SUBSCRIPTION_RENEWAL_DUE' });
     });
   });
@@ -114,8 +114,8 @@ describe('NotificationService', () => {
         severity: 'ERROR',
         metadata: { subscriptionId: '00000000-0000-0000-0000-000000000010', previousTier: 'GROWTH' },
       }));
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000103' });
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000103' });
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000103' }, null, null);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000103' }, null, 'SUBSCRIPTION_EXPIRED');
       expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000103', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'SUBSCRIPTION_EXPIRED' });
     });
   });
@@ -131,7 +131,7 @@ describe('NotificationService', () => {
       );
 
       expect(notificationModel.create).toHaveBeenCalled();
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000200' });
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('WEBHOOK_FANOUT', '00000000-0000-0000-0000-000000000001', { notificationId: '00000000-0000-0000-0000-000000000200' }, null, null);
       expect(pendingEffectService.enqueue).not.toHaveBeenCalledWith('NOTIFICATION_DISPATCH', expect.anything(), expect.anything());
       expect(notificationModel.updateEmailStatus).not.toHaveBeenCalled();
     });
