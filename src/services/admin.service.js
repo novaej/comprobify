@@ -114,8 +114,9 @@ async function updateTenantStatus(id, status, reason = null) {
   // reason distinguishes why a tenant landed in SUSPENDED — e.g. a
   // voluntary account-closure request (docs/agreements/terms-of-service.md
   // §10) reads very differently in the audit trail from a fraud/non-payment
-  // suspension, even though both use the same status value (see NEXT_STEPS
-  // item 11 — account closure is intentionally not a separate status).
+  // suspension, even though both use the same status value — account
+  // closure is intentionally not a separate status (unlike unpaid renewals,
+  // which do get their own PAST_DUE status — see ADR-025).
   await tenantEventModel.create(id, 'STATUS_CHANGED', { from: previous.status, to: status, reason });
 
   // Catch-up: a tenant reactivated out of SUSPENDED (e.g. after settling an
