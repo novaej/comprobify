@@ -3,6 +3,7 @@ const documentEventModel = require('../models/document-event.model');
 const sriService = require('./sri.service');
 const sriResponseModel = require('../models/sri-response.model');
 const pendingEffectService = require('./pending-effect.service');
+const notificationService = require('./notification.service');
 const { EffectTypes } = require('../constants/effect-types');
 const NotFoundError = require('../errors/not-found-error');
 const DocumentStatus = require('../constants/document-status');
@@ -145,19 +146,21 @@ async function checkAuthorization(accessKey, issuer) {
     }, null, issuer.id, issuer.sandbox);
 
     if (newStatus === DocumentStatus.AUTHORIZED) {
-      const payload = {
-        documentId: updated.id,
-        accessKey: updated.access_key,
-        issuerId: issuer.id,
-        sandbox: issuer.sandbox,
-      };
-      // Durable-enqueue every post-authorization side effect (awaited — the
-      // INSERT must land before this function returns, or a crash right
-      // after could lose the effect entirely, same failure mode Phase 2
-      // exists to close), then best-effort dispatch each (queueEffect
-      // itself doesn't await dispatch). Replaces the old unawaited
-      // .catch(console.warn) fire-and-forget calls (ADR-022, NEXT_STEPS.md
-      // item 2 Phase 2).
+      // The DOCUMENT_AUTHORIZED tenant notification is created synchronously
+      // (ADR-024, NEXT_STEPS.md item 13) — createDocumentAuthorized() itself
+      // durably enqueues WEBHOOK_FANOUT internally; it never enqueues
+      // NOTIFICATION_DISPATCH for this type since DOCUMENT_AUTHORIZED has no
+      // EMAIL channel (see notification-catalog.js — INVOICE_AUTHORIZED_EMAIL
+      // below emails the document's BUYER, not a tenant notification, and
+      // stays a completely separate, always-unconditional effect).
+      await notificationService.createDocumentAuthorized(updated, issuer);
+
+      // Durable-enqueue (awaited — the INSERT must land before this function
+      // returns, or a crash right after could lose the effect entirely, same
+      // failure mode Phase 2 exists to close), then best-effort dispatch
+      // (queueEffect itself doesn't await dispatch). Replaces the old
+      // unawaited .catch(console.warn) fire-and-forget calls (ADR-022,
+      // NEXT_STEPS.md item 2 Phase 2).
       //
       // Deliberately NOT here: subscription activation/tier-change/renewal
       // checks. Those used to fire unconditionally on every authorized
@@ -166,10 +169,12 @@ async function checkAuthorization(accessKey, issuer) {
       // normal case), and the rare reverse ordering is caught by a periodic
       // scan in POST /v1/admin/jobs/subscriptions instead — see ADR-022's
       // addendum.
-      await Promise.all([
-        queueEffect(EffectTypes.DOCUMENT_AUTHORIZED_NOTIFICATION, issuer.tenant_id, payload),
-        queueEffect(EffectTypes.INVOICE_AUTHORIZED_EMAIL, issuer.tenant_id, payload),
-      ]);
+      await queueEffect(EffectTypes.INVOICE_AUTHORIZED_EMAIL, issuer.tenant_id, {
+        documentId: updated.id,
+        accessKey: updated.access_key,
+        issuerId: issuer.id,
+        sandbox: issuer.sandbox,
+      });
     }
   }
 

@@ -3,12 +3,14 @@ jest.mock('../../../src/models/document-event.model');
 jest.mock('../../../src/services/sri.service');
 jest.mock('../../../src/models/sri-response.model');
 jest.mock('../../../src/services/pending-effect.service');
+jest.mock('../../../src/services/notification.service');
 
 const documentModel = require('../../../src/models/document.model');
 const documentEventModel = require('../../../src/models/document-event.model');
 const sriService = require('../../../src/services/sri.service');
 const sriResponseModel = require('../../../src/models/sri-response.model');
 const pendingEffectService = require('../../../src/services/pending-effect.service');
+const notificationService = require('../../../src/services/notification.service');
 const documentTransmission = require('../../../src/services/document-transmission.service');
 
 const ACCESS_KEY = '1234567890123456789012345678901234567890123456789';
@@ -247,6 +249,7 @@ describe('DocumentTransmissionService', () => {
       const updatedDoc = baseDoc({ status: 'AUTHORIZED' });
       documentModel.updateStatus.mockResolvedValue(updatedDoc);
       documentEventModel.create.mockResolvedValue({});
+      notificationService.createDocumentAuthorized.mockResolvedValue();
 
       const result = await documentTransmission.checkAuthorization(ACCESS_KEY, mockIssuer);
 
@@ -262,25 +265,24 @@ describe('DocumentTransmissionService', () => {
       );
       expect(result.status).toBe('AUTHORIZED');
 
-      // The INSERT (enqueue) for every effect must be awaited before
-      // checkAuthorization returns — a crash right after must not lose any
-      // of these (see ADR-022). Dispatch (the RabbitMQ publish) stays
-      // best-effort/unawaited, same as document-transmission's other
+      // The tenant DOCUMENT_AUTHORIZED notification is created synchronously
+      // now (ADR-024) — no longer a queued effect. INVOICE_AUTHORIZED_EMAIL
+      // (buyer-facing, unrelated to the tenant notification system) is the
+      // one remaining durably-enqueued effect: the INSERT (enqueue) must be
+      // awaited before checkAuthorization returns — a crash right after must
+      // not lose it (see ADR-022) — while dispatch (the RabbitMQ publish)
+      // stays best-effort/unawaited, same as document-transmission's other
       // producer call sites.
       // No SUBSCRIPTION_* effects — that reconciliation moved to a periodic
       // scan in POST /v1/admin/jobs/subscriptions (see ADR-022's addendum),
       // not a RabbitMQ effect fired on every document authorization.
+      expect(notificationService.createDocumentAuthorized).toHaveBeenCalledWith(updatedDoc, mockIssuer);
       const expectedPayload = {
         documentId: updatedDoc.id, accessKey: updatedDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
       };
-      for (const type of [
-        'DOCUMENT_AUTHORIZED_NOTIFICATION',
-        'INVOICE_AUTHORIZED_EMAIL',
-      ]) {
-        expect(pendingEffectService.enqueue).toHaveBeenCalledWith(type, mockIssuer.tenant_id, expectedPayload, null);
-      }
-      expect(pendingEffectService.enqueue).toHaveBeenCalledTimes(2);
-      expect(pendingEffectService.dispatch).toHaveBeenCalledTimes(2);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('INVOICE_AUTHORIZED_EMAIL', mockIssuer.tenant_id, expectedPayload, null);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledTimes(1);
+      expect(pendingEffectService.dispatch).toHaveBeenCalledTimes(1);
     });
   });
 

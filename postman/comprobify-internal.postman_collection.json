@@ -84,6 +84,16 @@
       "type": "string"
     },
     {
+      "key": "notification_template_id",
+      "value": ""
+    },
+    {
+      "key": "tier_price_id",
+      "value": "",
+      "description": "Tier price row id — copy from Create Tier Price (Draft) or List Tier Prices response. Used by Update/Publish/Get Tier Price.",
+      "type": "string"
+    },
+    {
       "key": "verification_token",
       "value": "",
       "description": "Email verification token — copy from the verification email link (?token=...)",
@@ -2108,7 +2118,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "[\n  { \"type\": \"DOCUMENT_AUTHORIZED\", \"enabled\": true },\n  { \"type\": \"CERT_EXPIRING\",        \"enabled\": true },\n  { \"type\": \"CERT_EXPIRED\",         \"enabled\": true }\n]",
+              "raw": "[\n  { \"type\": \"PAYMENT_VERIFIED\", \"channel\": \"EMAIL\", \"enabled\": false },\n  { \"type\": \"DOCUMENT_AUTHORIZED\", \"channel\": \"IN_APP\", \"enabled\": true }\n]",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3190,6 +3200,425 @@
               ]
             },
             "description": "Re-activates a previously published version as current for its document_type — e.g. to undo a bad edit without republishing. Does not delete or alter any other version; every row from every publish attempt is retained."
+          }
+        },
+        {
+          "name": "List Current Notification Email Templates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.templates?.length) console.log(r.templates.length, 'current template(s) published');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/notification-email-templates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "notification-email-templates"
+              ]
+            },
+            "description": "Lists the current (is_current=true) version for every (notificationType, language) pair that has ever been published — id, type, language, version, createdAt."
+          }
+        },
+        {
+          "name": "Publish Notification Email Template (PAYMENT_VERIFIED, es)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.template?.id) { pm.collectionVariables.set('notification_template_id', r.template.id); console.log('Published', r.template.notificationType, r.template.language, 'v', r.template.version, '(id', r.template.id + ')'); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/notification-email-templates",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "notification-email-templates"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notificationType\": \"PAYMENT_VERIFIED\",\n  \"language\": \"es\",\n  \"version\": \"1.0\"\n}"
+            },
+            "description": "notificationType, language, and version are required. notificationType must be one of the 5 email-capable NotificationTypes (PAYMENT_VERIFIED, PAYMENT_REJECTED, SUBSCRIPTION_RENEWAL_DUE, SUBSCRIPTION_EXPIRED, PRICE_CHANGE_ANNOUNCED); language must be es or en. If rawContent is omitted (as here), content is read from docs/email-templates/{notificationType}.{language}.txt on the server (SUBJECT:/---HTML---/---TEXT--- format). Pass an optional rawContent string instead to publish edited content directly, without touching the filesystem or redeploying."
+          }
+        },
+        {
+          "name": "List Notification Email Template Versions (PAYMENT_VERIFIED, es)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.versions?.length) console.log(r.versions.length, 'version(s) found — most recent id', r.versions[0].id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/notification-email-templates/PAYMENT_VERIFIED/es/versions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "notification-email-templates",
+                "PAYMENT_VERIFIED",
+                "es",
+                "versions"
+              ]
+            },
+            "description": "Lists every published version for this (notificationType, language) pair (id, version, isCurrent, createdAt — no template bodies, to keep the list lightweight). Swap the type/language in the path to list others. Copy an id into notification_template_id to fetch its full content next."
+          }
+        },
+        {
+          "name": "Get Notification Email Template Version (by id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.template) console.log('Fetched', r.template.notificationType, r.template.language, 'v', r.template.version);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/notification-email-templates/versions/{{notification_template_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "notification-email-templates",
+                "versions",
+                "{{notification_template_id}}"
+              ]
+            },
+            "description": "Fetches one specific version's full subjectTemplate/htmlTemplate/textTemplate by its row id (no notificationType/language needed in the path — id is a global primary key). Use this to pull existing content into an editor before tweaking it and resubmitting via 'Publish Notification Email Template'."
+          }
+        },
+        {
+          "name": "Activate Notification Email Template Version (Rollback)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.template) console.log('Now current for', r.template.notificationType, r.template.language + ':', 'v', r.template.version);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/notification-email-templates/{{notification_template_id}}/activate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "notification-email-templates",
+                "{{notification_template_id}}",
+                "activate"
+              ]
+            },
+            "description": "Re-activates a previously published version as current for its (notificationType, language) — e.g. to undo a bad edit without republishing. Does not delete or alter any other version; every row from every publish attempt is retained."
+          }
+        },
+        {
+          "name": "Create Tier Price (Draft)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.price?.id) { pm.collectionVariables.set('tier_price_id', r.price.id); console.log('Created DRAFT price', r.price.id, 'for', r.price.tier, r.price.billingInterval, '$' + r.price.priceUsd); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tier\": \"STARTER\",\n  \"billingInterval\": \"MONTHLY\",\n  \"priceUsd\": 25\n}"
+            },
+            "description": "Creates a DRAFT tier_prices row — not visible to tenants yet, no notice clock running. Edit it with 'Update Tier Price (Draft)' before confirming with 'Publish Tier Price'."
+          }
+        },
+        {
+          "name": "Update Tier Price (Draft)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.price) console.log('Updated DRAFT price', r.price.id, 'to $' + r.price.priceUsd);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices/{{tier_price_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices",
+                "{{tier_price_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priceUsd\": 27.50\n}"
+            },
+            "description": "Only works while the price is still DRAFT (400 PRICE_NOT_DRAFT once published)."
+          }
+        },
+        {
+          "name": "Publish Tier Price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.price) console.log('Published price', r.price.id, '— effective', r.price.effectiveAt, '— every ACTIVE tenant is now being notified.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices/{{tier_price_id}}/publish",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices",
+                "{{tier_price_id}}",
+                "publish"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Confirms the DRAFT price: starts the notice clock (effectiveAt = now + noticeDays, floor is PRICE_CHANGE_MIN_NOTICE_DAYS, default 30 — omit noticeDays in the body to use the default, or pass e.g. { \"noticeDays\": 45 } for longer notice) and notifies every currently-ACTIVE tenant (in-app PRICE_CHANGE_ANNOUNCED notification + email). Irreversible — a published price is immutable."
+          }
+        },
+        {
+          "name": "List Tier Prices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.prices?.length) console.log(r.prices.length, 'price row(s) — most recent id', r.prices[0].id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices?tier=STARTER",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices"
+              ],
+              "query": [
+                {
+                  "key": "tier",
+                  "value": "STARTER"
+                }
+              ]
+            },
+            "description": "Full price history, newest first. Optional ?tier= filter (FREE/STARTER/GROWTH/BUSINESS); remove the query param to list every tier."
+          }
+        },
+        {
+          "name": "Get Tier Price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.price) console.log('Fetched price', r.price.id, r.price.tier, r.price.billingInterval, r.price.status, '$' + r.price.priceUsd);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/prices/{{tier_price_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "prices",
+                "{{tier_price_id}}"
+              ]
+            },
+            "description": "Fetches one specific price row by id."
           }
         },
         {

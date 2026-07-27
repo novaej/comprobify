@@ -47,6 +47,12 @@ async function findById(id) {
  * Return active (unexpired) notifications for a tenant, newest first.
  * Both read and unread are included so the client can render a full history.
  *
+ * Excludes rows whose type the tenant has explicitly disabled on the IN_APP
+ * channel (notification_preferences) — creation is unconditional for every
+ * type (NEXT_STEPS.md item 13), so this is the one place IN_APP preference
+ * actually takes effect: visibility, not existence. Mandatory types never
+ * have a preference row, so they're never excluded here.
+ *
  * @param {number}      tenantId
  * @param {number|null} issuerId - When provided, filters to notifications for
  *   that issuer plus tenant-level notifications (issuer_id IS NULL). When null,
@@ -55,7 +61,14 @@ async function findById(id) {
  *   id > sinceId (cursor-based catch-up after downtime).
  */
 async function findActiveByTenantId(tenantId, issuerId = null, sinceId = null) {
-  const conditions = ['tenant_id = $1', '(expires_at IS NULL OR expires_at > NOW())'];
+  const conditions = [
+    'tenant_id = $1',
+    '(expires_at IS NULL OR expires_at > NOW())',
+    `type NOT IN (
+       SELECT type FROM notification_preferences
+       WHERE tenant_id = $1 AND channel = 'IN_APP' AND enabled = false
+     )`,
+  ];
   const values = [tenantId];
   let idx = 2;
 
@@ -173,6 +186,23 @@ async function updateAggregated(id, { title, message, metadata }) {
 }
 
 /**
+ * Update a notification's email delivery status (migration 078). Only
+ * meaningful for types that support the EMAIL channel (notification-catalog.js)
+ * — set to PENDING by dispatchNotification() the moment the NOTIFICATION_DISPATCH
+ * effect is enqueued, then SENT/FAILED/SKIPPED by that effect's handler.
+ *
+ * @param {string} id
+ * @param {string} emailStatus - EmailStatus value (PENDING/SENT/FAILED/SKIPPED)
+ */
+async function updateEmailStatus(id, emailStatus) {
+  const { rows } = await db.query(
+    `UPDATE notifications SET email_status = $2 WHERE id = $1 RETURNING *`,
+    [id, emailStatus]
+  );
+  return rows[0] || null;
+}
+
+/**
  * Auto-dismiss all unread cert alerts for an issuer.
  * Called by the cert-check job when a cert is renewed and has > 30 days remaining.
  */
@@ -196,6 +226,7 @@ module.exports = {
   findPendingDocumentAuthorized,
   update,
   updateAggregated,
+  updateEmailStatus,
   markAsRead,
   markAllCertAlertsAsRead,
 };

@@ -51,6 +51,20 @@ async function findAllActive() {
   return rows;
 }
 
+/**
+ * Return all tenants with a specific status — narrower than findAllActive()
+ * (which returns everything non-SUSPENDED, i.e. ACTIVE + PENDING_VERIFICATION).
+ * Used by the price-change publish flow to notify exactly the tenants whose
+ * status is ACTIVE, not every non-suspended one.
+ */
+async function findAllByStatus(status) {
+  const { rows } = await db.query(
+    `SELECT * FROM tenants WHERE status = $1 ORDER BY id`,
+    [status]
+  );
+  return rows;
+}
+
 async function activate(id) {
   const { rows } = await db.query(
     `UPDATE tenants
@@ -179,4 +193,4 @@ async function countIssuePointsByBranch(tenantId, branchCode) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, findAllActive, activate, demoteToPendingVerification, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, updateAgreementAcceptance, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, findAllActive, findAllByStatus, activate, demoteToPendingVerification, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, updateAgreementAcceptance, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };

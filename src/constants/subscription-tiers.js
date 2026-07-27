@@ -5,23 +5,27 @@
 // in NEXT_STEPS.md's "Additional Document Types" item ships, or new types will be
 // silently unreachable on Growth/Business.
 //
-// priceMonthlyUsd / priceYearlyUsd are IVA-inclusive all-in amounts — the exact
-// figure a tenant transfers via SPI and what appears as the invoice total. The
-// taxable base (base imponible) is derived at payment-creation time as
-// total / (1 + IVA_RATE), stored in payments.amount alongside payments.iva_amount
-// and payments.total_amount for a full per-payment audit trail.
-//
-// priceYearlyUsd = priceMonthlyUsd × 10 (2 months free — standard SaaS yearly
-// discount). overagePerDocumentUsd is not enforced yet (no payment gateway —
-// see NEXT_STEPS.md's "Payment Gateway Integration" item).
+// priceMonthlyUsd/priceYearlyUsd used to live here as plain numbers — they
+// moved to the tier_prices table (migration 076) so a price change can be
+// historical (a renewal due before a new price's effective_at still bills
+// the old one) with a 30-day notice, per docs/agreements/terms-of-service.md.
+// See src/services/pricing.service.js (getCurrentPrice/getPriceAsOf) for the
+// resolver — nothing in this file's TIERS object carries a price anymore.
+// overagePerDocumentUsd stays here (not yet enforced — no payment gateway,
+// see NEXT_STEPS.md's "Payment Gateway Integration" item) since overage
+// billing hasn't been built and so has no history/notice requirement yet.
 
 const config = require('../config');
 
-// Sourced from config (IVA_RATE env var, defaults to the current 5% rate) —
+// Sourced from config (IVA_RATE env var, defaults to the current 15% rate) —
 // re-exported here under its existing name so every consumer that already
 // does `const { TIERS, IVA_RATE } = require('.../subscription-tiers')`
 // keeps working unchanged. See src/config/index.js for why this is
-// env-driven rather than a hardcoded literal.
+// env-driven rather than a hardcoded literal. Deliberately NOT part of the
+// tier_prices history/notice mechanism — it's a government-mandated tax
+// rate, not a Comprobify pricing decision, and every payment already
+// snapshots the rate in effect at creation (payments.iva_rate) for audit
+// purposes.
 const IVA_RATE = config.ivaRate;
 
 const TIERS = {
@@ -33,8 +37,6 @@ const TIERS = {
     writeRateLimit:          10,
     readRateLimit:           60,
     allowedDocumentTypes:    ['01'],
-    priceMonthlyUsd:         0,
-    priceYearlyUsd:          0,
     overagePerDocumentUsd:   null,
   },
   STARTER: {
@@ -45,8 +47,6 @@ const TIERS = {
     writeRateLimit:          60,
     readRateLimit:           300,
     allowedDocumentTypes:    ['01'],
-    priceMonthlyUsd:         20,
-    priceYearlyUsd:          200,
     overagePerDocumentUsd:   0.30,
   },
   GROWTH: {
@@ -57,8 +57,6 @@ const TIERS = {
     writeRateLimit:          120,
     readRateLimit:           600,
     allowedDocumentTypes:    ['01', '04'],
-    priceMonthlyUsd:         90,
-    priceYearlyUsd:          900,
     overagePerDocumentUsd:   0.15,
   },
   BUSINESS: {
@@ -69,8 +67,6 @@ const TIERS = {
     writeRateLimit:          300,
     readRateLimit:           1500,
     allowedDocumentTypes:    ['01', '04'],
-    priceMonthlyUsd:         230,
-    priceYearlyUsd:          2300,
     overagePerDocumentUsd:   0.08,
   },
 };

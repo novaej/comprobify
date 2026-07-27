@@ -6,8 +6,13 @@ const db = require('../config/database');
  * that existing row untouched. Used by SRI_AUTHORIZE so a client repeatedly
  * calling GET /:key/authorize never creates duplicate open rows for the same
  * document (see idx_pending_effects_dedup).
+ *
+ * notificationType is a denormalized snapshot of notifications.type, only
+ * ever passed for NOTIFICATION_DISPATCH rows (see notification.service.js's
+ * dispatchNotification) — informational only, never read by the handler
+ * itself. See migration 080.
  */
-async function create(effectType, tenantId, payload, dedupKey = null) {
+async function create(effectType, tenantId, payload, dedupKey = null, notificationType = null) {
   if (dedupKey) {
     // The ON CONFLICT predicate below must match idx_pending_effects_dedup's
     // index predicate EXACTLY (including dedup_key IS NOT NULL) — Postgres's
@@ -17,19 +22,19 @@ async function create(effectType, tenantId, payload, dedupKey = null) {
     // exclusion constraint matching the ON CONFLICT specification") even
     // though the index exists and would otherwise apply.
     const { rows } = await db.query(
-      `INSERT INTO pending_effects (effect_type, tenant_id, payload, dedup_key)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO pending_effects (effect_type, tenant_id, payload, dedup_key, notification_type)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (dedup_key) WHERE dedup_key IS NOT NULL AND status IN ('PENDING', 'DISPATCHED')
        DO UPDATE SET attempt_count = pending_effects.attempt_count
        RETURNING *`,
-      [effectType, tenantId, payload, dedupKey]
+      [effectType, tenantId, payload, dedupKey, notificationType]
     );
     return rows[0];
   }
 
   const { rows } = await db.query(
-    `INSERT INTO pending_effects (effect_type, tenant_id, payload) VALUES ($1, $2, $3) RETURNING *`,
-    [effectType, tenantId, payload]
+    `INSERT INTO pending_effects (effect_type, tenant_id, payload, notification_type) VALUES ($1, $2, $3, $4) RETURNING *`,
+    [effectType, tenantId, payload, notificationType]
   );
   return rows[0];
 }

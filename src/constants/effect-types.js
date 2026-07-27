@@ -12,6 +12,19 @@
  * Adding a new type requires updating the chk_pending_effects_type CHECK
  * constraint in a migration (mirrors CLAUDE.md Common Mistake #12/#19) and
  * registering a handler in src/effects/index.js.
+ *
+ * NOTIFICATION_DISPATCH (ADR-024, NEXT_STEPS.md item 13) is a single
+ * channel-neutral effect replacing what used to be 8 separate
+ * type-specific `*_NOTIFICATION`/`*_EMAIL` types (DOCUMENT_AUTHORIZED_NOTIFICATION,
+ * PAYMENT_REVIEWED_NOTIFICATION/_EMAIL, SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION/_EMAIL,
+ * SUBSCRIPTION_EXPIRED_NOTIFICATION/_EMAIL, PRICE_CHANGE_EMAIL — migration 078
+ * drops all 8 from the DB CHECK constraint too, safe since no production data
+ * existed yet). Every notification's in-app row is now created synchronously
+ * by notificationService (no queued "_NOTIFICATION" effect needed at all);
+ * NOTIFICATION_DISPATCH is enqueued only when a type supports the EMAIL
+ * channel, and is named for what it's for — whatever async channel work a
+ * notification still needs — not for a specific channel, so a future
+ * channel doesn't require inventing another effect type.
  */
 // SUBSCRIPTION_ACTIVATE_IF_LINKED / _APPLY_TIER_CHANGE_IF_LINKED /
 // _APPLY_RENEWAL_IF_LINKED deliberately do NOT exist here. They were
@@ -24,20 +37,14 @@
 // POST /v1/admin/jobs/subscriptions, not a RabbitMQ message fired for every
 // tenant's every invoice. See ADR-022's addendum.
 const EffectTypes = Object.freeze({
-  SRI_SEND:                              'SRI_SEND',
-  SRI_AUTHORIZE:                         'SRI_AUTHORIZE',
-  DOCUMENT_AUTHORIZED_NOTIFICATION:      'DOCUMENT_AUTHORIZED_NOTIFICATION',
-  INVOICE_AUTHORIZED_EMAIL:              'INVOICE_AUTHORIZED_EMAIL',
-  TENANT_AGREEMENT_GENERATE:             'TENANT_AGREEMENT_GENERATE',
-  VERIFICATION_EMAIL_SEND:               'VERIFICATION_EMAIL_SEND',
-  WEBHOOK_FANOUT:                        'WEBHOOK_FANOUT',
-  PAYMENT_REVIEWED_NOTIFICATION:         'PAYMENT_REVIEWED_NOTIFICATION',
-  PAYMENT_REVIEWED_EMAIL:                'PAYMENT_REVIEWED_EMAIL',
-  PAYMENT_PROOF_SUBMITTED_EMAIL:         'PAYMENT_PROOF_SUBMITTED_EMAIL',
-  SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION: 'SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION',
-  SUBSCRIPTION_RENEWAL_DUE_EMAIL:        'SUBSCRIPTION_RENEWAL_DUE_EMAIL',
-  SUBSCRIPTION_EXPIRED_NOTIFICATION:     'SUBSCRIPTION_EXPIRED_NOTIFICATION',
-  SUBSCRIPTION_EXPIRED_EMAIL:            'SUBSCRIPTION_EXPIRED_EMAIL',
+  SRI_SEND:                      'SRI_SEND',
+  SRI_AUTHORIZE:                 'SRI_AUTHORIZE',
+  INVOICE_AUTHORIZED_EMAIL:      'INVOICE_AUTHORIZED_EMAIL',
+  TENANT_AGREEMENT_GENERATE:     'TENANT_AGREEMENT_GENERATE',
+  VERIFICATION_EMAIL_SEND:       'VERIFICATION_EMAIL_SEND',
+  WEBHOOK_FANOUT:                'WEBHOOK_FANOUT',
+  PAYMENT_PROOF_SUBMITTED_EMAIL: 'PAYMENT_PROOF_SUBMITTED_EMAIL',
+  NOTIFICATION_DISPATCH:         'NOTIFICATION_DISPATCH',
 });
 
 // Routing key each effect_type publishes under — three queues, not one, so a

@@ -3,7 +3,9 @@ node_modules
 .env.*
 docs
 !docs/agreements
+!docs/email-templates
 *.md
 !docs/agreements/*.md
+!docs/email-templates/*.txt
 .git
 .gitignore

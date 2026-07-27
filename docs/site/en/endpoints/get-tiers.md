@@ -35,6 +35,10 @@ None. This is a public, unauthenticated endpoint with no rate limit — it's sta
       "priceYearlyUsdBase": 0,
       "priceYearlyUsdIva": 0,
       "priceYearlyUsd": 0,
+      "upcomingPriceMonthlyUsd": null,
+      "monthlyPriceEffectiveAt": null,
+      "upcomingPriceYearlyUsd": null,
+      "yearlyPriceEffectiveAt": null,
       "overagePerDocumentUsd": null
     },
     {
@@ -53,6 +57,10 @@ None. This is a public, unauthenticated endpoint with no rate limit — it's sta
       "priceYearlyUsdBase": 173.91,
       "priceYearlyUsdIva": 26.09,
       "priceYearlyUsd": 200,
+      "upcomingPriceMonthlyUsd": 25,
+      "monthlyPriceEffectiveAt": "2026-08-24T00:00:00.000Z",
+      "upcomingPriceYearlyUsd": null,
+      "yearlyPriceEffectiveAt": null,
       "overagePerDocumentUsd": 0.30
     }
   ]
@@ -62,5 +70,7 @@ None. This is a public, unauthenticated endpoint with no rate limit — it's sta
 All prices are in USD. `priceMonthlyUsd` and `priceYearlyUsd` are IVA-inclusive all-in amounts — the exact figure a tenant transfers via SPI. `priceMonthlyUsdBase` is the taxable base (base imponible on the SRI invoice); `priceMonthlyUsdIva` is the 15% IVA portion. `ivaRate` is exposed both at the top level and per tier so a pricing page can show the breakdown without hardcoding the tax rate.
 
 `priceYearlyUsd` is the discounted annual price (2 months free vs. paying monthly). `maxBranches`/`maxIssuePointsPerBranch` are `null` for BUSINESS, meaning unlimited. `overagePerDocumentUsd` is `null` for FREE — overage billing isn't enforced anywhere yet (no payment gateway exists), these numbers are reference only.
+
+`upcomingPriceMonthlyUsd`/`monthlyPriceEffectiveAt` and `upcomingPriceYearlyUsd`/`yearlyPriceEffectiveAt` reflect a price change an admin has already published but that hasn't taken effect yet (always at least 30 days' notice, per the Terms of Service) — `null` when nothing is pending for that tier/interval. A renewal whose current period ends before `monthlyPriceEffectiveAt`/`yearlyPriceEffectiveAt` is still billed at the current price (`priceMonthlyUsd`/`priceYearlyUsd`), not the new one.
 
 To actually start a subscription for a tier, see [Promote Tenant to Production](promote-tenant.md) (self-service) or have your provider use the admin API.

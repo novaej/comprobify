@@ -7,6 +7,7 @@ const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const ErrorCodes = require('../constants/error-codes');
 const config = require('../config');
+const { substitute } = require('../utils/template-placeholders');
 
 const markdownRenderer = new MarkdownIt();
 
@@ -133,12 +134,12 @@ async function listCurrent() {
 
 // Replaces {{token}} placeholders with values from a flat or nested object.
 // Unmatched tokens are left as-is — a missing value is visibly obvious rather
-// than silently disappearing from a legal document.
+// than silently disappearing from a legal document. Delegates to the shared
+// implementation in src/utils/template-placeholders.js (also used by
+// notification-email-template.service.js) — kept exported under this name
+// since callers throughout the codebase already import it as such.
 function substitutePlaceholders(markdown, values = {}) {
-  return markdown.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (match, tokenPath) => {
-    const value = tokenPath.split('.').reduce((obj, key) => (obj == null ? undefined : obj[key]), values);
-    return value === undefined ? match : String(value);
-  });
+  return substitute(markdown, values);
 }
 
 // Markdown is the only thing ever stored — HTML is rendered on demand, never

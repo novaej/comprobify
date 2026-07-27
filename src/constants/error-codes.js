@@ -107,6 +107,14 @@ const ErrorCodes = Object.freeze({
   /** rejectionReasonCode is missing or not a recognised value when rejecting a payment */
   INVALID_REJECTION_REASON: 'INVALID_REJECTION_REASON',
 
+  // --- Tier pricing ---
+  /** No tier_prices row found for the requested id, or none published for a tier/interval as of the requested date */
+  PRICE_NOT_FOUND: 'PRICE_NOT_FOUND',
+  /** Attempted to edit or publish a tier price that is not in DRAFT status */
+  PRICE_NOT_DRAFT: 'PRICE_NOT_DRAFT',
+  /** Requested noticeDays is below the configured minimum (PRICE_CHANGE_MIN_NOTICE_DAYS) */
+  PRICE_NOTICE_TOO_SHORT: 'PRICE_NOTICE_TOO_SHORT',
+
   // --- Webhook endpoints ---
   /** Tenant has reached the maximum number of webhook endpoints for their plan */
   WEBHOOK_ENDPOINT_LIMIT_REACHED: 'WEBHOOK_ENDPOINT_LIMIT_REACHED',
@@ -120,6 +128,12 @@ const ErrorCodes = Object.freeze({
   VERSION_MISMATCH: 'VERSION_MISMATCH',
   /** All legal documents must be ACCEPTED before promoting to production */
   AGREEMENT_ACCEPTANCE_REQUIRED: 'AGREEMENT_ACCEPTANCE_REQUIRED',
+
+  // --- Notification email templates ---
+  /** No published (current) email template found for a notification_type/language pair */
+  NOTIFICATION_TEMPLATE_NOT_FOUND: 'NOTIFICATION_TEMPLATE_NOT_FOUND',
+  /** docs/email-templates/*.txt (or admin-submitted rawContent) is missing SUBJECT:/---HTML---/---TEXT--- sections */
+  NOTIFICATION_TEMPLATE_MALFORMED: 'NOTIFICATION_TEMPLATE_MALFORMED',
 
   // --- File upload ---
   /** Multipart file upload is malformed or contains an unexpected field */

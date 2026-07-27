@@ -1,15 +1,21 @@
 jest.mock('../../../src/models/tenant.model');
-jest.mock('../../../src/models/notification-preference.model');
 jest.mock('../../../src/services/webhook-delivery.service');
 jest.mock('../../../src/services/notification.service');
+jest.mock('../../../src/services/pricing.service');
 
 const tenantModel = require('../../../src/models/tenant.model');
-const notificationPreferenceModel = require('../../../src/models/notification-preference.model');
 const webhookDeliveryService = require('../../../src/services/webhook-delivery.service');
 const notificationService = require('../../../src/services/notification.service');
+const pricingService = require('../../../src/services/pricing.service');
 const notificationSchedulerService = require('../../../src/services/notification-scheduler.service');
 
+const NO_PRICE_CHANGES = { tenantsChecked: 0, notified: 0 };
+
 describe('NotificationSchedulerService', () => {
+  beforeEach(() => {
+    pricingService.reconcilePendingPriceChangeNotifications.mockResolvedValue(NO_PRICE_CHANGES);
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -23,18 +29,16 @@ describe('NotificationSchedulerService', () => {
 
       const result = await notificationSchedulerService.runAll();
 
-      expect(notificationPreferenceModel.findByTenantId).not.toHaveBeenCalled();
       expect(notificationService.runCertChecksForTenant).not.toHaveBeenCalled();
       expect(result).toEqual({
         tenantsChecked: 0,
         retries: { attempted: 0, succeeded: 0, failed: 0, exhausted: 0 },
+        priceChangeReconciliation: NO_PRICE_CHANGES,
       });
     });
 
-    test('runs cert checks for every active tenant using their notification preferences', async () => {
+    test('runs cert checks for every active tenant', async () => {
       tenantModel.findAllActive.mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000002' }]);
-      notificationPreferenceModel.findByTenantId.mockImplementation((tenantId) =>
-        Promise.resolve({ CERT_EXPIRING: tenantId === '00000000-0000-0000-0000-000000000001' }));
       notificationService.runCertChecksForTenant.mockResolvedValue(undefined);
       webhookDeliveryService.processDueRetries.mockResolvedValue({
         attempted: 3, succeeded: 2, failed: 1, exhausted: 0,
@@ -42,20 +46,18 @@ describe('NotificationSchedulerService', () => {
 
       const result = await notificationSchedulerService.runAll();
 
-      expect(notificationPreferenceModel.findByTenantId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
-      expect(notificationPreferenceModel.findByTenantId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002');
-      expect(notificationService.runCertChecksForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', { CERT_EXPIRING: true });
-      expect(notificationService.runCertChecksForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', { CERT_EXPIRING: false });
+      expect(notificationService.runCertChecksForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
+      expect(notificationService.runCertChecksForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002');
       expect(result).toEqual({
         tenantsChecked: 2,
         retries: { attempted: 3, succeeded: 2, failed: 1, exhausted: 0 },
+        priceChangeReconciliation: NO_PRICE_CHANGES,
       });
     });
 
     test('continues past a tenant whose cert check throws, without counting it as checked', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       tenantModel.findAllActive.mockResolvedValue([{ id: '00000000-0000-0000-0000-000000000001' }, { id: '00000000-0000-0000-0000-000000000002' }]);
-      notificationPreferenceModel.findByTenantId.mockResolvedValue({});
       notificationService.runCertChecksForTenant.mockImplementation((tenantId) => {
         if (tenantId === '00000000-0000-0000-0000-000000000001') return Promise.reject(new Error('boom'));
         return Promise.resolve(undefined);
@@ -85,6 +87,20 @@ describe('NotificationSchedulerService', () => {
 
       expect(webhookDeliveryService.processDueRetries).toHaveBeenCalledWith();
       expect(result.retries).toBe(retries);
+    });
+
+    test('propagates the price-change reconciliation summary from pricingService', async () => {
+      tenantModel.findAllActive.mockResolvedValue([]);
+      webhookDeliveryService.processDueRetries.mockResolvedValue({
+        attempted: 0, succeeded: 0, failed: 0, exhausted: 0,
+      });
+      const reconciliation = { tenantsChecked: 12, notified: 3 };
+      pricingService.reconcilePendingPriceChangeNotifications.mockResolvedValue(reconciliation);
+
+      const result = await notificationSchedulerService.runAll();
+
+      expect(pricingService.reconcilePendingPriceChangeNotifications).toHaveBeenCalledWith();
+      expect(result.priceChangeReconciliation).toBe(reconciliation);
     });
   });
 });

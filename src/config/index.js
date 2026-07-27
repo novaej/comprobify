@@ -104,6 +104,14 @@ const config = {
   // rate in effect as of this writing (15%); override with IVA_RATE if it
   // changes (e.g. IVA_RATE=0.05 for 5%).
   ivaRate: process.env.IVA_RATE !== undefined ? parseFloat(process.env.IVA_RATE) : 0.15,
+
+  // Floor for how much notice a published tier price change must give before
+  // it takes effect (docs/agreements/terms-of-service.md's price-change
+  // clause commits to "at least 30 days"). pricingService.publishPrice()
+  // rejects an explicit noticeDays below this; omitting it defaults to it.
+  priceChangeMinNoticeDays: process.env.PRICE_CHANGE_MIN_NOTICE_DAYS !== undefined
+    ? parseInt(process.env.PRICE_CHANGE_MIN_NOTICE_DAYS, 10)
+    : 30,
 };
 
 module.exports = config;

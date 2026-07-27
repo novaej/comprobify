@@ -6,6 +6,8 @@ const tenantModel = require('../models/tenant.model');
 const tenantEventModel = require('../models/tenant-event.model');
 const tenantQuotaService = require('./tenant-quota.service');
 const pendingEffectService = require('./pending-effect.service');
+const pricingService = require('./pricing.service');
+const notificationService = require('./notification.service');
 const { EffectTypes } = require('../constants/effect-types');
 const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
@@ -91,9 +93,8 @@ async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
   }
 
   const subscription = await subscriptionModel.create({ tenantId: tenant.id, tier, billingInterval });
-  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(
-    billingInterval === 'YEARLY' ? TIERS[tier].priceYearlyUsd : TIERS[tier].priceMonthlyUsd
-  );
+  const priceUsd = await pricingService.getCurrentPrice(tier, billingInterval);
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(priceUsd);
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
     amount: baseAmount,
@@ -203,8 +204,10 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     );
   }
 
-  const isTierUpgrade = TIERS[tier].priceMonthlyUsd > TIERS[subscription.tier].priceMonthlyUsd;
-  const isTierDowngrade = TIERS[tier].priceMonthlyUsd < TIERS[subscription.tier].priceMonthlyUsd;
+  const targetMonthlyPrice = await pricingService.getCurrentPrice(tier, 'MONTHLY');
+  const currentMonthlyPrice = await pricingService.getCurrentPrice(subscription.tier, 'MONTHLY');
+  const isTierUpgrade = targetMonthlyPrice > currentMonthlyPrice;
+  const isTierDowngrade = targetMonthlyPrice < currentMonthlyPrice;
 
   // Sandbox subscriptions have no meaningful current_period_end — it's fully
   // discarded the moment the tenant promotes (resetPeriodOnPromotion resets
@@ -231,13 +234,16 @@ async function requestTierChange(tenantId, tier, billingInterval) {
   // Same-interval upgrade: immediate, prorated against the remaining value
   // of the current period — unchanged from the tier-only design.
   if (isTierUpgrade && !intervalChanged) {
-    const priceField = subscription.billing_interval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
+    const billingInterval = subscription.billing_interval;
     const periodStart = new Date(subscription.current_period_start).getTime();
     const periodEnd = new Date(subscription.current_period_end).getTime();
     const totalMs = periodEnd - periodStart;
     const remainingMs = Math.min(Math.max(periodEnd - Date.now(), 0), totalMs);
     const remainingFraction = totalMs > 0 ? remainingMs / totalMs : 0;
-    const proratedTotal = Math.round((TIERS[tier][priceField] - TIERS[subscription.tier][priceField]) * remainingFraction * 100) / 100;
+    // Upgrade takes effect immediately, so both prices resolve as of now.
+    const targetPrice = await pricingService.getCurrentPrice(tier, billingInterval);
+    const currentPrice = await pricingService.getCurrentPrice(subscription.tier, billingInterval);
+    const proratedTotal = Math.round((targetPrice - currentPrice) * remainingFraction * 100) / 100;
 
     // With ~no time left in the current period, the prorated amount can round
     // to $0 — asking for proof of a $0 transfer isn't something a tenant can
@@ -281,9 +287,10 @@ async function requestTierChange(tenantId, tier, billingInterval) {
   // current_period_end, paid in full at the new tier+interval's sticker
   // price. No cross-interval proration: the current period is already paid
   // for under the old cadence, and the new cadence starts its own fresh,
-  // fully-paid period.
-  const priceField = targetInterval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
-  const fullPrice = TIERS[tier][priceField];
+  // fully-paid period. Resolved as of current_period_end (when the new
+  // cadence's period actually starts), not "now" — this is what makes a
+  // pending price change's 30-day protection apply here too.
+  const fullPrice = await pricingService.getPriceAsOf(tier, targetInterval, subscription.current_period_end);
   const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
@@ -337,8 +344,8 @@ async function requestSandboxTierChange(tenant, subscription, tier, targetInterv
     return { subscription: updated, payment: null, amount: 0 };
   }
 
-  const priceField = targetInterval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
-  const fullPrice = TIERS[tier][priceField];
+  // Sandbox changes always apply immediately (see comment above), so "now" is correct.
+  const fullPrice = await pricingService.getCurrentPrice(tier, targetInterval);
   const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
@@ -568,10 +575,9 @@ async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   // Tell the tenant the outcome — there's no other notification for this,
   // see GET /v1/subscriptions/me docs. Covers every payment purpose
   // (INITIAL, TIER_CHANGE, RENEWAL) uniformly; only the wording adapts.
-  // Durably enqueued (ADR-022).
-  const reviewedPayload = { paymentId: updatedPayment.id, subscriptionId: updatedSubscription.id, decision };
-  await queueEffect(EffectTypes.PAYMENT_REVIEWED_NOTIFICATION, subscription.tenant_id, reviewedPayload);
-  await queueEffect(EffectTypes.PAYMENT_REVIEWED_EMAIL, subscription.tenant_id, reviewedPayload);
+  // createPaymentReviewed() creates the in-app row synchronously and
+  // durably enqueues the NOTIFICATION_DISPATCH effect for email (ADR-024).
+  await notificationService.createPaymentReviewed(updatedPayment, updatedSubscription, decision);
 
   return { payment: updatedPayment, subscription: updatedSubscription };
 }
@@ -988,8 +994,12 @@ async function processDueRenewals() {
 }
 
 async function createRenewalReminder(subscription) {
-  const priceField = subscription.billing_interval === 'YEARLY' ? 'priceYearlyUsd' : 'priceMonthlyUsd';
-  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(TIERS[subscription.tier][priceField]);
+  // Resolved as of current_period_end (when the renewal's period actually
+  // starts), not "now" — this is the other half of the 30-day price-change
+  // protection: a renewal due before a new price's effective_at still bills
+  // the old price automatically.
+  const renewalPrice = await pricingService.getPriceAsOf(subscription.tier, subscription.billing_interval, subscription.current_period_end);
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(renewalPrice);
 
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
@@ -1007,9 +1017,7 @@ async function createRenewalReminder(subscription) {
     currentPeriodEnd: subscription.current_period_end,
   });
 
-  const renewalDuePayload = { subscriptionId: subscription.id, paymentId: payment.id };
-  await queueEffect(EffectTypes.SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION, subscription.tenant_id, renewalDuePayload);
-  await queueEffect(EffectTypes.SUBSCRIPTION_RENEWAL_DUE_EMAIL, subscription.tenant_id, renewalDuePayload);
+  await notificationService.createSubscriptionRenewalDue(subscription, payment);
 }
 
 async function expireSubscription(subscription) {
@@ -1022,9 +1030,7 @@ async function expireSubscription(subscription) {
     previousTier: subscription.tier,
   });
 
-  const expiredPayload = { subscriptionId: subscription.id };
-  await queueEffect(EffectTypes.SUBSCRIPTION_EXPIRED_NOTIFICATION, subscription.tenant_id, expiredPayload);
-  await queueEffect(EffectTypes.SUBSCRIPTION_EXPIRED_EMAIL, subscription.tenant_id, expiredPayload);
+  await notificationService.createSubscriptionExpired(updated);
 
   return updated;
 }

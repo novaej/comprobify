@@ -19,15 +19,16 @@ const tenantEventModel = require('../models/tenant-event.model');
 const paymentModel = require('../models/payment.model');
 const subscriptionModel = require('../models/subscription.model');
 const notificationModel = require('../models/notification.model');
+const notificationPreferenceModel = require('../models/notification-preference.model');
 const documentTransmissionService = require('../services/document-transmission.service');
-const notificationService = require('../services/notification.service');
-const subscriptionService = require('../services/subscription.service');
 const emailService = require('../services/email.service');
+const notificationEmailTemplateService = require('../services/notification-email-template.service');
 const webhookDeliveryService = require('../services/webhook-delivery.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
 const { EffectTypes } = require('../constants/effect-types');
 const EmailStatus = require('../constants/email-status');
 const EventType = require('../constants/event-type');
+const NotificationChannel = require('../constants/notification-channel');
 
 async function resolveIssuer(issuerId, sandbox) {
   const issuer = await issuerModel.findById(issuerId);
@@ -67,10 +68,10 @@ const handlers = {
 
   // --- Post-authorization side effects ---
 
-  [EffectTypes.DOCUMENT_AUTHORIZED_NOTIFICATION]: async (payload) => {
-    const { document, issuer } = await resolveDocument(payload);
-    await notificationService.createDocumentAuthorized(document, issuer);
-  },
+  // No DOCUMENT_AUTHORIZED_NOTIFICATION here — that notification is created
+  // synchronously by document-transmission.service.js's checkAuthorization
+  // now (ADR-024). INVOICE_AUTHORIZED_EMAIL below is unrelated to it — it
+  // emails the document's BUYER, not a tenant notification channel.
 
   // No SUBSCRIPTION_ACTIVATE_IF_LINKED / _APPLY_TIER_CHANGE_IF_LINKED /
   // _APPLY_RENEWAL_IF_LINKED here — see effect-types.js's comment. linkInvoice()
@@ -133,17 +134,7 @@ const handlers = {
     await webhookDeliveryService.fanOut(notification);
   },
 
-  // --- Subscription / payment lifecycle ---
-
-  [EffectTypes.PAYMENT_REVIEWED_NOTIFICATION]: async (payload) => {
-    const { payment, subscription } = await resolvePaymentAndSubscription(payload);
-    await notificationService.createPaymentReviewed(payment, subscription, payload.decision);
-  },
-
-  [EffectTypes.PAYMENT_REVIEWED_EMAIL]: async (payload) => {
-    const { payment, subscription } = await resolvePaymentAndSubscription(payload);
-    await emailService.sendPaymentReviewed(payment, subscription, payload.decision);
-  },
+  // --- Payment proof (operator-facing, not a tenant notification channel) ---
 
   [EffectTypes.PAYMENT_PROOF_SUBMITTED_EMAIL]: async (payload) => {
     const { payment, subscription } = await resolvePaymentAndSubscription(payload);
@@ -151,24 +142,39 @@ const handlers = {
     await emailService.sendPaymentProofSubmitted(payment, subscription, tenant, payload.referenceNumber);
   },
 
-  [EffectTypes.SUBSCRIPTION_RENEWAL_DUE_NOTIFICATION]: async (payload) => {
-    const { payment, subscription } = await resolvePaymentAndSubscription(payload);
-    await notificationService.createSubscriptionRenewalDue(subscription, payment);
-  },
+  // --- NOTIFICATION_DISPATCH (ADR-024, NEXT_STEPS.md item 13) ---
+  //
+  // The one channel-neutral effect handling whatever async dispatch a
+  // notification still needs, for every type notificationService's
+  // dispatchNotification() enqueues it for. Today that's always EMAIL — the
+  // in-app row already exists (created synchronously before this was
+  // enqueued), and webhook fan-out is its own separate effect.
+  //
+  // Rendering (which template, which language, which values pulled from
+  // notification.metadata) is entirely notificationEmailTemplateService's
+  // job (Phase C, DB-backed versioned templates — see docs/email-templates/
+  // *.txt) — this handler only gates on the tenant's EMAIL preference,
+  // resolves the tenant for its .email/.preferred_language, and dispatches.
+  [EffectTypes.NOTIFICATION_DISPATCH]: async (payload) => {
+    const notification = await notificationModel.findById(payload.notificationId);
+    if (!notification) return;
 
-  [EffectTypes.SUBSCRIPTION_RENEWAL_DUE_EMAIL]: async (payload) => {
-    const { payment, subscription } = await resolvePaymentAndSubscription(payload);
-    await emailService.sendSubscriptionRenewalDue(subscription, payment);
-  },
+    const enabled = await notificationPreferenceModel.isEnabled(notification.tenant_id, notification.type, NotificationChannel.EMAIL);
+    if (!enabled) {
+      await notificationModel.updateEmailStatus(notification.id, EmailStatus.SKIPPED);
+      return;
+    }
 
-  [EffectTypes.SUBSCRIPTION_EXPIRED_NOTIFICATION]: async (payload) => {
-    const subscription = await subscriptionModel.findById(payload.subscriptionId);
-    await notificationService.createSubscriptionExpired(subscription);
-  },
-
-  [EffectTypes.SUBSCRIPTION_EXPIRED_EMAIL]: async (payload) => {
-    const subscription = await subscriptionModel.findById(payload.subscriptionId);
-    await emailService.sendSubscriptionExpired(subscription);
+    try {
+      const tenant = await tenantModel.findById(notification.tenant_id);
+      const language = tenant.preferred_language || 'es';
+      const rendered = await notificationEmailTemplateService.render(notification.type, language, notification);
+      await emailService.sendNotificationEmail(tenant, rendered);
+      await notificationModel.updateEmailStatus(notification.id, EmailStatus.SENT);
+    } catch (err) {
+      await notificationModel.updateEmailStatus(notification.id, EmailStatus.FAILED);
+      throw err;
+    }
   },
 };
 

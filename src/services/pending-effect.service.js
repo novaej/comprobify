@@ -1,7 +1,7 @@
 // Producer/consumer mechanics for the pending_effects outbox (ADR-022,
 // CLAUDE.md "Async worker: pending_effects outbox"). Generalizes Phase 1's
 // per-document dispatch tracking (documents.send_dispatch_attempted_at/
-// authorize_dispatch_attempted_at) to all 17 effect types, SRI send/authorize
+// authorize_dispatch_attempted_at) to all 8 effect types, SRI send/authorize
 // included.
 //
 // Every producer call site follows the same two-step shape:
@@ -28,8 +28,8 @@ function isBenignStateError(err) {
   return err instanceof AppError && err.statusCode === 400;
 }
 
-async function enqueue(effectType, tenantId, payload, dedupKey = null) {
-  return pendingEffectModel.create(effectType, tenantId, payload, dedupKey);
+async function enqueue(effectType, tenantId, payload, dedupKey = null, notificationType = null) {
+  return pendingEffectModel.create(effectType, tenantId, payload, dedupKey, notificationType);
 }
 
 async function dispatch(effectRow) {
