@@ -117,7 +117,21 @@ DELETE FROM payments WHERE subscription_id = <SUB_ID> AND purpose = 'RENEWAL' AN
 ```
 After running: a new `payments` row (`purpose = 'RENEWAL'`) appears, plus a `RENEWAL_DUE` tenant event.
 
-### 2c. Expiry — non-payment (not suspension!)
+### 2b1. Past-due warning (2 days before the grace cutoff, ADR-025)
+```sql
+UPDATE subscriptions
+SET pending_tier = NULL, current_period_end = NOW() - INTERVAL '5 days'  -- SUSPENSION_WARNING_DAYS
+WHERE id = <SUB_ID> AND status = 'ACTIVE';
+```
+Won't re-fire within the same cycle — dedup checks `notifications` directly (`type = 'SUBSCRIPTION_PAST_DUE_WARNING'`, `created_at >= current_period_end`), no separate column to clear:
+```sql
+SELECT type, severity, metadata FROM notifications
+WHERE tenant_id = <TENANT_ID> AND type = 'SUBSCRIPTION_PAST_DUE_WARNING'
+ORDER BY created_at DESC LIMIT 1;
+```
+Expect `metadata.suspendsAt` = `current_period_end + 7 days` (`RENEWAL_GRACE_DAYS`). The email only sends if `SUBSCRIPTION_PAST_DUE_WARNING` has a published template — publish it first if you haven't already (`notificationEmailTemplateService.publish('SUBSCRIPTION_PAST_DUE_WARNING', 'es', '1.0')`), otherwise `NOTIFICATION_DISPATCH` fails with `NOTIFICATION_TEMPLATE_NOT_FOUND` (retryable, not silently dropped).
+
+### 2c. Expiry — non-payment, tenant flips to PAST_DUE (ADR-025)
 ```sql
 UPDATE subscriptions
 SET current_period_end = NOW() - INTERVAL '8 days'  -- past the 7-day grace
@@ -126,10 +140,21 @@ WHERE id = <SUB_ID> AND status = 'ACTIVE';
 After running:
 ```sql
 SELECT status FROM subscriptions WHERE id = <SUB_ID>;                  -- EXPIRED
-SELECT status, subscription_tier FROM tenants WHERE id = <TENANT_ID>;  -- status still ACTIVE, tier FREE
+SELECT status, subscription_tier FROM tenants WHERE id = <TENANT_ID>;  -- status PAST_DUE, tier FREE
 SELECT document_quota FROM tenant_quotas WHERE tenant_id = <TENANT_ID> AND is_current = true; -- already FREE's cap
+SELECT event_type, detail FROM tenant_events WHERE tenant_id = <TENANT_ID> ORDER BY created_at DESC LIMIT 1;
+-- STATUS_CHANGED, detail: {"from":"ACTIVE","to":"PAST_DUE","reason":"unpaid_renewal"}
 ```
-**Important:** `tenants.status` never changes here. A lapsed subscription only downgrades the tier automatically (`expireSubscription()` → `setCap`) — it does **not** set `SUSPENDED`. `SUSPENDED` is a separate, admin-only lever (`PATCH /v1/admin/tenants/:id/status`) unrelated to billing. A tenant whose subscription expired can call `POST /v1/subscriptions` again immediately with no admin involvement — `findActiveOrPendingByTenantId` only blocks a new subscription while an existing one is still in a non-terminal status, and `EXPIRED`/`CANCELLED` don't count.
+**Important:** `expireSubscription()` sets `tenants.status = 'PAST_DUE'` — but only if the tenant isn't already `SUSPENDED` or `PAST_DUE` (idempotent, won't overwrite an admin suspension or re-flag on a second lapse). `PAST_DUE` is distinct from `SUSPENDED` (see ADR-025 and CLAUDE.md's "Suspension" section): it's automated, not admin-lifted, and **self-resolving** — `require-past-due.js` blocks the same broad set of writes `require-not-suspended.js` does, except `POST /v1/subscriptions` and `PATCH /v1/payments/:id/proof` are deliberately exempt so the tenant can pay their way back in without contacting support. `findActiveOrPendingByTenantId` only blocks a new subscription while an existing one is still non-terminal, and `EXPIRED`/`CANCELLED` don't count, so `POST /v1/subscriptions` succeeds immediately for a `PAST_DUE` tenant.
+
+### 2c1. Recovery — PAST_DUE tenant pays and flips back to ACTIVE
+Continue the flow from 2c: call `POST /v1/subscriptions` for the same tenant, walk it through proof upload → admin review (`VERIFIED`) → self-billed invoice → `PATCH /v1/admin/subscriptions/:id/link-invoice`. If the linked document is already `AUTHORIZED`, `activateIfLinked()` applies immediately:
+```sql
+SELECT status FROM tenants WHERE id = <TENANT_ID>;  -- back to ACTIVE
+SELECT event_type, detail FROM tenant_events WHERE tenant_id = <TENANT_ID> ORDER BY created_at DESC LIMIT 1;
+-- STATUS_CHANGED, detail: {"from":"PAST_DUE","to":"ACTIVE","reason":"payment_recovered"}
+```
+`activateIfLinked()` also re-runs the price-change reactivation catch-up (`pricingService.notifyPendingPriceChangesForTenant`) at this point, same as every other place a tenant transitions to `ACTIVE` — if a price change published while the tenant was `PAST_DUE`, expect a `PRICE_CHANGE_ANNOUNCED` notification to appear here too if one hadn't already been sent.
 
 ### 2d. Yearly plan — confirm it's unaffected mid-year
 ```sql
@@ -211,9 +236,9 @@ Run the job again immediately after 4a-4c with no further SQL changes — expect
 
 ## 5. Combined scenario: cancel a monthly plan, restart it next "month"
 
-1. Run **2c** above to simulate the lapse — tier drops to FREE, tenant stays `ACTIVE`.
+1. Run **2c** above to simulate the lapse — tier drops to FREE, tenant flips to `PAST_DUE`.
 2. Confirm quota records keep being created regardless — run **3a** any time during the gap; the rollover happens on schedule with whatever cap currently applies (FREE, in this case), completely unaware a subscription ever existed.
-3. To "start again": call `POST /v1/subscriptions` for the same tenant (succeeds — the old subscription is terminal). Walk it through proof upload → admin review (`VERIFIED`) → self-billed invoice → `PATCH /v1/admin/subscriptions/:id/link-invoice`. If the linked document is already `AUTHORIZED`, activation applies immediately — no need to wait for a webhook.
+3. To "start again": follow **2c1** above — `POST /v1/subscriptions` succeeds immediately since the old subscription is terminal and `PAST_DUE` doesn't block that route. Walk it through proof upload → admin review (`VERIFIED`) → self-billed invoice → `PATCH /v1/admin/subscriptions/:id/link-invoice`. If the linked document is already `AUTHORIZED`, activation applies immediately — no need to wait for a webhook — and the tenant flips back to `ACTIVE` in the same step.
 4. Check `tenant_quotas` again — the cap already reflects the new paid tier, same day, independent of whether the quota job has run since.
 
 This is the same asymmetry noted in CLAUDE.md's quota section: billing periods get an explicit "restart the clock now" moment at (re)activation, but quota periods just keep ticking on their own schedule since the tenant was created — harmless here since nothing was consumed during the gap, but worth knowing if you're checking exact period boundaries in a test.
