@@ -16,6 +16,12 @@ services:
     image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Staging's cluster also hosts comprobify-web's database (see
+      # docs/deployment.md) — this value leaves headroom for that consumer
+      # too, not just this process. Re-check against the real cluster's
+      # connection ceiling once provisioned.
+      - DB_POOL_MAX=6
     command: node app.js
     expose:
       - "8080"
@@ -25,6 +31,8 @@ services:
     image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
+    environment:
+      - DB_POOL_MAX=3
     command: node workers/worker.js
     mem_limit: 150m
 
