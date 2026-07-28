@@ -119,15 +119,29 @@ resource "digitalocean_firewall" "this" {
   }
 }
 
-resource "digitalocean_project" "this" {
-  name        = "Comprobify ${title(var.environment)}"
-  description = "Comprobify ${var.environment} infrastructure"
-  purpose     = "Web Application"
-  environment = var.environment == "production" ? "Production" : "Staging"
+# Looked up, not created/owned - the project is a permanent, external grouping that
+# Terraform should never try to create, rename, or destroy. This is a deliberate
+# narrowing of scope: a droplet destroy/recreate cycle (e.g. any user_data/cloud-init
+# edit) already needs digitalocean_project_resources to reassign the *new* droplet's
+# URN into this project regardless (DigitalOcean's droplet-creation API has no
+# project_id argument at all - every droplet always lands in the account's Default
+# project first, and project_resources is the only way to move it anywhere else,
+# confirmed against the provider's own docs). Managing the project resource itself
+# added no capability on top of that and only expanded the failure surface - if this
+# resource's own attributes ever drifted or needed to change, Terraform would try to
+# recreate the *project*, which would orphan whatever else might someday live in it.
+# IMPORTANT: this project already exists in state as a managed `resource` (it was
+# created by an earlier apply, not by hand). Applying this change as-is would make
+# Terraform see the resource block gone from config and DESTROY the real project.
+# Before running apply against this: `terraform state rm module.<env>.digitalocean_project.this`
+# to drop it from state without calling the delete API - the data source above will
+# then just look the already-existing project up fresh by name.
+data "digitalocean_project" "this" {
+  name = "Comprobify ${title(var.environment)}"
 }
 
 resource "digitalocean_project_resources" "this" {
-  project = digitalocean_project.this.id
+  project = data.digitalocean_project.this.id
   resources = [
     digitalocean_droplet.this.urn,
   ]
