@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.2] — 2026-07-28
+
+### Changed
+- **Operational note: staging droplet resized from `s-1vcpu-512mb-10gb` to `s-1vcpu-1gb`, plus a 1G swapfile.** The 512MB tier left ~60MB free after the `api`/`worker` container `mem_limit`s, causing swap pressure and OOM-driven disconnects under load (`write EPIPE`, unresponsive endpoints). Swap is a backstop against transient memory spikes (RIDE PDF generation, `xmllint` subprocess forks) on top of the resize, not a substitute for it. No API-facing behavior changes.
+- **Operational note: the 4 admin cron jobs now log to plain files under `/opt/comprobify/logs`** (rotated weekly via a new `/etc/logrotate.d/comprobify-cron`) instead of `logger`/syslog. Reading the journal requires the `systemd-journal` group or root, and root SSH is fully disabled on the staging droplet by design — plain files are readable by the deploy user without ever needing root. No API-facing behavior changes.
+- **Operational note: Terraform no longer manages the DigitalOcean Project's own lifecycle.** `digitalocean_project` is now a `data` lookup instead of a `resource` — Terraform only ever assigns the current droplet into the (permanent, externally-managed) project via `digitalocean_project_resources`, never creates/renames/destroys the project itself. No API-facing behavior changes.
+
 ## [0.11.1] — 2026-07-28
 
 ### Fixed
