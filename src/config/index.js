@@ -15,8 +15,15 @@ const config = {
     // DigitalOcean managed Postgres) — without it, Node's default trusted
     // root store rejects the cert with SELF_SIGNED_CERT_IN_CHAIN. Providers
     // with a publicly-trusted chain (e.g. Neon) work fine without it.
+    //
+    // Stored as a single line with literal \n sequences instead of real
+    // newlines — a raw multi-line PEM breaks the droplet's .env file (the
+    // deploy workflow's heredoc substitution isn't quoted, so a real newline
+    // mid-certificate produces a line docker compose's env parser can't read
+    // as KEY=value, e.g. a base64 line containing a "+"). Reconstructed into
+    // real newlines here, once, at the boundary.
     ssl: process.env.DB_SSL === 'true'
-      ? { rejectUnauthorized: true, ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : {}) }
+      ? { rejectUnauthorized: true, ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA.replace(/\\n/g, '\n') } : {}) }
       : false,
     // Small managed-Postgres plans (e.g. DigitalOcean's Basic tier) cap total
     // backend connections in the low tens, shared across every process AND
