@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.1] — 2026-07-28
+
 ### Fixed
 - **`DB_SSL_CA` now round-trips through the deployed `.env` file correctly.** The `v0.11.0` staging deploy failed with `docker compose`'s env parser rejecting a line inside the certificate (`unexpected character "+" in variable name`) — a raw multi-line PEM breaks the droplet's `.env` file, since the deploy workflow's heredoc substitution isn't quoted and a real newline mid-certificate produces a line that isn't valid `KEY=value`. `DB_SSL_CA` must now be set as a single line with real newlines replaced by literal `\n`; `src/config/index.js` converts it back to real newlines before passing it to `pg`'s `ssl.ca` option.
 
