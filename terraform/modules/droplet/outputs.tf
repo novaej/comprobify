@@ -15,7 +15,7 @@ output "droplet_id" {
 
 output "project_id" {
   description = "DigitalOcean Project ID this droplet was assigned to"
-  value       = digitalocean_project.this.id
+  value       = data.digitalocean_project.this.id
 }
 
 output "dns_record" {
