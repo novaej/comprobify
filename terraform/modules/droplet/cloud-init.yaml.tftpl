@@ -21,7 +21,12 @@ write_files:
   # commented-out defaults. No sudo is granted to deploy_username anywhere in this
   # file (see AllowUsers below plus the runcmd section) - it can run docker commands
   # via group membership only, so a compromised key never has a path to root over
-  # SSH. Real root access, when actually needed, goes through DO's browser Console.
+  # SSH. DO's browser Console also goes through sshd under the hood (not a true
+  # out-of-band serial console), so PermitRootLogin no blocks it too - there is no
+  # interactive root path on this box at all. If root access is ever genuinely
+  # needed, edit this file to allow it temporarily and force a droplet replacement
+  # (terraform apply -replace=module.<env>.digitalocean_droplet.this), then revert
+  # and re-apply once done.
   - path: /etc/ssh/sshd_config.d/99-comprobify-hardening.conf
     content: |
       PasswordAuthentication no
@@ -43,24 +48,57 @@ write_files:
   # Render's original hourly cadence - self-hosted cron has no per-invocation cost,
   # so at current (low) document volume there's no reason not to shrink the worst-case
   # recovery window for a stuck dispatch from up to an hour down to up to 5 minutes.
+  # Output goes to a plain file under /opt/comprobify/logs (owned by deploy_username)
+  # instead of `logger`/syslog - reading the journal requires the systemd-journal
+  # group or root, and root SSH is fully disabled on this box (see the hardening
+  # file above), so journal-based logging would be permanently unreadable without
+  # replacing the droplet just to grant a group. Plain files sidestep that entirely.
   - path: /etc/cron.d/comprobify-jobs
     permissions: '0644'
     content: |
-      */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications 2>&1 | logger -t comprobify-cron-notifications
-      0 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions 2>&1 | logger -t comprobify-cron-subscriptions
-      10 6 * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota 2>&1 | logger -t comprobify-cron-quota
-      */5 * * * * ${deploy_username} cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation 2>&1 | logger -t comprobify-cron-queue-reconciliation
+      */5 * * * * ${deploy_username} { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications; } >> /opt/comprobify/logs/cron-notifications.log 2>&1
+      0 6 * * * ${deploy_username} { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions; } >> /opt/comprobify/logs/cron-subscriptions.log 2>&1
+      10 6 * * * ${deploy_username} { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota; } >> /opt/comprobify/logs/cron-quota.log 2>&1
+      */5 * * * * ${deploy_username} { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation; } >> /opt/comprobify/logs/cron-queue-reconciliation.log 2>&1
+  # Rotated weekly / kept 4 weeks so the two 5-minute-cadence jobs can't grow
+  # unbounded. `create` re-creates each file as deploy_username so the next cron
+  # run (plain shell redirection, not a held-open fd) can write to it without root.
+  - path: /etc/logrotate.d/comprobify-cron
+    content: |
+      /opt/comprobify/logs/*.log {
+        weekly
+        rotate 4
+        compress
+        missingok
+        notifempty
+        create 0644 ${deploy_username} ${deploy_username}
+      }
 
 runcmd:
   - mkdir -p /opt/comprobify
   - chown ${deploy_username}:${deploy_username} /opt/comprobify
+  - mkdir -p /opt/comprobify/logs
+  - chown ${deploy_username}:${deploy_username} /opt/comprobify/logs
+  # 1G swap: this box runs tight on RAM (see the api/worker mem_limits in
+  # docker-compose.yml) - swap is a backstop against a transient spike (e.g. a
+  # burst of RIDE PDF generation, or xmllint subprocess forks) triggering an OOM
+  # kill, not a substitute for right-sizing the droplet. Low swappiness keeps the
+  # kernel preferring RAM and only reaching for swap under real pressure, so this
+  # doesn't turn into routine thrashing.
+  - fallocate -l 1G /swapfile
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  - echo 'vm.swappiness=10' >> /etc/sysctl.conf
+  - sysctl -p
   # All package installation happens here in runcmd, not via cloud-init's own
   # package_update/packages directives - those can't be given a lock-wait timeout, so a
   # background apt-daily timer grabbing the dpkg lock right after boot can make that
   # module fail outright. Every apt-get call below uses DPkg::Lock::Timeout instead, so
   # it waits out a lock rather than failing if one is briefly held elsewhere.
   - apt-get -o DPkg::Lock::Timeout=120 update
-  - apt-get -o DPkg::Lock::Timeout=120 install -y ca-certificates curl cron
+  - apt-get -o DPkg::Lock::Timeout=120 install -y ca-certificates curl cron logrotate
   - install -m 0755 -d /etc/apt/keyrings
   # Docker Engine + Compose plugin from Docker's official apt repo - not the
   # get.docker.com convenience script, which Docker itself advises against for
