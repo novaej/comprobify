@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-07-29
+
+### Added
+- **Every generated document now embeds the invoicing provider's RUC in `infoAdicional`,** per SRI Resolution NAC-DGERCGC26-00000027 (published 2026-07-27), which requires electronic documents issued through a third-party invoicing system to identify that provider's RUC. `BaseDocumentBuilder.buildAdditionalInfo()` (moved up from the per-type builders, which had duplicated it) now always appends a fixed `Proveedor` field sourced from `config.operator` (`ruc`/`nombre`), alongside whatever `additionalInfo` the caller supplies. No new API surface — issuers never see or set this field.
+
 ## [0.11.2] — 2026-07-28
 
 ### Changed
