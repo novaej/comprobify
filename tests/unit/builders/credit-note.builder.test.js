@@ -115,12 +115,14 @@ describe('CreditNoteBuilder', () => {
     expect(xml).toContain('test@example.com');
   });
 
-  test('additional info is omitted when not provided', () => {
+  test('infoAdicional still carries the provider field when no additionalInfo is provided', () => {
     const bodyNoInfo = { ...validBody, additionalInfo: undefined };
     const builder = new CreditNoteBuilder(mockIssuer);
     const xml = builder.build(bodyNoInfo, '1'.repeat(49), 27);
 
-    expect(xml).not.toContain('<infoAdicional>');
+    expect(xml).toContain('<infoAdicional>');
+    expect(xml).toContain('nombre="Proveedor"');
+    expect(xml).not.toContain('nombre="email"');
   });
 
   test('handles multiple items', () => {
