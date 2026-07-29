@@ -1,6 +1,6 @@
 {
   "name": "comprobify",
-  "version": "0.11.2",
+  "version": "0.12.0",
   "description": "SRI electronic invoicing API for Ecuador",
   "main": "app.js",
   "scripts": {
