@@ -1,3 +1,7 @@
+jest.mock('../../../src/config', () => ({
+  operator: { ruc: '1715824775001', nombre: 'TEST OPERATOR' },
+}));
+
 const BaseDocumentBuilder = require('../../../src/builders/base.builder');
 
 const mockIssuer = {
@@ -64,5 +68,25 @@ describe('BaseDocumentBuilder', () => {
 
     expect(xml).toContain('version="1.1.0"');
     expect(xml).not.toContain('version="2.1.0"');
+  });
+
+  test('buildAdditionalInfo always appends the provider RUC/name, even with no caller-supplied fields', () => {
+    const builder = new BaseDocumentBuilder(mockIssuer, '01');
+    builder.buildAdditionalInfo(undefined);
+
+    const { campoAdicional } = builder.data.infoAdicional;
+    expect(campoAdicional).toHaveLength(1);
+    expect(campoAdicional[0]['@'].nombre).toBe('Proveedor');
+    expect(campoAdicional[0]['#']).toBe('1715824775001 - TEST OPERATOR');
+  });
+
+  test('buildAdditionalInfo keeps caller-supplied fields alongside the provider field', () => {
+    const builder = new BaseDocumentBuilder(mockIssuer, '01');
+    builder.buildAdditionalInfo([{ name: 'email', value: 'buyer@example.com' }]);
+
+    const { campoAdicional } = builder.data.infoAdicional;
+    expect(campoAdicional).toHaveLength(2);
+    expect(campoAdicional[0]).toEqual({ '@': { nombre: 'email' }, '#': 'buyer@example.com' });
+    expect(campoAdicional[1]).toEqual({ '@': { nombre: 'Proveedor' }, '#': '1715824775001 - TEST OPERATOR' });
   });
 });

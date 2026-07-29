@@ -92,18 +92,6 @@ class CreditNoteBuilder extends BaseDocumentBuilder {
     return this;
   }
 
-  buildAdditionalInfo(additionalInfo) {
-    if (additionalInfo && additionalInfo.length > 0) {
-      this.data.infoAdicional = {
-        campoAdicional: additionalInfo.map((info) => ({
-          '@': { nombre: info.name },
-          '#': info.value,
-        })),
-      };
-    }
-    return this;
-  }
-
   build(body, accessKey, sequential) {
     this.buildInfoTributaria({ accessKey, sequential });
     this.buildInfoNotaCredito(body);

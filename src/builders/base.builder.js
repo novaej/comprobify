@@ -1,4 +1,5 @@
 const js2xmlparser = require('js2xmlparser');
+const config = require('../config');
 
 class BaseDocumentBuilder {
   constructor(issuer, documentType, schemaVersion) {
@@ -24,6 +25,25 @@ class BaseDocumentBuilder {
       ...(this.issuer.agent_retention && { agenteRetencion: this.issuer.agent_retention }),
       ...(this.issuer.contribuyente_rimpe && { contribuyenteRimpe: this.issuer.contribuyente_rimpe }),
     };
+    return this;
+  }
+
+  // SRI Resolution NAC-DGERCGC26-00000027 requires every electronic document
+  // issued through a third-party invoicing system to identify that provider's
+  // RUC in infoAdicional. Comprobify is not incorporated, so config.operator
+  // holds the operator's own persona natural RUC/name.
+  buildAdditionalInfo(additionalInfo) {
+    const campoAdicional = (additionalInfo || []).map((info) => ({
+      '@': { nombre: info.name },
+      '#': info.value,
+    }));
+
+    campoAdicional.push({
+      '@': { nombre: 'Proveedor' },
+      '#': `${config.operator.ruc} - ${config.operator.nombre}`,
+    });
+
+    this.data.infoAdicional = { campoAdicional };
     return this;
   }
 
