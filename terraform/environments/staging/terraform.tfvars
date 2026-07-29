@@ -1,4 +1,4 @@
-region          = "nyc3"
+region          = "nyc1"
 droplet_size    = "s-1vcpu-1gb"
 ssh_public_key  = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIE3zDCrcjodHB+57h6n41rQuWrs6dvERYQkeNWdCqNzB comprobify-deploy"
 subdomain       = "api-staging"
