@@ -64,9 +64,9 @@ Cuando se establece, el correo de verificación contiene un enlace a tu página 
 https://app.comprobify.com/verify?token=<64-char-hex>
 ```
 
-Tu página del frontend debería mostrar una interfaz de confirmación y luego llamar a `GET /v1/verify-email?token=<token>` cuando el usuario actúe.
+Tu página del frontend debería llamar a `GET /v1/verify-email/check?token=<token>` al cargar la página para mostrar si el enlace sigue siendo válido (seguro de llamar repetidamente, incluso por escáneres de enlaces de correo), y luego a `POST /v1/verify-email` con `{ "token": "<token>" }` solo en respuesta a una acción explícita del usuario (por ejemplo, un botón "Verificar mi correo") — ver [Verificar Correo](./verify-email.md).
 
-Cuando se omite, el enlace va directamente a la API:
+Cuando se omite, el enlace va directamente al endpoint heredado de consumo de la API:
 
 ```
 https://api.comprobify.com/v1/verify-email?token=<64-char-hex>

@@ -11,9 +11,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 - **`hasPublishedAgreements: boolean`** on `GET /v1/tenants/agreements`'s response, alongside the existing `needsAcceptance`/`outdated` fields.
+- **`GET /v1/verify-email/check`** — read-only, non-consuming check of whether a verification token is still valid. Safe to call repeatedly, including by automated email link-scanners.
+- **`POST /v1/verify-email`** — the consuming verification action (moved off `GET`), taking `{ token }` in the request body. Activates the tenant; intended to be triggered only by an explicit user action.
 
 ### Fixed
 - **`GET /v1/tenants/agreements`'s `needsAcceptance: false` was indistinguishable between "everything's accepted" and "no agreement templates have ever been published"** — `tenant-agreement.service.js#getStatus()` short-circuits to `{ needsAcceptance: false, outdated: [] }` before generating anything when `agreementService.listCurrent()` is empty, which is exactly what a fresh/pre-launch environment (no admin has visited `/admin/agreements` yet) returns for every tenant. A caller had no way to tell that apart from a tenant that's simply caught up, which caused `comprobify-web`'s "Documentos legales" settings card to show three dead links that all 404 with `AGREEMENT_NOT_FOUND`. Added `hasPublishedAgreements: boolean` to the response so callers can render "nothing to show yet" correctly instead of assuming templates exist.
+- **Email verification links no longer get silently burned by corporate email link-scanners.** `GET /v1/verify-email?token=` both validated and consumed the token in one request, so a scanner's automated prefetch (e.g. Microsoft Defender/Safe Links on Outlook addresses) could invalidate the token before the user's real click, leaving them with `INVALID_OR_EXPIRED_TOKEN` on their first genuine attempt. Verification is now split into a non-consuming check (`GET /v1/verify-email/check`, safe to prefetch) and a consuming confirm (`POST /v1/verify-email`, which a `GET`-only prefetch can never trigger). The old combined `GET /v1/verify-email` is kept unchanged for backward compatibility — it's still the endpoint the verification email links to directly when no `verificationRedirectUrl` was configured at registration.
 ## [0.12.0] — 2026-07-29
 
 ### Added

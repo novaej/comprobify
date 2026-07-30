@@ -10,7 +10,9 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 |---|---|---|
 | `POST` | `/v1/register` | Self-service: create tenant + issuer + sandbox API key. New accounts only — if the email already exists, rejects with `409 CONFLICT` (use `/v1/recover` instead). |
 | `POST` | `/v1/recover` | Recover access to an existing account with the same P12 certificate — revokes and reissues the current environment's key only if the certificate matches the one on file |
-| `GET` | `/v1/verify-email` | Verify email with token from registration email |
+| `GET` | `/v1/verify-email/check` | Check whether a verification token is valid, without consuming it — safe for email link-scanners to prefetch |
+| `POST` | `/v1/verify-email` | Confirm verification with the token — activates the tenant; call only on explicit user action |
+| `GET` | `/v1/verify-email` | Legacy combined check-and-consume endpoint, kept for backward compatibility |
 | `POST` | `/v1/resend-verification` | Resend verification email (regenerates token) |
 
 ## Agreements (public)

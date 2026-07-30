@@ -77,11 +77,16 @@ La cuenta comienza en el tier **FREE** (5 comprobantes, 1 sucursal, 1 punto de e
 
 ## 2. Verifica tu correo
 
-Se envía un correo de verificación a la dirección con la que te registraste. Haz clic en el enlace, o llama al endpoint directamente con el token del correo:
+Se envía un correo de verificación a la dirección con la que te registraste. Haz clic en el enlace, o llama directamente a la API con el token del correo:
 
 ```http
-GET /v1/verify-email?token=<token>
+POST /v1/verify-email
+Content-Type: application/json
+
+{ "token": "<token>" }
 ```
+
+(También existe una variante heredada `GET /v1/verify-email?token=<token>` para consumidores directos de la API — ver [Verificar Correo](endpoints/verify-email.md) para el flujo completo de comprobar/confirmar y por qué está dividido así.)
 
 Se requiere verificación de correo antes de poder promoverte a producción. Puedes emitir facturas de sandbox de inmediato sin verificar.
 
