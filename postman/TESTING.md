@@ -171,7 +171,7 @@ Expected: `{ "ok": true }` — all three rows flip to `status: ACCEPTED`.
 
 **`GET /v1/tenants/agreements`** *(Tenants folder)*
 
-Expected: `needsAcceptance: false`, `outdated: []` — all documents accepted.
+Expected: `needsAcceptance: false`, `outdated: []`, `hasPublishedAgreements: true` — all documents accepted.
 
 > **If `needsAcceptance: true`:** The `outdated` array lists which types need acceptance and includes a `url` for each. Fetch `GET /v1/tenants/agreements/:type` to show the document, then call `POST /v1/tenants/agreements` again.
 

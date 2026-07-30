@@ -21,7 +21,8 @@ GET /v1/tenants/agreements
   "ok": true,
   "agreements": {
     "needsAcceptance": false,
-    "outdated": []
+    "outdated": [],
+    "hasPublishedAgreements": true
   }
 }
 ```
@@ -41,7 +42,21 @@ GET /v1/tenants/agreements
         "url": "/v1/tenants/agreements/DPA",
         "acceptUrl": "/v1/tenants/agreements"
       }
-    ]
+    ],
+    "hasPublishedAgreements": true
+  }
+}
+```
+
+#### No agreement templates have ever been published
+
+```json
+{
+  "ok": true,
+  "agreements": {
+    "needsAcceptance": false,
+    "outdated": [],
+    "hasPublishedAgreements": false
   }
 }
 ```
@@ -56,6 +71,7 @@ Each entry in `outdated` names the specific document type that changed. Use the 
 | `outdated[].acceptedVersion` | Template version the tenant last accepted, or `null` if never accepted |
 | `outdated[].status` | `PENDING` (generated, not accepted), or `NOT_GENERATED` (template published but instance not yet created) |
 | `outdated[].url` | URL to the tenant's personalized document instance (`GET /v1/tenants/agreements/:type`) |
+| `hasPublishedAgreements` | `false` only when no agreement template has ever been published (a fresh/pre-launch environment) — distinguishes that case from `needsAcceptance: false` meaning "everything's accepted." A `false` value means `outdated` is empty because there's nothing to show yet, not because the tenant is caught up. |
 
 **Calling this endpoint automatically generates any missing `PENDING` instances** for new template versions — no separate backfill call needed after the admin publishes an update.
 

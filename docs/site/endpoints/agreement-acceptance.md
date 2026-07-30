@@ -21,7 +21,8 @@ GET /v1/tenants/agreements
   "ok": true,
   "agreements": {
     "needsAcceptance": false,
-    "outdated": []
+    "outdated": [],
+    "hasPublishedAgreements": true
   }
 }
 ```
@@ -41,7 +42,21 @@ GET /v1/tenants/agreements
         "url": "/v1/tenants/agreements/DPA",
         "acceptUrl": "/v1/tenants/agreements"
       }
-    ]
+    ],
+    "hasPublishedAgreements": true
+  }
+}
+```
+
+#### Ninguna plantilla de acuerdo ha sido publicada todavía
+
+```json
+{
+  "ok": true,
+  "agreements": {
+    "needsAcceptance": false,
+    "outdated": [],
+    "hasPublishedAgreements": false
   }
 }
 ```
@@ -56,6 +71,7 @@ Cada entrada en `outdated` indica el tipo específico de documento que cambió. 
 | `outdated[].acceptedVersion` | Versión de plantilla que el tenant aceptó por última vez, o `null` si nunca la aceptó |
 | `outdated[].status` | `PENDING` (generada, no aceptada), o `NOT_GENERATED` (plantilla publicada pero instancia aún no creada) |
 | `outdated[].url` | URL de la instancia personalizada del documento del tenant (`GET /v1/tenants/agreements/:type`) |
+| `hasPublishedAgreements` | `false` únicamente cuando nunca se ha publicado ninguna plantilla de acuerdo (entorno nuevo o previo al lanzamiento) — distingue ese caso de `needsAcceptance: false`, que también significa "todo aceptado". Un valor `false` indica que `outdated` está vacío porque no hay nada que mostrar todavía, no porque el tenant esté al día. |
 
 **Llamar a este endpoint genera automáticamente cualquier instancia `PENDING` faltante** para nuevas versiones de plantilla — no se necesita una llamada de backfill separada después de que el administrador publique una actualización.
 

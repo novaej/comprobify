@@ -164,7 +164,7 @@ describe('TenantAgreementService', () => {
 
       const result = await tenantAgreementService.getStatus(1);
 
-      expect(result).toEqual({ needsAcceptance: false, outdated: [] });
+      expect(result).toEqual({ needsAcceptance: false, outdated: [], hasPublishedAgreements: false });
       expect(tenantAgreementModel.findLatestByTenantAndType).not.toHaveBeenCalled();
     });
 
@@ -186,6 +186,7 @@ describe('TenantAgreementService', () => {
           url: '/v1/tenants/agreements/TERMS',
           acceptUrl: '/v1/tenants/agreements',
         }],
+        hasPublishedAgreements: true,
       });
     });
 
@@ -197,7 +198,7 @@ describe('TenantAgreementService', () => {
 
       const result = await tenantAgreementService.getStatus(1);
 
-      expect(result).toEqual({ needsAcceptance: false, outdated: [] });
+      expect(result).toEqual({ needsAcceptance: false, outdated: [], hasPublishedAgreements: true });
     });
 
     test('flags a PENDING instance at the current version', async () => {

@@ -77,7 +77,12 @@ async function acceptAll(tenantId, { ip, userAgent } = {}) {
 // whether the tenant still needs to accept updated documents.
 async function getStatus(tenantId) {
   const templates = await agreementService.listCurrent();
-  if (templates.length === 0) return { needsAcceptance: false, outdated: [] };
+  // Distinct from needsAcceptance: false, which is also true once every
+  // published template has been accepted — hasPublishedAgreements is what
+  // lets a caller tell "nothing to view yet" apart from "all caught up".
+  if (templates.length === 0) {
+    return { needsAcceptance: false, outdated: [], hasPublishedAgreements: false };
+  }
 
   // Lazy generation: ensure the tenant has a row for every current template
   // version. ON CONFLICT DO NOTHING makes this safe to call any time.
@@ -107,7 +112,7 @@ async function getStatus(tenantId) {
     }
   }
 
-  return { needsAcceptance: outdated.length > 0, outdated };
+  return { needsAcceptance: outdated.length > 0, outdated, hasPublishedAgreements: true };
 }
 
 async function hasAllAccepted(tenantId) {
