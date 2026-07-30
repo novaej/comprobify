@@ -306,6 +306,19 @@ async function resendVerification(email, verificationRedirectUrl) {
   }
 }
 
+// Read-only, non-consuming check — safe to call repeatedly (email
+// link-scanners such as Microsoft Defender/Safe Links prefetch every link in
+// an email with a plain GET before the user clicks). Runs the same lookup as
+// verifyEmail() but never calls activate(), so it can't burn the token before
+// the user's real click.
+async function checkVerificationToken(token) {
+  const tenant = await tenantModel.findByVerificationToken(token);
+  if (!tenant) {
+    return { valid: false };
+  }
+  return { valid: true, email: tenant.email };
+}
+
 async function verifyEmail(token) {
   const tenant = await tenantModel.findByVerificationToken(token);
   if (!tenant) {
@@ -329,4 +342,4 @@ async function verifyEmail(token) {
   return { email: tenant.email };
 }
 
-module.exports = { register, recover, resendVerification, verifyEmail, formatTenant };
+module.exports = { register, recover, resendVerification, verifyEmail, checkVerificationToken, formatTenant };

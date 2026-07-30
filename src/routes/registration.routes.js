@@ -3,7 +3,7 @@ const multer = require('multer');
 const controller = require('../controllers/registration.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
-const { register, recover, resendVerification, verifyEmail } = require('../validators/registration.validator');
+const { register, recover, resendVerification, verifyEmail, verifyEmailBody } = require('../validators/registration.validator');
 const { registrationLimiter } = require('../middleware/rate-limit');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
@@ -54,6 +54,18 @@ const uploadRecoveryFile = (req, res, next) => {
 router.post('/register', registrationLimiter, uploadRegistrationFiles, register, validateRequest, asyncHandler(controller.register));
 router.post('/recover', registrationLimiter, uploadRecoveryFile, recover, validateRequest, asyncHandler(controller.recover));
 router.post('/resend-verification', registrationLimiter, resendVerification, validateRequest, asyncHandler(controller.resendVerification));
+// Legacy fallback: still reachable when no verificationRedirectUrl was set
+// (e.g. a direct API caller bypassing comprobify-web), so it stays a
+// consuming GET for backward compatibility. comprobify-web itself never
+// calls this directly — see /verify-email/check and the POST below.
 router.get('/verify-email', verifyEmail, validateRequest, asyncHandler(controller.verifyEmail));
+// Read-only check — safe for email link-scanners (Microsoft Defender/Safe
+// Links etc.) to prefetch repeatedly without burning the token. The
+// frontend calls this on page load.
+router.get('/verify-email/check', verifyEmail, validateRequest, asyncHandler(controller.checkVerifyEmail));
+// The actual consuming action. POST-only so an automated scanner's GET
+// prefetch can never trigger it — only an explicit user click can. The
+// frontend calls this from a button, not from page render.
+router.post('/verify-email', verifyEmailBody, validateRequest, asyncHandler(controller.confirmVerifyEmail));
 
 module.exports = router;

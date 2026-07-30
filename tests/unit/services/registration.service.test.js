@@ -562,6 +562,27 @@ describe('RegistrationService', () => {
     });
   });
 
+  describe('checkVerificationToken', () => {
+    test('returns valid: false when the token is invalid or expired, without consuming it', async () => {
+      tenantModel.findByVerificationToken.mockResolvedValue(null);
+
+      const result = await registrationService.checkVerificationToken('bad-token');
+
+      expect(result).toEqual({ valid: false });
+      expect(tenantModel.activate).not.toHaveBeenCalled();
+    });
+
+    test('returns valid: true with the email on a valid token, without consuming it', async () => {
+      tenantModel.findByVerificationToken.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000003', email: 'someone@example.com' });
+
+      const result = await registrationService.checkVerificationToken('good-token');
+
+      expect(result).toEqual({ valid: true, email: 'someone@example.com' });
+      expect(tenantModel.activate).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('formatTenant', () => {
     test('maps a DB row to the camelCase tenant response shape', () => {
       const row = {

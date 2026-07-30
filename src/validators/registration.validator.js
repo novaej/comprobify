@@ -107,6 +107,14 @@ const verifyEmail = [
     .withMessage('token must be a 64-character hex string'),
 ];
 
+const verifyEmailBody = [
+  body('token')
+    .notEmpty()
+    .isHexadecimal()
+    .isLength({ min: 64, max: 64 })
+    .withMessage('token must be a 64-character hex string'),
+];
+
 const recover = [
   body('email')
     .isEmail()
@@ -143,4 +151,4 @@ const resendVerification = [
     ),
 ];
 
-module.exports = { register, recover, resendVerification, verifyEmail };
+module.exports = { register, recover, resendVerification, verifyEmail, verifyEmailBody };
