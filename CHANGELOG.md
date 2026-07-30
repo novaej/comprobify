@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`hasPublishedAgreements: boolean`** on `GET /v1/tenants/agreements`'s response, alongside the existing `needsAcceptance`/`outdated` fields.
+
+### Fixed
+- **`GET /v1/tenants/agreements`'s `needsAcceptance: false` was indistinguishable between "everything's accepted" and "no agreement templates have ever been published"** — `tenant-agreement.service.js#getStatus()` short-circuits to `{ needsAcceptance: false, outdated: [] }` before generating anything when `agreementService.listCurrent()` is empty, which is exactly what a fresh/pre-launch environment (no admin has visited `/admin/agreements` yet) returns for every tenant. A caller had no way to tell that apart from a tenant that's simply caught up, which caused `comprobify-web`'s "Documentos legales" settings card to show three dead links that all 404 with `AGREEMENT_NOT_FOUND`. Added `hasPublishedAgreements: boolean` to the response so callers can render "nothing to show yet" correctly instead of assuming templates exist.
 ## [0.12.0] — 2026-07-29
 
 ### Added
