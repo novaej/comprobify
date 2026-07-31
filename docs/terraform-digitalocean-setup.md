@@ -4,7 +4,7 @@ Reference for how the API/worker compute layer is provisioned and deployed on Di
 
 **What lives on DigitalOcean:** one droplet per environment (`staging`, `production`), each running the `api` and `worker` containers behind a Caddy reverse proxy.
 
-**What doesn't:** Neon (Postgres), CloudAMQP (RabbitMQ), Mailgun, Sentry, and Cloudflare (DNS/proxy, registrar) — all external managed services, unaffected by anything in this document. `comprobify-web` (Vercel) is entirely out of scope too.
+**What doesn't:** CloudAMQP (RabbitMQ), Mailgun, Sentry, and Cloudflare (DNS/proxy, registrar) — external managed services, unaffected by anything in this document. The Postgres database (DigitalOcean Managed Database, shared by comprobify's API/worker and `comprobify-web`) and `comprobify-web` itself (DigitalOcean App Platform, moved off Vercel) are also outside this repo's Terraform — neither is provisioned by `terraform/` here — but both are grouped into the same `Comprobify Staging` DO Project as the droplet for dashboard purposes; see "DO Projects" below.
 
 ---
 
@@ -117,25 +117,24 @@ terraform/
 
 ## DO Projects — where the resources actually live
 
-A DigitalOcean **Project** is a dashboard-only grouping (which droplets/volumes/etc. show up together in the UI) — it is **not** a network or security boundary. The real isolation between staging and prod comes entirely from what's already covered above: separate droplets, separate Terraform state, separate firewalls, separate secrets. A Project changes nothing about what can reach what.
+A DigitalOcean **Project** is a dashboard-only grouping (which droplets/databases/apps show up together in the UI) — it is **not** a network or security boundary. The real isolation between staging and prod comes entirely from what's already covered above: separate droplets, separate Terraform state, separate firewalls, separate secrets. A Project changes nothing about what can reach what.
 
-That said, create one anyway — purely so the DO dashboard doesn't mix a staging droplet and a prod droplet in one flat list. It's Terraform-managed too:
+Each environment gets one anyway — purely so the DO dashboard doesn't mix a staging droplet and a prod droplet in one flat list. The project itself is **looked up, not created**:
 
 ```hcl
-resource "digitalocean_project" "this" {
-  name        = "Comprobify ${title(var.environment)}"
-  description = "Comprobify ${var.environment} infrastructure"
-  purpose     = "Web Application"
-  environment = var.environment == "production" ? "Production" : "Staging"
+data "digitalocean_project" "this" {
+  name = "Comprobify ${title(var.environment)}"
 }
 
 resource "digitalocean_project_resources" "this" {
-  project = digitalocean_project.this.id
+  project = data.digitalocean_project.this.id
   resources = [
     digitalocean_droplet.this.urn,
   ]
 }
 ```
+
+It used to be a managed `resource`. Staging's project now also holds resources this repo's Terraform doesn't own — `comprobify-web`'s DigitalOcean App Platform app and the shared Managed Postgres database, each assigned into the project through their own respective flows, not this Terraform config — so letting Terraform manage the project resource itself risked a config drift on either of those triggering Terraform to try to recreate the *project*, which would orphan everything else already living in it. `data.digitalocean_project` only looks the already-existing project up by name; `digitalocean_project_resources` still moves this repo's own droplet into it (DigitalOcean's droplet-creation API has no `project_id` argument — every droplet lands in the account's Default project first).
 
 Two entirely separate Projects (`Comprobify Staging`, `Comprobify Production`) — DO has no nested "one Project, multiple Environments" concept.
 
@@ -225,7 +224,7 @@ resource "digitalocean_ssh_key" "infra" {
 
 resource "digitalocean_droplet" "this" {
   name      = "comprobify-${var.environment}"
-  region    = var.region             # e.g. "nyc3"
+  region    = var.region             # e.g. "nyc1" (staging's actual value — moved here from nyc3 to match comprobify-web's App Platform app, which only runs in nyc1)
   size      = var.droplet_size       # e.g. "s-1vcpu-512mb-10gb" — the $4/mo tier, staging
   image     = var.image_slug         # plain base OS image — see note below
   ssh_keys  = [digitalocean_ssh_key.infra.id]
@@ -484,7 +483,7 @@ volumes:
   caddy_config:
 ```
 
-`api` and `worker` run the **same image** — one Dockerfile, one build, one push to GHCR — started with different `command:` values. `expose` (not `ports`) on `api` means it's reachable from `caddy` over the Compose network but never bound to the host directly — only Caddy holds 80/443. `worker` has no `ports`/`expose` at all — it makes outbound connections to RabbitMQ/Neon and needs nothing inbound.
+`api` and `worker` run the **same image** — one Dockerfile, one build, one push to GHCR — started with different `command:` values. `expose` (not `ports`) on `api` means it's reachable from `caddy` over the Compose network but never bound to the host directly — only Caddy holds 80/443. `worker` has no `ports`/`expose` at all — it makes outbound connections to RabbitMQ/Postgres and needs nothing inbound.
 
 ```
 # deploy/Caddyfile
@@ -511,7 +510,8 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `APP_ENV` | **Yes** | Correct value differs per environment (`staging`/`production`) — see the exception above |
 | `APP_BASE_URL` | **Yes** | No default at all |
 | `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` | **Yes** | Have defaults (`localhost`, `5432`, `comprobify_local`, `postgres`, `''`) but they point at a local dev Postgres that doesn't exist here — not usable defaults for a real deployment |
-| `DB_SSL` | **Yes** | Must be `true` against Neon; default is effectively "off" |
+| `DB_SSL` | **Yes** | Must be `true` against the Managed Postgres database; default is effectively "off" |
+| `DB_SSL_CA` | **Yes** | Staging's DB is DigitalOcean Managed Postgres, which signs with a private CA — required or connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. See `docs/deployment.md`'s env var table for the exact single-line format the deploy workflow's heredoc needs. |
 | `ENCRYPTION_KEY` | **Yes** | No default |
 | `ADMIN_SECRET` | **Yes** | No default |
 | `EMAIL_FROM` | **Yes** | No default, and email is enabled by default (`EMAIL_PROVIDER` defaults to `mailgun`) |
@@ -543,7 +543,7 @@ Split, for the "Yes" rows only:
 | GitHub **Secrets** | GitHub **Variables** |
 |---|---|
 | `ENCRYPTION_KEY` | `APP_ENV`, `APP_BASE_URL` |
-| `ADMIN_SECRET` | `DB_SSL` |
+| `ADMIN_SECRET` | `DB_SSL`, `DB_SSL_CA` (a public CA certificate, not sensitive) |
 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` (kept together as one group for simplicity, even though a couple of them aren't sensitive alone) | `EMAIL_FROM`, `MAILGUN_DOMAIN` |
 | `MAILGUN_API_KEY` | `BANK_TRANSFER_BANK_NAME` / `ACCOUNT_TYPE` / `ACCOUNT_NUMBER` / `ACCOUNT_HOLDER` / `IDENTIFICATION` — `deployment.md` already calls these "Display text only, not a secret" |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | `ADMIN_NOTIFICATION_EMAIL`, `OPERATOR_NAME`, `OPERATOR_RUC`, `OPERATOR_EMAIL`, `OPERATOR_ADDRESS` — an email address and public business-registry identity info, not credentials |
