@@ -60,7 +60,7 @@ The account's current API key for its actual current environment (sandbox or pro
 
 `environment` reflects the account's **actual current** environment (`"sandbox"` or `"production"`) — a tenant already promoted to production recovers their production key, not a sandbox one.
 
-**As extra validation, the account is also moved back to `PENDING_VERIFICATION`** — matching the certificate only proves you have the P12 file, not that you control the registered email inbox. A verification email with a fresh link is sent in the background (it does not block this response). The returned API key already works for sandbox document creation, but actions that require an `ACTIVE` account — creating a branch, promoting to production, starting a subscription, or minting additional named keys — are blocked until you click the link in that email. See [`GET /v1/verify-email`](./verify-email.md).
+**As extra validation, the account is also moved back to `PENDING_VERIFICATION`** — matching the certificate only proves you have the P12 file, not that you control the registered email inbox. A verification email with a fresh link is sent in the background (it does not block this response). The returned API key already works for sandbox document creation, but actions that require an `ACTIVE` account — creating a branch, promoting to production, starting a subscription, or minting additional named keys — are blocked until you click the link in that email. See [Verify Email](./verify-email.md).
 
 ### 200 OK — every other case
 
@@ -97,5 +97,5 @@ Certificate errors (corrupt file, wrong password, expired certificate) are valid
 ## Notes
 
 - Don't confuse this with `POST /v1/register` — that endpoint is for new accounts only; if the email already exists, it rejects with `409 CONFLICT` and never revokes or issues a key.
-- The notice email reuses the exact same mechanism as `POST /v1/resend-verification` (same token, same template) and the same redemption endpoint, `GET /v1/verify-email`, which flips the account back to `ACTIVE`. If you don't have email access, an administrator can also verify the account manually.
+- The notice email reuses the exact same mechanism as `POST /v1/resend-verification` (same token, same template) and the same redemption flow (`GET /v1/verify-email/check` + `POST /v1/verify-email`, or the legacy `GET /v1/verify-email`), which flips the account back to `ACTIVE`. If you don't have email access, an administrator can also verify the account manually.
 - This re-verification requirement applies even if the account was already `ACTIVE` before recovery — a certificate match alone is no longer enough to keep full account privileges without also confirming email access.

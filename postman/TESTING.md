@@ -119,9 +119,11 @@ https://your-api.com/v1/verify-email?token=<64-char-hex>
 
 Set `verification_token` collection variable manually, then run:
 
-**`GET /v1/verify-email?token={{verification_token}}`** *(Registration folder)*
+**`POST /v1/verify-email`** *(Registration folder)* with body `{ "token": "{{verification_token}}" }`
 
 This activates the tenant. Without verification you can use sandbox but cannot promote to production.
+
+(`GET /v1/verify-email/check?token={{verification_token}}` is a read-only companion request that checks token validity without activating the tenant — safe to run multiple times. A legacy `GET /v1/verify-email?token={{verification_token}}` combined check-and-consume request also still exists for backward compatibility.)
 
 ---
 

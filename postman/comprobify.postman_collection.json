@@ -411,6 +411,31 @@
           ]
         },
         {
+          "name": "Check Verify Email Token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/verify-email/check?token={{verification_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "verify-email",
+                "check"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{verification_token}}"
+                }
+              ]
+            },
+            "description": "Read-only check of whether a verification token is still valid — does not activate the tenant. Safe to call repeatedly, including by email link-scanners that prefetch links. Returns { valid, email } or { valid: false }."
+          }
+        },
+        {
           "name": "Verify Email",
           "request": {
             "method": "GET",
@@ -431,7 +456,34 @@
                 }
               ]
             },
-            "description": "Verify your email address using the token from the registration email. Required before promoting to production."
+            "description": "Legacy combined check-and-consume endpoint, kept for backward compatibility (this is what the verification email links to directly when no verificationRedirectUrl was set). Prefer Check Verify Email Token + Confirm Verify Email for new integrations — see those requests."
+          }
+        },
+        {
+          "name": "Confirm Verify Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verification_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/verify-email",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "verify-email"
+              ]
+            },
+            "description": "Activates the tenant using the verification token. POST-only so an automated link-scanner GET prefetch cannot trigger it — call this only in response to an explicit user action. Required before promoting to production."
           }
         },
         {

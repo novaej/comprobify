@@ -10,7 +10,9 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 |---|---|---|
 | `POST` | `/v1/register` | Autoservicio: crea tenant + emisor + API key de sandbox. Solo para cuentas nuevas — si el correo ya existe, rechaza con `409 CONFLICT` (usa `/v1/recover` en su lugar). |
 | `POST` | `/v1/recover` | Recupera el acceso a una cuenta existente con el mismo certificado P12 — revoca y reemite la llave del entorno actual solo si el certificado coincide con el archivado |
-| `GET` | `/v1/verify-email` | Verifica el correo con el token del correo de registro |
+| `GET` | `/v1/verify-email/check` | Comprueba si un token de verificación es válido, sin consumirlo — seguro para que lo precarguen escáneres de enlaces de correo |
+| `POST` | `/v1/verify-email` | Confirma la verificación con el token — activa el tenant; llamar solo ante una acción explícita del usuario |
+| `GET` | `/v1/verify-email` | Endpoint heredado que combina comprobación y consumo, mantenido por compatibilidad hacia atrás |
 | `POST` | `/v1/resend-verification` | Reenvía el correo de verificación (regenera el token) |
 
 ## Acuerdos (público)

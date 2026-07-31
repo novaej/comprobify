@@ -77,11 +77,16 @@ Lost your API key? `POST /v1/register` won't recover it for you anymore — use 
 
 ## 2. Verify your email
 
-A verification email is sent to the address you registered with. Click the link, or call the endpoint directly with the token from the email:
+A verification email is sent to the address you registered with. Click the link, or call the token from the email against the API directly:
 
 ```http
-GET /v1/verify-email?token=<token>
+POST /v1/verify-email
+Content-Type: application/json
+
+{ "token": "<token>" }
 ```
+
+(A `GET /v1/verify-email?token=<token>` legacy variant also exists for direct API callers — see [Verify Email](endpoints/verify-email.md) for the full check/confirm flow and why it's split this way.)
 
 Email verification is required before you can promote to production. You can issue sandbox invoices immediately without verifying.
 
