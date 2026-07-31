@@ -102,6 +102,8 @@ Three separate scopes are in play: the `staging` Environment (app deploy secrets
 
 Written into `/opt/comprobify/.env` on the droplet on every app deploy. `DB_SSL_CA` is required here now that staging's database is DigitalOcean Managed Postgres, which signs with a private CA.
 
+Not a GitHub Secret, but also written into this same `.env` by the workflow itself: `SENTRY_RELEASE=${{ github.sha }}`. Without it, Sentry's release auto-detection has nothing to key off of inside a plain Docker container (it used to auto-detect via Render's `RENDER_GIT_COMMIT` env var before the DigitalOcean migration) — releases silently stopped showing up in Sentry after that move until this was added.
+
 | Secret | Value |
 |---|---|
 | `DROPLET_IP` | |

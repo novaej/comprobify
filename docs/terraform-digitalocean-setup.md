@@ -520,6 +520,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `MAILGUN_DOMAIN` | **Yes** | No default, required while email is enabled |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | **Yes** | No default, required while email is enabled |
 | `SENTRY_DSN` | **Yes** (recommended) | Default is silently *disabled monitoring* — not a fatal gap like a missing DB credential, but not something you'd actually want in a real deployment either |
+| `SENTRY_RELEASE` | No — set automatically by the deploy workflow (`${{ github.sha }}`), not a GitHub Secret/Variable | Without it, `@sentry/node`'s own release auto-detection falls through a list of CI/PaaS-specific env vars (`GITHUB_SHA`, `VERCEL_GIT_COMMIT_SHA`, `RENDER_GIT_COMMIT`, ...), none of which exist inside a plain Docker container on a droplet — this is what silently broke Sentry's release tracking when staging moved off Render (Render injected `RENDER_GIT_COMMIT` automatically; nothing here does the equivalent unless this var is set explicitly) |
 | `BANK_TRANSFER_BANK_NAME`/`ACCOUNT_TYPE`/`ACCOUNT_NUMBER`/`ACCOUNT_HOLDER`/`IDENTIFICATION` | **Yes** | No defaults |
 | `ADMIN_NOTIFICATION_EMAIL` | **Yes** | No default; validated as required at startup — the API won't boot without it |
 | `OPERATOR_NAME` / `OPERATOR_RUC` / `OPERATOR_EMAIL` | **Yes** | No default; needed before `POST /v1/admin/agreements` will produce correct legal documents |
@@ -573,12 +574,14 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             cat > /opt/comprobify/.env <<'EOF'
             APP_ENV=${{ vars.APP_ENV }}
             APP_BASE_URL=${{ vars.APP_BASE_URL }}
+            API_BASE_URL=${{ vars.APP_BASE_URL }}
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=${{ secrets.DB_PORT }}
             DB_NAME=${{ secrets.DB_NAME }}
             DB_USER=${{ secrets.DB_USER }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             DB_SSL=${{ vars.DB_SSL }}
+            DB_SSL_CA=${{ secrets.DB_SSL_CA }}
             ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
             ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
             EMAIL_FROM=${{ vars.EMAIL_FROM }}
@@ -586,6 +589,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN }}
             MAILGUN_WEBHOOK_SIGNING_KEY=${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+            SENTRY_RELEASE=${{ github.sha }}
             BANK_TRANSFER_BANK_NAME=${{ vars.BANK_TRANSFER_BANK_NAME }}
             BANK_TRANSFER_ACCOUNT_TYPE=${{ vars.BANK_TRANSFER_ACCOUNT_TYPE }}
             BANK_TRANSFER_ACCOUNT_NUMBER=${{ vars.BANK_TRANSFER_ACCOUNT_NUMBER }}
