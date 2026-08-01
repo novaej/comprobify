@@ -21,25 +21,25 @@ Para los datos del propio Cliente (su cuenta, su correo, su certificado de firma
 | Dirección IP y user-agent del Cliente | Del Cliente | Evidencia de aceptación al aceptar los Términos de Servicio, la Política de Privacidad o el DPA (ver sección de Registros) |
 | Comprobante de pago (transferencia bancaria) | Del Cliente | Verificación manual de pagos de suscripción |
 
-No recopilamos datos de comprador más allá de los exigidos por la normativa aplicable del SRI para el tipo de comprobante electrónico, la cual puede ser actualizada por el Servicio de Rentas Internas (SRI) o la autoridad tributaria competente. Esto aplica al uso del Servicio a través de la API.
+Cuando el Cliente utiliza el Servicio exclusivamente a través de la API, no recopilamos datos de comprador más allá de los exigidos por la normativa aplicable del SRI para el tipo de comprobante electrónico, la cual puede ser actualizada por el Servicio de Rentas Internas (SRI) o la autoridad tributaria competente.
 
-**Datos adicionales si el Cliente utiliza la interfaz web (comprobify-web).** Cuando el Cliente utiliza la interfaz web del Servicio, Comprobify puede almacenar adicionalmente otros datos que el Cliente decida ingresar para facilitar su uso del Servicio — por ejemplo, catálogos de compradores (con fines de reutilización en futuros comprobantes) y catálogos de productos o servicios propios del Cliente —, así como otra información funcionalmente similar que se incorpore conforme evolucione el Servicio. Esta funcionalidad no se activa si el Cliente utiliza el Servicio únicamente a través de la API; en ese caso, Comprobify no almacena datos más allá de los indicados en la tabla anterior.
+**Datos adicionales si el Cliente utiliza la interfaz web (comprobify-web).** Cuando el Cliente utiliza la interfaz web del Servicio, Comprobify además almacena el nombre, correo electrónico, contraseña (almacenada como hash, nunca en texto plano) y rol de cada usuario que el Cliente invita a acceder a la cuenta, con el fin de gestionar el acceso y los permisos dentro de la interfaz. Comprobify también puede almacenar otros datos que el Cliente decida ingresar para facilitar su uso del Servicio — por ejemplo, catálogos de compradores (con fines de reutilización en futuros comprobantes) y catálogos de productos o servicios propios del Cliente —, así como otra información funcionalmente similar que se incorpore conforme evolucione el Servicio. Esta funcionalidad no se activa si el Cliente utiliza el Servicio únicamente a través de la API; en ese caso, Comprobify no almacena datos de comprador ni de usuarios individuales más allá de los indicados en la tabla anterior.
 
 ## 3. Base legal y finalidad
 
-El tratamiento se realiza para la ejecución del contrato de servicio (estos Términos) entre Comprobify y el Cliente, y, respecto de los datos del comprador, por instrucción directa del Cliente en su calidad de Responsable del Tratamiento, con la finalidad exclusiva de generar y transmitir comprobantes electrónicos válidos ante el SRI.
+Respecto de los datos del propio Cliente, el tratamiento se realiza para la ejecución de los Términos de Servicio entre Comprobify y el Cliente, que constituyen el contrato de servicio bajo el cual se presta el Servicio. Respecto de los datos del comprador, el tratamiento se realiza por instrucción directa del Cliente en su calidad de Responsable del Tratamiento, con la finalidad exclusiva de generar y transmitir comprobantes electrónicos válidos ante el SRI.
 
 ## 4. Con quién compartimos datos (subencargados)
 
-Los datos se almacenan y procesan utilizando los siguientes proveedores, todos bajo contrato de confidencialidad correspondiente a su rol de subencargado:
+Los datos se almacenan y procesan utilizando los siguientes proveedores, cada uno actuando como subencargado del tratamiento respecto de los datos que procesa por cuenta de Comprobify, conforme a sus propios términos de servicio y compromisos de confidencialidad y seguridad:
 
 - **DigitalOcean** — hosting de la API (todos los Clientes).
-- **Neon** — base de datos PostgreSQL de la API (todos los Clientes), incluida la base de datos independiente de la interfaz web cuando el Cliente la utiliza.
+- **DigitalOcean Managed Postgres** — base de datos PostgreSQL, utilizada tanto por la API como por la interfaz web del Servicio (comprobify-web) cuando el Cliente la utiliza.
+- **DigitalOcean App Platform** — hosting de la interfaz web del Servicio (comprobify-web) (solo Clientes que utilizan la interfaz web).
 - **Mailgun** — envío de correos transaccionales (verificación de cuenta, RIDE/PDF de comprobantes autorizados, notificaciones) (todos los Clientes).
 - **Sentry** — monitoreo de errores (configurado para minimizar el tratamiento de datos personales) (todos los Clientes).
 - **CloudAMQP** — enrutamiento de mensajes para el procesamiento asíncrono de comprobantes electrónicos; los mensajes contienen únicamente identificadores del comprobante, sin datos del comprador (todos los Clientes).
 - **SRI (Servicio de Rentas Internas)** — autoridad tributaria ecuatoriana receptora obligatoria por mandato legal; la transmisión de comprobantes electrónicos es exigida por la normativa tributaria aplicable (todos los Clientes).
-- **Vercel** — hosting de la interfaz web del Servicio (comprobify-web) (solo Clientes que utilizan la interfaz web).
 
 Los subencargados marcados como aplicables únicamente a la interfaz web solo tratan datos del Cliente si este utiliza comprobify-web; un Cliente que utiliza el Servicio exclusivamente a través de la API no está sujeto a dichos subencargados.
 
@@ -51,11 +51,15 @@ Esta lista de proveedores puede actualizarse conforme evolucione la infraestruct
 
 ## 5. Medidas de seguridad
 
-- **Aislamiento por tenant a nivel de base de datos** mediante Row-Level Security (RLS) de PostgreSQL — cada cuenta solo puede consultar sus propios registros.
+- **Aislamiento de los datos de comprobantes a nivel de base de datos** mediante Row-Level Security (RLS) de PostgreSQL — las tablas que contienen los comprobantes electrónicos y sus líneas, eventos y secuenciales están restringidas por emisor directamente en el motor de base de datos, no solo por la lógica de la aplicación. El resto de los datos de la cuenta (suscripciones, pagos, notificaciones, API keys, eventos de cuenta) se aíslan por filtrado explícito por cuenta en la capa de aplicación.
 - **Cifrado AES-256-GCM** de la clave privada de firma; la clave de cifrado se gestiona fuera de la base de datos.
 - **TLS** en todas las comunicaciones con la API.
+- **API keys almacenadas únicamente como hash (SHA-256)** — la API key en texto plano nunca se guarda en el sistema; solo se conserva su huella criptográfica, de modo que una filtración de la base de datos no expone API keys utilizables.
 - **Acceso administrativo** restringido mediante mecanismos de autenticación independientes de las credenciales de los Clientes.
-- **Recuperación de cuenta verificada por certificado** — una nueva llave API solo se emite si el certificado digital presentado coincide con el certificado ya registrado para la cuenta; conocer el correo electrónico de la cuenta, por sí solo, no es suficiente para obtener acceso.
+- **Recuperación de cuenta verificada por certificado** — una nueva API key solo se emite si el certificado digital presentado coincide con el certificado ya registrado para la cuenta; conocer el correo electrónico de la cuenta, por sí solo, no es suficiente para obtener acceso.
+- **Diseño anti-enumeración** en los flujos de recuperación de cuenta y reenvío de verificación — una solicitud con un correo no registrado, sin emisor asociado, o con un certificado que no coincide recibe la misma respuesta genérica, de modo que estos flujos no puedan usarse para confirmar si un correo existe en el sistema.
+- **Firma de los webhooks salientes (HMAC-SHA256)** — cada notificación enviada a los endpoints de webhook configurados por el Cliente incluye una firma que le permite verificar que el contenido proviene efectivamente de Comprobify y no ha sido alterado en tránsito.
+- **Limitación de tasa (rate limiting)** por API key, según el plan de suscripción del Cliente, como medida adicional contra el abuso del Servicio.
 - La cuenta de base de datos utilizada por la aplicación no tiene privilegios de superusuario, y las políticas de RLS están diseñadas para impedir su elusión desde la capa de aplicación.
 
 ## 6. Registros (logs)
@@ -66,7 +70,7 @@ La dirección IP y el user-agent del Cliente se registran únicamente al momento
 
 ## 7. Cookies y tecnologías similares
 
-Esta política cubre la API. El sitio web y el panel de administración (cuando existan) pueden utilizar cookies técnicas necesarias para mantener la sesión del usuario, garantizar la seguridad, y mejorar el funcionamiento del Servicio. Comprobify no utiliza cookies con fines publicitarios ni de seguimiento de terceros, salvo que se indique expresamente en el momento correspondiente.
+Esta política cubre la API. Cuando el Cliente utiliza el sitio web y el panel de administración del Servicio (comprobify-web), estos utilizan cookies técnicas necesarias para mantener la sesión del usuario autenticado, recordar el emisor activo seleccionado, garantizar la seguridad, y mejorar el funcionamiento del Servicio. Comprobify no utiliza cookies con fines publicitarios ni de seguimiento de terceros, salvo que se indique expresamente en el momento correspondiente.
 
 ## 8. Retención de datos
 
@@ -74,9 +78,9 @@ Comprobify almacena los datos relacionados con comprobantes electrónicos emitid
 
 Los comprobantes electrónicos y su historial de autorización, firma y transmisión están sujetos a los plazos de conservación establecidos por la normativa tributaria ecuatoriana — en particular el Código Tributario y el Reglamento de Comprobantes de Venta, Retención y Documentos Complementarios —, que exigen conservar los documentos tributarios durante el período de prescripción de las obligaciones tributarias. **Durante este período — que conforme al Art. 55 del Código Tributario es de cinco (5) años para los casos ordinarios y de siete (7) años cuando la declaración no fue presentada o fue presentada de forma incompleta; se recomienda conservar durante el plazo mayor como medida prudente —, Comprobify no eliminará ni permitirá la eliminación de dichos datos, incluso ante una solicitud de supresión.** El derecho de supresión reconocido por la LOPDP no es aplicable cuando la conservación es necesaria para el cumplimiento de una obligación legal (Art. 15 LOPDP).
 
-**El catálogo de compradores (cuando aplica) no está sujeto a esta limitación.** A diferencia de los datos ya incorporados en un comprobante autorizado, una entrada del catálogo de compradores no constituye por sí misma un documento tributario, por lo que Comprobify la eliminará conforme a la solicitud del Cliente, sin las restricciones aplicables a los datos de comprobantes ya autorizados.
+**El catálogo de compradores y el catálogo de productos o servicios (cuando aplican) no están sujetos a esta limitación.** A diferencia de los datos ya incorporados en un comprobante autorizado, una entrada de estos catálogos no constituye por sí misma un documento tributario — el Cliente puede eliminarla directamente desde la interfaz web en cualquier momento, sin las restricciones aplicables a los datos de comprobantes ya autorizados.
 
-Para los datos de la cuenta del Cliente (correo electrónico, metadatos de registro, historial de pagos) que no formen parte de un comprobante electrónico autorizado por el SRI, Comprobify atenderá solicitudes de supresión una vez terminada la relación contractual, siempre que no existan obligaciones legales que requieran su conservación.
+Para los datos de la cuenta del Cliente (correo electrónico, metadatos de registro, historial de pagos) — y, cuando el Cliente utiliza comprobify-web, los datos de los usuarios individuales invitados a esa interfaz — que no formen parte de un comprobante electrónico autorizado por el SRI, Comprobify atenderá solicitudes de supresión una vez terminada la relación con Comprobify, siempre que no existan obligaciones legales que requieran su conservación.
 
 Actualmente el sistema no implementa un mecanismo de eliminación definitiva de comprobantes electrónicos ni de su historial de auditoría y cumplimiento normativo; únicamente admite la desactivación lógica de recursos como emisores.
 
@@ -85,6 +89,8 @@ Actualmente el sistema no implementa un mecanismo de eliminación definitiva de 
 Bajo la LOPDP, los compradores cuyos datos constan en un comprobante pueden ejercer sus derechos de acceso, rectificación, actualización, eliminación (cuando proceda), oposición y portabilidad (si aplica), **directamente ante el Cliente** (Responsable del Tratamiento), quien decidió incluir esos datos. Comprobify, como Encargado, colaborará con el Cliente para atender dichas solicitudes en la medida técnicamente posible. **El derecho de eliminación no aplica a los datos contenidos en comprobantes electrónicos autorizados por el SRI durante el período de conservación obligatorio establecido por la normativa tributaria ecuatoriana (ver sección 8).**
 
 El Cliente, respecto de los datos de su propia cuenta (correo, certificado, historial de pagos), puede ejercer los mismos derechos señalados anteriormente directamente ante Comprobify, escribiendo a `{{soporte.email}}`.
+
+Cuando el Cliente utiliza comprobify-web, cada usuario individual que invita a esa interfaz puede ejercer los mismos derechos respecto de sus propios datos (nombre, correo electrónico, contraseña). El acceso y la rectificación de su nombre y contraseña están disponibles directamente desde su cuenta en comprobify-web; cualquier otra solicitud puede dirigirse a `{{soporte.email}}`. Esta funcionalidad no aplica si el Cliente utiliza el Servicio únicamente a través de la API.
 
 ## 10. Cambios a esta política
 

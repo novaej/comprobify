@@ -32,8 +32,8 @@
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-60" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;DigitalOcean Droplet&lt;/b&gt;&lt;br&gt;Caddy (TLS, reverse proxy) → api container&lt;br&gt;Docker Compose · Branch: staging *" vertex="1">
           <mxGeometry height="85" width="230" x="590" y="185" as="geometry" />
         </mxCell>
-        <mxCell id="iyyHeRbHeA1ESX64Fu_m-61" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;Neon&lt;/b&gt;&lt;br/&gt;PostgreSQL 16&lt;br/&gt;schemas: public + sandbox" vertex="1">
-          <mxGeometry height="70" width="180" x="1354" y="120" as="geometry" />
+        <mxCell id="iyyHeRbHeA1ESX64Fu_m-61" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;DigitalOcean Managed Postgres&lt;/b&gt;&lt;br/&gt;PostgreSQL 16&lt;br/&gt;schemas: public + sandbox&lt;br/&gt;shared cluster w/ comprobify-web" vertex="1">
+          <mxGeometry height="85" width="180" x="1354" y="120" as="geometry" />
         </mxCell>
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-62" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="&lt;b&gt;Mailgun&lt;/b&gt;&lt;br&gt;Transactional email&lt;br&gt;Domain: mg.comprobify.com" vertex="1">
           <mxGeometry height="80" width="180" x="1354" y="220" as="geometry" />
@@ -74,7 +74,7 @@
         <mxCell id="edge-rabbitmq-worker" edge="1" parent="1" source="rabbitmq-node" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="worker-node" value="consume">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-worker-neon" edge="1" parent="1" source="worker-node" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="iyyHeRbHeA1ESX64Fu_m-61" value="PostgreSQL / SSL">
+        <mxCell id="edge-worker-db" edge="1" parent="1" source="worker-node" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="iyyHeRbHeA1ESX64Fu_m-61" value="PostgreSQL / SSL">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="1130" y="350" />

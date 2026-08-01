@@ -171,7 +171,7 @@ The production pipeline is **written but disabled** — `release-production.yml`
 
 To enable production once it's ready to provision:
 1. Create the `production` branch (fast-forwarded only by the automation, same invariant as `staging`)
-2. Provision the production droplet via Terraform (`terraform/environments/production`, mirroring `staging`'s setup — see `docs/terraform-digitalocean-setup.md`'s "First-time setup" steps) + a production **Neon** Postgres project (own project, `public` + `sandbox` schemas), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
+2. Provision the production droplet via Terraform (`terraform/environments/production`, mirroring `staging`'s setup — see `docs/terraform-digitalocean-setup.md`'s "First-time setup" steps) + a production **DigitalOcean Managed Postgres** database (own cluster, `public` + `sandbox` schemas — mirrors staging's setup, see `docs/deployment-reference-staging.md`, including sharing the cluster with `comprobify-web`'s production database if/when that's provisioned), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
 3. Set up the `production` GitHub Environment's Secrets/Variables (same full set as `staging` — see `docs/terraform-digitalocean-setup.md`'s env var reference table)
 4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
 5. In `deploy-production.yml`: rewrite to mirror `deploy-staging.yml` (build/push/SSH-deploy), uncomment the `push: branches: [production]` trigger, remove the `if: false` guard
@@ -416,7 +416,7 @@ Note `release-staging.yml` / `release-production.yml` don't need extra secrets �
 ### 5. DigitalOcean
 
 - Staging droplet already exists, provisioned via Terraform and deployed to by `deploy-staging.yml` over SSH — see `docs/terraform-digitalocean-setup.md`
-- When ready: provision the production droplet (`terraform/environments/production`) + a production Neon Postgres project, with independent env vars and secrets from staging — see "Production status" above
+- When ready: provision the production droplet (`terraform/environments/production`) + a production DigitalOcean Managed Postgres database, with independent env vars and secrets from staging — see "Production status" above
 - Migrations run automatically at startup via `app.js` — no separate deploy step needed
 
 ---
@@ -434,7 +434,7 @@ GRANT ALL ON SCHEMA public TO comprobify_app;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO comprobify_app;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO comprobify_app;
 ```
-(`defaultdb` is DigitalOcean Managed Postgres's default database name — adjust if the cluster was provisioned with a different one, or if targeting a Neon project instead, whose default database is `neondb`.)
+(`defaultdb` is DigitalOcean Managed Postgres's default database name — adjust if the cluster was provisioned with a different one.)
 
 ### 2. Droplet + first deploy
 - [ ] Provision the droplet via Terraform (`terraform/environments/<env>`) — see `docs/terraform-digitalocean-setup.md`'s "First-time setup"
@@ -512,7 +512,7 @@ All variables are required unless marked optional.
 | `DB_USER` | Yes | Database user |
 | `DB_PASSWORD` | Yes | Database password |
 | `DB_SSL` | Yes | `true` to enable SSL (required in production) |
-| `DB_SSL_CA` | No | The provider's CA certificate, **as a single line with real newlines replaced by literal `\n`** (e.g. `-----BEGIN CERTIFICATE-----\nMIIE...\n-----END CERTIFICATE-----`) — `src/config/index.js` converts it back to real newlines at runtime. Required for a provider with a private CA (e.g. DigitalOcean managed Postgres — download from its dashboard's Connection page); omit for a publicly-trusted chain (e.g. Neon), where `rejectUnauthorized: true` alone already verifies correctly. **Must not be pasted as a raw multi-line PEM** — the deploy workflow writes this into the droplet's `.env` file via an unquoted heredoc substitution, so a real newline mid-certificate produces a line `docker compose`'s env parser can't read as `KEY=value` (fails with `unexpected character` on whatever line follows, e.g. a base64 line containing a `+`). Without the CA at all against a private-CA provider, connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. |
+| `DB_SSL_CA` | No | The provider's CA certificate, **as a single line with real newlines replaced by literal `\n`** (e.g. `-----BEGIN CERTIFICATE-----\nMIIE...\n-----END CERTIFICATE-----`) — `src/config/index.js` converts it back to real newlines at runtime. Required for a provider with a private CA (e.g. DigitalOcean Managed Postgres — download from its dashboard's Connection page); omit for a publicly-trusted chain, where `rejectUnauthorized: true` alone already verifies correctly. **Must not be pasted as a raw multi-line PEM** — the deploy workflow writes this into the droplet's `.env` file via an unquoted heredoc substitution, so a real newline mid-certificate produces a line `docker compose`'s env parser can't read as `KEY=value` (fails with `unexpected character` on whatever line follows, e.g. a base64 line containing a `+`). Without the CA at all against a private-CA provider, connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. |
 | `DB_POOL_MAX` | No | Max `pg.Pool` connections for this process (default `5`, a conservative fallback — not a tuned value). Set per-process — the `api` and `worker` containers each open their own pool, and both draw from the same provider connection ceiling as any *other* database sharing that cluster (e.g. comprobify-web's database is planned to share the staging cluster). `deploy/docker-compose.yml` sets `6`/`3` respectively, leaving headroom for that third consumer; re-tune against whatever plan/provider you're actually on. |
 | `ENCRYPTION_KEY` | Yes | 64-character hex string — AES-256-GCM key for private key encryption |
 | `ADMIN_SECRET` | Yes | 64-character hex string — protects all `/v1/admin/*` endpoints |
