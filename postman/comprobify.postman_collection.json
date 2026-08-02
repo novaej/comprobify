@@ -1940,8 +1940,8 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Status RECEIVED or RETURNED', () => pm.expect(['RECEIVED','RETURNED']).to.include(r.document?.status));"
+                  "pm.test('Status 202', () => pm.response.to.have.status(202));",
+                  "pm.test('Document status is PENDING_SEND', () => pm.expect(r.document?.status).to.eql('PENDING_SEND'));"
                 ],
                 "type": "text/javascript"
               }
