@@ -19,6 +19,19 @@ function authorizeDedupKey(documentId) {
   return `sri-authorize:${documentId}`;
 }
 
+// Presents a pending_effects row for the retry endpoints' responses —
+// camelCase, and deliberately narrow (no payload/tenant_id/dedup_key/etc.,
+// same "don't leak internal outbox bookkeeping" reasoning as every other
+// presenter in this codebase).
+function formatEffect(effect) {
+  return {
+    id: effect.id,
+    effectType: effect.effect_type,
+    status: effect.status,
+    attemptCount: effect.attempt_count,
+  };
+}
+
 // Durable-enqueue + best-effort-dispatch, mirrored at every producer call
 // site in this file (see ADR-022 / pending-effect.service.js). documentId is
 // only meaningful for SRI_SEND/SRI_AUTHORIZE (see migration 082) — every
@@ -293,7 +306,7 @@ async function retrySend(accessKey, issuer) {
   }
 
   const reset = await pendingEffectService.retryEffect(effect.id);
-  return { document: formatDocument(document), effect: reset };
+  return { document: formatDocument(document), effect: formatEffect(reset) };
 }
 
 // Bulk variant of the above — every FAILED SRI_SEND/SRI_AUTHORIZE effect for
@@ -305,7 +318,7 @@ async function retryAllFailedForTenant(tenantId) {
   const retried = [];
   for (const effect of failed) {
     const reset = await pendingEffectService.retryEffect(effect.id);
-    if (reset) retried.push(reset);
+    if (reset) retried.push(formatEffect(reset));
   }
   return retried;
 }

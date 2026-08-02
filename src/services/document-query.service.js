@@ -3,13 +3,47 @@ const documentModel = require('../models/document.model');
 const documentEventModel = require('../models/document-event.model');
 const sriResponseModel = require('../models/sri-response.model');
 const catalogModel = require('../models/catalog.model');
+const pendingEffectModel = require('../models/pending-effect.model');
 const NotFoundError = require('../errors/not-found-error');
+const DocumentStatus = require('../constants/document-status');
+const { EffectTypes } = require('../constants/effect-types');
 const { formatDocument } = require('../presenters/document.presenter');
+
+// Maps a document's current status to the effect type actively driving its
+// next transition — PENDING_SEND is waiting on SRI_SEND, RECEIVED is waiting
+// on SRI_AUTHORIZE. Any other status (SIGNED, AUTHORIZED, RETURNED,
+// NOT_AUTHORIZED) has nothing in flight.
+function relevantEffectTypeFor(documentStatus) {
+  if (documentStatus === DocumentStatus.PENDING_SEND) return EffectTypes.SRI_SEND;
+  if (documentStatus === DocumentStatus.RECEIVED) return EffectTypes.SRI_AUTHORIZE;
+  return null;
+}
 
 async function getByAccessKey(accessKey, issuer) {
   const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) return null;
-  return formatDocument(document);
+
+  const formatted = formatDocument(document);
+
+  // Lets a polling client (GET /:accessKey every few seconds while waiting
+  // on SRI) tell "still auto-retrying" apart from "exhausted all 5 attempts,
+  // needs a manual POST /:accessKey/send/retry" instead of guessing from how
+  // long it's been polling — the two timescales don't match (reconciliation
+  // spaces automatic re-attempts 5 minutes apart, so exhausting all 5 can
+  // take ~20+ minutes, far longer than a typical short polling window).
+  const relevantEffectType = relevantEffectTypeFor(document.status);
+  if (relevantEffectType) {
+    const effect = await pendingEffectModel.findActiveByDocumentId(document.id, issuer.tenant_id, relevantEffectType);
+    if (effect) {
+      formatted.dispatch = {
+        status: effect.status,
+        attemptCount: effect.attempt_count,
+        lastError: effect.last_error,
+      };
+    }
+  }
+
+  return formatted;
 }
 
 async function getCreditNotes(accessKey, issuer) {

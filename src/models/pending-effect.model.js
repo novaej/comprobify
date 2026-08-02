@@ -64,10 +64,30 @@ async function findFailedByDocumentId(documentId, tenantId) {
 }
 
 /**
+ * The latest still-open (not DONE) SRI_SEND/SRI_AUTHORIZE effect for one
+ * document + a specific effect type, scoped to the tenant — backs the
+ * `dispatch` field on GET /v1/documents/:accessKey (see
+ * document-query.service.js's getByAccessKey), which lets a polling client
+ * tell "still auto-retrying" apart from "genuinely FAILED, needs a manual
+ * retry" instead of guessing from elapsed time. Excludes DONE on purpose —
+ * once an attempt actually succeeds there's nothing left to report.
+ */
+async function findActiveByDocumentId(documentId, tenantId, effectType) {
+  const { rows } = await db.query(
+    `SELECT * FROM pending_effects
+     WHERE document_id = $1 AND tenant_id = $2 AND effect_type = $3
+       AND status IN ('PENDING', 'DISPATCHED', 'FAILED')
+     ORDER BY created_at DESC LIMIT 1`,
+    [documentId, tenantId, effectType]
+  );
+  return rows[0] || null;
+}
+
+/**
  * Every FAILED SRI_SEND/SRI_AUTHORIZE effect for a tenant — backs
- * POST /v1/documents/retry-failed. No document_id needed here: tenant_id
- * and effect_type are real columns already, so this doesn't touch the
- * JSONB payload at all.
+ * POST /v1/tenants/retry-failed-documents. No document_id needed here:
+ * tenant_id and effect_type are real columns already, so this doesn't touch
+ * the JSONB payload at all.
  */
 async function findFailedByTenantId(tenantId) {
   const { rows } = await db.query(
@@ -169,6 +189,7 @@ async function findStaleForReconciliation(client, { checkDelayMinutes, staleMinu
 module.exports = {
   create,
   findFailedByDocumentId,
+  findActiveByDocumentId,
   findFailedByTenantId,
   resetForRetry,
   markDispatched,
