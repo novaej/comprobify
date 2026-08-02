@@ -124,7 +124,10 @@ async function sendReceipt(signedXml, issuer) {
   const rawResponse = await response.text();
 
   if (!response.ok) {
-    throw new SriError(`SRI reception service returned HTTP ${response.status}`, []);
+    const error = new SriError(`SRI reception service returned HTTP ${response.status}`, []);
+    error.httpStatus = response.status;
+    error.rawResponse = rawResponse;
+    throw error;
   }
 
   const estado = extractTagContent(rawResponse, 'estado');
@@ -153,7 +156,10 @@ async function checkAuthorization(accessKey, issuer) {
   const rawResponse = await response.text();
 
   if (!response.ok) {
-    throw new SriError(`SRI authorization service returned HTTP ${response.status}`, []);
+    const error = new SriError(`SRI authorization service returned HTTP ${response.status}`, []);
+    error.httpStatus = response.status;
+    error.rawResponse = rawResponse;
+    throw error;
   }
 
   const numeroComprobantes = extractTagContent(rawResponse, 'numeroComprobantes');

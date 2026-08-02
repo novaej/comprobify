@@ -42,6 +42,19 @@ async function sendToSri(accessKey, issuer) {
       operation: 'SEND',
       message: err.message,
     }, null, issuer.id, issuer.sandbox);
+    // err.rawResponse is only set for a non-2xx HTTP response from SRI (see
+    // sri.service.js) — a genuine network-level throw (timeout, DNS, etc.)
+    // never reaches SRI at all, so there's no raw body to persist for that case.
+    if (err.rawResponse) {
+      await sriResponseModel.create({
+        documentId: document.id,
+        operationType: OperationType.RECEPTION,
+        status: `HTTP_${err.httpStatus}`,
+        messages: null,
+        rawResponse: err.rawResponse,
+        sandbox: issuer.sandbox,
+      });
+    }
     throw err;
   }
 
@@ -109,6 +122,18 @@ async function checkAuthorization(accessKey, issuer) {
       operation: 'AUTHORIZE',
       message: err.message,
     }, null, issuer.id, issuer.sandbox);
+    // See the matching comment in sendToSri — only a non-2xx HTTP response
+    // from SRI carries a raw body worth persisting.
+    if (err.rawResponse) {
+      await sriResponseModel.create({
+        documentId: document.id,
+        operationType: OperationType.AUTHORIZATION,
+        status: `HTTP_${err.httpStatus}`,
+        messages: null,
+        rawResponse: err.rawResponse,
+        sandbox: issuer.sandbox,
+      });
+    }
     throw err;
   }
 
