@@ -39,6 +39,41 @@ async function create(effectType, tenantId, payload, dedupKey = null, notificati
   return rows[0];
 }
 
+async function findById(id) {
+  const { rows } = await db.query(`SELECT * FROM pending_effects WHERE id = $1`, [id]);
+  return rows[0] || null;
+}
+
+async function findAllFailed(limit = 100) {
+  const { rows } = await db.query(
+    `SELECT * FROM pending_effects WHERE status = 'FAILED' ORDER BY created_at ASC LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+/**
+ * Resets a FAILED effect back to a fresh, retryable state — a full new
+ * attempt_count budget, not a continuation of the exhausted one, since a
+ * manual retry is normally reached for after whatever caused the original
+ * 5 failures (e.g. an SRI-side outage) is believed to be resolved.
+ * dispatch_attempted_at is cleared to NULL so a subsequent reconciliation
+ * sweep would pick it up immediately if the caller's own dispatch() (see
+ * pending-effect.service.js's retry()) doesn't land. The `AND status =
+ * 'FAILED'` guard makes this a no-op (returns null) on anything not
+ * actually FAILED, so a race against a concurrent retry can't double-reset.
+ */
+async function resetForRetry(id) {
+  const { rows } = await db.query(
+    `UPDATE pending_effects
+     SET status = 'PENDING', attempt_count = 0, last_error = NULL, dispatch_attempted_at = NULL
+     WHERE id = $1 AND status = 'FAILED'
+     RETURNING *`,
+    [id]
+  );
+  return rows[0] || null;
+}
+
 async function markDispatched(id) {
   const { rows } = await db.query(
     `UPDATE pending_effects SET status = 'DISPATCHED', dispatch_attempted_at = NOW() WHERE id = $1 RETURNING *`,
@@ -104,6 +139,9 @@ async function findStaleForReconciliation(client, { checkDelayMinutes, staleMinu
 
 module.exports = {
   create,
+  findById,
+  findAllFailed,
+  resetForRetry,
   markDispatched,
   claimForProcessing,
   markDone,

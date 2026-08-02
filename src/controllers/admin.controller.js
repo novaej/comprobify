@@ -3,6 +3,7 @@ const notificationSchedulerService = require('../services/notification-scheduler
 const subscriptionService = require('../services/subscription.service');
 const tenantQuotaService = require('../services/tenant-quota.service');
 const queueReconciliationService = require('../services/queue-reconciliation.service');
+const pendingEffectService = require('../services/pending-effect.service');
 const agreementService = require('../services/agreement.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
 const notificationEmailTemplateService = require('../services/notification-email-template.service');
@@ -373,17 +374,46 @@ const runQuotaJobs = async (req, res) => {
  * SRI itself, only ensures a message exists for workers/worker.js to
  * eventually pick up. See queue-reconciliation.service.js.
  *
- * Designed to be called by an external scheduler hourly — more frequent
+ * Designed to be called by an external scheduler every 5 minutes (matches
+ * config.queueReconciliation.effectStaleMinutes' default, and the actual
+ * droplet cron — see docs/terraform-digitalocean-setup.md) — more frequent
  * than the daily jobs above, since this is the mechanism that recovers
- * from a RabbitMQ outage or a missed publish, but not tighter than that:
- * CloudAMQP is a managed broker that rarely fails outright, and the
- * worker already processes anything actually queued near-instantly, so
- * this cadence only bounds how long a document can sit unprocessed if
- * nothing ever queued a message for it at all.
+ * from a RabbitMQ outage or a missed publish. CloudAMQP is a managed
+ * broker that rarely fails outright, and the worker already processes
+ * anything actually queued near-instantly, so this cadence only bounds
+ * how long a document can sit unprocessed if nothing ever queued a
+ * message for it at all.
  */
 const runQueueReconciliationJob = async (req, res) => {
   const result = await queueReconciliationService.runAll();
   res.json({ ok: true, ...result });
+};
+
+/**
+ * POST /api/admin/jobs/pending-effects/:id/retry
+ *
+ * Manually recovers one FAILED pending_effects row — resets it to a fresh
+ * attempt_count budget and dispatches it immediately. There is no automatic
+ * path back from FAILED (see pending-effect.service.js's retry()), so this
+ * is the only recovery mechanism for an effect whose 5 attempts were all
+ * consumed by something transient (e.g. an SRI-side outage) that has since
+ * cleared up.
+ */
+const retryPendingEffect = async (req, res) => {
+  const effect = await pendingEffectService.retry(req.params.id);
+  res.json({ ok: true, effect });
+};
+
+/**
+ * POST /api/admin/jobs/pending-effects/retry-failed
+ *
+ * Bulk variant of the above — retries every currently-FAILED effect. Useful
+ * after an outage affecting many tenants' effects at once (e.g. SRI itself
+ * being down) clears up, rather than retrying one at a time.
+ */
+const retryAllFailedPendingEffects = async (req, res) => {
+  const effects = await pendingEffectService.retryAllFailed();
+  res.json({ ok: true, retried: effects.length, effects });
 };
 
 const getDocumentRide = async (req, res) => {
@@ -397,6 +427,7 @@ module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
   runSubscriptionJobs, runQuotaJobs, runQueueReconciliationJob,
+  retryPendingEffect, retryAllFailedPendingEffects,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments,
   publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion, generateTenantAgreements,

@@ -150,6 +150,12 @@ const ErrorCodes = Object.freeze({
   BUILDER_NOT_FOUND: 'BUILDER_NOT_FOUND',
   /** OPERATOR_NAME/OPERATOR_RUC/OPERATOR_EMAIL env vars not set — cannot publish legal documents */
   OPERATOR_CONFIG_MISSING: 'OPERATOR_CONFIG_MISSING',
+
+  // --- Pending effects (async outbox) ---
+  /** No pending_effects row exists with the given id */
+  PENDING_EFFECT_NOT_FOUND: 'PENDING_EFFECT_NOT_FOUND',
+  /** Only a FAILED effect can be retried — it's still PENDING/DISPATCHED/DONE */
+  PENDING_EFFECT_NOT_FAILED: 'PENDING_EFFECT_NOT_FAILED',
 });
 
 module.exports = ErrorCodes;

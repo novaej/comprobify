@@ -70,5 +70,7 @@ router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs))
 router.post('/jobs/subscriptions', asyncHandler(controller.runSubscriptionJobs));
 router.post('/jobs/quota', asyncHandler(controller.runQuotaJobs));
 router.post('/jobs/queue-reconciliation', asyncHandler(controller.runQueueReconciliationJob));
+router.post('/jobs/pending-effects/retry-failed', asyncHandler(controller.retryAllFailedPendingEffects));
+router.post('/jobs/pending-effects/:id/retry', v.retryPendingEffect, validateRequest, asyncHandler(controller.retryPendingEffect));
 
 module.exports = router;

@@ -18,6 +18,8 @@ const pendingEffectModel = require('../models/pending-effect.model');
 const queueService = require('./queue.service');
 const { routingKeyForEffectType } = require('../constants/effect-types');
 const AppError = require('../errors/app-error');
+const NotFoundError = require('../errors/not-found-error');
+const ErrorCodes = require('../constants/error-codes');
 const config = require('../config');
 
 // A state-machine violation (400) means another delivery already advanced
@@ -42,6 +44,45 @@ async function dispatch(effectRow) {
     // caller's request, same as queueSend/queueAuthorizationCheck.
     console.warn(`[pending-effects] publish failed for ${effectRow.id} (${effectRow.effect_type}):`, err.message);
   }
+}
+
+// Manual recovery for a FAILED effect (admin-triggered — see
+// POST /v1/admin/jobs/pending-effects/:id/retry). There's no automatic path
+// back from FAILED (queue-reconciliation only ever looks at PENDING/
+// DISPATCHED rows, and RabbitMQ itself never redelivers — see worker.js's
+// nack(msg, false, false)), so this is the only way to recover an effect
+// whose failure turned out to be transient (e.g. an SRI-side outage) once
+// whatever caused it is believed to be resolved.
+async function retry(effectId) {
+  const reset = await pendingEffectModel.resetForRetry(effectId);
+  if (!reset) {
+    const effect = await pendingEffectModel.findById(effectId);
+    if (!effect) throw new NotFoundError('PendingEffect', ErrorCodes.PENDING_EFFECT_NOT_FOUND);
+    throw new AppError(
+      `Effect is '${effect.status}', not FAILED — only a FAILED effect can be retried`,
+      409,
+      ErrorCodes.PENDING_EFFECT_NOT_FAILED
+    );
+  }
+  dispatch(reset);
+  return reset;
+}
+
+// Bulk variant — retries every currently-FAILED effect. Best-effort per row:
+// one row's dispatch failing (see dispatch()'s own try/catch) never stops
+// the rest, since each is independent and reconciliation would pick up any
+// left undispatched regardless.
+async function retryAllFailed() {
+  const failed = await pendingEffectModel.findAllFailed();
+  const retried = [];
+  for (const effect of failed) {
+    const reset = await pendingEffectModel.resetForRetry(effect.id);
+    if (reset) {
+      dispatch(reset);
+      retried.push(reset);
+    }
+  }
+  return retried;
 }
 
 /**
@@ -111,4 +152,4 @@ async function process(effectId) {
   throw handlerError;
 }
 
-module.exports = { enqueue, dispatch, process, isBenignStateError };
+module.exports = { enqueue, dispatch, process, isBenignStateError, retry, retryAllFailed };
