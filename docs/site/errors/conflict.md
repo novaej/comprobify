@@ -12,6 +12,12 @@ Se llamó a `POST /v1/resend-verification` para una dirección de correo cuya cu
 
 **Qué hacer:** No se requiere ninguna acción — la cuenta está verificada y puede usarse con normalidad.
 
+### `NOTHING_TO_RETRY`
+
+Se llamó a `POST /v1/documents/:accessKey/send/retry` (o `POST /v1/tenants/retry-failed-documents`) pero no hay ningún intento de envío/autorización fallido que recuperar — el comprobante puede ya estar en curso, ya haber completado, o nunca haber fallado.
+
+**Qué hacer:** Consulta `GET /v1/documents/:accessKey` para ver el estado actual del comprobante antes de reintentar.
+
 ### `CONFLICT` (respaldo)
 
 Se proporcionó un encabezado `Idempotency-Key` con un valor que ya fue usado para un payload de solicitud **diferente**, o se violó otra restricción de unicidad. Lee `detail`.

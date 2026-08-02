@@ -171,7 +171,7 @@ The production pipeline is **written but disabled** — `release-production.yml`
 
 To enable production once it's ready to provision:
 1. Create the `production` branch (fast-forwarded only by the automation, same invariant as `staging`)
-2. Provision the production droplet via Terraform (`terraform/environments/production`, mirroring `staging`'s setup — see `docs/terraform-digitalocean-setup.md`'s "First-time setup" steps) + a production **Neon** Postgres project (own project, `public` + `sandbox` schemas), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
+2. Provision the production droplet via Terraform (`terraform/environments/production`, mirroring `staging`'s setup — see `docs/terraform-digitalocean-setup.md`'s "First-time setup" steps) + a production **DigitalOcean Managed Postgres** database (own cluster, `public` + `sandbox` schemas — mirrors staging's setup, see `docs/deployment-reference-staging.md`, including sharing the cluster with `comprobify-web`'s production database if/when that's provisioned), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
 3. Set up the `production` GitHub Environment's Secrets/Variables (same full set as `staging` — see `docs/terraform-digitalocean-setup.md`'s env var reference table)
 4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
 5. In `deploy-production.yml`: rewrite to mirror `deploy-staging.yml` (build/push/SSH-deploy), uncomment the `push: branches: [production]` trigger, remove the `if: false` guard
@@ -246,7 +246,7 @@ Fix: a Cloudflare **Configuration Rule** scoped to just the API hostnames, with 
 
 This leaves Email Obfuscation active on the marketing site (`comprobify.com`, `staging.comprobify.com`), where it's still useful, and only disables it on the API hostnames that actually serve HTML with real embedded email addresses.
 
-`app.comprobify.com` / `app-staging.comprobify.com` (the frontend) are proxied through Vercel, not Cloudflare, so this rule doesn't need to — and can't — cover them.
+`app.comprobify.com` / `app-staging.comprobify.com` (the frontend, `comprobify-web`) now run on DigitalOcean App Platform (moved off Vercel). Whether this rule needs to cover them depends on whether that hostname is Cloudflare-proxied — if App Platform serves it directly (not proxied), the rule still can't reach it; if it's since been put behind Cloudflare, add it to the expression above.
 
 > Applies to any Cloudflare-proxied API hostname serving `GET /v1/agreements/:type` or `GET /v1/tenants/agreements/:type` HTML. If a new API hostname is added later (e.g. a second staging environment), add it to this rule's expression too, or its agreement pages will silently break the same way.
 
@@ -416,7 +416,7 @@ Note `release-staging.yml` / `release-production.yml` don't need extra secrets �
 ### 5. DigitalOcean
 
 - Staging droplet already exists, provisioned via Terraform and deployed to by `deploy-staging.yml` over SSH — see `docs/terraform-digitalocean-setup.md`
-- When ready: provision the production droplet (`terraform/environments/production`) + a production Neon Postgres project, with independent env vars and secrets from staging — see "Production status" above
+- When ready: provision the production droplet (`terraform/environments/production`) + a production DigitalOcean Managed Postgres database, with independent env vars and secrets from staging — see "Production status" above
 - Migrations run automatically at startup via `app.js` — no separate deploy step needed
 
 ---
@@ -426,14 +426,15 @@ Note `release-staging.yml` / `release-production.yml` don't need extra secrets �
 Run through this after every new environment is provisioned (staging done, repeat for production). Steps are in order.
 
 ### 1. Database user
-- [ ] Create a dedicated non-superuser role in Neon's SQL Editor (never use `neondb_owner` as the app user — it bypasses RLS):
+- [ ] Create a dedicated non-superuser role via the database's SQL client (staging: DigitalOcean Managed Postgres, shared with `comprobify-web` — never use the provider's default admin role, e.g. DO's `doadmin`, as the app user; it bypasses RLS):
 ```sql
 CREATE ROLE comprobify_app LOGIN PASSWORD 'strong-password';
-GRANT ALL PRIVILEGES ON DATABASE neondb TO comprobify_app;
+GRANT ALL PRIVILEGES ON DATABASE defaultdb TO comprobify_app;
 GRANT ALL ON SCHEMA public TO comprobify_app;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO comprobify_app;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO comprobify_app;
 ```
+(`defaultdb` is DigitalOcean Managed Postgres's default database name — adjust if the cluster was provisioned with a different one.)
 
 ### 2. Droplet + first deploy
 - [ ] Provision the droplet via Terraform (`terraform/environments/<env>`) — see `docs/terraform-digitalocean-setup.md`'s "First-time setup"
@@ -442,7 +443,7 @@ ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO comprobify_app;
 - [ ] Confirm first deploy succeeds and all migrations are listed as applied in the container logs (`docker compose logs api`)
 
 ### 3. Sandbox schema grants
-After migrations run, migration 033 creates the `sandbox` schema. Grant access in Neon's SQL Editor:
+After migrations run, migration 033 creates the `sandbox` schema. Grant access via the database's SQL client:
 - [ ] Run:
 ```sql
 GRANT ALL ON SCHEMA sandbox TO comprobify_app;
@@ -511,7 +512,7 @@ All variables are required unless marked optional.
 | `DB_USER` | Yes | Database user |
 | `DB_PASSWORD` | Yes | Database password |
 | `DB_SSL` | Yes | `true` to enable SSL (required in production) |
-| `DB_SSL_CA` | No | The provider's CA certificate, **as a single line with real newlines replaced by literal `\n`** (e.g. `-----BEGIN CERTIFICATE-----\nMIIE...\n-----END CERTIFICATE-----`) — `src/config/index.js` converts it back to real newlines at runtime. Required for a provider with a private CA (e.g. DigitalOcean managed Postgres — download from its dashboard's Connection page); omit for a publicly-trusted chain (e.g. Neon), where `rejectUnauthorized: true` alone already verifies correctly. **Must not be pasted as a raw multi-line PEM** — the deploy workflow writes this into the droplet's `.env` file via an unquoted heredoc substitution, so a real newline mid-certificate produces a line `docker compose`'s env parser can't read as `KEY=value` (fails with `unexpected character` on whatever line follows, e.g. a base64 line containing a `+`). Without the CA at all against a private-CA provider, connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. |
+| `DB_SSL_CA` | No | The provider's CA certificate, **as a single line with real newlines replaced by literal `\n`** (e.g. `-----BEGIN CERTIFICATE-----\nMIIE...\n-----END CERTIFICATE-----`) — `src/config/index.js` converts it back to real newlines at runtime. Required for a provider with a private CA (e.g. DigitalOcean Managed Postgres — download from its dashboard's Connection page); omit for a publicly-trusted chain, where `rejectUnauthorized: true` alone already verifies correctly. **Must not be pasted as a raw multi-line PEM** — the deploy workflow writes this into the droplet's `.env` file via an unquoted heredoc substitution, so a real newline mid-certificate produces a line `docker compose`'s env parser can't read as `KEY=value` (fails with `unexpected character` on whatever line follows, e.g. a base64 line containing a `+`). Without the CA at all against a private-CA provider, connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. |
 | `DB_POOL_MAX` | No | Max `pg.Pool` connections for this process (default `5`, a conservative fallback — not a tuned value). Set per-process — the `api` and `worker` containers each open their own pool, and both draw from the same provider connection ceiling as any *other* database sharing that cluster (e.g. comprobify-web's database is planned to share the staging cluster). `deploy/docker-compose.yml` sets `6`/`3` respectively, leaving headroom for that third consumer; re-tune against whatever plan/provider you're actually on. |
 | `ENCRYPTION_KEY` | Yes | 64-character hex string — AES-256-GCM key for private key encryption |
 | `ADMIN_SECRET` | Yes | 64-character hex string — protects all `/v1/admin/*` endpoints |
@@ -648,7 +649,7 @@ Not all three of `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials are equally 
 
 **`ADMIN_SECRET`** — safe, mechanical. It's only ever compared as a bearer token (`authenticate-admin.js`), never used to encrypt anything at rest. Update the value in the `staging`/`production` GitHub Environment's Secrets, then trigger a deploy — the CD workflow writes it into the container's `.env` fresh on every run, and the `cron.d` schedule reads it from that same container, so one GitHub-side update covers both the API and the scheduled jobs with no separate step. Old value stops working the moment the container restarts with the new one; brief window where a leaked old secret and the new one might both be "in flight" during the update, but no data-level risk either way.
 
-**DB credentials** — also low-risk. Rotate the password/role at the provider (Neon), update the `DB_*` GitHub Secrets, trigger a deploy. No stored data depends on the credential value itself, only on being able to authenticate — a connection-level concern, not a data-level one.
+**DB credentials** — also low-risk. Rotate the password/role at the provider (DigitalOcean Managed Postgres for staging), update the `DB_*` GitHub Secrets, trigger a deploy. No stored data depends on the credential value itself, only on being able to authenticate — a connection-level concern, not a data-level one.
 
 **`ENCRYPTION_KEY` — dangerous, requires a real migration, do not just swap the env var.** This key is the only thing standing between `issuers.encrypted_private_key` (AES-256-GCM, `crypto.service.js`) and being unreadable garbage. Changing the env var value alone, without re-encrypting existing rows first, permanently breaks every existing issuer's ability to sign documents — a full outage for every already-onboarded tenant, not a gradual degradation. Correct rotation requires: decrypt every `issuers.encrypted_private_key` with the OLD key, re-encrypt with the NEW key, write it back, *then* cut the env var over — ideally as one script run before the restart, not manually. **No such script exists in this repo yet.** If `ENCRYPTION_KEY` is ever suspected compromised, that script needs to be written and tested (ideally against a copy of production data) before rotating for real — don't attempt this live for the first time during an actual incident.
 

@@ -373,13 +373,15 @@ const runQuotaJobs = async (req, res) => {
  * SRI itself, only ensures a message exists for workers/worker.js to
  * eventually pick up. See queue-reconciliation.service.js.
  *
- * Designed to be called by an external scheduler hourly — more frequent
+ * Designed to be called by an external scheduler every 5 minutes (matches
+ * config.queueReconciliation.effectStaleMinutes' default, and the actual
+ * droplet cron — see docs/terraform-digitalocean-setup.md) — more frequent
  * than the daily jobs above, since this is the mechanism that recovers
- * from a RabbitMQ outage or a missed publish, but not tighter than that:
- * CloudAMQP is a managed broker that rarely fails outright, and the
- * worker already processes anything actually queued near-instantly, so
- * this cadence only bounds how long a document can sit unprocessed if
- * nothing ever queued a message for it at all.
+ * from a RabbitMQ outage or a missed publish. CloudAMQP is a managed
+ * broker that rarely fails outright, and the worker already processes
+ * anything actually queued near-instantly, so this cadence only bounds
+ * how long a document can sit unprocessed if nothing ever queued a
+ * message for it at all.
  */
 const runQueueReconciliationJob = async (req, res) => {
   const result = await queueReconciliationService.runAll();

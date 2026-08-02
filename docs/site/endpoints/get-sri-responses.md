@@ -37,6 +37,12 @@ GET /v1/documents/:accessKey/sri-responses
       "status": "RECIBIDA",
       "messages": null,
       "createdAt": "2026-07-05T14:21:00.000Z"
+    },
+    {
+      "operationType": "RECEPTION",
+      "status": "HTTP_500",
+      "messages": null,
+      "createdAt": "2026-07-05T14:20:00.000Z"
     }
   ]
 }
@@ -45,8 +51,8 @@ GET /v1/documents/:accessKey/sri-responses
 | Campo | Descripción |
 |---|---|
 | `operationType` | `RECEPTION` (de `POST /:accessKey/send`) o `AUTHORIZATION` (de `GET /:accessKey/authorize`) |
-| `status` | El `estado` que devolvió el SRI para esa llamada (por ejemplo, `RECIBIDA`, `DEVUELTA`, `AUTORIZADO`, `NO_AUTORIZADO`) |
-| `messages` | Arreglo de mensajes de observación/error del SRI para esa llamada, o `null` si el SRI no devolvió ninguno |
+| `status` | El `estado` que devolvió el SRI para esa llamada (por ejemplo, `RECIBIDA`, `DEVUELTA`, `AUTORIZADO`, `NO_AUTORIZADO`), o `HTTP_<código>` (por ejemplo, `HTTP_500`) cuando el propio servicio del SRI falló a nivel de transporte y nunca llegó a devolver un `estado` de negocio — un tipo de fallo distinto a un rechazo del comprobante, y típicamente un problema transitorio del lado del SRI, no un problema con el comprobante enviado |
+| `messages` | Arreglo de mensajes de observación/error del SRI para esa llamada, o `null` si el SRI no devolvió ninguno (siempre `null` para un `status` de tipo `HTTP_<código>`, ya que nunca se llegó a interpretar una respuesta de negocio) |
 | `createdAt` | Cuándo se registró la respuesta de esa llamada |
 
 El cuerpo de la respuesta SOAP sin procesar se excluye intencionalmente — es información de diagnóstico interno, no forma parte del contrato de la API.

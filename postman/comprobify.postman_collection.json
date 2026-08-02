@@ -872,6 +872,25 @@
             },
             "description": "Full tenant-level audit trail (email verification, subscription, payment, and tier/billing-interval change lifecycle events), chronological (oldest first). This is the one place that shows the sequence of changes to a subscription over time — e.g. that it started as monthly GROWTH and later changed to yearly STARTER — not just its current state (see Get My Subscriptions / Get Current Tenant for that)."
           }
+        },
+        {
+          "name": "Retry All Failed Documents",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/tenants/retry-failed-documents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "tenants",
+                "retry-failed-documents"
+              ]
+            },
+            "description": "Bulk variant of Retry Send/Authorize (under Documents) — recovers every stuck document for the tenant in one call, no X-Issuer-Id needed, covers all issuers/branches at once. Best-effort per document: one failing to re-queue doesn't stop the rest.\n\nResponse is { retried: <count>, effects: [<the reset rows>] } — retried: 0 is a valid response meaning nothing needed recovery."
+          }
         }
       ]
     },
@@ -1887,7 +1906,7 @@
                 "{{access_key}}"
               ]
             },
-            "description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates."
+            "description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates.\n\nWhile status is PENDING_SEND or RECEIVED, the response may include a `dispatch` field ({ status, attemptCount, lastError }) reporting the in-flight SRI_SEND/SRI_AUTHORIZE effect's own state — PENDING/DISPATCHED means it's still auto-retrying (reconciliation spaces attempts 5 minutes apart), FAILED means all 5 automatic attempts are exhausted and Retry Send/Authorize is now needed. Absent once the document reaches a settled status."
           }
         },
         {
@@ -1921,13 +1940,40 @@
               "script": {
                 "exec": [
                   "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Status RECEIVED or RETURNED', () => pm.expect(['RECEIVED','RETURNED']).to.include(r.document?.status));"
+                  "pm.test('Status 202', () => pm.response.to.have.status(202));",
+                  "pm.test('Document status is PENDING_SEND', () => pm.expect(r.document?.status).to.eql('PENDING_SEND'));"
                 ],
                 "type": "text/javascript"
               }
             }
           ]
+        },
+        {
+          "name": "Retry Send/Authorize",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Issuer-Id",
+                "value": "{{issuer_id}}",
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/send/retry",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "{{access_key}}",
+                "send",
+                "retry"
+              ]
+            },
+            "description": "Recovers a document whose asynchronous SRI dispatch (send or authorization check) exhausted its 5 automatic attempts and got stuck. Resets the attempt counter and re-queues it immediately, without waiting for the next Queue Reconciliation sweep. Works whether the document is stuck in PENDING_SEND or RECEIVED — automatically detects which of the two attempts failed.\n\nReturns 409 NOTHING_TO_RETRY if there's no FAILED send/authorize attempt for this document (already in progress, already completed, or never failed)."
+          }
         },
         {
           "name": "Check Authorization",

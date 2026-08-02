@@ -44,12 +44,12 @@ El Responsable autoriza el uso de los siguientes subencargados, ya en operación
 | Subencargado | Finalidad | Aplica a |
 |---|---|---|
 | DigitalOcean | Infraestructura y alojamiento del Servicio (API) | Todos los clientes |
-| Neon | Base de datos del Servicio, incluida la base de datos independiente de la interfaz web cuando el Responsable la utiliza | Todos los clientes |
+| DigitalOcean Managed Postgres | Base de datos del Servicio, utilizada tanto por la API como por la interfaz web (comprobify-web) cuando el Responsable la utiliza | Todos los clientes |
+| DigitalOcean App Platform | Alojamiento de la interfaz web del Servicio (comprobify-web) | Solo clientes que utilizan la interfaz web |
 | Mailgun | Envío de correos transaccionales | Todos los clientes |
 | Sentry | Monitoreo y diagnóstico de errores | Todos los clientes |
 | CloudAMQP | Enrutamiento de mensajes para el procesamiento asíncrono de comprobantes electrónicos (identificadores del comprobante únicamente, sin datos del comprador) | Todos los clientes |
 | SRI | Recepción obligatoria de comprobantes electrónicos conforme a la normativa ecuatoriana | Todos los clientes |
-| Vercel | Alojamiento de la interfaz web del Servicio (comprobify-web) | Solo clientes que utilizan la interfaz web |
 
 Los subencargados marcados como aplicables únicamente a la interfaz web solo tratan datos del Responsable si este utiliza comprobify-web; un Responsable que utiliza el Servicio exclusivamente a través de la API no está sujeto a dichos subencargados.
 
@@ -59,13 +59,13 @@ El Responsable autoriza las transferencias internacionales de datos que resulten
 
 El Encargado notificará al Responsable con razonable antelación antes de incorporar un nuevo subencargado, indicando expresamente si dicha incorporación implica una nueva transferencia internacional de datos. La lista de subencargados podrá actualizarse cuando resulte necesario para la prestación del Servicio, conforme a lo dispuesto en esta sección.
 
-## 7. Retención y eliminación al término del contrato
+## 7. Retención y eliminación al término de la relación con Comprobify
 
 El Servicio almacena los datos relacionados con comprobantes electrónicos (facturas, notas de crédito y documentos similares) autorizados por el Servicio de Rentas Internas ("SRI"), así como los metadatos de su firma, transmisión y autorización. Cuando el Responsable utiliza la interfaz web del Servicio (comprobify-web), el Servicio también almacena, de forma independiente al comprobante, el catálogo de compradores descrito en la sección 3 — funcionalidad que no se activa si el Responsable utiliza el Servicio únicamente a través de la API. Fuera de estos dos contextos, el Servicio no almacena datos de los compradores del Responsable.
 
 Los datos contenidos en comprobantes electrónicos autorizados por el SRI están sujetos al período de conservación obligatorio establecido por la normativa tributaria ecuatoriana — en particular el Código Tributario y el Reglamento de Comprobantes de Venta, Retención y Documentos Complementarios. **Durante dicho período — que conforme al Art. 55 del Código Tributario es de cinco (5) años en los casos ordinarios y de siete (7) años cuando la declaración no fue presentada o fue presentada de forma incompleta; se recomienda conservar durante el plazo mayor como medida prudente —, el Encargado no eliminará estos datos, incluso ante una solicitud del Responsable.** Esta limitación se fundamenta en la obligación legal del Encargado de conservar documentos tributarios durante el período de prescripción de las obligaciones tributarias (Art. 15 LOPDP — limitación del derecho de supresión por obligación legal).
 
-**El catálogo de compradores no está sujeto a esta limitación.** A diferencia de los datos ya incorporados en un comprobante autorizado, una entrada del catálogo de compradores no constituye por sí misma un documento tributario, por lo que el Encargado la suprimirá conforme a la solicitud del Responsable según la obligación establecida en la sección 4(7), sin las restricciones aplicables a los datos de comprobantes ya autorizados.
+**El catálogo de compradores no está sujeto a esta limitación.** A diferencia de los datos ya incorporados en un comprobante autorizado, una entrada del catálogo de compradores no constituye por sí misma un documento tributario — el Responsable puede eliminarla directamente desde la interfaz web en cualquier momento, conforme a la obligación establecida en la sección 4(7), sin las restricciones aplicables a los datos de comprobantes ya autorizados.
 
 Para los datos del Responsable que no formen parte de comprobantes electrónicos autorizados (datos de cuenta, metadatos de registro), el Encargado atenderá solicitudes de supresión conforme a la obligación establecida en la sección 4(7), una vez que no existan obligaciones legales que requieran su conservación.
 
@@ -79,4 +79,4 @@ La responsabilidad de las partes bajo este DPA se rige por lo dispuesto en los T
 
 ## 10. Vigencia y aceptación
 
-Este DPA forma parte integrante de la relación contractual entre el Responsable y Comprobify y requiere aceptación expresa, independiente de la aceptación de los Términos de Servicio, según lo descrito en la sección 1 de dichos Términos. Permanecerá vigente mientras el Responsable mantenga una cuenta activa en el Servicio, y se entiende automáticamente terminado al darse de baja dicha cuenta, sin perjuicio de las obligaciones de confidencialidad y de las descritas en la sección 7 que sobrevivan a la terminación.
+Este DPA forma parte integrante de la relación entre el Responsable y Comprobify y requiere aceptación expresa, independiente de la aceptación de los Términos de Servicio, según lo descrito en la sección 1 de dichos Términos. Permanecerá vigente mientras el Responsable mantenga una cuenta activa en el Servicio, y se entiende automáticamente terminado al darse de baja dicha cuenta, sin perjuicio de las obligaciones de confidencialidad y de las descritas en la sección 7 que sobrevivan a la terminación.

@@ -12,6 +12,12 @@ A uniqueness or state conflict prevented the operation from completing.
 
 **What to do:** No action needed — the account is verified and can be used normally.
 
+### `NOTHING_TO_RETRY`
+
+`POST /v1/documents/:accessKey/send/retry` (or `POST /v1/tenants/retry-failed-documents`) was called but there's no failed send/authorize attempt to recover — the document may already be in progress, already completed, or never failed.
+
+**What to do:** Check `GET /v1/documents/:accessKey` for the document's current status before retrying.
+
 ### `CONFLICT` (fallback)
 
 An `Idempotency-Key` header was supplied with a value that has already been used for a **different** request payload, or another uniqueness constraint was violated. Read `detail`.

@@ -28,8 +28,8 @@ function isBenignStateError(err) {
   return err instanceof AppError && err.statusCode === 400;
 }
 
-async function enqueue(effectType, tenantId, payload, dedupKey = null, notificationType = null) {
-  return pendingEffectModel.create(effectType, tenantId, payload, dedupKey, notificationType);
+async function enqueue(effectType, tenantId, payload, dedupKey = null, notificationType = null, documentId = null) {
+  return pendingEffectModel.create(effectType, tenantId, payload, dedupKey, notificationType, documentId);
 }
 
 async function dispatch(effectRow) {
@@ -42,6 +42,25 @@ async function dispatch(effectRow) {
     // caller's request, same as queueSend/queueAuthorizationCheck.
     console.warn(`[pending-effects] publish failed for ${effectRow.id} (${effectRow.effect_type}):`, err.message);
   }
+}
+
+// Manual recovery for one FAILED effect, given its row already resolved by
+// the caller (see document-transmission.service.js's retrySend()/
+// retryAllFailedForTenant(), the tenant-facing entry points — resolving
+// *which* effect is in scope, e.g. by document ownership, is the caller's
+// job; this is just the mechanical reset-and-redispatch shared by both the
+// single and bulk paths). There's no automatic path back from FAILED
+// (queue-reconciliation only ever looks at PENDING/DISPATCHED rows, and
+// RabbitMQ itself never redelivers — see worker.js's nack(msg, false,
+// false)), so this is the only way to recover an effect whose failure
+// turned out to be transient (e.g. an SRI-side outage) once whatever caused
+// it is believed to be resolved. Returns null (no-op) if the row wasn't
+// actually FAILED anymore by the time this ran (e.g. a race against
+// reconciliation) — the caller decides whether that's worth surfacing.
+async function retryEffect(effectId) {
+  const reset = await pendingEffectModel.resetForRetry(effectId);
+  if (reset) dispatch(reset);
+  return reset;
 }
 
 /**
@@ -111,4 +130,4 @@ async function process(effectId) {
   throw handlerError;
 }
 
-module.exports = { enqueue, dispatch, process, isBenignStateError };
+module.exports = { enqueue, dispatch, process, isBenignStateError, retryEffect };

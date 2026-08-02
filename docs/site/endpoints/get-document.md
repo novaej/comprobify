@@ -43,6 +43,31 @@ GET /v1/documents/:accessKey
 
 `requestPayload` contiene el cuerpo de la solicitud original usado para crear el comprobante. Se omite cuando es `null`. Úsalo para prellenar el formulario de [Reconstruir Factura](rebuild-invoice.md) después de que un comprobante sea rechazado.
 
+### El campo `dispatch` (solo mientras el comprobante está en tránsito)
+
+Cuando `status` es `PENDING_SEND` o `RECEIVED`, la respuesta puede incluir un campo `dispatch` con el estado del envío/verificación de autorización asíncrona que está en curso:
+
+```json
+{
+  "document": {
+    "status": "PENDING_SEND",
+    "dispatch": {
+      "status": "FAILED",
+      "attemptCount": 5,
+      "lastError": "SRI reception service returned HTTP 500"
+    }
+  }
+}
+```
+
+| Campo | Descripción |
+|---|---|
+| `dispatch.status` | `PENDING`/`DISPATCHED` (todavía reintentando automáticamente) o `FAILED` (agotó los 5 intentos automáticos — recién aquí tiene sentido llamar a [Reintentar Envío/Autorización](retry-send.md)) |
+| `dispatch.attemptCount` | Cuántos intentos automáticos lleva (0–5) |
+| `dispatch.lastError` | Mensaje del último fallo, o `null` si aún no ha fallado ningún intento |
+
+Pensado para un cliente que sondea este endpoint mientras espera el resultado del SRI: los reintentos automáticos están espaciados 5 minutos entre sí (hasta ~20+ minutos para agotar los 5), un lapso mucho mayor a una ventana de sondeo típica — sin este campo, no hay forma de distinguir "sigue reintentando solo" de "ya se estancó" a partir del tiempo transcurrido. El campo no aparece en absoluto cuando el comprobante está en un estado asentado (`SIGNED`, `AUTHORIZED`, `RETURNED`, `NOT_AUTHORIZED`) — nada en tránsito que reportar.
+
 ## Errores
 
 | Código | Estado HTTP | Cuándo ocurre |

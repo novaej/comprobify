@@ -3,9 +3,12 @@ const documentEventModel = require('../models/document-event.model');
 const sriService = require('./sri.service');
 const sriResponseModel = require('../models/sri-response.model');
 const pendingEffectService = require('./pending-effect.service');
+const pendingEffectModel = require('../models/pending-effect.model');
 const notificationService = require('./notification.service');
 const { EffectTypes } = require('../constants/effect-types');
 const NotFoundError = require('../errors/not-found-error');
+const AppError = require('../errors/app-error');
+const ErrorCodes = require('../constants/error-codes');
 const DocumentStatus = require('../constants/document-status');
 const { assertTransition } = require('../constants/document-state-machine');
 const EventType = require('../constants/event-type');
@@ -16,10 +19,25 @@ function authorizeDedupKey(documentId) {
   return `sri-authorize:${documentId}`;
 }
 
+// Presents a pending_effects row for the retry endpoints' responses —
+// camelCase, and deliberately narrow (no payload/tenant_id/dedup_key/etc.,
+// same "don't leak internal outbox bookkeeping" reasoning as every other
+// presenter in this codebase).
+function formatEffect(effect) {
+  return {
+    id: effect.id,
+    effectType: effect.effect_type,
+    status: effect.status,
+    attemptCount: effect.attempt_count,
+  };
+}
+
 // Durable-enqueue + best-effort-dispatch, mirrored at every producer call
-// site in this file (see ADR-022 / pending-effect.service.js).
-async function queueEffect(effectType, tenantId, payload, dedupKey = null) {
-  const effect = await pendingEffectService.enqueue(effectType, tenantId, payload, dedupKey);
+// site in this file (see ADR-022 / pending-effect.service.js). documentId is
+// only meaningful for SRI_SEND/SRI_AUTHORIZE (see migration 082) — every
+// other caller in this file (INVOICE_AUTHORIZED_EMAIL) leaves it null.
+async function queueEffect(effectType, tenantId, payload, dedupKey = null, documentId = null) {
+  const effect = await pendingEffectService.enqueue(effectType, tenantId, payload, dedupKey, null, documentId);
   pendingEffectService.dispatch(effect);
   return effect;
 }
@@ -42,6 +60,19 @@ async function sendToSri(accessKey, issuer) {
       operation: 'SEND',
       message: err.message,
     }, null, issuer.id, issuer.sandbox);
+    // err.rawResponse is only set for a non-2xx HTTP response from SRI (see
+    // sri.service.js) — a genuine network-level throw (timeout, DNS, etc.)
+    // never reaches SRI at all, so there's no raw body to persist for that case.
+    if (err.rawResponse) {
+      await sriResponseModel.create({
+        documentId: document.id,
+        operationType: OperationType.RECEPTION,
+        status: `HTTP_${err.httpStatus}`,
+        messages: null,
+        rawResponse: err.rawResponse,
+        sandbox: issuer.sandbox,
+      });
+    }
     throw err;
   }
 
@@ -77,7 +108,7 @@ async function sendToSri(accessKey, issuer) {
       accessKey: updated.access_key,
       issuerId: issuer.id,
       sandbox: issuer.sandbox,
-    }, authorizeDedupKey(updated.id));
+    }, authorizeDedupKey(updated.id), null, updated.id);
   }
 
   return {
@@ -109,6 +140,18 @@ async function checkAuthorization(accessKey, issuer) {
       operation: 'AUTHORIZE',
       message: err.message,
     }, null, issuer.id, issuer.sandbox);
+    // See the matching comment in sendToSri — only a non-2xx HTTP response
+    // from SRI carries a raw body worth persisting.
+    if (err.rawResponse) {
+      await sriResponseModel.create({
+        documentId: document.id,
+        operationType: OperationType.AUTHORIZATION,
+        status: `HTTP_${err.httpStatus}`,
+        messages: null,
+        rawResponse: err.rawResponse,
+        sandbox: issuer.sandbox,
+      });
+    }
     throw err;
   }
 
@@ -204,7 +247,7 @@ async function queueSend(accessKey, issuer) {
     accessKey: updated.access_key,
     issuerId: issuer.id,
     sandbox: issuer.sandbox,
-  });
+  }, null, updated.id);
 
   return formatDocument(updated);
 }
@@ -232,9 +275,55 @@ async function queueAuthorizationCheck(accessKey, issuer) {
     accessKey: document.access_key,
     issuerId: issuer.id,
     sandbox: issuer.sandbox,
-  }, authorizeDedupKey(document.id));
+  }, authorizeDedupKey(document.id), document.id);
 
   return formatDocument(document);
 }
 
-module.exports = { sendToSri, checkAuthorization, queueSend, queueAuthorizationCheck };
+// Tenant-facing recovery for one document's stuck SRI dispatch — see
+// POST /:accessKey/send/retry. Only ever finds something when the
+// document's SRI_SEND (still SIGNED→PENDING_SEND) or SRI_AUTHORIZE (RECEIVED,
+// awaiting authorization) effect exhausted its 5 automatic attempts and
+// flipped to FAILED (queueSend/queueAuthorizationCheck/queue-reconciliation
+// already cover everything short of that — this exists specifically for the
+// dead end past it, e.g. after a transient SRI-side outage clears up). If
+// nothing FAILED is found — the document may already be progressing
+// normally, or never had a stuck attempt to begin with — that's reported as
+// a 409, not silently treated as success.
+async function retrySend(accessKey, issuer) {
+  const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
+  if (!document) {
+    throw new NotFoundError('Document');
+  }
+
+  const effect = await pendingEffectModel.findFailedByDocumentId(document.id, issuer.tenant_id);
+  if (!effect) {
+    throw new AppError(
+      'No failed send/authorize attempt found for this document — it may already be in progress or completed',
+      409,
+      ErrorCodes.NOTHING_TO_RETRY
+    );
+  }
+
+  const reset = await pendingEffectService.retryEffect(effect.id);
+  return { document: formatDocument(document), effect: formatEffect(reset) };
+}
+
+// Bulk variant of the above — every FAILED SRI_SEND/SRI_AUTHORIZE effect for
+// the authenticated tenant, across all their issuers/documents. Best-effort
+// per row, same reasoning as pending-effect.service.js's old admin bulk
+// retry: one row's dispatch failing never stops the rest.
+async function retryAllFailedForTenant(tenantId) {
+  const failed = await pendingEffectModel.findFailedByTenantId(tenantId);
+  const retried = [];
+  for (const effect of failed) {
+    const reset = await pendingEffectService.retryEffect(effect.id);
+    if (reset) retried.push(formatEffect(reset));
+  }
+  return retried;
+}
+
+module.exports = {
+  sendToSri, checkAuthorization, queueSend, queueAuthorizationCheck,
+  retrySend, retryAllFailedForTenant,
+};

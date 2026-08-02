@@ -33,6 +33,16 @@ const sendToSri = async (req, res) => {
   res.status(202).json({ ok: true, document: result });
 };
 
+// Recovers a document whose SRI send/authorize dispatch exhausted its
+// automatic retry budget (5 attempts) and is stuck — see
+// document-transmission.service.js's retrySend(). 409 NOTHING_TO_RETRY if
+// there's no FAILED effect for this document (already in progress, already
+// completed, or never had a stuck attempt).
+const retrySend = async (req, res) => {
+  const result = await documentTransmission.retrySend(req.params.accessKey, req.issuer);
+  res.status(202).json({ ok: true, ...result });
+};
+
 const checkAuthorization = async (req, res) => {
   const result = await documentTransmission.queueAuthorizationCheck(req.params.accessKey, req.issuer);
   res.status(202).json({ ok: true, document: result });
@@ -88,4 +98,4 @@ const getStats = async (req, res) => {
   res.json({ ok: true, stats });
 };
 
-module.exports = { create, getByAccessKey, getCreditNotes, sendToSri, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, getSriResponses, list, getStats };
+module.exports = { create, getByAccessKey, getCreditNotes, sendToSri, retrySend, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, getSriResponses, list, getStats };

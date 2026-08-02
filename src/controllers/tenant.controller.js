@@ -1,5 +1,6 @@
 const tenantService = require('../services/tenant.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
+const documentTransmission = require('../services/document-transmission.service');
 
 const getMe = async (req, res) => {
   res.json({ ok: true, tenant: req.tenant });
@@ -63,4 +64,18 @@ const getEvents = async (req, res) => {
   res.json({ ok: true, events });
 };
 
-module.exports = { getMe, updateLanguage, promote, getAgreementStatus, acceptAgreements, listTenantAgreements, getTenantAgreement, getEvents };
+// Bulk recovery for every stuck document across all of the tenant's
+// issuers/branches at once — see document-transmission.service.js's
+// retryAllFailedForTenant(). Tenant-wide rather than issuer-scoped
+// (unlike everything under /v1/documents/*, which requires X-Issuer-Id)
+// on purpose: an SRI-side outage affecting multiple branches shouldn't
+// require one call per issuer to recover from.
+const retryFailedDocuments = async (req, res) => {
+  const effects = await documentTransmission.retryAllFailedForTenant(req.tenant.id);
+  res.status(202).json({ ok: true, retried: effects.length, effects });
+};
+
+module.exports = {
+  getMe, updateLanguage, promote, getAgreementStatus, acceptAgreements,
+  listTenantAgreements, getTenantAgreement, getEvents, retryFailedDocuments,
+};

@@ -43,6 +43,31 @@ GET /v1/documents/:accessKey
 
 `requestPayload` contains the original request body that was used to create the document. It is omitted when `null`. Use it to pre-fill the [Rebuild Invoice](rebuild-invoice.md) form after a document is rejected.
 
+### The `dispatch` field (only while the document is in flight)
+
+When `status` is `PENDING_SEND` or `RECEIVED`, the response may include a `dispatch` field with the status of the in-progress asynchronous send/authorization check:
+
+```json
+{
+  "document": {
+    "status": "PENDING_SEND",
+    "dispatch": {
+      "status": "FAILED",
+      "attemptCount": 5,
+      "lastError": "SRI reception service returned HTTP 500"
+    }
+  }
+}
+```
+
+| Field | Description |
+|---|---|
+| `dispatch.status` | `PENDING`/`DISPATCHED` (still auto-retrying) or `FAILED` (exhausted all 5 automatic attempts — only now does it make sense to call [Retry Send/Authorize](retry-send.md)) |
+| `dispatch.attemptCount` | How many automatic attempts so far (0–5) |
+| `dispatch.lastError` | The last failure's message, or `null` if no attempt has failed yet |
+
+Meant for a client polling this endpoint while waiting on SRI's outcome: automatic retries are spaced 5 minutes apart (up to ~20+ minutes to exhaust all 5), far longer than a typical short polling window — without this field, there's no way to tell "still auto-retrying" apart from "genuinely stuck" based on elapsed time alone. The field is entirely absent once the document reaches a settled status (`SIGNED`, `AUTHORIZED`, `RETURNED`, `NOT_AUTHORIZED`) — nothing in flight to report.
+
 ## Errors
 
 | Code | Status | When |

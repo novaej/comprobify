@@ -58,6 +58,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `GET` | `/v1/tenants/agreements/history` | List all personalized agreement instances for the tenant, with status and acceptance timestamps |
 | `GET` | `/v1/tenants/agreements/:type` | Render the tenant's personalized document as HTML — includes their business name/RUC and the dates as of when the account was created |
 | `GET` | `/v1/tenants/events` | Full tenant-level audit trail (verification, subscription, payment, tier/billing-interval change history), chronological |
+| `POST` | `/v1/tenants/retry-failed-documents` | Recovers every stuck document for the tenant (failed send/authorize after exhausting automatic retries) — covers all issuers, no `X-Issuer-Id` needed ([Retry All Failed Documents](retry-failed-documents.md)) |
 
 ## Issuers (authenticated)
 
@@ -96,6 +97,7 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 | `POST` | `/v1/documents` | Create and sign a document — invoice ([Create Invoice](create-invoice.md)) or credit note ([Create Credit Note](create-credit-note.md)), selected by `documentType` |
 | `GET` | `/v1/documents/:accessKey` | Get a document by access key |
 | `POST` | `/v1/documents/:accessKey/send` | Queue submission to SRI ([Send to SRI](send-to-sri.md) — returns 202, async) |
+| `POST` | `/v1/documents/:accessKey/send/retry` | Recovers a stuck document after its automatic send/authorize retries are exhausted ([Retry Send/Authorize](retry-send.md) — returns 202, async) |
 | `GET` | `/v1/documents/:accessKey/authorize` | Queue an SRI authorization check ([Check Authorization](check-authorization.md) — returns 202, async) |
 | `POST` | `/v1/documents/:accessKey/rebuild` | Rebuild and re-sign a rejected document |
 | `GET` | `/v1/documents/:accessKey/ride` | Download RIDE PDF |

@@ -86,6 +86,14 @@ const config = {
   verificationTokenTtlHours: parseInt(process.env.VERIFICATION_TOKEN_TTL_HOURS, 10) || 24,
   sentry: {
     dsn: process.env.SENTRY_DSN || '',
+    // Deploy-workflow-injected commit SHA (see .github/workflows/deploy-*.yml).
+    // Without this, @sentry/node's own release auto-detection falls through a
+    // list of CI/PaaS-specific env vars (GITHUB_SHA, VERCEL_GIT_COMMIT_SHA,
+    // RENDER_GIT_COMMIT, ...) none of which are present once the app runs
+    // inside a plain Docker container on a droplet — staging's Sentry
+    // "Releases" list silently stopped updating after the Render migration
+    // for exactly this reason.
+    release: process.env.SENTRY_RELEASE || '',
   },
   // Returned in createSubscription's response so a tenant knows where to send
   // the SPI transfer — display text only, not a secret. Validated as

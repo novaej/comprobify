@@ -34,6 +34,7 @@ router.get('/:accessKey/sri-responses', readLimiter, accessKeyParam, validateReq
 router.post('/', writeLimiter, requireNotSuspended, requireNotPastDue, extractIdempotencyKey, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.create));
 router.post('/email-retry', writeLimiter, requireNotSuspended, requireNotPastDue, asyncHandler(controller.retryEmails));
 router.post('/:accessKey/send', writeLimiter, requireNotSuspended, requireNotPastDue, accessKeyParam, validateRequest, asyncHandler(controller.sendToSri));
+router.post('/:accessKey/send/retry', writeLimiter, requireNotSuspended, requireNotPastDue, accessKeyParam, validateRequest, asyncHandler(controller.retrySend));
 router.post('/:accessKey/rebuild', writeLimiter, requireNotSuspended, requireNotPastDue, accessKeyParam, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.rebuild));
 router.post('/:accessKey/email-retry', writeLimiter, requireNotSuspended, requireNotPastDue, accessKeyParam, validateRequest, asyncHandler(controller.retrySingleEmail));
 

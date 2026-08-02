@@ -67,6 +67,7 @@ function esSidebar() {
             { text: 'Actualizar idioma', link: '/endpoints/tenant-language' },
             { text: 'Promover a producción', link: '/endpoints/promote-tenant' },
             { text: 'Historial de eventos del tenant', link: '/endpoints/tenant-events' },
+            { text: 'Reintentar todos los comprobantes fallidos', link: '/endpoints/retry-failed-documents' },
           ],
         },
         {
@@ -102,6 +103,7 @@ function esSidebar() {
             { text: 'Crear nota de crédito', link: '/endpoints/create-credit-note' },
             { text: 'Consultar comprobante', link: '/endpoints/get-document' },
             { text: 'Enviar al SRI', link: '/endpoints/send-to-sri' },
+            { text: 'Reintentar envío/autorización', link: '/endpoints/retry-send' },
             { text: 'Consultar autorización', link: '/endpoints/check-authorization' },
             { text: 'Reconstruir factura', link: '/endpoints/rebuild-invoice' },
             { text: 'Obtener RIDE (PDF)', link: '/endpoints/get-ride' },
@@ -219,6 +221,7 @@ function enSidebar() {
             { text: 'Update Language', link: '/en/endpoints/tenant-language' },
             { text: 'Promote to Production', link: '/en/endpoints/promote-tenant' },
             { text: 'Get Tenant Events', link: '/en/endpoints/tenant-events' },
+            { text: 'Retry All Failed Documents', link: '/en/endpoints/retry-failed-documents' },
           ],
         },
         {
@@ -254,6 +257,7 @@ function enSidebar() {
             { text: 'Create Credit Note', link: '/en/endpoints/create-credit-note' },
             { text: 'Get Document', link: '/en/endpoints/get-document' },
             { text: 'Send to SRI', link: '/en/endpoints/send-to-sri' },
+            { text: 'Retry Send/Authorize', link: '/en/endpoints/retry-send' },
             { text: 'Check Authorization', link: '/en/endpoints/check-authorization' },
             { text: 'Rebuild Invoice', link: '/en/endpoints/rebuild-invoice' },
             { text: 'Get RIDE (PDF)', link: '/en/endpoints/get-ride' },

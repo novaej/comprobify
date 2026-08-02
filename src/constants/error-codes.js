@@ -150,6 +150,10 @@ const ErrorCodes = Object.freeze({
   BUILDER_NOT_FOUND: 'BUILDER_NOT_FOUND',
   /** OPERATOR_NAME/OPERATOR_RUC/OPERATOR_EMAIL env vars not set — cannot publish legal documents */
   OPERATOR_CONFIG_MISSING: 'OPERATOR_CONFIG_MISSING',
+
+  // --- Pending effects (async outbox) ---
+  /** No FAILED SRI_SEND/SRI_AUTHORIZE effect found to retry for this document/tenant */
+  NOTHING_TO_RETRY: 'NOTHING_TO_RETRY',
 });
 
 module.exports = ErrorCodes;

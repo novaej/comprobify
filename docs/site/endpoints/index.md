@@ -58,6 +58,7 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 | `GET` | `/v1/tenants/agreements/history` | Lista todas las instancias de acuerdo personalizadas del tenant, con estado y marcas de tiempo de aceptación |
 | `GET` | `/v1/tenants/agreements/:type` | Renderiza el documento personalizado del tenant como HTML — incluye su razón social/RUC y las fechas al momento en que se creó la cuenta |
 | `GET` | `/v1/tenants/events` | Bitácora de auditoría completa a nivel de tenant (verificación, suscripción, pagos, historial de cambios de plan/intervalo de facturación), en orden cronológico |
+| `POST` | `/v1/tenants/retry-failed-documents` | Recupera todos los comprobantes estancados del tenant (envío/autorización fallidos tras agotar los reintentos automáticos) — abarca todos los emisores, sin `X-Issuer-Id` ([Reintentar Todos los Comprobantes Fallidos](retry-failed-documents.md)) |
 
 ## Emisores (autenticado)
 
@@ -96,6 +97,7 @@ Cada endpoint de comprobantes requiere tanto `Authorization: Bearer <key>` como 
 | `POST` | `/v1/documents` | Crea y firma un comprobante — factura ([Create Invoice](create-invoice.md)) o nota de crédito ([Create Credit Note](create-credit-note.md)), seleccionado mediante `documentType` |
 | `GET` | `/v1/documents/:accessKey` | Obtiene un comprobante por clave de acceso |
 | `POST` | `/v1/documents/:accessKey/send` | Encola el envío al SRI ([Send to SRI](send-to-sri.md) — devuelve 202, asíncrono) |
+| `POST` | `/v1/documents/:accessKey/send/retry` | Recupera un comprobante estancado tras agotar los reintentos automáticos de envío/autorización ([Reintentar Envío/Autorización](retry-send.md) — devuelve 202, asíncrono) |
 | `GET` | `/v1/documents/:accessKey/authorize` | Encola una verificación de autorización ante el SRI ([Check Authorization](check-authorization.md) — devuelve 202, asíncrono) |
 | `POST` | `/v1/documents/:accessKey/rebuild` | Reconstruye y vuelve a firmar un comprobante rechazado |
 | `GET` | `/v1/documents/:accessKey/ride` | Descarga el PDF RIDE |
