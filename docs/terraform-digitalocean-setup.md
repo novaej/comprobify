@@ -478,12 +478,20 @@ services:
     command: node workers/worker.js
     mem_limit: 150m
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru --save ""
+    expose:
+      - "6379"
+    mem_limit: 48m
+
 volumes:
   caddy_data:
   caddy_config:
 ```
 
-`api` and `worker` run the **same image** — one Dockerfile, one build, one push to GHCR — started with different `command:` values. `expose` (not `ports`) on `api` means it's reachable from `caddy` over the Compose network but never bound to the host directly — only Caddy holds 80/443. `worker` has no `ports`/`expose` at all — it makes outbound connections to RabbitMQ/Postgres and needs nothing inbound.
+`api` and `worker` run the **same image** — one Dockerfile, one build, one push to GHCR — started with different `command:` values. `expose` (not `ports`) on `api` means it's reachable from `caddy` over the Compose network but never bound to the host directly — only Caddy holds 80/443. `worker` has no `ports`/`expose` at all — it makes outbound connections to RabbitMQ/Postgres and needs nothing inbound. `redis` backs the rate limiters' shared store (`src/services/redis.service.js`, `src/middleware/rate-limit.js`) — only `api` connects to it (`worker` never rate-limits); no persistence (`--save ""`) since rate-limit counters are disposable short-window state, and a hard `--maxmemory` cap since this is a $4/mo 512MB–1GB tier already budgeted for `api`+`worker`.
 
 ```
 # deploy/Caddyfile
@@ -526,6 +534,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `OPERATOR_NAME` / `OPERATOR_RUC` / `OPERATOR_EMAIL` | **Yes** | No default; needed before `POST /v1/admin/agreements` will produce correct legal documents |
 | `OPERATOR_ADDRESS` | **Yes** (recommended) | Has a generic placeholder default (`"Domicilio disponible previa solicitud razonable"`) that won't crash anything, but isn't your actual address |
 | `RABBITMQ_URL` | **Yes** | No default |
+| `REDIS_URL` | No — set directly in the deploy workflow's heredoc, not a GitHub Secret/Variable | Backs the rate limiters' shared store (`src/services/redis.service.js`); value is deterministic (`redis://redis:6379`, the `redis` service's Compose-internal DNS name) and identical across environments, so there's nothing to configure per-environment. Absent means the limiters silently fall back to the in-memory store post-deploy — see `src/middleware/rate-limit.js` |
 | `PORT` | No | Default `8080` already matches the Dockerfile's `EXPOSE` |
 | `DOCS_BASE_URL` | No | Default `''` just omits the docs link from error responses — harmless; set it once you have a docs site |
 | `VERIFICATION_TOKEN_TTL_HOURS` | No | Default `24` is fine |

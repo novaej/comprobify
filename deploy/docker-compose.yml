@@ -26,6 +26,8 @@ services:
     expose:
       - "8080"
     mem_limit: 300m
+    depends_on:
+      - redis
 
   worker:
     image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
@@ -35,6 +37,20 @@ services:
       - DB_POOL_MAX=3
     command: node workers/worker.js
     mem_limit: 150m
+
+  # Backs the rate limiters' shared store (src/services/redis.service.js,
+  # src/middleware/rate-limit.js) — required for every `api` instance to
+  # enforce one shared counter per key once there's more than one. No
+  # persistence (--save "") and a hard memory cap: rate-limit counters are
+  # disposable short-window state, not data worth surviving a restart, and
+  # this is a 1GB droplet already budgeted for api+worker.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru --save ""
+    expose:
+      - "6379"
+    mem_limit: 48m
 
 volumes:
   caddy_data:

@@ -88,6 +88,7 @@ jobs:
             OPERATOR_EMAIL=${{ vars.OPERATOR_EMAIL }}
             OPERATOR_ADDRESS=${{ vars.OPERATOR_ADDRESS }}
             RABBITMQ_URL=${{ secrets.RABBITMQ_URL }}
+            REDIS_URL=redis://redis:6379
             EOF
             chmod 600 /opt/comprobify/.env
             cd /opt/comprobify

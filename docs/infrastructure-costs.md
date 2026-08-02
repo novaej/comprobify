@@ -16,7 +16,7 @@ Production platform decisions and the real cost baseline behind the subscription
 | Frontend | DigitalOcean App Platform | comprobify-web (Next.js) — Autodeploy on push, no separate deploy workflow needed (see comprobify-web's `docs/deployment.md`) |
 | Email | Mailgun (Foundation, 50k sends) | Transactional email + delivery webhooks |
 | Error monitoring | Sentry | 5xx tracking |
-| Rate-limit store | Redis, provider TBD | Required once the API runs more than one instance — see `NEXT_STEPS.md` #8. Not yet built, so not yet a real cost. Render's own Redis add-on no longer applies now that compute is on DigitalOcean — likely candidates are Upstash or a Redis container on the droplet, not yet decided. |
+| Rate-limit store | Redis, self-hosted container on the droplet (`deploy/docker-compose.yml`'s `redis` service) | Backs `src/middleware/rate-limit.js`'s shared store (`src/services/redis.service.js`) so every `api` instance enforces one counter per key instead of counting independently — load-bearing once the API runs more than one instance (still just one today; see NEXT_STEPS.md's scaling note). Chosen over a managed provider (Upstash) since it only needs to be reachable by `api` replicas on the *same* droplet — the near-term scaling plan is Compose replicas on one droplet before ever provisioning a second one. Revisit if that ever changes (multiple droplets need a Redis every droplet can reach, not one scoped to a single host). |
 | DNS | Cloudflare (free) | `api.comprobify.com` |
 | CI/CD | GitHub + GitHub Actions (free tier) | |
 
@@ -44,7 +44,7 @@ Unlike Neon (usage-billed per project — CU-hours + storage, so running a secon
 | Mailgun Foundation (50k) | $35 |
 | Sentry (base plan) | $29 |
 | DigitalOcean App Platform (comprobify-web, 1 shared vCPU/1 GiB) | $12 |
-| Redis | $0 (not yet built — see Stack table) |
+| Redis | $0 (self-hosted container on the droplet — no incremental cost, same reasoning as `cron.d`; see Stack table) |
 | GitHub | $0 (free tier) |
 | **Subtotal** | **~$103–115** (using the droplet placeholder range) |
 | **+15% ISD** (Ecuador card payments sent abroad) | **~$119–132/month** |
