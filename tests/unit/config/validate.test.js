@@ -37,7 +37,6 @@ function validConfig(overrides = {}) {
     },
     rateLimit: {
       windowMs: 60000,
-      maxRequests: 60,
     },
     bankTransfer: {
       bankName: 'Banco Pichincha',

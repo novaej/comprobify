@@ -524,8 +524,8 @@ All variables are required unless marked optional.
 | `MAILGUN_API_KEY` | No | Mailgun private API key |
 | `MAILGUN_DOMAIN` | No | Mailgun sending domain, e.g. `mg.yourdomain.com` |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | No | From Mailgun dashboard → Sending → Webhooks → Webhook signing key |
-| `RATE_LIMIT_WINDOW_MS` | No | Rate limiter window in milliseconds (default `60000`) |
-| `RATE_LIMIT_MAX` | No | Max requests per window per API key on write endpoints (default `60`) — see `src/middleware/rate-limit.js` for how this combines with tier-aware limits |
+| `RATE_LIMIT_WINDOW_MS` | No | Rate limiter window in milliseconds, shared by write and read endpoints (default `60000`). The request-count ceiling itself is not env-configurable — it's read from the tenant's subscription tier (`TIERS[tier].writeRateLimit`/`.readRateLimit`, `src/constants/subscription-tiers.js`). |
+| `REDIS_URL` | No | Backs the rate limiters' shared store (`src/services/redis.service.js`) so every API instance enforces one counter per key instead of counting independently. Unset falls back to `express-rate-limit`'s own in-memory store, correct for a single API instance. Self-hosted via `deploy/docker-compose.yml`'s `redis` service — see `docs/terraform-digitalocean-setup.md`. |
 | `SENTRY_DSN` | No | Sentry project DSN — enables error monitoring (`@sentry/node`). Leave unset to disable; the client becomes a no-op and nothing is transmitted. Set independently per environment — staging and production should point at the same Sentry project but report distinct `environment` tags (derived from `APP_ENV`). |
 | `BANK_TRANSFER_BANK_NAME` | No | Returned in the subscription-creation response (`POST /v1/tenants/promote` with `tier`, or admin's Create Subscription) so a tenant knows where to send the SPI transfer. Display text only, not a secret. |
 | `BANK_TRANSFER_ACCOUNT_TYPE` | No | e.g. `AHORROS`, `CORRIENTE` |

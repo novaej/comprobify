@@ -79,9 +79,12 @@ const config = {
     mailgunDomain:            process.env.MAILGUN_DOMAIN                 || '',
     mailgunWebhookSigningKey: process.env.MAILGUN_WEBHOOK_SIGNING_KEY    || '',
   },
+  // windowMs applies to both writeLimiter and readLimiter (src/middleware/rate-limit.js)
+  // — their actual max-requests values come from TIERS[tenant.subscriptionTier]
+  // .writeRateLimit/.readRateLimit (src/constants/subscription-tiers.js), not from
+  // an env var here.
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60000,
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX, 10) || 60,
   },
   // Optional — backs the rate limiters' shared store (src/services/redis.service.js).
   // Unset means every limiter falls back to express-rate-limit's own in-memory

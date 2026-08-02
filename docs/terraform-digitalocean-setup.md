@@ -540,7 +540,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `VERIFICATION_TOKEN_TTL_HOURS` | No | Default `24` is fine |
 | `EMAIL_PROVIDER` | No | Default `mailgun` is the only supported provider today |
 | `SRI_TEST_BASE_URL` / `SRI_PROD_BASE_URL` | No | Defaults are the real, correct SRI endpoint URLs |
-| `RATE_LIMIT_WINDOW_MS` / `RATE_LIMIT_MAX` | No | Defaults (`60000`, `60`) are reasonable |
+| `RATE_LIMIT_WINDOW_MS` | No | Default (`60000`) is reasonable. The write/read request-count ceiling itself isn't an env var — it comes from `TIERS[tier].writeRateLimit`/`.readRateLimit` |
 | `RABBITMQ_SRI_EXCHANGE` | No | Default `sri.direct` is fine |
 | `QUEUE_RECONCILE_SEND_STALE_MINUTES` / `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES` / `QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES` / `QUEUE_RECONCILE_EFFECT_STALE_MINUTES` / `QUEUE_RECONCILE_BATCH_LIMIT` | No | Defaults (`5`, `5`, `5`, `5`, `100`) are reasonable |
 | `PENDING_EFFECTS_MAX_ATTEMPTS` | No | Default `5` is fine |
