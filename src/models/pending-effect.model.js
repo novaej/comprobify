@@ -11,8 +11,13 @@ const db = require('../config/database');
  * ever passed for NOTIFICATION_DISPATCH rows (see notification.service.js's
  * dispatchNotification) — informational only, never read by the handler
  * itself. See migration 080.
+ *
+ * documentId is the same kind of denormalized snapshot, only ever passed for
+ * SRI_SEND/SRI_AUTHORIZE rows (see document-transmission.service.js) — backs
+ * findByDocumentId()/findFailedByTenantId() below, used by the tenant-facing
+ * retry endpoints. See migration 082.
  */
-async function create(effectType, tenantId, payload, dedupKey = null, notificationType = null) {
+async function create(effectType, tenantId, payload, dedupKey = null, notificationType = null, documentId = null) {
   if (dedupKey) {
     // The ON CONFLICT predicate below must match idx_pending_effects_dedup's
     // index predicate EXACTLY (including dedup_key IS NOT NULL) — Postgres's
@@ -22,32 +27,56 @@ async function create(effectType, tenantId, payload, dedupKey = null, notificati
     // exclusion constraint matching the ON CONFLICT specification") even
     // though the index exists and would otherwise apply.
     const { rows } = await db.query(
-      `INSERT INTO pending_effects (effect_type, tenant_id, payload, dedup_key, notification_type)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO pending_effects (effect_type, tenant_id, payload, dedup_key, notification_type, document_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (dedup_key) WHERE dedup_key IS NOT NULL AND status IN ('PENDING', 'DISPATCHED')
        DO UPDATE SET attempt_count = pending_effects.attempt_count
        RETURNING *`,
-      [effectType, tenantId, payload, dedupKey, notificationType]
+      [effectType, tenantId, payload, dedupKey, notificationType, documentId]
     );
     return rows[0];
   }
 
   const { rows } = await db.query(
-    `INSERT INTO pending_effects (effect_type, tenant_id, payload, notification_type) VALUES ($1, $2, $3, $4) RETURNING *`,
-    [effectType, tenantId, payload, notificationType]
+    `INSERT INTO pending_effects (effect_type, tenant_id, payload, notification_type, document_id) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [effectType, tenantId, payload, notificationType, documentId]
   );
   return rows[0];
 }
 
-async function findById(id) {
-  const { rows } = await db.query(`SELECT * FROM pending_effects WHERE id = $1`, [id]);
+/**
+ * The FAILED SRI_SEND/SRI_AUTHORIZE effect for one document, scoped to the
+ * requesting tenant — backs POST /v1/documents/:accessKey/send/retry.
+ * tenant_id is included not just for ownership but as a disambiguator: a
+ * bare document_id match could theoretically collide across the independent
+ * public.documents/sandbox.documents id sequences (see migration 082), and a
+ * collision that also matches the same tenant is not a realistic concern.
+ */
+async function findFailedByDocumentId(documentId, tenantId) {
+  const { rows } = await db.query(
+    `SELECT * FROM pending_effects
+     WHERE document_id = $1 AND tenant_id = $2
+       AND effect_type IN ('SRI_SEND', 'SRI_AUTHORIZE')
+       AND status = 'FAILED'`,
+    [documentId, tenantId]
+  );
   return rows[0] || null;
 }
 
-async function findAllFailed(limit = 100) {
+/**
+ * Every FAILED SRI_SEND/SRI_AUTHORIZE effect for a tenant — backs
+ * POST /v1/documents/retry-failed. No document_id needed here: tenant_id
+ * and effect_type are real columns already, so this doesn't touch the
+ * JSONB payload at all.
+ */
+async function findFailedByTenantId(tenantId) {
   const { rows } = await db.query(
-    `SELECT * FROM pending_effects WHERE status = 'FAILED' ORDER BY created_at ASC LIMIT $1`,
-    [limit]
+    `SELECT * FROM pending_effects
+     WHERE tenant_id = $1
+       AND effect_type IN ('SRI_SEND', 'SRI_AUTHORIZE')
+       AND status = 'FAILED'
+     ORDER BY created_at ASC`,
+    [tenantId]
   );
   return rows;
 }
@@ -139,8 +168,8 @@ async function findStaleForReconciliation(client, { checkDelayMinutes, staleMinu
 
 module.exports = {
   create,
-  findById,
-  findAllFailed,
+  findFailedByDocumentId,
+  findFailedByTenantId,
   resetForRetry,
   markDispatched,
   claimForProcessing,

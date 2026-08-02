@@ -345,10 +345,6 @@ const getTierPrice = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
-const retryPendingEffect = [
-  param('id').isUUID().withMessage('id must be a valid UUID'),
-];
-
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
@@ -360,5 +356,4 @@ module.exports = {
   publishNotificationEmailTemplate, getNotificationEmailTemplateVersion,
   activateNotificationEmailTemplate, listNotificationEmailTemplateVersions,
   createTierPrice, updateTierPrice, publishTierPrice, listTierPrices, getTierPrice,
-  retryPendingEffect,
 };

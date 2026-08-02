@@ -152,10 +152,8 @@ const ErrorCodes = Object.freeze({
   OPERATOR_CONFIG_MISSING: 'OPERATOR_CONFIG_MISSING',
 
   // --- Pending effects (async outbox) ---
-  /** No pending_effects row exists with the given id */
-  PENDING_EFFECT_NOT_FOUND: 'PENDING_EFFECT_NOT_FOUND',
-  /** Only a FAILED effect can be retried — it's still PENDING/DISPATCHED/DONE */
-  PENDING_EFFECT_NOT_FAILED: 'PENDING_EFFECT_NOT_FAILED',
+  /** No FAILED SRI_SEND/SRI_AUTHORIZE effect found to retry for this document/tenant */
+  NOTHING_TO_RETRY: 'NOTHING_TO_RETRY',
 });
 
 module.exports = ErrorCodes;

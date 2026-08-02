@@ -68,5 +68,6 @@ router.post('/agreements', writeLimiter, requireNotSuspended, requireNotPastDue,
 router.get('/agreements/history', readLimiter, asyncHandler(controller.listTenantAgreements));
 router.get('/agreements/:type', readLimiter, asyncHandler(controller.getTenantAgreement));
 router.get('/events', readLimiter, asyncHandler(controller.getEvents));
+router.post('/retry-failed-documents', writeLimiter, requireNotSuspended, requireNotPastDue, asyncHandler(controller.retryFailedDocuments));
 
 module.exports = router;
