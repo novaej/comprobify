@@ -132,17 +132,9 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 6. Shared Rate-Limit Store for Horizontal Scaling
+## 6. Shared Rate-Limit Store for Horizontal Scaling — SHIPPED
 
-**Priority: Medium — blocks running more than one API instance correctly in production**
-
-`src/middleware/rate-limit.js` uses `express-rate-limit`'s default in-memory store. Each API instance counts requests independently, so running N instances lets a tenant burst to roughly `limit × N` before any single instance throttles them — the counters aren't shared across instances.
-
-**What:**
-- Swap the store backing `writeLimiter`/`readLimiter` to a shared one (`rate-limit-redis`, backed by a small Redis instance — Upstash, or a Redis container alongside the others on the droplet) so all instances enforce one counter per `keyHash`
-- No change to the limiter logic or tier-based limits themselves — only the store option
-
-**Effort:** Low — one new dependency, one Redis connection, swap the store option in `rate-limit.js`. Must land before scaling the production API to more than one instance.
+`writeLimiter`/`readLimiter`/`adminLimiter`/`registrationLimiter` now share a Redis-backed store (`src/services/redis.service.js`, `src/middleware/rate-limit.js`'s `buildStore()`) instead of each defaulting to `express-rate-limit`'s per-process in-memory one — self-hosted via a `redis` service in `deploy/docker-compose.yml`, wired on via `REDIS_URL` in the deploy workflows. See CHANGELOG.md's Unreleased/Changed entry. `REDIS_URL` is optional (falls back to in-memory when unset, correct for today's single-instance topology) and every limiter fails open on a Redis outage (`passOnStoreError: true`).
 
 ---
 
@@ -206,8 +198,8 @@ That fix (see `CHANGELOG.md`'s Unreleased/Added entry — `POST /v1/recover`) cl
 **What:**
 - A small reusable service (e.g. `src/services/attempt-tracker.service.js`) exposing something like `recordFailure(eventType, key)` → returns whether the configured threshold was crossed for that `(eventType, key)` pair within the configured window
 - A pluggable action on threshold-crossed — start with a single WARN-level structured log line (once item 4 ships, this is just another queryable log line, no separate storage needed for the *detection* half); escalate later to an email via the existing `ADMIN_NOTIFICATION_EMAIL`/`emailService` pattern (mirrors `sendPaymentProofSubmitted`'s operator-facing notification) if false-positive rate proves low enough to be worth an inbox ping
-- **Depends on item 6's shared store to be meaningful in production** — an in-memory counter is exactly the per-instance problem item 6 already documents for the rate limiters (`limit × N` across N instances). Either sequence this after item 6, or reuse whatever Redis connection item 6 introduces rather than standing up a second one
+- **Item 6's shared store has now shipped** — reuse the same Redis connection (`src/services/redis.service.js`'s `getClient()`) rather than standing up a second one. An in-memory counter here would have the identical per-instance problem item 6 fixed for the rate limiters (`limit × N` across N instances), so this tracker should be built directly on the shared client from the start
 - First wire-up targets: the three call sites listed above — proves the mechanism generalizes before adding a fourth
 
-**Effort:** Medium — the tracker itself is small, but real value depends on item 6 landing first, and touches three separate existing call sites to wire in.
+**Effort:** Medium — the tracker itself is small, and item 6's Redis connection is now available to reuse; still touches three separate existing call sites to wire in.
 
