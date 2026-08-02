@@ -102,12 +102,6 @@
     {
       "key": "proof_id",
       "value": ""
-    },
-    {
-      "key": "pending_effect_id",
-      "value": "",
-      "description": "pending_effects row id — copy from a FAILED effect's id (e.g. from a document_events ERROR entry or a direct DB query). Used by Retry Pending Effect.",
-      "type": "string"
     }
   ],
   "item": [
@@ -3757,49 +3751,6 @@
               ]
             },
             "description": "Re-publishes to RabbitMQ any pending_effects row (all 8 effect types — SRI send/authorize, notifications, webhook fan-out, transactional emails) whose dispatch was never confirmed or has gone stale (ADR-019/ADR-022) — never runs a handler itself, only ensures a message exists for workers/worker.js to eventually pick up. Subscription activation/tier-change/renewal reconciliation is separate — see the subscriptions job.\n\nRuns a single SELECT ... FOR UPDATE SKIP LOCKED sweep against pending_effects (not schema-scoped, so no more public/sandbox split): SRI_AUTHORIZE rows use their own two-threshold timing (a delay before the first check, then a stale window for re-checks); every other effect type uses one stale-dispatch window.\n\nDesigned to be called by an external scheduler every 5 minutes (matches the actual droplet cron and effectStaleMinutes' default) — this is the actual recovery mechanism for a temporarily unreachable broker or a publish that timed out.\n\nResponse is { republished: <count from this run> }."
-          }
-        },
-        {
-          "name": "Retry Pending Effect",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/admin/jobs/pending-effects/{{pending_effect_id}}/retry",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "admin",
-                "jobs",
-                "pending-effects",
-                "{{pending_effect_id}}",
-                "retry"
-              ]
-            },
-            "description": "Manually recovers one FAILED pending_effects row — resets attempt_count to 0, clears last_error/dispatch_attempted_at, and dispatches it to RabbitMQ immediately (doesn't wait for the next Queue Reconciliation sweep).\n\nThere is no automatic path back from FAILED: Queue Reconciliation only scans PENDING/DISPATCHED rows, and the worker always nacks a failed message with requeue: false, so RabbitMQ itself never retries it either. This endpoint is the only recovery mechanism for an effect whose 5 attempts were all consumed by something transient (e.g. an SRI-side outage) that has since cleared up.\n\nReturns 404 PENDING_EFFECT_NOT_FOUND if the id doesn't exist, or 409 PENDING_EFFECT_NOT_FAILED if it exists but isn't currently FAILED.\n\nResponse is { effect: <the reset row> }."
-          }
-        },
-        {
-          "name": "Retry All Failed Pending Effects",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/admin/jobs/pending-effects/retry-failed",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "admin",
-                "jobs",
-                "pending-effects",
-                "retry-failed"
-              ]
-            },
-            "description": "Bulk variant of Retry Pending Effect — finds every currently-FAILED effect and retries each one (same reset + immediate dispatch as the single-effect endpoint). Best-effort per row: one row's dispatch failing never stops the rest, since Queue Reconciliation would pick up anything left undispatched regardless.\n\nUseful after an outage affecting many tenants' effects at once (e.g. SRI itself being down for a stretch) clears up, rather than retrying one at a time.\n\nResponse is { retried: <count>, effects: [<the reset rows>] }."
           }
         },
         {
