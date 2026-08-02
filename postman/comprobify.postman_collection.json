@@ -1906,7 +1906,7 @@
                 "{{access_key}}"
               ]
             },
-            "description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates."
+            "description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates.\n\nWhile status is PENDING_SEND or RECEIVED, the response may include a `dispatch` field ({ status, attemptCount, lastError }) reporting the in-flight SRI_SEND/SRI_AUTHORIZE effect's own state — PENDING/DISPATCHED means it's still auto-retrying (reconciliation spaces attempts 5 minutes apart), FAILED means all 5 automatic attempts are exhausted and Retry Send/Authorize is now needed. Absent once the document reaches a settled status."
           }
         },
         {
