@@ -1,5 +1,7 @@
 const crypto = require('crypto');
 const apiKeyModel = require('../models/api-key.model');
+const attemptTrackerService = require('../services/attempt-tracker.service');
+const AttemptEventTypes = require('../constants/attempt-event-types');
 const AppError = require('../errors/app-error');
 
 // Identity only — does NOT reject a SUSPENDED tenant. That check lives in
@@ -21,6 +23,9 @@ const authenticate = async (req, _res, next) => {
   const row = await apiKeyModel.findByKeyHash(keyHash);
 
   if (!row) {
+    // Repeated failed lookups for the same keyHash can indicate someone
+    // testing a leaked/scraped key.
+    await attemptTrackerService.recordEvent(AttemptEventTypes.API_KEY_AUTH_FAILURE, keyHash);
     return next(new AppError('Invalid or revoked API key', 401));
   }
 

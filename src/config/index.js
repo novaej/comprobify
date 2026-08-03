@@ -93,6 +93,14 @@ const config = {
   redis: {
     url: process.env.REDIS_URL || '',
   },
+  // Backs src/services/attempt-tracker.service.js — a repeated-attempt counter
+  // shared across all event types (see AttemptEventTypes), not per-type. No
+  // effect without REDIS_URL also being set (attempt-tracker.service.js's
+  // getClient() check is what makes it a no-op, not this config).
+  attemptTracker: {
+    threshold: parseInt(process.env.ATTEMPT_TRACKER_THRESHOLD, 10) || 5,
+    windowMs: parseInt(process.env.ATTEMPT_TRACKER_WINDOW_MS, 10) || 15 * 60 * 1000,
+  },
   verificationTokenTtlHours: parseInt(process.env.VERIFICATION_TOKEN_TTL_HOURS, 10) || 24,
   sentry: {
     dsn: process.env.SENTRY_DSN || '',

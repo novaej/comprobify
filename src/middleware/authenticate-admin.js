@@ -1,6 +1,9 @@
 const crypto = require('crypto');
+const { ipKeyGenerator } = require('express-rate-limit');
 const config = require('../config');
 const AppError = require('../errors/app-error');
+const attemptTrackerService = require('../services/attempt-tracker.service');
+const AttemptEventTypes = require('../constants/attempt-event-types');
 
 const authenticateAdmin = (req, _res, next) => {
   const authHeader = req.headers['authorization'];
@@ -21,6 +24,9 @@ const authenticateAdmin = (req, _res, next) => {
   const secretBuf = Buffer.from(secret, 'utf8');
 
   if (tokenBuf.length !== secretBuf.length || !crypto.timingSafeEqual(tokenBuf, secretBuf)) {
+    // Fire-and-forget — recordEvent never throws, and this must never add
+    // latency to the auth-rejection path.
+    attemptTrackerService.recordEvent(AttemptEventTypes.ADMIN_AUTH_FAILURE, ipKeyGenerator(req.ip));
     return next(new AppError('Unauthorized', 401));
   }
 
