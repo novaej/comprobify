@@ -29,16 +29,16 @@ describe('PendingEffectService', () => {
 
       const result = await pendingEffectService.enqueue('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, 'dedup-1');
 
-      expect(pendingEffectModel.create).toHaveBeenCalledWith('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, 'dedup-1', null);
+      expect(pendingEffectModel.create).toHaveBeenCalledWith('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, 'dedup-1', null, null);
       expect(result).toEqual({ id: 'effect-1', effect_type: 'WEBHOOK_FANOUT' });
     });
 
-    test('defaults dedupKey and notificationType to null when omitted', async () => {
+    test('defaults dedupKey, notificationType, and documentId to null when omitted', async () => {
       pendingEffectModel.create.mockResolvedValue({ id: 'effect-1' });
 
       await pendingEffectService.enqueue('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' });
 
-      expect(pendingEffectModel.create).toHaveBeenCalledWith('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, null, null);
+      expect(pendingEffectModel.create).toHaveBeenCalledWith('WEBHOOK_FANOUT', 'tenant-1', { notificationId: 'n-1' }, null, null, null);
     });
 
     test('passes notificationType through for NOTIFICATION_DISPATCH', async () => {
@@ -46,7 +46,15 @@ describe('PendingEffectService', () => {
 
       await pendingEffectService.enqueue('NOTIFICATION_DISPATCH', 'tenant-1', { notificationId: 'n-1' }, null, 'PAYMENT_VERIFIED');
 
-      expect(pendingEffectModel.create).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', 'tenant-1', { notificationId: 'n-1' }, null, 'PAYMENT_VERIFIED');
+      expect(pendingEffectModel.create).toHaveBeenCalledWith('NOTIFICATION_DISPATCH', 'tenant-1', { notificationId: 'n-1' }, null, 'PAYMENT_VERIFIED', null);
+    });
+
+    test('passes documentId through for SRI_SEND/SRI_AUTHORIZE', async () => {
+      pendingEffectModel.create.mockResolvedValue({ id: 'effect-1' });
+
+      await pendingEffectService.enqueue('SRI_SEND', 'tenant-1', { accessKey: 'abc' }, null, null, 'document-1');
+
+      expect(pendingEffectModel.create).toHaveBeenCalledWith('SRI_SEND', 'tenant-1', { accessKey: 'abc' }, null, null, 'document-1');
     });
   });
 

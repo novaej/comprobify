@@ -110,7 +110,9 @@ describe('DocumentTransmissionService', () => {
         'SRI_AUTHORIZE',
         mockIssuer.tenant_id,
         { documentId: receivedDoc.id, accessKey: receivedDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox },
-        `sri-authorize:${receivedDoc.id}`
+        `sri-authorize:${receivedDoc.id}`,
+        null,
+        receivedDoc.id
       );
       expect(pendingEffectService.dispatch).not.toHaveBeenCalled();
       expect(result.status).toBe('RECEIVED');
@@ -138,7 +140,7 @@ describe('DocumentTransmissionService', () => {
         expect.objectContaining({ processingRetry: true, sriIdentifier: '70' }),
         null, mockIssuer.id, mockIssuer.sandbox
       );
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SRI_AUTHORIZE', mockIssuer.tenant_id, expect.any(Object), expect.any(String));
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SRI_AUTHORIZE', mockIssuer.tenant_id, expect.any(Object), expect.any(String), null, expect.any(String));
       expect(result.processingRetry).toBe(true);
     });
 
@@ -280,7 +282,7 @@ describe('DocumentTransmissionService', () => {
       const expectedPayload = {
         documentId: updatedDoc.id, accessKey: updatedDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
       };
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('INVOICE_AUTHORIZED_EMAIL', mockIssuer.tenant_id, expectedPayload, null);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('INVOICE_AUTHORIZED_EMAIL', mockIssuer.tenant_id, expectedPayload, null, null, null);
       expect(pendingEffectService.enqueue).toHaveBeenCalledTimes(1);
       expect(pendingEffectService.dispatch).toHaveBeenCalledTimes(1);
     });
@@ -320,7 +322,7 @@ describe('DocumentTransmissionService', () => {
       );
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith('SRI_SEND', mockIssuer.tenant_id, {
         documentId: pendingDoc.id, accessKey: pendingDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
-      }, null);
+      }, null, null, pendingDoc.id);
       expect(pendingEffectService.dispatch).toHaveBeenCalledWith(effectRow);
       expect(result.status).toBe('PENDING_SEND');
     });
@@ -354,7 +356,9 @@ describe('DocumentTransmissionService', () => {
         'SRI_AUTHORIZE',
         mockIssuer.tenant_id,
         { documentId: doc.id, accessKey: doc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox },
-        `sri-authorize:${doc.id}`
+        `sri-authorize:${doc.id}`,
+        null,
+        doc.id
       );
       expect(pendingEffectService.dispatch).toHaveBeenCalledWith(effectRow);
       expect(documentModel.updateStatus).not.toHaveBeenCalled();
