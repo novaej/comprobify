@@ -11,6 +11,8 @@ const certificateService = require('./certificate.service');
 const tenantEventModel = require('../models/tenant-event.model');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const pendingEffectService = require('./pending-effect.service');
+const attemptTrackerService = require('./attempt-tracker.service');
+const AttemptEventTypes = require('../constants/attempt-event-types');
 const { EffectTypes } = require('../constants/effect-types');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
@@ -216,6 +218,11 @@ async function recover(email, p12Buffer, p12Password) {
   // gets recovered too.
   const environment = tenant.sandbox ? 'sandbox' : 'production';
   console.warn(`[registration] recovery key issued for tenant ${tenant.id} (${environment})`);
+  // Anti-enumeration means every non-match already looks identical (see the
+  // generic response above) — the only observable signal here is a genuine
+  // match repeating unexpectedly often, which could indicate a compromised
+  // certificate being reused rather than one being guessed.
+  await attemptTrackerService.recordEvent(AttemptEventTypes.RECOVERY_SUCCESS, tenant.id);
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenant.id, environment);
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({

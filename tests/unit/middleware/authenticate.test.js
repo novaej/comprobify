@@ -1,6 +1,9 @@
 jest.mock('../../../src/models/api-key.model');
+jest.mock('../../../src/services/attempt-tracker.service');
 
 const apiKeyModel = require('../../../src/models/api-key.model');
+const attemptTrackerService = require('../../../src/services/attempt-tracker.service');
+const AttemptEventTypes = require('../../../src/constants/attempt-event-types');
 const authenticate = require('../../../src/middleware/authenticate');
 
 const mockRow = {
@@ -61,6 +64,22 @@ describe('authenticate middleware', () => {
     apiKeyModel.findByKeyHash.mockResolvedValue(null);
     const req = makeReq('Bearer unknowntoken');
     await expect(runMiddleware(req)).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  test('records an API_KEY_AUTH_FAILURE attempt when the key hash is not found', async () => {
+    const crypto = require('crypto');
+    apiKeyModel.findByKeyHash.mockResolvedValue(null);
+    const req = makeReq('Bearer unknowntoken');
+    await expect(runMiddleware(req)).rejects.toMatchObject({ statusCode: 401 });
+    const expectedHash = crypto.createHash('sha256').update('unknowntoken').digest('hex');
+    expect(attemptTrackerService.recordEvent).toHaveBeenCalledWith(AttemptEventTypes.API_KEY_AUTH_FAILURE, expectedHash);
+  });
+
+  test('does not record an attempt on a successful lookup', async () => {
+    apiKeyModel.findByKeyHash.mockResolvedValue(mockRow);
+    const req = makeReq('Bearer mytoken');
+    await runMiddleware(req);
+    expect(attemptTrackerService.recordEvent).not.toHaveBeenCalled();
   });
 
   test('does not reject a SUSPENDED tenant — that check lives in require-not-suspended.js', async () => {

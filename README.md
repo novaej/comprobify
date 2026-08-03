@@ -144,6 +144,9 @@ API keys belong to the tenant, not to a single branch. A tenant can mint multipl
 **Error monitoring**
 Unexpected `5xx` failures are reported to [Sentry](https://sentry.io) via `@sentry/node`, tagged with the running `environment` (`staging` / `production`). Sentry's Express error handler is mounted directly before the central RFC 7807 error handler, so it captures genuine internal errors with full stack traces and request context — without intercepting expected `AppError` 4xx responses (validation, not found, quota, etc.). Configured via the optional `SENTRY_DSN` env var; unset locally so development never reports.
 
+**Repeated-attempt detection**
+A small, reusable mechanism (`src/services/attempt-tracker.service.js`) flags a repeated-attempt pattern against the same event/key pair as a signal for the operator — detection, not brute-force prevention, since every secret involved (API keys, `ADMIN_SECRET`, Mailgun's webhook signature) is already high-entropy. Wired into four call sites: repeated successful account-recovery issuances for the same tenant, repeated invalid API keys, repeated wrong `ADMIN_SECRET` values, and repeated invalid Mailgun webhook signatures. Backed by the same Redis store as rate limiting (optional, no-op without it); on crossing the configurable threshold, reports to Sentry in addition to a log line so it's actually visible in practice.
+
 ---
 
 ## Project Structure

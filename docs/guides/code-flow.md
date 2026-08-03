@@ -111,7 +111,7 @@ authenticate  →  [rate limit]  →  [optional middleware]  →  [validator cha
 
 **Why this pattern?**
 
-- **`authenticate`**: verifies the `Authorization: Bearer <token>` header and sets `req.tenant` + `req.apiKey` before any business logic runs. Centralising authentication at the router level means no endpoint can accidentally be reached unauthenticated.
+- **`authenticate`**: verifies the `Authorization: Bearer <token>` header and sets `req.tenant` + `req.apiKey` before any business logic runs. Centralising authentication at the router level means no endpoint can accidentally be reached unauthenticated. An invalid/unrecognized key also awaits `attemptTrackerService.recordEvent()` before the 401 is thrown — cheap and fails open, never blocks or breaks the rejection itself — see CLAUDE.md's "Repeated-attempt detection" entry.
 - **`resolveIssuer`**: reads `X-Issuer-Id` and sets `req.issuer` — only mounted on `/v1/documents/*` where issuer scoping is required. Issuer-management routes use a URL `:id` param and inline ownership check instead.
 - **`[rate limit]`** (`readLimiter` or `writeLimiter`): per-API-key rate limiting prevents abuse. Applied immediately after authentication so the rate limit key (`req.keyHash`) is available. See `src/middleware/rate-limit.js`.
 - **Optional middleware** (e.g. `extractIdempotencyKey`): thin, synchronous header extraction that runs before body validation. Keeps HTTP-level concerns out of the controller.

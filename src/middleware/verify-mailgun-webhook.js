@@ -1,5 +1,8 @@
 const crypto = require('crypto');
+const { ipKeyGenerator } = require('express-rate-limit');
 const config = require('../config');
+const attemptTrackerService = require('../services/attempt-tracker.service');
+const AttemptEventTypes = require('../constants/attempt-event-types');
 
 /**
  * Verifies Mailgun's HMAC-SHA256 webhook signature.
@@ -35,6 +38,9 @@ function verifyMailgunWebhook(req, res, next) {
     computedBuf.length !== providedBuf.length ||
     !crypto.timingSafeEqual(computedBuf, providedBuf)
   ) {
+    // Fire-and-forget — repeated invalid signatures could indicate probing,
+    // not just a misconfigured signing key.
+    attemptTrackerService.recordEvent(AttemptEventTypes.MAILGUN_WEBHOOK_INVALID_SIGNATURE, ipKeyGenerator(req.ip));
     return res.status(401).json({ error: 'Invalid webhook signature' });
   }
 

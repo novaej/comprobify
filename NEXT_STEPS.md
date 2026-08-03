@@ -94,6 +94,7 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 - **Quota disputes** — per-request audit trail independent of the `document_count` counter
 - **Security** — detect a leaked key used from an unexpected IP before the tenant reports it; especially important given documents have legal standing under Ecuadorian tax law
 - **Traces registration recovery volume** — `path=/v1/recover` + `ip` + `timestamp` gives per-IP/per-time visibility into recovery attempts with no registration-specific code. Note the anti-enumeration design means `statusCode` alone can't distinguish a real match from a no-op (both return `200`) — item 10's anomaly detection is what actually needs to tell those apart, not this logging layer
+- **Captures item 10's attempt-tracker WARN lines too** — `[attempt-tracker] threshold crossed: ...` (`src/services/attempt-tracker.service.js`) is currently only visible via `Sentry.captureMessage` (immediate alerting) or grepping stdout on the droplet. Once log shipping exists here, those lines become queryable/aggregatable the same way every other log line is (e.g. "how many `ADMIN_AUTH_FAILURE` crossings this week") — not just alerted-on individually
 
 **Implementation:**
 1. Add `express-winston` (or a thin custom middleware) to emit one structured JSON log line per request after the response is sent, mounted globally (see Scope above) — attach `tenantId`/`issuerId`/`keyHash`/`apiKeyId` from `req` when `authenticate` has run, `null` otherwise
@@ -182,24 +183,7 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ---
 
-## 10. Generic Repeated-Attempt / Anomaly Detection
+## 10. Generic Repeated-Attempt / Anomaly Detection — SHIPPED
 
-**Priority: Medium — reusable security mechanism, first identified while closing the registration recovery account-takeover gap**
-
-That fix (see `CHANGELOG.md`'s Unreleased/Added entry — `POST /v1/recover`) closed the takeover itself, but left "what if someone keeps trying anyway" unaddressed. Rather than build one-off counting/alerting logic just for that endpoint, this item is a small reusable mechanism any sensitive code path can call into — because registration recovery isn't the only place a repeated-attempt pattern is worth noticing:
-
-- **Registration recovery** (`POST /v1/recover`) — repeated recovery key issuances for the same tenant. Note this can't be counted via a distinct "mismatch" error the way it originally could — the endpoint deliberately returns the same generic response for every non-matching attempt (anti-enumeration), so the only observable signal here is the *successful* case repeating unexpectedly often, which could indicate a compromised certificate being reused rather than one being guessed
-- **API key authentication** (`authenticate` middleware) — repeated bearer tokens that fail the `keyHash` lookup, which can indicate someone testing leaked/scraped keys
-- **Admin authentication** (`authenticate-admin.js`) — repeated wrong `ADMIN_SECRET` values against `/v1/admin/*`, currently only bounded by `adminLimiter`'s 20 req/min IP cap with no alerting on sustained attempts
-- **Mailgun webhook** (`verify-mailgun-webhook.js`) — repeated invalid HMAC signatures could indicate probing, not just a misconfigured signing key
-
-**Important framing: this is not brute-force *prevention*.** Every secret involved (API keys, `ADMIN_SECRET`, verification tokens, cert fingerprints) is already high-entropy (256-bit or equivalent) and computationally infeasible to guess — nothing here is defending against an attacker who could plausibly succeed by trying enough values. The value is *detection*: repeated failures against the same target is a signal an operator should see, regardless of whether the underlying attack was ever likely to work.
-
-**What:**
-- A small reusable service (e.g. `src/services/attempt-tracker.service.js`) exposing something like `recordFailure(eventType, key)` → returns whether the configured threshold was crossed for that `(eventType, key)` pair within the configured window
-- A pluggable action on threshold-crossed — start with a single WARN-level structured log line (once item 4 ships, this is just another queryable log line, no separate storage needed for the *detection* half); escalate later to an email via the existing `ADMIN_NOTIFICATION_EMAIL`/`emailService` pattern (mirrors `sendPaymentProofSubmitted`'s operator-facing notification) if false-positive rate proves low enough to be worth an inbox ping
-- **Item 6's shared store has now shipped** — reuse the same Redis connection (`src/services/redis.service.js`'s `getClient()`) rather than standing up a second one. An in-memory counter here would have the identical per-instance problem item 6 fixed for the rate limiters (`limit × N` across N instances), so this tracker should be built directly on the shared client from the start
-- First wire-up targets: the three call sites listed above — proves the mechanism generalizes before adding a fourth
-
-**Effort:** Medium — the tracker itself is small, and item 6's Redis connection is now available to reuse; still touches three separate existing call sites to wire in.
+`src/services/attempt-tracker.service.js`'s `recordEvent(eventType, key)` — detection, not prevention (every secret involved is already high-entropy). Reuses item 6's shared Redis connection (`src/services/redis.service.js`), no-op without `REDIS_URL`. Wired into all four call sites originally named (the doc's own "three"/"fourth" language was a stale inconsistency, not a scoping decision): `RECOVERY_SUCCESS` (`POST /v1/recover`, keyed by tenant id), `API_KEY_AUTH_FAILURE` (`authenticate` middleware, keyed by the attempted `keyHash`), `ADMIN_AUTH_FAILURE` (`authenticate-admin.js`, keyed by IP), `MAILGUN_WEBHOOK_INVALID_SIGNATURE` (`verify-mailgun-webhook.js`'s signature-mismatch branch, keyed by IP). On threshold-crossing, fires both `console.warn` and `Sentry.captureMessage` (tagged by `eventType`) — Sentry is what makes this actually visible today, ahead of item 4's log aggregation; see item 4's own cross-reference below. See CLAUDE.md's "Repeated-attempt detection" entry for the full design. The "escalate to an email" follow-up floated in the original draft is intentionally not built — Sentry already closes the "how will I know" gap without it; revisit only if Sentry-fatigue or false-positive rate makes a dedicated inbox ping worth it.
 

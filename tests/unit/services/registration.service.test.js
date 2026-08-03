@@ -9,6 +9,7 @@ jest.mock('../../../src/services/tenant-quota.service');
 jest.mock('../../../src/services/crypto.service');
 jest.mock('../../../src/services/certificate.service');
 jest.mock('../../../src/services/pending-effect.service');
+jest.mock('../../../src/services/attempt-tracker.service');
 
 const db = require('../../../src/config/database');
 const tenantModel = require('../../../src/models/tenant.model');
@@ -21,6 +22,8 @@ const tenantQuotaService = require('../../../src/services/tenant-quota.service')
 const cryptoService = require('../../../src/services/crypto.service');
 const certificateService = require('../../../src/services/certificate.service');
 const pendingEffectService = require('../../../src/services/pending-effect.service');
+const attemptTrackerService = require('../../../src/services/attempt-tracker.service');
+const AttemptEventTypes = require('../../../src/constants/attempt-event-types');
 const config = require('../../../src/config');
 const registrationService = require('../../../src/services/registration.service');
 
@@ -302,6 +305,7 @@ describe('RegistrationService', () => {
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
       expect(apiKeyModel.create).not.toHaveBeenCalled();
       expect(pendingEffectService.enqueue).not.toHaveBeenCalledWith('VERIFICATION_EMAIL_SEND', expect.anything());
+      expect(attemptTrackerService.recordEvent).not.toHaveBeenCalled();
     });
 
     test('returns the same generic response when the tenant has no issuer (inconsistent state)', async () => {
@@ -312,6 +316,7 @@ describe('RegistrationService', () => {
 
       expect(result).toEqual({ ok: true, message: expect.any(String) });
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+      expect(attemptTrackerService.recordEvent).not.toHaveBeenCalled();
     });
 
     test('returns the same generic response when the certificate fingerprint does not match (indistinguishable from a nonexistent email)', async () => {
@@ -330,6 +335,7 @@ describe('RegistrationService', () => {
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
       expect(apiKeyModel.create).not.toHaveBeenCalled();
       expect(pendingEffectService.enqueue).not.toHaveBeenCalledWith('VERIFICATION_EMAIL_SEND', expect.anything());
+      expect(attemptTrackerService.recordEvent).not.toHaveBeenCalled();
     });
 
     test('rejects with ACCOUNT_SUSPENDED when the certificate matches but the tenant is suspended', async () => {
@@ -362,6 +368,16 @@ describe('RegistrationService', () => {
       expect(result.apiKey).toHaveLength(64);
       expect(result.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000001', email: baseFields.email });
       expect(result.issuer).toMatchObject({ id: '00000000-0000-0000-0000-000000000010', ruc: baseFields.ruc });
+    });
+
+    test('matched: records a RECOVERY_SUCCESS attempt keyed by tenant id', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000500' });
+
+      await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+
+      expect(attemptTrackerService.recordEvent).toHaveBeenCalledWith(AttemptEventTypes.RECOVERY_SUCCESS, existingTenant.id);
     });
 
     test('matched + production (promoted) tenant: revokes and reissues a production key, not sandbox (regression test)', async () => {
