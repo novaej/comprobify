@@ -31,7 +31,7 @@ const handler = (req, res) => {
   });
 };
 
-const keyGenerator = (req) => req.keyHash || ipKeyGenerator(req);
+const keyGenerator = (req) => req.keyHash || ipKeyGenerator(req.ip);
 
 // Tier-aware limiters for document endpoints
 const writeLimiter = rateLimit({
@@ -64,7 +64,7 @@ const readLimiter = rateLimit({
 const adminLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
-  keyGenerator: (req) => ipKeyGenerator(req),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   handler,
   store: buildStore('rl:admin:'),
   passOnStoreError: true,
@@ -74,10 +74,10 @@ const adminLimiter = rateLimit({
 const registrationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
-  keyGenerator: (req) => ipKeyGenerator(req),
+  keyGenerator: (req) => ipKeyGenerator(req.ip),
   handler,
   store: buildStore('rl:registration:'),
   passOnStoreError: true,
 });
 
-module.exports = { writeLimiter, readLimiter, adminLimiter, registrationLimiter, buildStore };
+module.exports = { writeLimiter, readLimiter, adminLimiter, registrationLimiter, buildStore, keyGenerator };
