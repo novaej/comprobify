@@ -280,7 +280,7 @@ function drawBuyerSection(doc, data, y) {
   ];
   cells.forEach((c, i) => {
     const cx = M + i * CELL;
-    if (i > 0) vline(doc, cx, r2y, R2 + R3, C_DARK);
+    if (i > 0) vline(doc, cx, r2y, R2, C_DARK);
     wt(doc, c.label, cx + P, r2y + 3, CELL - P * 2, { size: 6.5, color: C_GREY });
     wt(doc, c.value, cx + P, r2y + 12, CELL - P * 2, { size: 8 });
   });
