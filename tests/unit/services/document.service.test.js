@@ -396,7 +396,9 @@ describe('DocumentTransmissionService', () => {
       'SRI_AUTHORIZE',
       mockIssuer.tenant_id,
       expect.objectContaining({ documentId: '00000000-0000-0000-0000-000000000001', issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox }),
-      'sri-authorize:00000000-0000-0000-0000-000000000001'
+      'sri-authorize:00000000-0000-0000-0000-000000000001',
+      null,
+      '00000000-0000-0000-0000-000000000001'
     );
     expect(pendingEffectService.dispatch).not.toHaveBeenCalled();
     expect(result.status).toBe('RECEIVED');

@@ -80,7 +80,7 @@ No log aggregation is currently in place. Without it there is no way to debug a 
 
 **What to log (one JSON line per request):**
 - `timestamp`, `method`, `path`, `statusCode`, `durationMs`
-- `ip` (client IP — needed for item 10's anomaly detection and for tracing unauthenticated-route abuse, e.g. registration recovery attempts, not just for post-hoc key-leak investigation)
+- `ip` (client IP — needed for the repeated-attempt detection mechanism (`src/services/attempt-tracker.service.js`, see CLAUDE.md's "Repeated-attempt detection" entry) and for tracing unauthenticated-route abuse, e.g. registration recovery attempts, not just for post-hoc key-leak investigation)
 - `keyHash` (never the plaintext key), `apiKeyId`, `tenantId`, `issuerId` — `null` on routes that never reach `authenticate` (registration, verification, public agreement/tiers endpoints)
 - `requestId` (UUID injected by middleware for correlation)
 
@@ -93,8 +93,8 @@ With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `fronte
 - **SRI failure investigation** — the document event log captures outcomes but not timing; logs capture slow or intermittently failing SRI SOAP calls
 - **Quota disputes** — per-request audit trail independent of the `document_count` counter
 - **Security** — detect a leaked key used from an unexpected IP before the tenant reports it; especially important given documents have legal standing under Ecuadorian tax law
-- **Traces registration recovery volume** — `path=/v1/recover` + `ip` + `timestamp` gives per-IP/per-time visibility into recovery attempts with no registration-specific code. Note the anti-enumeration design means `statusCode` alone can't distinguish a real match from a no-op (both return `200`) — item 10's anomaly detection is what actually needs to tell those apart, not this logging layer
-- **Captures item 10's attempt-tracker WARN lines too** — `[attempt-tracker] threshold crossed: ...` (`src/services/attempt-tracker.service.js`) is currently only visible via `Sentry.captureMessage` (immediate alerting) or grepping stdout on the droplet. Once log shipping exists here, those lines become queryable/aggregatable the same way every other log line is (e.g. "how many `ADMIN_AUTH_FAILURE` crossings this week") — not just alerted-on individually
+- **Traces registration recovery volume** — `path=/v1/recover` + `ip` + `timestamp` gives per-IP/per-time visibility into recovery attempts with no registration-specific code. Note the anti-enumeration design means `statusCode` alone can't distinguish a real match from a no-op (both return `200`) — the repeated-attempt detection mechanism is what actually needs to tell those apart, not this logging layer
+- **Captures the attempt-tracker's WARN lines too** — `[attempt-tracker] threshold crossed: ...` (`src/services/attempt-tracker.service.js`) is currently only visible via `Sentry.captureMessage` (immediate alerting) or grepping stdout on the droplet. Once log shipping exists here, those lines become queryable/aggregatable the same way every other log line is (e.g. "how many `ADMIN_AUTH_FAILURE` crossings this week") — not just alerted-on individually
 
 **Implementation:**
 1. Add `express-winston` (or a thin custom middleware) to emit one structured JSON log line per request after the response is sent, mounted globally (see Scope above) — attach `tenantId`/`issuerId`/`keyHash`/`apiKeyId` from `req` when `authenticate` has run, `null` otherwise
@@ -133,13 +133,7 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 6. Shared Rate-Limit Store for Horizontal Scaling — SHIPPED
-
-`writeLimiter`/`readLimiter`/`adminLimiter`/`registrationLimiter` now share a Redis-backed store (`src/services/redis.service.js`, `src/middleware/rate-limit.js`'s `buildStore()`) instead of each defaulting to `express-rate-limit`'s per-process in-memory one — self-hosted via a `redis` service in `deploy/docker-compose.yml`, wired on via `REDIS_URL` in the deploy workflows. See CHANGELOG.md's Unreleased/Changed entry. `REDIS_URL` is optional (falls back to in-memory when unset, correct for today's single-instance topology) and every limiter fails open on a Redis outage (`passOnStoreError: true`).
-
----
-
-## 7. Payment Gateway Integration
+## 6. Payment Gateway Integration
 
 **Priority: Low — blocked, requires a registered legal entity. Every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different vendor. No vendor has been selected yet — not under active consideration until the entity exists.**
 
@@ -154,11 +148,11 @@ The manual subscription/payment pipeline this depends on is already fully built 
 
 ---
 
-## 8. Overage Billing (Per-Tenant Toggle + Charging)
+## 7. Overage Billing (Per-Tenant Toggle + Charging)
 
-**Priority: Low — depends on the payment gateway integration (#7)**
+**Priority: Low — depends on the payment gateway integration (#6)**
 
-The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#7) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
+The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#6) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
 
 **What:**
 1. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
@@ -171,7 +165,7 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ---
 
-## 9. Audit Certificate Changes
+## 8. Audit Certificate Changes
 
 **Priority: Low — cheap gap, found while reviewing the billing audit-trail design**
 
@@ -180,10 +174,4 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 **What:** log a `tenant_events` row (or a new `issuer_events` table if issuer-level granularity matters more than tenant-level) on certificate upload (registration/branch creation) and renewal — fingerprint and expiry are already computed by `certificateService.parseCertificate`, just not persisted as an event.
 
 **Effort:** Low — one event write per existing call site, no new flow.
-
----
-
-## 10. Generic Repeated-Attempt / Anomaly Detection — SHIPPED
-
-`src/services/attempt-tracker.service.js`'s `recordEvent(eventType, key)` — detection, not prevention (every secret involved is already high-entropy). Reuses item 6's shared Redis connection (`src/services/redis.service.js`), no-op without `REDIS_URL`. Wired into all four call sites originally named (the doc's own "three"/"fourth" language was a stale inconsistency, not a scoping decision): `RECOVERY_SUCCESS` (`POST /v1/recover`, keyed by tenant id), `API_KEY_AUTH_FAILURE` (`authenticate` middleware, keyed by the attempted `keyHash`), `ADMIN_AUTH_FAILURE` (`authenticate-admin.js`, keyed by IP), `MAILGUN_WEBHOOK_INVALID_SIGNATURE` (`verify-mailgun-webhook.js`'s signature-mismatch branch, keyed by IP). On threshold-crossing, fires both `console.warn` and `Sentry.captureMessage` (tagged by `eventType`) — Sentry is what makes this actually visible today, ahead of item 4's log aggregation; see item 4's own cross-reference below. See CLAUDE.md's "Repeated-attempt detection" entry for the full design. The "escalate to an email" follow-up floated in the original draft is intentionally not built — Sentry already closes the "how will I know" gap without it; revisit only if Sentry-fatigue or false-positive rate makes a dedicated inbox ping worth it.
 

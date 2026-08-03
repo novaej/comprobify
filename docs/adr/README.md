@@ -110,3 +110,4 @@ YYYY-MM-DD
 | [023](023-tier-price-history.md) | Tier Price History with a 30-Day Change Notice | Accepted | 2026-07-25 |
 | [024](024-unified-notification-service.md) | Unified Notification Service, Per-Channel Preferences, and DB-Backed Email Templates | Accepted | 2026-07-26 |
 | [025](025-past-due-tenant-status.md) | PAST_DUE Tenant Status, Distinct from SUSPENDED | Accepted | 2026-07-27 |
+| [026](026-redis-shared-counter-store.md) | Redis for Shared Rate-Limiting and Repeated-Attempt Counters | Accepted | 2026-08-03 |
