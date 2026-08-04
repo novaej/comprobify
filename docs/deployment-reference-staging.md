@@ -119,6 +119,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `MAILGUN_API_KEY` | |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | |
 | `SENTRY_DSN` | |
+| `BETTERSTACK_SOURCE_TOKEN` | |
 | `RABBITMQ_URL` | |
 
 ### GitHub Environment: `staging` — Variables

@@ -541,6 +541,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `EMAIL_PROVIDER` | No | Default `mailgun` is the only supported provider today |
 | `SRI_TEST_BASE_URL` / `SRI_PROD_BASE_URL` | No | Defaults are the real, correct SRI endpoint URLs |
 | `RATE_LIMIT_WINDOW_MS` | No | Default (`60000`) is reasonable. The write/read request-count ceiling itself isn't an env var — it comes from `TIERS[tier].writeRateLimit`/`.readRateLimit` |
+| `BETTERSTACK_SOURCE_TOKEN` | No | Backs `src/services/logger.service.js`'s Betterstack transport. Absent means structured logs still print locally (`Console` transport, visible via `docker compose logs api`) but never ship anywhere — a real gap for anyone not SSHing into the droplet to debug, but not a startup-blocking one |
 | `RABBITMQ_SRI_EXCHANGE` | No | Default `sri.direct` is fine |
 | `QUEUE_RECONCILE_SEND_STALE_MINUTES` / `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES` / `QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES` / `QUEUE_RECONCILE_EFFECT_STALE_MINUTES` / `QUEUE_RECONCILE_BATCH_LIMIT` | No | Defaults (`5`, `5`, `5`, `5`, `100`) are reasonable |
 | `PENDING_EFFECTS_MAX_ATTEMPTS` | No | Default `5` is fine |
@@ -559,6 +560,7 @@ Split, for the "Yes" rows only:
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | `ADMIN_NOTIFICATION_EMAIL`, `OPERATOR_NAME`, `OPERATOR_RUC`, `OPERATOR_EMAIL`, `OPERATOR_ADDRESS` — an email address and public business-registry identity info, not credentials |
 | `RABBITMQ_URL` (embeds credentials) | — |
 | `SENTRY_DSN` (not catastrophic if leaked, but conventionally kept private — a leaked DSN lets someone spam fake events into your project) | — |
+| `BETTERSTACK_SOURCE_TOKEN` (a real credential — lets someone write arbitrary events into your logs) | — |
 
 Both stores are scoped per GitHub Environment (`staging`/`production`) — one place per environment, two tabs (Secrets / Variables) within it.
 
@@ -599,6 +601,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             MAILGUN_WEBHOOK_SIGNING_KEY=${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
             SENTRY_DSN=${{ secrets.SENTRY_DSN }}
             SENTRY_RELEASE=${{ github.sha }}
+            BETTERSTACK_SOURCE_TOKEN=${{ secrets.BETTERSTACK_SOURCE_TOKEN }}
             BANK_TRANSFER_BANK_NAME=${{ vars.BANK_TRANSFER_BANK_NAME }}
             BANK_TRANSFER_ACCOUNT_TYPE=${{ vars.BANK_TRANSFER_ACCOUNT_TYPE }}
             BANK_TRANSFER_ACCOUNT_NUMBER=${{ vars.BANK_TRANSFER_ACCOUNT_NUMBER }}
