@@ -1,6 +1,7 @@
 const Sentry = require('../../instrument');
 const redisService = require('./redis.service');
 const config = require('../config');
+const logger = require('./logger.service');
 
 // Detection, not prevention — every secret involved at every call site (API
 // keys, ADMIN_SECRET, verification tokens, cert fingerprints) is already
@@ -24,7 +25,11 @@ async function recordEvent(eventType, key) {
 
     if (count === config.attemptTracker.threshold) {
       const message = `[attempt-tracker] threshold crossed: eventType=${eventType} key=${key} count=${count} windowMs=${config.attemptTracker.windowMs}`;
-      console.warn(message);
+      // logger.warn (not console.warn) — prints locally the same as before,
+      // but also ships to Betterstack once BETTERSTACK_SOURCE_TOKEN is set,
+      // making crossings independently queryable/aggregatable after the
+      // fact, not just alerted-on once via Sentry.captureMessage below.
+      logger.warn(message, { eventType, key, count });
       Sentry.captureMessage(message, { level: 'warning', tags: { eventType }, extra: { key, count } });
     }
 

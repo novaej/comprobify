@@ -12,10 +12,10 @@ Two channels fire together, every time the configured threshold is crossed (`ATT
 
 | Channel | What it takes to see it | How useful it is in practice |
 |---|---|---|
-| **Sentry** (`Sentry.captureMessage`) | `SENTRY_DSN` set in the running environment | The real one. Shows up in the Sentry project's **Issues** list as a `warning`-level event, tagged `eventType`, with `key`/`count` in the extra data. Filter Issues by `eventType:ADMIN_AUTH_FAILURE` (or any of the other three) to see just that category. |
-| **`console.warn`** | Nothing — always fires | Only visible by `docker compose logs api` on the droplet (no log aggregation exists yet — that's the separate, not-yet-built NEXT_STEPS.md item 4), or in your terminal for local dev. Not something anyone is expected to be watching continuously. |
+| **Sentry** (`Sentry.captureMessage`) | `SENTRY_DSN` set in the running environment | The immediate one. Shows up in the Sentry project's **Issues** list as a `warning`-level event, tagged `eventType`, with `key`/`count` in the extra data. Filter Issues by `eventType:ADMIN_AUTH_FAILURE` (or any of the other three) to see just that category. |
+| **Structured logs** (`logger.warn`, via `src/services/logger.service.js`) | Nothing to see it locally (always prints); `BETTERSTACK_SOURCE_TOKEN` set to have it shipped and queryable | Always visible via `docker compose logs api` on the droplet, or your terminal locally. Once `BETTERSTACK_SOURCE_TOKEN` is set, also queryable/aggregatable in Betterstack after the fact — e.g. "how many `ADMIN_AUTH_FAILURE` crossings this week" — which Sentry's one-off alert doesn't give you on its own. See CLAUDE.md's "Structured request logging" entry. |
 
-**Sentry Issues is where you should actually look.** If you want a push notification instead of checking the dashboard, set up a Sentry **Alert Rule** on the project (e.g. "notify when an event matches `level:warning`", optionally scoped to a specific `eventType` tag) — that's a one-time Sentry project configuration, not something this code does for you.
+**Sentry Issues is where you should look for the immediate alert.** If you want a push notification instead of checking the dashboard, set up a Sentry **Alert Rule** on the project (e.g. "notify when an event matches `level:warning`", optionally scoped to a specific `eventType` tag) — that's a one-time Sentry project configuration, not something this code does for you. For historical/aggregate queries across crossings over time, use Betterstack instead.
 
 If `REDIS_URL` isn't set at all, none of this fires — `recordEvent()` is a silent no-op (see ADR-026's "optional, not required").
 

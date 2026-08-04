@@ -2,6 +2,7 @@ jest.mock('../../../src/models/pending-effect.model');
 jest.mock('../../../src/config/database');
 jest.mock('../../../src/services/queue.service');
 jest.mock('../../../src/effects');
+jest.mock('../../../src/services/logger.service', () => ({ info: jest.fn(), error: jest.fn() }));
 
 const pendingEffectModel = require('../../../src/models/pending-effect.model');
 const db = require('../../../src/config/database');
@@ -9,6 +10,7 @@ const queueService = require('../../../src/services/queue.service');
 const { getHandler } = require('../../../src/effects');
 const AppError = require('../../../src/errors/app-error');
 const config = require('../../../src/config');
+const logger = require('../../../src/services/logger.service');
 const pendingEffectService = require('../../../src/services/pending-effect.service');
 
 describe('PendingEffectService', () => {
@@ -94,6 +96,7 @@ describe('PendingEffectService', () => {
       expect(getHandler).not.toHaveBeenCalled();
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
       expect(mockClient.release).toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith('[worker] skipped', expect.objectContaining({ effectId: 'effect-missing' }));
     });
 
     test.each(['DONE', 'FAILED'])('is a no-op when the row is already %s (benign at-least-once redelivery)', async (status) => {
@@ -116,6 +119,7 @@ describe('PendingEffectService', () => {
       expect(handler).toHaveBeenCalledWith({ notificationId: 'n-1' });
       expect(pendingEffectModel.markDone).toHaveBeenCalledWith(mockClient, 'effect-1');
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+      expect(logger.info).toHaveBeenCalledWith('[worker] done', expect.objectContaining({ effectId: 'effect-1', effectType: 'WEBHOOK_FANOUT' }));
     });
 
     test('leaves the row untouched (no DONE, no attempt bump) when the handler returns { requeue: true }', async () => {
@@ -129,6 +133,7 @@ describe('PendingEffectService', () => {
       expect(pendingEffectModel.markDone).not.toHaveBeenCalled();
       expect(pendingEffectModel.recordFailedAttempt).not.toHaveBeenCalled();
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+      expect(logger.info).toHaveBeenCalledWith('[worker] requeue', expect.objectContaining({ effectId: 'effect-2' }));
     });
 
     test('treats a benign state-transition error (400 AppError) as success — marks DONE, does not rethrow', async () => {
@@ -141,6 +146,7 @@ describe('PendingEffectService', () => {
 
       expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
       expect(pendingEffectModel.recordFailedAttempt).toHaveBeenCalledWith('effect-3', 2, null, 'DONE');
+      expect(logger.error).toHaveBeenCalledWith('[worker] done_benign', expect.objectContaining({ effectId: 'effect-3', error: 'already processed' }));
     });
 
     test('a genuine failure increments attempt_count, keeps status for retry below maxAttempts, and rethrows', async () => {
@@ -155,6 +161,7 @@ describe('PendingEffectService', () => {
       expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
       // attempt_count 1 -> 2, below the default maxAttempts (5), so status stays DISPATCHED
       expect(pendingEffectModel.recordFailedAttempt).toHaveBeenCalledWith('effect-4', 2, 'endpoint timed out', 'DISPATCHED');
+      expect(logger.error).toHaveBeenCalledWith('[worker] failed_retry', expect.objectContaining({ effectId: 'effect-4', error: 'endpoint timed out' }));
     });
 
     test('marks the row FAILED once attempt_count reaches maxAttempts', async () => {
@@ -168,6 +175,7 @@ describe('PendingEffectService', () => {
       expect(pendingEffectModel.recordFailedAttempt).toHaveBeenCalledWith(
         'effect-5', config.pendingEffects.maxAttempts, 'still failing', 'FAILED'
       );
+      expect(logger.error).toHaveBeenCalledWith('[worker] failed_final', expect.objectContaining({ effectId: 'effect-5' }));
     });
 
     test('always releases the claiming client, even on failure', async () => {

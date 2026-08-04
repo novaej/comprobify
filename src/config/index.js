@@ -101,6 +101,12 @@ const config = {
     threshold: parseInt(process.env.ATTEMPT_TRACKER_THRESHOLD, 10) || 5,
     windowMs: parseInt(process.env.ATTEMPT_TRACKER_WINDOW_MS, 10) || 15 * 60 * 1000,
   },
+  // Backs src/services/logger.service.js's Betterstack transport. Unset means
+  // structured logs still print locally (Console transport) but never ship
+  // anywhere — same graceful-degrade treatment as SENTRY_DSN/REDIS_URL.
+  logging: {
+    betterstackSourceToken: process.env.BETTERSTACK_SOURCE_TOKEN || '',
+  },
   verificationTokenTtlHours: parseInt(process.env.VERIFICATION_TOKEN_TTL_HOURS, 10) || 24,
   sentry: {
     dsn: process.env.SENTRY_DSN || '',

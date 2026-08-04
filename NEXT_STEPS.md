@@ -49,7 +49,7 @@ Rate limiting is already per `keyHash` (in-memory, enforces throttling). But the
 - Audit trail: `created_at` + `last_used_at` + `request_count` per key tells the full lifecycle story
 
 **Notes:**
-- `request_count` is a monotonic counter, not windowed — for windowed analytics use structured logs (item 4) or an APM tool
+- `request_count` is a monotonic counter, not windowed — for windowed analytics use the structured request logs (`src/services/logger.service.js`, see CLAUDE.md's "Structured request logging" entry) or an APM tool
 - The background UPDATE is a single indexed write per request (`WHERE id = $1`); acceptable overhead for the observability gain
 - Per-issuer document volume is already derivable from `documents.issuer_id` — this adds the per-integration request-level dimension
 
@@ -72,44 +72,7 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 ---
 
-## 4. Structured Request Logging
-
-**Priority: Medium — important for a B2B API where documents have legal weight**
-
-No log aggregation is currently in place. Without it there is no way to debug a client's failed integration, investigate a SRI timeout, audit a quota dispute, or detect a compromised API key being used from an unexpected IP before the tenant notices.
-
-**What to log (one JSON line per request):**
-- `timestamp`, `method`, `path`, `statusCode`, `durationMs`
-- `ip` (client IP — needed for the repeated-attempt detection mechanism (`src/services/attempt-tracker.service.js`, see CLAUDE.md's "Repeated-attempt detection" entry) and for tracing unauthenticated-route abuse, e.g. registration recovery attempts, not just for post-hoc key-leak investigation)
-- `keyHash` (never the plaintext key), `apiKeyId`, `tenantId`, `issuerId` — `null` on routes that never reach `authenticate` (registration, verification, public agreement/tiers endpoints)
-- `requestId` (UUID injected by middleware for correlation)
-
-With tenant-scoped API keys, `apiKeyId` identifies the integration (e.g. `frontend-prod` vs `erp`) and `issuerId` identifies which branch the request targeted — the two dimensions slice traffic independently.
-
-**Scope: mount globally, not just on authenticated routes.** The original draft of this item only attached fields "after `authenticate` runs," which would silently exclude every public endpoint — `POST /v1/register`, `POST /v1/recover`, `/v1/resend-verification`, `/v1/verify-email`, `GET /v1/agreements/*`, `GET /v1/tiers`. Mount the logging middleware ahead of `authenticate` at the top of the stack so every request gets a line regardless of whether it ever authenticates; the identity fields are simply `null` until `authenticate` (if it runs at all) populates `req.tenant`/`req.apiKey`.
-
-**What this enables:**
-- **Client debugging** — look up a key hash and see exactly what was sent and what the API returned, without needing the client to reproduce
-- **SRI failure investigation** — the document event log captures outcomes but not timing; logs capture slow or intermittently failing SRI SOAP calls
-- **Quota disputes** — per-request audit trail independent of the `document_count` counter
-- **Security** — detect a leaked key used from an unexpected IP before the tenant reports it; especially important given documents have legal standing under Ecuadorian tax law
-- **Traces registration recovery volume** — `path=/v1/recover` + `ip` + `timestamp` gives per-IP/per-time visibility into recovery attempts with no registration-specific code. Note the anti-enumeration design means `statusCode` alone can't distinguish a real match from a no-op (both return `200`) — the repeated-attempt detection mechanism is what actually needs to tell those apart, not this logging layer
-- **Captures the attempt-tracker's WARN lines too** — `[attempt-tracker] threshold crossed: ...` (`src/services/attempt-tracker.service.js`) is currently only visible via `Sentry.captureMessage` (immediate alerting) or grepping stdout on the droplet. Once log shipping exists here, those lines become queryable/aggregatable the same way every other log line is (e.g. "how many `ADMIN_AUTH_FAILURE` crossings this week") — not just alerted-on individually
-
-**Implementation:**
-1. Add `express-winston` (or a thin custom middleware) to emit one structured JSON log line per request after the response is sent, mounted globally (see Scope above) — attach `tenantId`/`issuerId`/`keyHash`/`apiKeyId` from `req` when `authenticate` has run, `null` otherwise
-2. Ship logs to **Datadog** or **Betterstack** (both have free tiers; Betterstack integrates in ~10 lines for Node)
-3. The item 2 `request_count` counter on `api_keys` still has value as a cheap "is this key alive" check without a log query — these two are complementary, not alternatives
-
-**Note:** log the `keyHash`, never the plaintext token. All sensitive fields (`encrypted_private_key`, cert PEM, passwords) must be excluded.
-
-**Interaction with the RabbitMQ async worker:** since `POST /:key/send`/`GET /:key/authorize` now return `202` immediately and the actual SRI outcome is produced later by `workers/worker.js`, the "what happened" half of the story lives outside the request/response cycle — a request-only logging middleware can't show the full picture for an async-processed document. `workers/worker.js` needs to emit the same structured JSON log shape, tagged with a correlation id (the original `requestId`, or the document's `access_key`) that ties consumer-side log lines back to the request that queued them.
-
-**Effort:** Low — one middleware, one external service connection, no migrations.
-
----
-
-## 5. API Key Scopes
+## 4. API Key Scopes
 
 **Priority: Low — defer until first concrete use case**
 
@@ -133,7 +96,7 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 6. Payment Gateway Integration
+## 5. Payment Gateway Integration
 
 **Priority: Low — blocked, requires a registered legal entity. Every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different vendor. No vendor has been selected yet — not under active consideration until the entity exists.**
 
@@ -148,11 +111,11 @@ The manual subscription/payment pipeline this depends on is already fully built 
 
 ---
 
-## 7. Overage Billing (Per-Tenant Toggle + Charging)
+## 6. Overage Billing (Per-Tenant Toggle + Charging)
 
-**Priority: Low — depends on the payment gateway integration (#6)**
+**Priority: Low — depends on the payment gateway integration (#5)**
 
-The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#6) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
+The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#5) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
 
 **What:**
 1. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
@@ -165,7 +128,7 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ---
 
-## 8. Audit Certificate Changes
+## 7. Audit Certificate Changes
 
 **Priority: Low — cheap gap, found while reviewing the billing audit-trail design**
 

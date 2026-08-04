@@ -19,6 +19,7 @@ const queueService = require('./queue.service');
 const { routingKeyForEffectType } = require('../constants/effect-types');
 const AppError = require('../errors/app-error');
 const config = require('../config');
+const logger = require('./logger.service');
 
 // A state-machine violation (400) means another delivery already advanced
 // the underlying document past this state — expected under RabbitMQ's
@@ -26,6 +27,29 @@ const config = require('../config');
 // workers/sri-worker.js's isBenignStateError before this refactor.
 function isBenignStateError(err) {
   return err instanceof AppError && err.statusCode === 400;
+}
+
+// Structured worker-side log line for process()'s outcome — correlated by the
+// effect's own id and, when present in the payload, the document's
+// accessKey/documentId (payload is "ids only" by design, see the outbox note
+// above, so these are safe to read directly). See CLAUDE.md's "Structured
+// request logging" entry — this is the worker-side half of that mechanism.
+function logOutcome(effectId, effect, outcome, startedAt, err = null) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    effectId,
+    effectType: effect?.effect_type || null,
+    tenantId: effect?.tenant_id || null,
+    accessKey: effect?.payload?.accessKey || null,
+    documentId: effect?.payload?.documentId || null,
+    outcome,
+    durationMs: Date.now() - startedAt,
+  };
+  if (err) {
+    logger.error(`[worker] ${outcome}`, { ...entry, error: err.message });
+  } else {
+    logger.info(`[worker] ${outcome}`, entry);
+  }
 }
 
 async function enqueue(effectType, tenantId, payload, dedupKey = null, notificationType = null, documentId = null) {
@@ -74,6 +98,7 @@ async function retryEffect(effectId) {
  */
 async function process(effectId) {
   const { getHandler } = require('../effects'); // lazy: effects/index.js requires services that require this file
+  const startedAt = Date.now();
   const client = await db.getClient();
   let effect;
   let handlerError = null;
@@ -85,6 +110,7 @@ async function process(effectId) {
 
     if (!effect || effect.status === 'DONE' || effect.status === 'FAILED') {
       await client.query('COMMIT');
+      logOutcome(effectId, effect, 'skipped', startedAt);
       return;
     }
 
@@ -99,12 +125,14 @@ async function process(effectId) {
       // as-is (not DONE, attempt_count untouched) — reconciliation's
       // staleness window naturally re-dispatches it later.
       await client.query('COMMIT');
+      logOutcome(effectId, effect, 'requeue', startedAt);
       return;
     }
 
     if (!handlerError) {
       await pendingEffectModel.markDone(client, effect.id);
       await client.query('COMMIT');
+      logOutcome(effectId, effect, 'done', startedAt);
       return;
     }
 
@@ -113,6 +141,7 @@ async function process(effectId) {
     await client.query('ROLLBACK');
   } catch (err) {
     await client.query('ROLLBACK');
+    logOutcome(effectId, effect, 'claim_error', startedAt, err);
     throw err;
   } finally {
     client.release();
@@ -122,11 +151,13 @@ async function process(effectId) {
   // closed above) via a fresh, unlocked write.
   if (isBenignStateError(handlerError)) {
     await pendingEffectModel.recordFailedAttempt(effect.id, effect.attempt_count, null, 'DONE');
+    logOutcome(effectId, effect, 'done_benign', startedAt, handlerError);
     return;
   }
   const attempts = effect.attempt_count + 1;
   const status = attempts >= config.pendingEffects.maxAttempts ? 'FAILED' : effect.status;
   await pendingEffectModel.recordFailedAttempt(effect.id, attempts, String(handlerError.message).slice(0, 500), status);
+  logOutcome(effectId, effect, status === 'FAILED' ? 'failed_final' : 'failed_retry', startedAt, handlerError);
   throw handlerError;
 }
 

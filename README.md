@@ -147,6 +147,9 @@ Unexpected `5xx` failures are reported to [Sentry](https://sentry.io) via `@sent
 **Repeated-attempt detection**
 A small, reusable mechanism (`src/services/attempt-tracker.service.js`) flags a repeated-attempt pattern against the same event/key pair as a signal for the operator — detection, not brute-force prevention, since every secret involved (API keys, `ADMIN_SECRET`, Mailgun's webhook signature) is already high-entropy. Wired into four call sites: repeated successful account-recovery issuances for the same tenant, repeated invalid API keys, repeated wrong `ADMIN_SECRET` values, and repeated invalid Mailgun webhook signatures. Backed by the same Redis store as rate limiting (optional, no-op without it); on crossing the configurable threshold, reports to Sentry in addition to a log line so it's actually visible in practice.
 
+**Structured request logging**
+One structured JSON line per HTTP request (method, path, status, duration, client IP, and — once authenticated — `keyHash`/`apiKeyId`/`tenantId`/`issuerId`), mounted ahead of everything else so every request gets a line regardless of whether it ever authenticates. Never logs the query string or the `Authorization` header — see `src/middleware/request-logger.js`. A matching structured line is emitted per async effect processed by `workers/worker.js` (`src/services/pending-effect.service.js`'s `process()`), correlated back to the originating request via the document's access key when applicable, since `POST /:key/send`/`GET /:key/authorize` return `202` immediately. Always prints locally; optionally ships to [Betterstack](https://betterstack.com/logs) via the optional `BETTERSTACK_SOURCE_TOKEN` env var.
+
 ---
 
 ## Project Structure

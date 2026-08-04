@@ -1,23 +1,22 @@
 jest.mock('../../../instrument', () => ({ captureMessage: jest.fn() }));
 jest.mock('../../../src/services/redis.service');
+jest.mock('../../../src/services/logger.service', () => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn() }));
 
 const Sentry = require('../../../instrument');
 const redisService = require('../../../src/services/redis.service');
 const config = require('../../../src/config');
+const logger = require('../../../src/services/logger.service');
 const attemptTrackerService = require('../../../src/services/attempt-tracker.service');
 
 describe('attempt-tracker.service', () => {
-  let warnSpy;
   let errorSpy;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   afterEach(() => {
-    warnSpy.mockRestore();
     errorSpy.mockRestore();
   });
 
@@ -56,7 +55,7 @@ describe('attempt-tracker.service', () => {
     const result = await attemptTrackerService.recordEvent('SOME_EVENT', 'some-key');
 
     expect(result).toBe(false);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
     expect(Sentry.captureMessage).not.toHaveBeenCalled();
   });
 
@@ -67,8 +66,12 @@ describe('attempt-tracker.service', () => {
     const result = await attemptTrackerService.recordEvent('ADMIN_AUTH_FAILURE', '1.2.3.4');
 
     expect(result).toBe(true);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy.mock.calls[0][0]).toContain('ADMIN_AUTH_FAILURE');
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn.mock.calls[0][0]).toContain('ADMIN_AUTH_FAILURE');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.any(String),
+      { eventType: 'ADMIN_AUTH_FAILURE', key: '1.2.3.4', count: config.attemptTracker.threshold }
+    );
     expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
     expect(Sentry.captureMessage).toHaveBeenCalledWith(
       expect.stringContaining('ADMIN_AUTH_FAILURE'),
@@ -87,7 +90,7 @@ describe('attempt-tracker.service', () => {
     const result = await attemptTrackerService.recordEvent('SOME_EVENT', 'some-key');
 
     expect(result).toBe(true);
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(logger.warn).not.toHaveBeenCalled();
     expect(Sentry.captureMessage).not.toHaveBeenCalled();
   });
 
