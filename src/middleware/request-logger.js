@@ -45,6 +45,12 @@ const requestLogger = expressWinston.logger({
   metaField: null,
   msg: buildLogMessage,
   dynamicMeta: buildLogMeta,
+  // statusCode >= 500 -> 'error', >= 400 -> 'warn', else 'info' — without this,
+  // express-winston logs every request at a fixed 'info' level regardless of
+  // outcome, so a genuine server error is indistinguishable from a 200 in the
+  // log stream. This is what makes `level:error`/`level:warn` a usable filter
+  // in Betterstack, and what the Console transport's LEVEL: prefix reflects.
+  statusLevels: true,
 });
 
 module.exports = { requestLogger, buildLogMeta, buildLogMessage };

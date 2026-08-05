@@ -3,6 +3,16 @@ const { Logtail } = require('@logtail/node');
 const { LogtailTransport } = require('@logtail/winston');
 const config = require('../config');
 
+// Console-only format — prefixes the level (INFO/WARN/ERROR) so log lines are
+// scannable at a glance in a terminal / `docker compose logs`, without losing
+// any field (still the same JSON, just after the prefix). Deliberately NOT
+// applied to the Betterstack transport below — Betterstack parses/indexes
+// fields from proper JSON, so that one stays winston.format.json() (the
+// logger-level default), never this human-readable one.
+const consoleFormat = winston.format.printf(
+  ({ level, ...meta }) => `${level.toUpperCase()}: ${JSON.stringify(meta)}`
+);
+
 // Single shared winston instance — used by both src/middleware/request-logger.js
 // (HTTP requests, via express-winston) and pending-effect.service.js's process()
 // (worker-side, no req/res available there) so the Betterstack wiring exists in
@@ -10,7 +20,7 @@ const config = require('../config');
 // locally / to `docker compose logs` with no config); the Betterstack transport
 // is added only when BETTERSTACK_SOURCE_TOKEN is set — same optional,
 // no-op-when-unset treatment as SENTRY_DSN/REDIS_URL.
-const transports = [new winston.transports.Console()];
+const transports = [new winston.transports.Console({ format: consoleFormat })];
 
 if (config.logging.betterstackSourceToken) {
   // @logtail/node defaults `endpoint` to the shared https://in.logs.betterstack.com

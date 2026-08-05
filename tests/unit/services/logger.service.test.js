@@ -2,11 +2,20 @@ const mockConsoleTransport = { type: 'console' };
 const mockLogtailTransport = { type: 'logtail' };
 const mockCreateLogger = jest.fn().mockReturnValue({ info: jest.fn(), error: jest.fn() });
 const mockLogtailConstructor = jest.fn();
+const mockConsoleTransportConstructor = jest.fn();
 
 jest.mock('winston', () => ({
   createLogger: (...args) => mockCreateLogger(...args),
-  format: { json: jest.fn().mockReturnValue('json-format') },
-  transports: { Console: jest.fn().mockImplementation(() => mockConsoleTransport) },
+  format: {
+    json: jest.fn().mockReturnValue('json-format'),
+    printf: jest.fn().mockReturnValue('printf-format'),
+  },
+  transports: {
+    Console: jest.fn().mockImplementation((...args) => {
+      mockConsoleTransportConstructor(...args);
+      return mockConsoleTransport;
+    }),
+  },
 }));
 jest.mock('@logtail/node', () => ({
   Logtail: jest.fn().mockImplementation((...args) => {
@@ -23,6 +32,7 @@ describe('logger.service', () => {
     jest.resetModules();
     mockCreateLogger.mockClear();
     mockLogtailConstructor.mockClear();
+    mockConsoleTransportConstructor.mockClear();
   });
 
   test('only the Console transport is used when BETTERSTACK_SOURCE_TOKEN is not configured', () => {
@@ -58,5 +68,31 @@ describe('logger.service', () => {
       'a-source-token',
       { endpoint: 'https://s123456.eu-central-1a.betterstackdata.com' }
     );
+  });
+
+  test('the Console transport gets its own human-readable format, distinct from the JSON default', () => {
+    const winston = require('winston');
+    require('../../../src/services/logger.service');
+
+    // Console transport is constructed with a `format` option (the printf
+    // one) — it must not fall through to the logger-level JSON default,
+    // which is what the shipped (Logtail) transport still uses.
+    expect(mockConsoleTransportConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({ format: 'printf-format' })
+    );
+    expect(mockCreateLogger).toHaveBeenCalledWith(
+      expect.objectContaining({ format: 'json-format' })
+    );
+    expect(winston.format.printf).toHaveBeenCalled();
+  });
+
+  test('the console format function prefixes the uppercased level and preserves every other field as JSON', () => {
+    const winston = require('winston');
+    require('../../../src/services/logger.service');
+
+    const formatFn = winston.format.printf.mock.calls[0][0];
+    const line = formatFn({ level: 'info', message: 'GET /health 200', requestId: 'req-1', statusCode: 200 });
+
+    expect(line).toBe('INFO: {"message":"GET /health 200","requestId":"req-1","statusCode":200}');
   });
 });
