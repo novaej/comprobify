@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.1] — 2026-08-05
+
+### Fixed
+- **`req.ip` resolved to Cloudflare's edge IP instead of the real client IP on the staging deployment**, discovered via a structured log line showing a Cloudflare-range address (`162.158.x.x`) as the request's `ip`. Caddy (the droplet's reverse proxy in front of the API container) doesn't trust the inbound `X-Forwarded-For` from Cloudflare without `trusted_proxies` configured, so it replaced it with its own immediate peer (Cloudflare's edge IP) rather than forwarding the real client — combined with Express's `trust proxy: 2` (expecting a Cloudflare-then-Caddy chain that wasn't actually there), this silently pooled `adminLimiter`/`registrationLimiter`'s per-IP rate limits into one shared bucket across every caller going through Cloudflare. `deploy/Caddyfile` now forwards Cloudflare's `CF-Connecting-IP` header (always the true client IP, not spoofable) as `X-Forwarded-For` explicitly, and `trust proxy` is dropped to `1` to match the resulting single-hop chain.
+
 ## [0.13.0] — 2026-08-04
 
 ### Added
