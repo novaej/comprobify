@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.2] — 2026-08-05
+
+### Fixed
+- **The 0.13.1 `CF-Connecting-IP`/`trust proxy` fix had no effect on the running staging deployment.** `docker compose up -d` only recreates a container when the service definition itself changes (image tag, env, volumes list) — `Caddyfile` is bind-mounted, so a content-only change on disk is invisible to Compose, and the running `caddy` container kept serving the old config it loaded at startup even after the file on disk was updated. The `api` container's `trust proxy` change took effect immediately (its image tag changes every deploy), but with Caddy still on the old config, `req.ip` kept resolving to Cloudflare's edge IP. `deploy-staging.yml`/`deploy-production.yml` now explicitly run `docker compose exec caddy caddy reload` after every deploy so a Caddyfile-only change actually takes effect.
+
 ## [0.13.1] — 2026-08-05
 
 ### Fixed
