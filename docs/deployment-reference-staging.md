@@ -119,6 +119,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `MAILGUN_API_KEY` | |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | |
 | `SENTRY_DSN` | |
+| `BETTERSTACK_SOURCE_TOKEN` | |
 | `RABBITMQ_URL` | |
 
 ### GitHub Environment: `staging` — Variables
@@ -142,6 +143,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `OPERATOR_RUC` | |
 | `OPERATOR_EMAIL` | |
 | `OPERATOR_ADDRESS` | |
+| `BETTERSTACK_INGESTING_HOST` | Only needed if the Betterstack source's setup page shows a specific regional ingesting host rather than the shared default — not sensitive, so a Variable rather than a Secret |
 
 Not set at all (code-level defaults are correct as-is): `PORT`, `DOCS_BASE_URL`, `VERIFICATION_TOKEN_TTL_HOURS`, `SRI_TEST_BASE_URL`, `SRI_PROD_BASE_URL`, `RATE_LIMIT_WINDOW_MS`, `RABBITMQ_SRI_EXCHANGE`, `QUEUE_RECONCILE_*`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE` (must stay genuinely absent, not empty — see `docs/terraform-digitalocean-setup.md`'s env var reference table). `REDIS_URL` is a separate case — not a GitHub Secret/Variable at all, but not genuinely unset either: it's hardcoded directly into the deploy workflow's heredoc (`redis://redis:6379`, deterministic across environments) — see `docs/terraform-digitalocean-setup.md`'s env var reference table.
 

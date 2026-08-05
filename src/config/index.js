@@ -101,6 +101,17 @@ const config = {
     threshold: parseInt(process.env.ATTEMPT_TRACKER_THRESHOLD, 10) || 5,
     windowMs: parseInt(process.env.ATTEMPT_TRACKER_WINDOW_MS, 10) || 15 * 60 * 1000,
   },
+  // Backs src/services/logger.service.js's Betterstack transport. Unset means
+  // structured logs still print locally (Console transport) but never ship
+  // anywhere — same graceful-degrade treatment as SENTRY_DSN/REDIS_URL.
+  logging: {
+    betterstackSourceToken: process.env.BETTERSTACK_SOURCE_TOKEN || '',
+    // Optional — Betterstack assigns each source its own regional ingesting
+    // host (shown on the source's setup page, e.g.
+    // https://s123456.eu-central-1a.betterstackdata.com). Only needed if your
+    // source doesn't use @logtail/node's shared default host.
+    betterstackIngestingHost: process.env.BETTERSTACK_INGESTING_HOST || '',
+  },
   verificationTokenTtlHours: parseInt(process.env.VERIFICATION_TOKEN_TTL_HOURS, 10) || 24,
   sentry: {
     dsn: process.env.SENTRY_DSN || '',
