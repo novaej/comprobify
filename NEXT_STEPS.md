@@ -138,22 +138,3 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 **Effort:** Low — one event write per existing call site, no new flow.
 
----
-
-## 9. Fix Notifications' Stale Pre-UUID Integer Parsing
-
-**Priority: Medium — real bug, breaks a documented endpoint feature today. Found live via a tenant's actual `GET /v1/notifications` request 400ing, traced via the new structured request logging.**
-
-`src/controllers/notification.controller.js`'s `parseOptionalIssuerId()` and `parseSinceId()` both still do `parseInt(header, 10)` / `parseInt(raw, 10)` and validate the result is "a positive integer" — leftover from before ADR-020's UUID primary key migration. `X-Issuer-Id` and every `notifications.id` value (see migration `044_notifications.sql`) have been UUIDs since that migration; nothing in this file was ever updated to match.
-
-**Concretely:** `parseInt("019fb533-f97f-728f-96b6-28a44232f7ba", 10)` reads only the leading decimal digits before the first non-digit character (`f` isn't valid in base 10) and silently truncates to `19`. The subsequent `String(19) !== String(header).trim()` check then always fails, so **any real UUID passed as `X-Issuer-Id` on `GET /v1/notifications` throws `400 ISSUER_ID_INVALID`**, even though the header is correctly formed and the issuer genuinely belongs to the caller. `parseSinceId` has the identical bug for `?sinceId=` cursor-based polling — a client following the endpoint's own documented pagination pattern (`sinceId` = the highest notification id seen) would also always 400.
-
-Compare against `src/middleware/resolve-issuer.js`, which validates `X-Issuer-Id` correctly today via a UUID regex (`UUID_PATTERN`) — that's the current, correct pattern this file should mirror. `GET /v1/notifications` doesn't use `resolveIssuer` (it supports an *optional* issuer filter, whereas `resolveIssuer` requires the header), so the fix is porting the same UUID-regex validation into `notification.controller.js`'s two local parse functions, not switching routers.
-
-**What:**
-1. Replace `parseOptionalIssuerId`'s integer parsing with `resolve-issuer.js`'s `UUID_PATTERN` regex check (still optional — absent header still returns `null`; present-but-malformed still throws `400 ISSUER_ID_INVALID`)
-2. Same fix for `parseSinceId` against a UUID pattern, keeping its own error code/message
-3. Add regression tests for both — a real UUID must pass, and the previous truncate-then-mismatch failure mode must not recur
-
-**Effort:** Low — two functions in one file, no schema/migration changes, no route changes.
-

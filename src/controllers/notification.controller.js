@@ -8,42 +8,53 @@ const ErrorCodes = require('../constants/error-codes');
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Mirrors resolve-issuer.js's UUID_PATTERN — every id in this schema has been
+// a UUID since ADR-020's primary key migration. Kept local rather than
+// shared/exported: these two functions parse a header/query value inline in
+// a controller, not through an express-validator chain like every other UUID
+// param in this codebase, so there's no natural shared module to put it in
+// without a bigger refactor than this fix calls for.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Parse the optional X-Issuer-Id header.
- * Returns the parsed integer, or null if the header is absent.
- * Throws 400 ISSUER_ID_INVALID if the header is present but malformed.
+ * Returns the trimmed UUID string, or null if the header is absent.
+ * Throws 400 ISSUER_ID_INVALID if the header is present but not a valid UUID.
  *
  * @param {import('express').Request} req
- * @returns {number|null}
+ * @returns {string|null}
  */
 function parseOptionalIssuerId(req) {
   const header = req.headers['x-issuer-id'];
   if (!header) return null;
 
-  const id = parseInt(header, 10);
-  if (!Number.isInteger(id) || id <= 0 || String(id) !== String(header).trim()) {
-    throw new AppError('X-Issuer-Id must be a positive integer', 400, ErrorCodes.ISSUER_ID_INVALID);
+  const issuerId = String(header).trim();
+  if (!UUID_PATTERN.test(issuerId)) {
+    throw new AppError('X-Issuer-Id must be a valid UUID', 400, ErrorCodes.ISSUER_ID_INVALID);
   }
-  return id;
+  return issuerId;
 }
 
 /**
  * Parse the optional ?sinceId query parameter.
- * Returns the parsed integer, or null if absent.
- * Throws 400 if present but not a valid positive integer.
+ * Returns the trimmed UUID string, or null if absent.
+ * Throws 400 if present but not a valid UUID. notifications.id is a UUIDv7 —
+ * its time-ordered layout is exactly what makes "everything after id X"
+ * cursor polling correct without a separate timestamp column (see CLAUDE.md's
+ * "UUID Primary Keys" entry).
  *
  * @param {import('express').Request} req
- * @returns {number|null}
+ * @returns {string|null}
  */
 function parseSinceId(req) {
   const raw = req.query.sinceId;
   if (raw === undefined || raw === '') return null;
 
-  const id = parseInt(raw, 10);
-  if (!Number.isInteger(id) || id <= 0 || String(id) !== String(raw).trim()) {
-    throw new AppError('sinceId must be a positive integer', 400, ErrorCodes.ISSUER_ID_INVALID);
+  const sinceId = String(raw).trim();
+  if (!UUID_PATTERN.test(sinceId)) {
+    throw new AppError('sinceId must be a valid UUID', 400, ErrorCodes.ISSUER_ID_INVALID);
   }
-  return id;
+  return sinceId;
 }
 
 function buildListResponse(notifications) {
@@ -122,4 +133,14 @@ async function updatePreferences(req, res) {
   res.json({ preferences });
 }
 
-module.exports = { list, markRead, getPreferences, updatePreferences };
+module.exports = {
+  list,
+  markRead,
+  getPreferences,
+  updatePreferences,
+  // Exported purely so the UUID validation can be unit-tested directly,
+  // without exercising the rest of list()'s HTTP flow — mirrors rate-limit.js's
+  // buildStore/keyGenerator and request-logger.js's buildLogMeta exports.
+  parseOptionalIssuerId,
+  parseSinceId,
+};
