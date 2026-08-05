@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.3] — 2026-08-05
+
+### Fixed
+- **`req.ip` still resolved to Cloudflare's edge IP even after 0.13.2 deployed with the Caddy reload fix.** Root cause: Caddy discards inbound `X-Forwarded-For` entirely by default without `trusted_proxies` configured, and 0.13.1's workaround (forwarding `CF-Connecting-IP` as a single-hop `X-Forwarded-For`, `trust proxy: 1`) didn't account for Caddy always appending its own peer IP regardless of an explicit `header_up` override. `deploy/Caddyfile` now lists Cloudflare's published IP ranges as `trusted_proxies`, so Caddy trusts and augments the already-correct inbound header instead of replacing it; `trust proxy` is back to `2` to match the real Cloudflare-then-Caddy chain.
+
 ## [0.13.2] — 2026-08-05
 
 ### Fixed
