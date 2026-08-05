@@ -50,7 +50,7 @@ A document type that has never issued a document in an environment reports `curr
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
+| `400` | `VALIDATION_FAILED` | `id` is not a valid UUID |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `ISSUER_FORBIDDEN` | Issuer belongs to a different tenant |
 | `404` | `ISSUER_NOT_FOUND` | Issuer not found or inactive |

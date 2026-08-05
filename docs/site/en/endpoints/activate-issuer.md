@@ -35,7 +35,7 @@ Reactivation re-runs the same branch/issue-point checks as creating a new branch
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
+| `400` | `VALIDATION_FAILED` | `id` is not a valid UUID |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `402` | `BRANCH_LIMIT_REACHED` | Reactivating would exceed the tenant's plan branch limit |
 | `402` | `ISSUE_POINT_LIMIT_REACHED` | Reactivating would exceed the plan's issue-points-per-branch limit |

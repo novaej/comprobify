@@ -37,7 +37,7 @@ PATCH /v1/issuers/:id/certificate
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
+| `400` | `VALIDATION_FAILED` | `id` is not a valid UUID |
 | `400` | `INVALID_FILE_UPLOAD` | No `cert` file provided |
 | `400` | `CERTIFICATE_INVALID` | File is not a valid PKCS#12 archive |
 | `400` | `CERTIFICATE_PASSWORD_INVALID` | Wrong `certPassword` |

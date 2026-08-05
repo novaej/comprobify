@@ -35,7 +35,7 @@ La reactivación vuelve a ejecutar las mismas validaciones de sucursal/punto de 
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `400` | `VALIDATION_FAILED` | `id` no es un UUID válido |
 | `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `402` | `BRANCH_LIMIT_REACHED` | La reactivación excedería el límite de sucursales del plan del tenant |
 | `402` | `ISSUE_POINT_LIMIT_REACHED` | La reactivación excedería el límite de puntos de emisión por sucursal del plan |

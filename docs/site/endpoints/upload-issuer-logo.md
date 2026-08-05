@@ -36,7 +36,7 @@ PATCH /v1/issuers/:id/logo
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `400` | `VALIDATION_FAILED` | `id` no es un UUID válido |
 | `400` | `INVALID_FILE_UPLOAD` | No se proporcionó ningún archivo, el archivo supera los 500 KB, o el tipo MIME no es compatible |
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
