@@ -1,3 +1,6 @@
+jest.mock('../../../instrument', () => ({ setTag: jest.fn() }));
+
+const Sentry = require('../../../instrument');
 const requestId = require('../../../src/middleware/request-id');
 
 function makeRes() {
@@ -40,5 +43,13 @@ describe('requestId middleware', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(next).toHaveBeenCalledWith();
+  });
+
+  test('tags the current Sentry scope with the same requestId', () => {
+    jest.clearAllMocks();
+    const req = {};
+    requestId(req, makeRes(), jest.fn());
+
+    expect(Sentry.setTag).toHaveBeenCalledWith('requestId', req.requestId);
   });
 });
