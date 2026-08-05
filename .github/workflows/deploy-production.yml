@@ -98,3 +98,10 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
             docker compose up -d
+            # docker compose up -d only recreates a container when the service
+            # definition itself changes (image tag, env, volumes list) - Caddyfile
+            # is bind-mounted, so a content-only change on disk is invisible to
+            # Compose and the running caddy container keeps serving whatever
+            # config it loaded at startup. Reload explicitly so a Caddyfile-only
+            # change (e.g. trusted proxy headers) actually takes effect.
+            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
