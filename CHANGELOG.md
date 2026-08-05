@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.4] — 2026-08-05
+
+### Fixed
+- **`req.ip` still resolved to Cloudflare's edge IP even after 0.13.3's `trusted_proxies` fix.** Caddy's `client_ip_headers` option defaults to `X-Forwarded-For` only, so `CF-Connecting-IP` was never actually read as a client-IP source regardless of `trusted_proxies`. Rather than iterate again on `X-Forwarded-For`'s automatic hop-counting/augmentation behavior, Caddy now resolves the real client IP once via its own `{client_ip}` placeholder (`trusted_proxies` + `client_ip_headers CF-Connecting-IP X-Forwarded-For`) and forwards it through a single dedicated `X-Real-Client-IP` header. New `src/middleware/resolve-client-ip.js` overrides `req.ip` from that header — safe to trust unconditionally, since `api` is only Docker-`expose`d and never reachable except through Caddy.
+
 ## [0.13.3] — 2026-08-05
 
 ### Fixed
