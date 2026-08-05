@@ -2,5 +2,12 @@
 # second file (Caddyfile.production, picked by the production deploy workflow) or a
 # {$PUBLIC_DOMAIN} env-substituted single file — revisit before the first production deploy.
 api-staging.comprobify.com {
-    reverse_proxy api:8080
+    # Without trusted_proxies configured, Caddy doesn't trust Cloudflare's inbound
+    # X-Forwarded-For and replaces it with its own immediate peer (Cloudflare's edge
+    # IP) instead of the real client. CF-Connecting-IP is Cloudflare's own header,
+    # always the true client IP and not spoofable (Cloudflare strips any
+    # client-supplied value at their edge) - forward it explicitly instead.
+    reverse_proxy api:8080 {
+        header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+    }
 }
