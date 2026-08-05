@@ -12,21 +12,10 @@ class Server {
     this.app = express();
     this.port = config.port;
 
-    // Trust exactly 1 hop: Caddy (the droplet's reverse proxy in front of this
-    // container - see deploy/docker-compose.yml), which forwards Cloudflare's
-    // CF-Connecting-IP header as X-Forwarded-For (see deploy/Caddyfile) - so
-    // req.ip reflects the real client IP for IP-based rate limiting. Was `2`
-    // (Cloudflare + Caddy) under the assumption Caddy would append to Cloudflare's
-    // inbound X-Forwarded-For, but Caddy doesn't trust that header without
-    // trusted_proxies configured and replaces it with its own peer (Cloudflare's
-    // edge IP) - which, combined with `2`, made req.ip resolve to that edge IP
-    // instead of the real client. adminLimiter/registrationLimiter in
-    // rate-limit.js key purely off req.ip with no fallback, so getting this wrong
-    // silently pools all traffic into one rate-limit bucket instead of limiting
-    // per-client. If the proxy chain ever changes again, verify by logging req.ip
-    // in staging and confirming it shows real external client IPs, not an
-    // internal/edge address.
-    this.app.set('trust proxy', 1);
+    // 2 hops: Cloudflare, then Caddy (see deploy/Caddyfile's trusted_proxies).
+    // adminLimiter/registrationLimiter key off req.ip with no fallback, so getting
+    // this wrong silently pools all traffic into one rate-limit bucket.
+    this.app.set('trust proxy', 2);
 
     this.requestLogging();
     this.middlewares();
