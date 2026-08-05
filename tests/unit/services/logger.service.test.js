@@ -36,14 +36,27 @@ describe('logger.service', () => {
     expect(mockLogtailConstructor).not.toHaveBeenCalled();
   });
 
-  test('adds the Logtail transport when BETTERSTACK_SOURCE_TOKEN is configured', () => {
+  test('adds the Logtail transport when BETTERSTACK_SOURCE_TOKEN is configured, using the library default endpoint when no ingesting host is set', () => {
     const config = require('../../../src/config');
     config.logging.betterstackSourceToken = 'a-source-token';
+    config.logging.betterstackIngestingHost = '';
     require('../../../src/services/logger.service');
 
-    expect(mockLogtailConstructor).toHaveBeenCalledWith('a-source-token');
+    expect(mockLogtailConstructor).toHaveBeenCalledWith('a-source-token', undefined);
     expect(mockCreateLogger).toHaveBeenCalledWith(
       expect.objectContaining({ transports: [mockConsoleTransport, mockLogtailTransport] })
+    );
+  });
+
+  test('passes the configured ingesting host as the endpoint override when set', () => {
+    const config = require('../../../src/config');
+    config.logging.betterstackSourceToken = 'a-source-token';
+    config.logging.betterstackIngestingHost = 'https://s123456.eu-central-1a.betterstackdata.com';
+    require('../../../src/services/logger.service');
+
+    expect(mockLogtailConstructor).toHaveBeenCalledWith(
+      'a-source-token',
+      { endpoint: 'https://s123456.eu-central-1a.betterstackdata.com' }
     );
   });
 });

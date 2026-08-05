@@ -13,7 +13,17 @@ const config = require('../config');
 const transports = [new winston.transports.Console()];
 
 if (config.logging.betterstackSourceToken) {
-  const logtail = new Logtail(config.logging.betterstackSourceToken);
+  // @logtail/node defaults `endpoint` to the shared https://in.logs.betterstack.com
+  // host, but Betterstack assigns each source its own regional ingesting host
+  // (e.g. https://s123456.eu-central-1a.betterstackdata.com, shown on the
+  // source's setup page) — without overriding it here, every sync attempt
+  // 401s against a host that was never issued this token. Only passed when
+  // set; omitting it lets the library's own default apply, for whichever
+  // source actually does use the shared host.
+  const logtailOptions = config.logging.betterstackIngestingHost
+    ? { endpoint: config.logging.betterstackIngestingHost }
+    : undefined;
+  const logtail = new Logtail(config.logging.betterstackSourceToken, logtailOptions);
   transports.push(new LogtailTransport(logtail));
 }
 

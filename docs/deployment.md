@@ -529,6 +529,7 @@ All variables are required unless marked optional.
 | `ATTEMPT_TRACKER_THRESHOLD` | No | Repeated-attempt detection (`src/services/attempt-tracker.service.js`) threshold, shared across all event types (default `5`) |
 | `ATTEMPT_TRACKER_WINDOW_MS` | No | Repeated-attempt detection window in milliseconds (default `900000` = 15 minutes) |
 | `BETTERSTACK_SOURCE_TOKEN` | No | Backs `src/services/logger.service.js`'s Betterstack transport. Unset means structured logs still print locally as JSON (`Console` transport) but never ship anywhere. Source token from your Betterstack (Logs) project settings. |
+| `BETTERSTACK_INGESTING_HOST` | No | Only needed if your Betterstack source's setup page shows a specific regional ingesting host (e.g. `https://s123456.eu-central-1a.betterstackdata.com`) rather than `@logtail/node`'s shared default — without it, syncing 401s against a host that was never issued your token. |
 | `SENTRY_DSN` | No | Sentry project DSN — enables error monitoring (`@sentry/node`). Leave unset to disable; the client becomes a no-op and nothing is transmitted. Set independently per environment — staging and production should point at the same Sentry project but report distinct `environment` tags (derived from `APP_ENV`). |
 | `BANK_TRANSFER_BANK_NAME` | No | Returned in the subscription-creation response (`POST /v1/tenants/promote` with `tier`, or admin's Create Subscription) so a tenant knows where to send the SPI transfer. Display text only, not a secret. |
 | `BANK_TRANSFER_ACCOUNT_TYPE` | No | e.g. `AHORROS`, `CORRIENTE` |

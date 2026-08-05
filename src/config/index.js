@@ -106,6 +106,11 @@ const config = {
   // anywhere — same graceful-degrade treatment as SENTRY_DSN/REDIS_URL.
   logging: {
     betterstackSourceToken: process.env.BETTERSTACK_SOURCE_TOKEN || '',
+    // Optional — Betterstack assigns each source its own regional ingesting
+    // host (shown on the source's setup page, e.g.
+    // https://s123456.eu-central-1a.betterstackdata.com). Only needed if your
+    // source doesn't use @logtail/node's shared default host.
+    betterstackIngestingHost: process.env.BETTERSTACK_INGESTING_HOST || '',
   },
   verificationTokenTtlHours: parseInt(process.env.VERIFICATION_TOKEN_TTL_HOURS, 10) || 24,
   sentry: {
