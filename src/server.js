@@ -6,15 +6,15 @@ const config = require('./config');
 const errorHandler = require('./middleware/error-handler');
 const requestId = require('./middleware/request-id');
 const { requestLogger } = require('./middleware/request-logger');
+const resolveClientIp = require('./middleware/resolve-client-ip');
 
 class Server {
   constructor() {
     this.app = express();
     this.port = config.port;
 
-    // 2 hops: Cloudflare, then Caddy (see deploy/Caddyfile's trusted_proxies).
-    // adminLimiter/registrationLimiter key off req.ip with no fallback, so getting
-    // this wrong silently pools all traffic into one rate-limit bucket.
+    // Fallback only (local dev with no Caddy in front) - resolveClientIp below
+    // overrides req.ip from Caddy's X-Real-Client-IP when present.
     this.app.set('trust proxy', 2);
 
     this.requestLogging();
@@ -28,6 +28,7 @@ class Server {
   // line regardless of whether it ever authenticates. See CLAUDE.md's
   // "Structured request logging" entry.
   requestLogging() {
+    this.app.use(resolveClientIp);
     this.app.use(requestId);
     this.app.use(requestLogger);
   }
