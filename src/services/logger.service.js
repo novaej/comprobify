@@ -1,3 +1,4 @@
+const os = require('os');
 const winston = require('winston');
 const { Logtail } = require('@logtail/node');
 const { LogtailTransport } = require('@logtail/winston');
@@ -40,6 +41,16 @@ if (config.logging.betterstackSourceToken) {
 const logger = winston.createLogger({
   level: 'info',
   format: winston.format.json(),
+  // Merged into every log entry regardless of which consumer calls
+  // logger.info()/.warn()/.error() (request-logger.js, pending-effect.service.js,
+  // attempt-tracker.service.js) — the only way to tell apart log lines from
+  // different machines when they all ship to the same Betterstack source
+  // (e.g. local dev vs. the staging droplet, or staging vs. production once
+  // that exists). os.hostname() needs no config: locally it's your real
+  // machine name; on the droplet it's whatever deploy/docker-compose.yml's
+  // `hostname:` sets explicitly (see that file) rather than Docker's default
+  // opaque per-container id.
+  defaultMeta: { hostname: os.hostname() },
   transports,
 });
 

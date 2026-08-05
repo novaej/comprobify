@@ -26,6 +26,9 @@ jest.mock('@logtail/node', () => ({
 jest.mock('@logtail/winston', () => ({
   LogtailTransport: jest.fn().mockImplementation(() => mockLogtailTransport),
 }));
+jest.mock('os', () => ({
+  hostname: jest.fn().mockReturnValue('test-host'),
+}));
 
 describe('logger.service', () => {
   beforeEach(() => {
@@ -94,5 +97,13 @@ describe('logger.service', () => {
     const line = formatFn({ level: 'info', message: 'GET /health 200', requestId: 'req-1', statusCode: 200 });
 
     expect(line).toBe('INFO: {"message":"GET /health 200","requestId":"req-1","statusCode":200}');
+  });
+
+  test('sets defaultMeta.hostname from os.hostname(), so every log entry carries it regardless of which consumer logs', () => {
+    require('../../../src/services/logger.service');
+
+    expect(mockCreateLogger).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultMeta: { hostname: 'test-host' } })
+    );
   });
 });

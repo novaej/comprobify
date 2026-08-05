@@ -16,6 +16,14 @@ services:
     image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
+    # Read by src/services/logger.service.js's os.hostname() call — every log
+    # line carries this so staging/production/local are distinguishable when
+    # they all ship to the same Betterstack source. ${APP_ENV} is read from
+    # the same .env this file's env_file already loads (Compose auto-loads a
+    # .env in its own directory for ${...} interpolation), so this resolves
+    # to comprobify-api-staging today, comprobify-api-production once that
+    # droplet exists — no value to keep in sync by hand.
+    hostname: comprobify-api-${APP_ENV:-local}
     environment:
       # Staging's cluster also hosts comprobify-web's database (see
       # docs/deployment.md) — this value leaves headroom for that consumer
@@ -33,6 +41,7 @@ services:
     image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
+    hostname: comprobify-worker-${APP_ENV:-local}
     environment:
       - DB_POOL_MAX=3
     command: node workers/worker.js
