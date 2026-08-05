@@ -37,7 +37,7 @@ PATCH /v1/issuers/:id/certificate
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `400` | `VALIDATION_FAILED` | `id` no es un UUID válido |
 | `400` | `INVALID_FILE_UPLOAD` | No se proporcionó archivo `cert` |
 | `400` | `CERTIFICATE_INVALID` | El archivo no es un archivo PKCS#12 válido |
 | `400` | `CERTIFICATE_PASSWORD_INVALID` | `certPassword` incorrecta |

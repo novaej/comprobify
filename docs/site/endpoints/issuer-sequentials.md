@@ -50,7 +50,7 @@ Un tipo de comprobante que nunca ha emitido un comprobante en un entorno reporta
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `400` | `VALIDATION_FAILED` | `id` no es un UUID válido |
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |

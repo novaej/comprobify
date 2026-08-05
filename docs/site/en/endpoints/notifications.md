@@ -279,8 +279,8 @@ Omit the header to receive all notifications across every issuer (useful for adm
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `ISSUER_ID_INVALID` | `X-Issuer-Id` header is present but not a valid positive integer |
-| `400` | `ISSUER_ID_INVALID` | `sinceId` is present but not a valid positive integer |
+| `400` | `ISSUER_ID_INVALID` | `X-Issuer-Id` header is present but not a valid UUID |
+| `400` | `ISSUER_ID_INVALID` | `sinceId` is present but not a valid UUID |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 
 ---
@@ -315,7 +315,7 @@ Marks a single notification as read (`readAt` is set to now). The notification i
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` is not a positive integer |
+| `400` | `VALIDATION_FAILED` | `id` is not a valid UUID |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `404` | `NOT_FOUND` | Notification does not exist, belongs to a different tenant, or is already read |
 

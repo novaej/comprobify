@@ -279,8 +279,8 @@ Omite el encabezado para recibir todas las notificaciones de todos los emisores 
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `ISSUER_ID_INVALID` | El encabezado `X-Issuer-Id` está presente pero no es un entero positivo válido |
-| `400` | `ISSUER_ID_INVALID` | `sinceId` está presente pero no es un entero positivo válido |
+| `400` | `ISSUER_ID_INVALID` | El encabezado `X-Issuer-Id` está presente pero no es un UUID válido |
+| `400` | `ISSUER_ID_INVALID` | `sinceId` está presente pero no es un UUID válido |
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 
 ---
@@ -315,7 +315,7 @@ Marca una sola notificación como leída (`readAt` se establece al momento actua
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `id` no es un entero positivo |
+| `400` | `VALIDATION_FAILED` | `id` no es un UUID válido |
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `404` | `NOT_FOUND` | La notificación no existe, pertenece a otro tenant, o ya está leída |
 
