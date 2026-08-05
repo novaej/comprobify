@@ -111,7 +111,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `CERTIFICATE_KEY_NOT_FOUND` | Signing key bag not found inside the P12 |
 | `CERTIFICATE_EXPIRED` | Certificate `notAfter` date has passed |
 | `ISSUER_ID_REQUIRED` | `X-Issuer-Id` header is missing on a document endpoint |
-| `ISSUER_ID_INVALID` | `X-Issuer-Id` is not a valid positive integer |
+| `ISSUER_ID_INVALID` | `X-Issuer-Id` is not a valid UUID |
 | `INVALID_OR_EXPIRED_TOKEN` | Email verification token is invalid or has expired |
 | `DOCUMENT_TYPE_NOT_ENABLED` | Requested document type is not active for this issuer |
 | `DOCUMENT_TYPE_NOT_SUPPORTED` | Document type code is not registered in the system |

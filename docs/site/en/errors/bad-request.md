@@ -38,7 +38,7 @@ The `X-Issuer-Id` request header is missing. Every document-creation and documen
 
 ### `ISSUER_ID_INVALID`
 
-The `X-Issuer-Id` header value is not a valid positive integer (e.g. `abc`, `0`, `-5`).
+The `X-Issuer-Id` header value is not a valid UUID (e.g. `abc`, `123`).
 
 **What to do:** Supply the issuer UUID returned by `GET /v1/issuers`.
 
