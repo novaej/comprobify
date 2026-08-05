@@ -38,7 +38,7 @@ Falta el encabezado de solicitud `X-Issuer-Id`. Toda solicitud de creación y ge
 
 ### `ISSUER_ID_INVALID`
 
-El valor del encabezado `X-Issuer-Id` no es un entero positivo válido (p. ej. `abc`, `0`, `-5`).
+El valor del encabezado `X-Issuer-Id` no es un UUID válido (p. ej. `abc`, `123`).
 
 **Qué hacer:** Proporciona el UUID del emisor devuelto por `GET /v1/issuers`.
 

@@ -111,7 +111,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `CERTIFICATE_KEY_NOT_FOUND` | No se encontró el bag de la llave de firma dentro del P12 |
 | `CERTIFICATE_EXPIRED` | La fecha `notAfter` del certificado ya pasó |
 | `ISSUER_ID_REQUIRED` | Falta el encabezado `X-Issuer-Id` en un endpoint de comprobantes |
-| `ISSUER_ID_INVALID` | `X-Issuer-Id` no es un entero positivo válido |
+| `ISSUER_ID_INVALID` | `X-Issuer-Id` no es un UUID válido |
 | `INVALID_OR_EXPIRED_TOKEN` | El token de verificación de correo es inválido o ha expirado |
 | `DOCUMENT_TYPE_NOT_ENABLED` | El tipo de comprobante solicitado no está activo para este emisor |
 | `DOCUMENT_TYPE_NOT_SUPPORTED` | El código de tipo de comprobante no está registrado en el sistema |
