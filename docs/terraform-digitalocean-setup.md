@@ -531,6 +531,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `DB_SSL_CA` | **Yes** | Staging's DB is DigitalOcean Managed Postgres, which signs with a private CA — required or connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. See `docs/deployment.md`'s env var table for the exact single-line format the deploy workflow's heredoc needs. |
 | `ENCRYPTION_KEY` | **Yes** | No default |
 | `ADMIN_SECRET` | **Yes** | No default |
+| `INTERNAL_SERVICE_SECRET` | No | Shared secret with `comprobify-web`'s BFF for forwarding the real visitor IP (`src/middleware/trusted-forwarded-ip.js`). Absent means the feature is inactive — no functional loss until `comprobify-web`'s own side is built (see its `NEXT_STEPS.md`). When set, must match the value configured in `comprobify-web`'s App Platform environment exactly. |
 | `EMAIL_FROM` | **Yes** | No default, and email is enabled by default (`EMAIL_PROVIDER` defaults to `mailgun`) |
 | `EMAIL_FROM_DOCUMENTS` | No | Falls back to `EMAIL_FROM` when unset — a legitimate, often-desired default (same sender for everything). Only set if you want document emails from a different address. |
 | `MAILGUN_API_KEY` | **Yes** | No default, required while email is enabled |
@@ -606,6 +607,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             DB_SSL_CA=${{ secrets.DB_SSL_CA }}
             ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
             ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
+            INTERNAL_SERVICE_SECRET=${{ secrets.INTERNAL_SERVICE_SECRET }}
             EMAIL_FROM=${{ vars.EMAIL_FROM }}
             MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}
             MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN }}
