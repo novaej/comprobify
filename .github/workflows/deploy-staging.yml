@@ -68,6 +68,7 @@ jobs:
             DB_SSL_CA=${{ secrets.DB_SSL_CA }}
             ENCRYPTION_KEY=${{ secrets.ENCRYPTION_KEY }}
             ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
+            INTERNAL_SERVICE_SECRET=${{ secrets.INTERNAL_SERVICE_SECRET }}
             EMAIL_FROM=${{ vars.EMAIL_FROM }}
             MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}
             MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN }}
