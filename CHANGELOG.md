@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-08-06
+
 ### Added
 - **`INTERNAL_SERVICE_SECRET` (optional) + `src/middleware/trusted-forwarded-ip.js`.** Lets a trusted first-party BFF (comprobify-web) forward the real visitor IP for calls it proxies server-side (register, recover, agreements acceptance) via an `X-Forwarded-Visitor-Ip` header, authenticated by a constant-time-compared `X-Internal-Service-Secret`. Without it, `req.ip` for those calls resolves to the BFF's own shared hosting-platform egress IP — collapsing `registrationLimiter`'s per-IP rate limit across unrelated visitors, and recording the wrong IP in the `tenant_agreements` legal consent audit trail. Unset means the feature is inactive and `req.ip` resolution is unchanged. See NEXT_STEPS.md #8 for the full design rationale and the comprobify-web-side work this depends on.
 
