@@ -1,6 +1,6 @@
 // api is only reachable via Caddy (docker-compose exposes 8080 internally, never
 // publishes it) - so X-Real-Client-IP, set by Caddy from its own trusted {client_ip}
-// resolution (see deploy/Caddyfile), can be trusted unconditionally here. Overriding
+// resolution (see deploy/caddy/Caddyfile), can be trusted unconditionally here. Overriding
 // req.ip directly (rather than fighting Express's trust-proxy/X-Forwarded-For hop
 // counting) means every consumer - rate limiters, request-logger, the agreements
 // audit trail - gets the real client IP without depending on Caddy's own automatic

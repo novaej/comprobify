@@ -444,7 +444,7 @@ Deliberately does **not** set up the app's `docker-compose.yml` or secrets — o
 
 ## The application stack: `docker-compose.yml`, Caddy, and env vars
 
-One file per droplet, committed to the repo, defining every container that runs there. Lives at `deploy/docker-compose.yml` and `deploy/Caddyfile`.
+One file per droplet, committed to the repo, defining every container that runs there. Lives at `deploy/docker-compose.yml` and `deploy/caddy/Caddyfile` (a directory mount, not a single-file mount — see the comment on `caddy`'s `volumes` in `docker-compose.yml` for why).
 
 ```yaml
 # deploy/docker-compose.yml
@@ -494,9 +494,18 @@ volumes:
 `api` and `worker` run the **same image** — one Dockerfile, one build, one push to GHCR — started with different `command:` values. `expose` (not `ports`) on `api` means it's reachable from `caddy` over the Compose network but never bound to the host directly — only Caddy holds 80/443. `worker` has no `ports`/`expose` at all — it makes outbound connections to RabbitMQ/Postgres and needs nothing inbound. `redis` backs the rate limiters' shared store (`src/services/redis.service.js`, `src/middleware/rate-limit.js`) — only `api` connects to it (`worker` never rate-limits); no persistence (`--save ""`) since rate-limit counters are disposable short-window state, and a hard `--maxmemory` cap since this is a $4/mo 512MB–1GB tier already budgeted for `api`+`worker`.
 
 ```
-# deploy/Caddyfile
+# deploy/caddy/Caddyfile
+{
+    servers {
+        trusted_proxies static <cloudflare ranges - see the file for the full list>
+        client_ip_headers CF-Connecting-IP X-Forwarded-For
+    }
+}
+
 api-staging.comprobify.com {
-    reverse_proxy api:8080
+    reverse_proxy api:8080 {
+        header_up X-Real-Client-IP {client_ip}
+    }
 }
 ```
 
@@ -574,7 +583,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
           host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
-          source: "deploy/docker-compose.yml,deploy/Caddyfile"
+          source: "deploy/docker-compose.yml,deploy/caddy/Caddyfile"
           target: /opt/comprobify
           strip_components: 1
 

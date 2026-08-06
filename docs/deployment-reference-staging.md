@@ -72,7 +72,7 @@ Provisioned by Terraform (`terraform/environments/staging`, using the shared `te
 
 ## Docker Compose stack (on the droplet)
 
-`deploy/docker-compose.yml` and `deploy/Caddyfile` are pushed to `/opt/comprobify` on every deploy (via scp), then started/updated with `docker compose pull && docker compose up -d`.
+`deploy/docker-compose.yml` and `deploy/caddy/Caddyfile` are pushed to `/opt/comprobify` on every deploy (via scp), then started/updated with `docker compose pull && docker compose up -d`.
 
 | Service | Image | Command | Exposed |
 |---|---|---|---|
@@ -82,11 +82,20 @@ Provisioned by Terraform (`terraform/environments/staging`, using the shared `te
 
 `api` and `worker` run the **same image**, built once per deploy from the repo's `Dockerfile` (`node:20-slim`, `libxml2-utils` installed at build time for `xmllint`), differing only in the container `command`.
 
-Caddy config (`deploy/Caddyfile`):
+Caddy config (`deploy/caddy/Caddyfile` — a directory mount, not a single-file mount, so a redeployed file is actually visible to the running container; see the comment on `caddy`'s `volumes` in `docker-compose.yml`):
 
 ```
+{
+    servers {
+        trusted_proxies static <cloudflare ranges>
+        client_ip_headers CF-Connecting-IP X-Forwarded-For
+    }
+}
+
 api-staging.comprobify.com {
-    reverse_proxy api:8080
+    reverse_proxy api:8080 {
+        header_up X-Real-Client-IP {client_ip}
+    }
 }
 ```
 
@@ -308,7 +317,7 @@ Docker, fail2ban, unattended-upgrades, and cron are installed on the droplet its
 1. Create and push a release tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
 2. `release-staging.yml` fast-forwards the `staging` branch to the tag and pushes it.
 3. The push to `staging` triggers `deploy-staging.yml`, which builds the Docker image and pushes it to `ghcr.io/novaej/comprobify:<commit-sha>`.
-4. `deploy-staging.yml` copies `deploy/docker-compose.yml` and `deploy/Caddyfile` to `/opt/comprobify` on the droplet over SCP, then SSHes in (as `cpfydeploy9x`) to write `/opt/comprobify/.env` from the `staging` Environment's Secrets/Variables and run `docker compose pull && docker compose up -d`.
+4. `deploy-staging.yml` copies `deploy/docker-compose.yml` and `deploy/caddy/Caddyfile` to `/opt/comprobify` on the droplet over SCP, then SSHes in (as `cpfydeploy9x`) to write `/opt/comprobify/.env` from the `staging` Environment's Secrets/Variables and run `docker compose pull && docker compose up -d`.
 5. Migrations run automatically inside the `api` container at startup — `app.js` calls `migrate()` before the server begins accepting requests. No separate migration step in the deploy workflow.
 6. The scheduled jobs and worker deploy as part of the same Compose stack — there's no separate deploy path for them; they update whenever `api`/`worker` do.
 

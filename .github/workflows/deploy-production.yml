@@ -47,7 +47,7 @@ jobs:
           host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
-          source: "deploy/docker-compose.yml,deploy/Caddyfile"
+          source: "deploy/docker-compose.yml,deploy/caddy/Caddyfile"
           target: /opt/comprobify
           strip_components: 1
 
