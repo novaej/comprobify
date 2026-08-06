@@ -5,8 +5,14 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # Directory mount, not a single-file mount: a single-file bind mount pins to
+    # that file's inode at container-start time, so a deploy that replaces the
+    # host file via unlink+recreate (not truncate-in-place) leaves the running
+    # container reading the old, now-unlinked inode forever - invisible to
+    # `caddy reload`, fixable only by recreating the container. A directory mount
+    # reflects the current file on every read.
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy:/etc/caddy
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
