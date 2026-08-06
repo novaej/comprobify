@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.5] — 2026-08-06
+
+### Fixed
+- **Found the actual reason `req.ip` never reflected any of the 0.13.1-0.13.4 fixes: Caddy was never reading the updated config at all.** `stat` on the running container's `/etc/caddy/Caddyfile` showed `Links: 0` and a July 29 mtime — the file had been unlinked from the filesystem since the very first deploy, kept alive only by Caddy's own open file descriptor. `docker-compose.yml`'s single-file bind mount (`./Caddyfile:/etc/caddy/Caddyfile`) pins to that file's specific inode at container-start time; the deploy tool replaces the host file via unlink+recreate rather than truncate-in-place, so every subsequent deploy silently updated a directory entry the running container could no longer see, while `caddy reload` kept re-parsing the same stale, orphaned inode (confirmed by its own `"config is unchanged"` log line every time). Now mounts the containing directory (`deploy/caddy/`) instead of the single file, so directory-entry updates are visible without needing container recreation. This doesn't change any Caddy config logic from 0.13.3/0.13.4 — it's what finally lets that config run for the first time.
+
 ## [0.13.4] — 2026-08-05
 
 ### Fixed
