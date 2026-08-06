@@ -7,6 +7,7 @@ const errorHandler = require('./middleware/error-handler');
 const requestId = require('./middleware/request-id');
 const { requestLogger } = require('./middleware/request-logger');
 const resolveClientIp = require('./middleware/resolve-client-ip');
+const trustedForwardedIp = require('./middleware/trusted-forwarded-ip');
 
 class Server {
   constructor() {
@@ -29,6 +30,7 @@ class Server {
   // "Structured request logging" entry.
   requestLogging() {
     this.app.use(resolveClientIp);
+    this.app.use(trustedForwardedIp);
     this.app.use(requestId);
     this.app.use(requestLogger);
   }

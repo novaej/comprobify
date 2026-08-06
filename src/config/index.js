@@ -5,6 +5,12 @@ const config = {
   docsBaseUrl: process.env.DOCS_BASE_URL || '',
   encryptionKey: process.env.ENCRYPTION_KEY || '',
   adminSecret: process.env.ADMIN_SECRET || '',
+  // Optional — lets a trusted first-party BFF (comprobify-web) override the
+  // resolved req.ip with a visitor IP it forwards itself, via
+  // src/middleware/trusted-forwarded-ip.js. Unset means the feature is
+  // inactive and req.ip resolution is unchanged (same degrade-gracefully
+  // treatment as REDIS_URL/SENTRY_DSN) — see NEXT_STEPS.md #8.
+  internalServiceSecret: process.env.INTERNAL_SERVICE_SECRET || '',
   db: {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT, 10) || 5432,

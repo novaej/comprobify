@@ -119,6 +119,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `INFRA_SSH_PRIVATE_KEY` | |
 | `ENCRYPTION_KEY` | |
 | `ADMIN_SECRET` | |
+| `INTERNAL_SERVICE_SECRET` | Shared with `comprobify-web`'s BFF (`src/middleware/trusted-forwarded-ip.js`) — must match the value configured on that side exactly. Inactive until `comprobify-web` also sends `X-Internal-Service-Secret`/`X-Forwarded-Visitor-Ip` (see its `NEXT_STEPS.md`) |
 | `DB_HOST` | |
 | `DB_PORT` | |
 | `DB_NAME` | |
