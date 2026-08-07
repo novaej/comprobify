@@ -38,6 +38,7 @@ Los datos se almacenan y procesan utilizando los siguientes proveedores, cada un
 - **DigitalOcean App Platform** — hosting de la interfaz web del Servicio (comprobify-web) (solo Clientes que utilizan la interfaz web).
 - **Mailgun** — envío de correos transaccionales (verificación de cuenta, RIDE/PDF de comprobantes autorizados, notificaciones) (todos los Clientes).
 - **Sentry** — monitoreo de errores (configurado para minimizar el tratamiento de datos personales) (todos los Clientes).
+- **Betterstack** — plataforma de registro (logging) para monitoreo operativo y diagnóstico de errores; puede incluir la dirección IP de cada solicitud a la API, conforme a lo descrito en la sección 6 (todos los Clientes).
 - **CloudAMQP** — enrutamiento de mensajes para el procesamiento asíncrono de comprobantes electrónicos; los mensajes contienen únicamente identificadores del comprobante, sin datos del comprador (todos los Clientes).
 - **SRI (Servicio de Rentas Internas)** — autoridad tributaria ecuatoriana receptora obligatoria por mandato legal; la transmisión de comprobantes electrónicos es exigida por la normativa tributaria aplicable (todos los Clientes).
 
@@ -66,7 +67,7 @@ Esta lista de proveedores puede actualizarse conforme evolucione la infraestruct
 
 Comprobify mantiene un registro de auditoría de los eventos relevantes del ciclo de vida de cada comprobante y de la cuenta del Cliente (creación, envío, autorización, cambios de estado, entre otros), con la finalidad de garantizar la seguridad del Servicio, diagnosticar errores y mantener la trazabilidad de las operaciones.
 
-La dirección IP y el user-agent del Cliente se registran únicamente al momento de aceptar los Términos de Servicio, la Política de Privacidad o el DPA, como evidencia de dicha aceptación. Comprobify no mantiene un registro de la dirección IP de cada solicitud individual a la API.
+La dirección IP y el user-agent del Cliente se registran al momento de aceptar los Términos de Servicio, la Política de Privacidad o el DPA, como evidencia de dicha aceptación. Adicionalmente, con fines de seguridad y diagnóstico operativo, la dirección IP de cada solicitud individual a la API se incluye en los registros técnicos del Servicio, los cuales se conservan durante un período máximo de tres (3) días, transcurrido el cual se eliminan de forma automática.
 
 ## 7. Cookies y tecnologías similares
 

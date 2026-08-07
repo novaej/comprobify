@@ -108,8 +108,15 @@ async function generate(accessKeyOrDocument, issuerOverride = null) {
     // Tax descriptions map (key = "taxCode|rateCode")
     taxDescriptions,
 
-    // Additional info
-    additionalInfo: payload.additionalInfo || null,
+    // Additional info — mirrors buildAdditionalInfo() in src/builders/base.builder.js,
+    // which appends this same "Proveedor" entry at XML-build time (SRI Resolution
+    // NAC-DGERCGC26-00000027). That injection never gets persisted back onto
+    // request_payload, so it must be reconstructed here or the RIDE would omit
+    // a field that is actually present in the SRI-authorized document.
+    additionalInfo: [
+      ...(payload.additionalInfo || []),
+      { name: 'Proveedor', value: `${config.operator.ruc} - ${config.operator.nombre}` },
+    ],
   };
 
   return rideBuilder.build(rideData);
