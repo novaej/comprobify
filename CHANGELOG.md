@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.1] — 2026-08-06
+
+### Fixed
+- **RIDE PDF omitted the `Proveedor` additional-info entry.** `base.builder.js` appends this entry (SRI Resolution NAC-DGERCGC26-00000027) at XML-build time, but the injection is never persisted back onto `request_payload`, so `ride.service.js` silently dropped it from the rendered RIDE even though it's present in the SRI-authorized document. `ride.service.js` now reconstructs the same entry when building RIDE data.
+
+### Changed
+- **Privacy policy discloses per-request IP logging.** Structured Request Logging (`request-logger.js`) began shipping the request `ip` field to Betterstack once `BETTERSTACK_SOURCE_TOKEN` was configured on staging, contradicting §6's "no per-request IP log" claim — a tripwire flagged in advance by the prior legal review. §4 now names Betterstack as a subprocessor and §6 discloses per-request IP logging with its 3-day retention. Source-only change; not yet published via `POST /v1/admin/agreements`.
+
 ## [0.14.0] — 2026-08-06
 
 ### Added
