@@ -121,7 +121,7 @@ describe('CreditNoteBuilder', () => {
     const xml = builder.build(bodyNoInfo, '1'.repeat(49), 27);
 
     expect(xml).toContain('<infoAdicional>');
-    expect(xml).toContain('nombre="Proveedor"');
+    expect(xml).toContain('nombre="RUC Proveedor"');
     expect(xml).not.toContain('nombre="email"');
   });
 

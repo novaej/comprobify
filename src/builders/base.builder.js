@@ -39,8 +39,8 @@ class BaseDocumentBuilder {
     }));
 
     campoAdicional.push({
-      '@': { nombre: 'Proveedor' },
-      '#': `${config.operator.ruc} - ${config.operator.nombre}`,
+      '@': { nombre: 'RUC Proveedor' },
+      '#': config.operator.ruc,
     });
 
     this.data.infoAdicional = { campoAdicional };

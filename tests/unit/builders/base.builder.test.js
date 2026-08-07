@@ -70,14 +70,14 @@ describe('BaseDocumentBuilder', () => {
     expect(xml).not.toContain('version="2.1.0"');
   });
 
-  test('buildAdditionalInfo always appends the provider RUC/name, even with no caller-supplied fields', () => {
+  test('buildAdditionalInfo always appends the provider RUC, even with no caller-supplied fields', () => {
     const builder = new BaseDocumentBuilder(mockIssuer, '01');
     builder.buildAdditionalInfo(undefined);
 
     const { campoAdicional } = builder.data.infoAdicional;
     expect(campoAdicional).toHaveLength(1);
-    expect(campoAdicional[0]['@'].nombre).toBe('Proveedor');
-    expect(campoAdicional[0]['#']).toBe('1715824775001 - TEST OPERATOR');
+    expect(campoAdicional[0]['@'].nombre).toBe('RUC Proveedor');
+    expect(campoAdicional[0]['#']).toBe('1715824775001');
   });
 
   test('buildAdditionalInfo keeps caller-supplied fields alongside the provider field', () => {
@@ -87,6 +87,6 @@ describe('BaseDocumentBuilder', () => {
     const { campoAdicional } = builder.data.infoAdicional;
     expect(campoAdicional).toHaveLength(2);
     expect(campoAdicional[0]).toEqual({ '@': { nombre: 'email' }, '#': 'buyer@example.com' });
-    expect(campoAdicional[1]).toEqual({ '@': { nombre: 'Proveedor' }, '#': '1715824775001 - TEST OPERATOR' });
+    expect(campoAdicional[1]).toEqual({ '@': { nombre: 'RUC Proveedor' }, '#': '1715824775001' });
   });
 });
