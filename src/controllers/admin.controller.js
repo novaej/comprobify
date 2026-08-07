@@ -91,6 +91,17 @@ const createApiKey = async (req, res) => {
   res.status(201).json({ ok: true, apiKey });
 };
 
+const listApiKeys = async (req, res) => {
+  const keys = await adminService.listApiKeys(req.params.id);
+  res.json({ ok: true, keys });
+};
+
+const getApiKeyUsage = async (req, res) => {
+  const days = req.query.days ? parseInt(req.query.days, 10) : 30;
+  const usage = await adminService.getApiKeyUsage(req.params.id, req.params.keyId, days);
+  res.json({ ok: true, usage });
+};
+
 const revokeApiKey = async (req, res) => {
   await adminService.revokeApiKey(req.params.id);
   res.json({ ok: true });
@@ -397,7 +408,7 @@ const getDocumentRide = async (req, res) => {
 
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
-  createIssuer, listIssuers, renewIssuerCertificate, createApiKey, revokeApiKey, runNotificationJobs,
+  createIssuer, listIssuers, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, runNotificationJobs,
   runSubscriptionJobs, runQuotaJobs, runQueueReconciliationJob,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments,

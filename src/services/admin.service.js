@@ -3,6 +3,7 @@ const db = require('../config/database');
 const tenantModel = require('../models/tenant.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
+const apiKeyService = require('./api-key.service');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const tenantEventModel = require('../models/tenant-event.model');
 const { formatTenantEvent } = require('../presenters/tenant-event.presenter');
@@ -334,6 +335,20 @@ async function promoteTenant(tenantId, initialSequentials = []) {
   return { apiKeys };
 }
 
+async function listApiKeys(tenantId) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+  const rows = await apiKeyModel.findActiveByTenantId(tenantId);
+  return rows.map(apiKeyService.formatKey);
+}
+
+async function getApiKeyUsage(tenantId, keyId, days) {
+  const key = await apiKeyModel.findByIdAndTenantId(keyId, tenantId);
+  if (!key) throw new NotFoundError('API key');
+  const rows = await apiKeyModel.findDailyUsage(keyId, days);
+  return rows.map((r) => ({ date: r.usage_date, requestCount: Number(r.request_count) }));
+}
+
 async function revokeApiKey(id) {
   const row = await apiKeyModel.revoke(id);
   if (!row) throw new NotFoundError('API key');
@@ -356,5 +371,5 @@ async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
 
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, listTenantEvents,
-  createIssuer, listIssuers, createApiKey, revokeApiKey, promoteTenant, renewIssuerCertificate,
+  createIssuer, listIssuers, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, promoteTenant, renewIssuerCertificate,
 };

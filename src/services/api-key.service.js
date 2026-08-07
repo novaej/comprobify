@@ -17,6 +17,8 @@ function formatKey(row) {
     active: row.active,
     createdAt: row.created_at,
     revokedAt: row.revoked_at,
+    lastUsedAt: row.last_used_at,
+    requestCount: Number(row.request_count),
   };
 }
 
@@ -56,6 +58,15 @@ async function createKey(tenant, { label, environment }) {
   return plainToken;
 }
 
+async function getDailyUsage(tenantId, keyId, days = 30) {
+  const row = await apiKeyModel.findByIdAndTenantId(keyId, tenantId);
+  if (!row) {
+    throw new NotFoundError('API key');
+  }
+  const rows = await apiKeyModel.findDailyUsage(keyId, days);
+  return rows.map((r) => ({ date: r.usage_date, requestCount: Number(r.request_count) }));
+}
+
 async function revokeKey(tenantId, keyId, currentApiKeyId) {
   const row = await apiKeyModel.findByIdAndTenantId(keyId, tenantId);
   if (!row || !row.active) {
@@ -71,4 +82,4 @@ async function revokeKey(tenantId, keyId, currentApiKeyId) {
   await apiKeyModel.revoke(row.id);
 }
 
-module.exports = { listKeys, createKey, revokeKey };
+module.exports = { listKeys, createKey, revokeKey, formatKey, getDailyUsage };

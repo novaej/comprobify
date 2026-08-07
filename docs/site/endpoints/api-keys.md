@@ -6,6 +6,7 @@ Gestión de API keys a nivel de tenant. Crea llaves nombradas para cada integrac
 GET    /v1/keys
 POST   /v1/keys
 DELETE /v1/keys/:id
+GET    /v1/keys/:id/usage
 ```
 
 ## Autenticación
@@ -34,7 +35,9 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
       "environment": "production",
       "active": true,
       "createdAt": "2026-03-01T12:00:00.000Z",
-      "revokedAt": null
+      "revokedAt": null,
+      "lastUsedAt": "2026-08-07T14:22:10.000Z",
+      "requestCount": 15832
     },
     {
       "id": "00000000-0000-0000-0000-000000000018",
@@ -42,11 +45,15 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
       "environment": "production",
       "active": true,
       "createdAt": "2026-04-12T09:30:00.000Z",
-      "revokedAt": null
+      "revokedAt": null,
+      "lastUsedAt": null,
+      "requestCount": 0
     }
   ]
 }
 ```
+
+`lastUsedAt` (nullable, `null` if the key has never authenticated a request) and `requestCount` (lifetime counter, not windowed — for time-boxed volume use the structured request logs or an APM tool) update on every request that key successfully authenticates.
 
 ---
 
@@ -122,6 +129,53 @@ Marca la llave como inactiva. La llave no podrá usarse para autenticar ninguna 
 | `400` | `BAD_REQUEST` | Se intenta revocar la misma llave que se está usando para hacer esta solicitud — usa una llave diferente, o coordina con soporte de administración |
 | `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `404` | `NOT_FOUND` | El id de la llave no existe o ya fue revocado, o pertenece a un tenant diferente |
+
+---
+
+## Uso diario de una llave
+
+```
+GET /v1/keys/:id/usage
+```
+
+Devuelve una serie diaria de solicitudes autenticadas con esa llave — pensada para alimentar directamente un gráfico (p. ej. Chart.js, Recharts) sin que el frontend tenga que rellenar días sin actividad.
+
+### Parámetros de ruta
+
+| Parámetro | Descripción |
+|---|---|
+| `id` | UUID de la llave (obtenido de `GET /v1/keys`) |
+
+### Parámetros de consulta
+
+| Parámetro | Tipo | Requerido | Por defecto | Descripción |
+|---|---|---|---|---|
+| `days` | integer | No | `30` | Cuántos días hacia atrás incluir (1–365), contando el día de hoy. |
+
+### Respuesta
+
+**200 OK**
+
+```json
+{
+  "ok": true,
+  "usage": [
+    { "date": "2026-08-05", "requestCount": 0 },
+    { "date": "2026-08-06", "requestCount": 128 },
+    { "date": "2026-08-07", "requestCount": 342 }
+  ]
+}
+```
+
+La serie viene **rellenada con ceros** — siempre hay exactamente `days` entradas, una por cada día del rango, aunque la llave no se haya usado ese día. El id puede pertenecer a una llave ya revocada (la propiedad, no el estado `active`, es lo que da acceso) para poder seguir consultando el historial de una llave revocada.
+
+### Errores
+
+| Estado HTTP | Código | Cuándo ocurre |
+|---|---|---|
+| `400` | `VALIDATION_FAILED` | `id` no es un UUID válido, o `days` está fuera del rango 1–365 |
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
+| `404` | `NOT_FOUND` | El id de la llave no existe o pertenece a un tenant diferente |
 
 ---
 

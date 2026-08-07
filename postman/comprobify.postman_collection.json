@@ -1200,7 +1200,7 @@
                 "keys"
               ]
             },
-            "description": "Returns every active key for the tenant. The plaintext token is **never** returned — only labels, environments, ids, and creation dates.\n\nCopy a key's `id` into the `api_key_id` variable to use it with Revoke Key."
+            "description": "Returns every active key for the tenant. The plaintext token is **never** returned — only labels, environments, ids, creation dates, and usage stats.\n\n`lastUsedAt` (null if never used) and `requestCount` (lifetime, not windowed) update on every request the key successfully authenticates.\n\nCopy a key's `id` into the `api_key_id` variable to use it with Revoke Key."
           }
         },
         {
@@ -1251,6 +1251,32 @@
               ]
             },
             "description": "Marks the key as inactive. The key stops working immediately and cannot be used to authenticate any future request.\n\nYou cannot revoke the key you are currently using to make this request — use a different key, or contact admin support."
+          }
+        },
+        {
+          "name": "Get Key Usage",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/keys/{{api_key_id}}/usage?days=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "keys",
+                "{{api_key_id}}",
+                "usage"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30",
+                  "description": "1-365, defaults to 30"
+                }
+              ]
+            },
+            "description": "Returns a zero-filled daily series of authenticated requests for this key — ready to feed a chart directly. Works for an already-revoked key too (ownership, not active status, gates access)."
           }
         }
       ]

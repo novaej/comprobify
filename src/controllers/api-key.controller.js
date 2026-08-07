@@ -18,4 +18,10 @@ const revoke = async (req, res) => {
   res.json({ ok: true });
 };
 
-module.exports = { list, create, revoke };
+const usage = async (req, res) => {
+  const days = req.query.days ? parseInt(req.query.days, 10) : 30;
+  const usage = await apiKeyService.getDailyUsage(req.tenant.id, req.params.id, days);
+  res.json({ ok: true, usage });
+};
+
+module.exports = { list, create, revoke, usage };

@@ -27,37 +27,7 @@ Creation and rebuild services already guard invoice-only logic (e.g. the payment
 
 ---
 
-## 2. API Key Usage Tracking
-
-**Priority: Medium — observability for named integrations**
-
-Rate limiting is already per `keyHash` (in-memory, enforces throttling). But there is no persistent usage record per key — request counts reset on restart and there is no way to answer "how many requests did the ERP integration make last month?" With tenant-scoped keys, this is the only way to slice traffic per integration (`frontend-prod`, `erp`, `mobile`, etc.); per-issuer slicing is already derivable from `documents.issuer_id`.
-
-**What to track (add to `api_keys` table):**
-- `last_used_at TIMESTAMPTZ` — updated on every authenticated request
-- `request_count BIGINT NOT NULL DEFAULT 0` — lifetime request counter, incremented on every authenticated request
-
-**Implementation:**
-1. Migration — `ALTER TABLE api_keys ADD COLUMN last_used_at TIMESTAMPTZ, ADD COLUMN request_count BIGINT NOT NULL DEFAULT 0`
-2. `authenticate` middleware — after a successful key lookup, fire a background `UPDATE api_keys SET last_used_at = NOW(), request_count = request_count + 1 WHERE id = $1` (no `await` — fire and forget, does not block the request)
-3. Admin / tenant key list endpoints — expose `lastUsedAt` and `requestCount` in the response so operators can see activity per integration
-
-**What this enables:**
-- Identify dormant integrations (key never used or `last_used_at` months ago)
-- Spot an integration generating unexpectedly high volume
-- Revoke a compromised key with confidence that the request spike matches the revocation event
-- Audit trail: `created_at` + `last_used_at` + `request_count` per key tells the full lifecycle story
-
-**Notes:**
-- `request_count` is a monotonic counter, not windowed — for windowed analytics use the structured request logs (`src/services/logger.service.js`, see CLAUDE.md's "Structured request logging" entry) or an APM tool
-- The background UPDATE is a single indexed write per request (`WHERE id = $1`); acceptable overhead for the observability gain
-- Per-issuer document volume is already derivable from `documents.issuer_id` — this adds the per-integration request-level dimension
-
-**Effort:** Low — one migration, ~3 lines in the authenticate middleware, small admin response change.
-
----
-
-## 3. Reporting
+## 2. Reporting
 
 **Priority: Low — depends on client requirements**
 
@@ -72,7 +42,7 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 ---
 
-## 4. API Key Scopes
+## 3. API Key Scopes
 
 **Priority: Low — defer until first concrete use case**
 
@@ -96,7 +66,7 @@ Today every API key can do everything its tenant can do. Scopes would let tenant
 
 ---
 
-## 5. Payment Gateway Integration
+## 4. Payment Gateway Integration
 
 **Priority: Low — blocked, requires a registered legal entity. Every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different vendor. No vendor has been selected yet — not under active consideration until the entity exists.**
 
@@ -111,11 +81,11 @@ The manual subscription/payment pipeline this depends on is already fully built 
 
 ---
 
-## 6. Overage Billing (Per-Tenant Toggle + Charging)
+## 5. Overage Billing (Per-Tenant Toggle + Charging)
 
-**Priority: Low — depends on the payment gateway integration (#5)**
+**Priority: Low — depends on the payment gateway integration (#4)**
 
-The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#5) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
+The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#4) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
 
 **What:**
 1. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
@@ -128,7 +98,7 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ---
 
-## 7. Audit Certificate Changes
+## 6. Audit Certificate Changes
 
 **Priority: Low — cheap gap, found while reviewing the billing audit-trail design**
 

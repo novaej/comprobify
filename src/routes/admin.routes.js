@@ -29,6 +29,8 @@ router.patch('/issuers/:id/certificate', upload.single('cert'), v.renewIssuerCer
 
 // API keys (tenant-scoped)
 router.post('/tenants/:id/api-keys', v.createApiKey,       validateRequest, asyncHandler(controller.createApiKey));
+router.get('/tenants/:id/api-keys',  v.listApiKeys,        validateRequest, asyncHandler(controller.listApiKeys));
+router.get('/tenants/:id/api-keys/:keyId/usage', v.getApiKeyUsage, validateRequest, asyncHandler(controller.getApiKeyUsage));
 router.delete('/api-keys/:id',       v.revokeApiKey,       validateRequest, asyncHandler(controller.revokeApiKey));
 
 // Subscriptions & payments

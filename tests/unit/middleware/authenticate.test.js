@@ -1,10 +1,16 @@
 jest.mock('../../../src/models/api-key.model');
 jest.mock('../../../src/services/attempt-tracker.service');
+jest.mock('../../../src/services/logger.service', () => ({ error: jest.fn() }));
 
 const apiKeyModel = require('../../../src/models/api-key.model');
 const attemptTrackerService = require('../../../src/services/attempt-tracker.service');
+const logger = require('../../../src/services/logger.service');
 const AttemptEventTypes = require('../../../src/constants/attempt-event-types');
 const authenticate = require('../../../src/middleware/authenticate');
+
+// touchUsage is fire-and-forget on every successful lookup — default it to
+// resolve so the many pre-existing success-path tests below aren't affected.
+apiKeyModel.touchUsage.mockResolvedValue(undefined);
 
 const mockRow = {
   key_id: '00000000-0000-0000-0000-000000000007',
@@ -96,5 +102,34 @@ describe('authenticate middleware', () => {
     await runMiddleware(req);
     const expectedHash = crypto.createHash('sha256').update('mytoken').digest('hex');
     expect(apiKeyModel.findByKeyHash).toHaveBeenCalledWith(expectedHash);
+  });
+
+  test('fires apiKeyModel.touchUsage with the key id on a successful lookup', async () => {
+    apiKeyModel.findByKeyHash.mockResolvedValue(mockRow);
+    const req = makeReq('Bearer mytoken');
+    await runMiddleware(req);
+    expect(apiKeyModel.touchUsage).toHaveBeenCalledWith(mockRow.key_id);
+  });
+
+  test('does not fire touchUsage when the key hash is not found', async () => {
+    apiKeyModel.findByKeyHash.mockResolvedValue(null);
+    const req = makeReq('Bearer unknowntoken');
+    await expect(runMiddleware(req)).rejects.toMatchObject({ statusCode: 401 });
+    expect(apiKeyModel.touchUsage).not.toHaveBeenCalled();
+  });
+
+  test('a rejected touchUsage does not fail or delay the request, and logs via logger.error', async () => {
+    apiKeyModel.findByKeyHash.mockResolvedValue(mockRow);
+    apiKeyModel.touchUsage.mockRejectedValueOnce(new Error('connection timeout'));
+    const req = makeReq('Bearer mytoken');
+    await runMiddleware(req);
+    expect(req.tenant).toBeDefined();
+    // Let the unawaited .catch() microtask run before asserting on it.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(logger.error).toHaveBeenCalledWith(
+      'api_key_usage_update_failed',
+      expect.objectContaining({ error: 'connection timeout', keyId: mockRow.key_id })
+    );
   });
 });
