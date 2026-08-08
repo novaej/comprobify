@@ -92,10 +92,13 @@ The SRI round trip is fully asynchronous — Postgres is the source of truth (`P
 | `POST` | `/v1/admin/issuers` | Create issuer (P12 upload or branch copy) |
 | `GET` | `/v1/admin/issuers` | List all issuers |
 | `POST` | `/v1/admin/tenants/:id/api-keys` | Generate a new Bearer API key for a tenant |
+| `GET` | `/v1/admin/tenants/:id/api-keys` | List a tenant's active API keys, with usage stats |
+| `GET` | `/v1/admin/tenants/:id/api-keys/:keyId/usage` | Daily usage series for one of a tenant's keys |
 | `DELETE` | `/v1/admin/api-keys/:id` | Revoke an API key |
-| `GET` | `/v1/keys` | List the tenant's active API keys |
+| `GET` | `/v1/keys` | List the tenant's active API keys, with usage stats |
 | `POST` | `/v1/keys` | Mint a new named API key for the tenant |
 | `DELETE` | `/v1/keys/:id` | Revoke a tenant API key |
+| `GET` | `/v1/keys/:id/usage` | Daily usage series for one key (zero-filled, chart-ready) |
 | `POST` | `/v1/mailgun/webhook` | Receive Mailgun delivery events (HMAC-verified) |
 
 ---
