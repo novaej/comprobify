@@ -4,6 +4,7 @@ const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const TenantStatus = require('../constants/tenant-status');
 const ErrorCodes = require('../constants/error-codes');
+const { ALL_SCOPES } = require('../constants/api-key-scopes');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -14,6 +15,7 @@ function formatKey(row) {
     id: row.id,
     label: row.label,
     environment: row.environment,
+    scopes: row.scopes,
     active: row.active,
     createdAt: row.created_at,
     revokedAt: row.revoked_at,
@@ -27,7 +29,7 @@ async function listKeys(tenantId) {
   return rows.map(formatKey);
 }
 
-async function createKey(tenant, { label, environment }) {
+async function createKey(tenant, { label, environment, scopes }) {
   if (tenant.status !== TenantStatus.ACTIVE) {
     throw new AppError(
       'Email verification is required before creating API keys. Check your inbox.',
@@ -48,14 +50,16 @@ async function createKey(tenant, { label, environment }) {
       );
     }
   }
+  const grantedScopes = Array.isArray(scopes) && scopes.length > 0 ? scopes : ALL_SCOPES;
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId: tenant.id,
     keyHash: sha256Hex(plainToken),
     label: label || null,
     environment: environment || 'sandbox',
+    scopes: grantedScopes,
   });
-  return plainToken;
+  return { token: plainToken, scopes: grantedScopes };
 }
 
 async function getDailyUsage(tenantId, keyId, days = 30) {

@@ -6,6 +6,8 @@ const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireNotPastDue = require('../middleware/require-past-due');
+const requireScope = require('../middleware/require-scope');
+const { ApiKeyScopes, ALL_SCOPES } = require('../constants/api-key-scopes');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 
 const router = Router();
@@ -13,6 +15,10 @@ const router = Router();
 router.use(authenticate);
 router.use(requireNotSuspended);
 router.use(requireNotPastDue);
+// Key management is gated behind issuers:manage — otherwise a scoped-down
+// key could mint itself a full-access key. See CLAUDE.md "Tenant-scoped API
+// key permissions."
+router.use(requireScope(ApiKeyScopes.ISSUERS_MANAGE));
 
 const createValidator = [
   body('label')
@@ -25,6 +31,14 @@ const createValidator = [
     .optional()
     .isIn(['sandbox', 'production'])
     .withMessage(`environment must be 'sandbox' or 'production'`),
+
+  body('scopes')
+    .optional()
+    .isArray({ min: 1 })
+    .withMessage('scopes must be a non-empty array when provided'),
+  body('scopes.*')
+    .isIn(ALL_SCOPES)
+    .withMessage(`each scope must be one of: ${ALL_SCOPES.join(', ')}`),
 ];
 
 const idParam = [

@@ -6,11 +6,12 @@ const list = async (req, res) => {
 };
 
 const create = async (req, res) => {
-  const apiKey = await apiKeyService.createKey(req.tenant, {
+  const { token, scopes } = await apiKeyService.createKey(req.tenant, {
     label: req.body.label,
     environment: req.body.environment,
+    scopes: req.body.scopes,
   });
-  res.status(201).json({ ok: true, apiKey });
+  res.status(201).json({ ok: true, apiKey: token, scopes });
 };
 
 const revoke = async (req, res) => {

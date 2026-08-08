@@ -3,6 +3,7 @@ const db = require('../config/database');
 async function findByKeyHash(keyHash) {
   const { rows } = await db.query(
     `SELECT ak.id AS key_id, ak.tenant_id, ak.label, ak.environment AS key_environment,
+            ak.scopes AS key_scopes,
             t.subscription_tier AS tenant_subscription_tier,
             t.status            AS tenant_status,
             t.email             AS tenant_email,
@@ -21,19 +22,19 @@ async function findByKeyHash(keyHash) {
   return rows[0] || null;
 }
 
-async function create({ tenantId, keyHash, label, environment }) {
+async function create({ tenantId, keyHash, label, environment, scopes }) {
   const { rows } = await db.query(
-    `INSERT INTO api_keys (tenant_id, key_hash, label, environment)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO api_keys (tenant_id, key_hash, label, environment, scopes)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [tenantId, keyHash, label || null, environment]
+    [tenantId, keyHash, label || null, environment, scopes]
   );
   return rows[0];
 }
 
 async function findActiveByTenantId(tenantId) {
   const { rows } = await db.query(
-    `SELECT ak.id, ak.label, ak.environment, ak.active, ak.created_at, ak.revoked_at,
+    `SELECT ak.id, ak.label, ak.environment, ak.scopes, ak.active, ak.created_at, ak.revoked_at,
             COALESCE(u.request_count, 0)::bigint AS request_count,
             u.last_used_at
      FROM api_keys ak

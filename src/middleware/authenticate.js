@@ -43,6 +43,7 @@ const authenticate = async (req, _res, next) => {
     id: row.key_id,
     label: row.label,
     environment: row.key_environment,
+    scopes: row.key_scopes,
   };
   req.tenant = {
     id: row.tenant_id,

@@ -2,6 +2,7 @@ jest.mock('../../../src/models/api-key.model');
 
 const apiKeyModel = require('../../../src/models/api-key.model');
 const apiKeyService = require('../../../src/services/api-key.service');
+const { ALL_SCOPES } = require('../../../src/constants/api-key-scopes');
 
 describe('ApiKeyService', () => {
   afterEach(() => {
@@ -17,6 +18,7 @@ describe('ApiKeyService', () => {
           id: '00000000-0000-0000-0000-000000000001',
           label: 'frontend-prod',
           environment: 'production',
+          scopes: ALL_SCOPES,
           active: true,
           created_at: createdAt,
           revoked_at: null,
@@ -33,6 +35,7 @@ describe('ApiKeyService', () => {
           id: '00000000-0000-0000-0000-000000000001',
           label: 'frontend-prod',
           environment: 'production',
+          scopes: ALL_SCOPES,
           active: true,
           createdAt: createdAt,
           revokedAt: null,
@@ -98,15 +101,17 @@ describe('ApiKeyService', () => {
       ]);
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
-      const token = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'production' });
+      const { token, scopes } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'production' });
 
       expect(typeof token).toBe('string');
       expect(token).toHaveLength(64);
+      expect(scopes).toEqual(ALL_SCOPES);
       expect(apiKeyModel.create).toHaveBeenCalledWith({
         tenantId: '00000000-0000-0000-0000-000000000001',
         keyHash: expect.any(String),
         label: 'erp',
         environment: 'production',
+        scopes: ALL_SCOPES,
       });
     });
 
@@ -114,7 +119,7 @@ describe('ApiKeyService', () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
-      const token = await apiKeyService.createKey(tenant, { label: 'mobile-app', environment: 'sandbox' });
+      const { token } = await apiKeyService.createKey(tenant, { label: 'mobile-app', environment: 'sandbox' });
 
       expect(apiKeyModel.findActiveByTenantId).not.toHaveBeenCalled();
       expect(typeof token).toBe('string');
@@ -123,6 +128,7 @@ describe('ApiKeyService', () => {
         keyHash: expect.any(String),
         label: 'mobile-app',
         environment: 'sandbox',
+        scopes: ALL_SCOPES,
       });
     });
 
@@ -137,6 +143,7 @@ describe('ApiKeyService', () => {
         keyHash: expect.any(String),
         label: null,
         environment: 'sandbox',
+        scopes: ALL_SCOPES,
       });
     });
 
@@ -145,12 +152,41 @@ describe('ApiKeyService', () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
-      const token = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' });
+      const { token } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' });
 
       const expectedHash = crypto.createHash('sha256').update(token).digest('hex');
       expect(apiKeyModel.create).toHaveBeenCalledWith(
         expect.objectContaining({ keyHash: expectedHash })
       );
+    });
+
+    test('passes an explicit scopes array through to storage and the response instead of defaulting', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
+
+      const { scopes } = await apiKeyService.createKey(tenant, {
+        label: 'dashboard-readonly',
+        environment: 'sandbox',
+        scopes: ['documents:read'],
+      });
+
+      expect(scopes).toEqual(['documents:read']);
+      expect(apiKeyModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ scopes: ['documents:read'] })
+      );
+    });
+
+    test('defaults to full access (ALL_SCOPES) when an empty scopes array is passed', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
+
+      const { scopes } = await apiKeyService.createKey(tenant, {
+        label: 'erp',
+        environment: 'sandbox',
+        scopes: [],
+      });
+
+      expect(scopes).toEqual(ALL_SCOPES);
     });
   });
 

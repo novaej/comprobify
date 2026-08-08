@@ -33,6 +33,12 @@ Una API key de producción solo puede crearse si el tenant ya se ha promovido a 
 
 **Qué hacer:** Llama a `POST /v1/tenants/promote` para promover el tenant a producción. Las llaves de producción se emitirán automáticamente como parte de esa respuesta. Se pueden generar llaves de producción adicionales después vía `POST /v1/keys`.
 
+### `INSUFFICIENT_SCOPE`
+
+La API key usada en esta solicitud no tiene el scope que exige el endpoint de destino. Cada llave tiene un arreglo `scopes` (`documents:write`, `documents:read`, `issuers:manage`, `account:manage`) — ver [API keys → Scopes](/endpoints/api-keys#scopes) para el vocabulario completo y qué rutas exigen qué scope. Una llave creada sin un campo `scopes` explícito tiene los cuatro (acceso total); este error solo ocurre con una llave deliberadamente reducida.
+
+**Qué hacer:** Crea una nueva llave que incluya el scope requerido, o usa otra llave más amplia que ya tengas para esta llamada.
+
 ### `FORBIDDEN` (respaldo)
 
 Un 403 genérico no cubierto por un código específico de los anteriores. Lee `detail`.
@@ -58,5 +64,16 @@ Un 403 genérico no cubierto por un código específico de los anteriores. Lee `
   "code":     "EMAIL_VERIFICATION_REQUIRED",
   "detail":   "Se requiere verificación de correo antes de crear sucursales adicionales. Revisa tu bandeja de entrada.",
   "instance": "/v1/issuers"
+}
+```
+
+```json
+{
+  "type":     "https://docs.comprobify.com/errors/forbidden",
+  "title":    "Forbidden",
+  "status":   403,
+  "code":     "INSUFFICIENT_SCOPE",
+  "detail":   "This API key does not have the 'issuers:manage' scope",
+  "instance": "/v1/keys"
 }
 ```

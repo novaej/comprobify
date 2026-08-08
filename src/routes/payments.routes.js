@@ -7,6 +7,8 @@ const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireNotPastDue = require('../middleware/require-past-due');
+const requireScope = require('../middleware/require-scope');
+const { ApiKeyScopes } = require('../constants/api-key-scopes');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
@@ -27,6 +29,7 @@ const uploadProof = multer({
 const router = Router();
 
 router.use(authenticate);
+router.use(requireScope(ApiKeyScopes.ACCOUNT_MANAGE));
 
 const idParam = [param('id').isUUID().withMessage('id must be a valid UUID')];
 const idAndProofIdParams = [

@@ -17,6 +17,7 @@ const mockRow = {
   tenant_id: '00000000-0000-0000-0000-000000000010',
   label: 'frontend-prod',
   key_environment: 'sandbox',
+  key_scopes: ['documents:write', 'documents:read', 'issuers:manage'],
   tenant_status: 'ACTIVE',
   tenant_email: 'test@example.com',
   tenant_subscription_tier: 'FREE',
@@ -45,7 +46,12 @@ describe('authenticate middleware', () => {
     const req = makeReq('Bearer mytoken');
     await runMiddleware(req);
     expect(req.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000010', subscriptionTier: 'FREE', status: 'ACTIVE' });
-    expect(req.apiKey).toEqual({ id: '00000000-0000-0000-0000-000000000007', label: 'frontend-prod', environment: 'sandbox' });
+    expect(req.apiKey).toEqual({
+      id: '00000000-0000-0000-0000-000000000007',
+      label: 'frontend-prod',
+      environment: 'sandbox',
+      scopes: ['documents:write', 'documents:read', 'issuers:manage'],
+    });
     expect(req.keyHash).toBeDefined();
     expect(typeof req.keyHash).toBe('string');
     expect(req.issuer).toBeUndefined();

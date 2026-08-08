@@ -5,12 +5,15 @@ const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireNotPastDue = require('../middleware/require-past-due');
+const requireScope = require('../middleware/require-scope');
+const { ApiKeyScopes } = require('../constants/api-key-scopes');
 const { readLimiter, writeLimiter } = require('../middleware/rate-limit');
 const v = require('../validators/subscription.validator');
 
 const router = Router();
 
 router.use(authenticate);
+router.use(requireScope(ApiKeyScopes.ACCOUNT_MANAGE));
 
 // A SUSPENDED tenant may still view their own subscription/payment history.
 router.get('/me', readLimiter, asyncHandler(controller.getMyStatus));

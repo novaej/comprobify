@@ -70,6 +70,8 @@ const ErrorCodes = Object.freeze({
   SELF_REVOCATION_FORBIDDEN: 'SELF_REVOCATION_FORBIDDEN',
   /** Production keys can only be created after at least one promotion */
   PRODUCTION_KEY_REQUIRES_PROMOTION: 'PRODUCTION_KEY_REQUIRES_PROMOTION',
+  /** The API key used for this request does not have the required scope */
+  INSUFFICIENT_SCOPE: 'INSUFFICIENT_SCOPE',
 
   // --- Tenant / plan limits ---
   /** Tenant has reached the maximum number of branches for their plan */

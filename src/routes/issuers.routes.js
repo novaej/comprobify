@@ -7,6 +7,8 @@ const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireNotPastDue = require('../middleware/require-past-due');
+const requireScope = require('../middleware/require-scope');
+const { ApiKeyScopes } = require('../constants/api-key-scopes');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_TYPES } = require('../builders');
 const v = require('../validators/issuer.validator');
@@ -32,6 +34,7 @@ const router = Router();
 router.use(authenticate);
 router.use(requireNotSuspended);
 router.use(requireNotPastDue);
+router.use(requireScope(ApiKeyScopes.ISSUERS_MANAGE));
 
 const idParam = [
   param('id')

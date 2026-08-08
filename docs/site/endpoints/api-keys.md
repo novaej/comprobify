@@ -11,7 +11,22 @@ GET    /v1/keys/:id/usage
 
 ## Autenticación
 
-`Authorization: Bearer <api-key>` — cualquier llave activa del tenant.
+`Authorization: Bearer <api-key>` — cualquier llave activa del tenant **con el scope `issuers:manage`**. Cada endpoint de esta página administra llaves en sí mismas, así que una llave más restringida (p. ej. una llave de solo `documents:read`) no puede listar, crear, revocar ni ver el uso de otras llaves — de lo contrario una llave reducida podría crearse a sí misma una llave nueva con acceso total. Ver [Scopes](#scopes) más abajo.
+
+---
+
+## Scopes
+
+Cada llave lleva un arreglo `scopes`. Una solicitud solo se permite si los scopes de la llave incluyen el scope que exige la ruta de destino — ver [Insufficient Scope](/errors/forbidden#insufficient_scope) para el formato del error cuando no lo tiene.
+
+| Scope | Cubre |
+|---|---|
+| `documents:write` | Todas las mutaciones de comprobantes (`POST /v1/documents`, `/send`, `/rebuild`, `/email-retry`, etc.) y `GET /:accessKey/authorize` (dispara una llamada en vivo al SRI y puede enviar un correo, por eso se trata como escritura). También `POST /v1/tenants/retry-failed-documents`. |
+| `documents:read` | Todos los demás `GET` bajo `/v1/documents` (listar, obtener, RIDE, XML, eventos, notas de crédito, respuestas del SRI, estadísticas). |
+| `issuers:manage` | Toda la ruta `/v1/issuers` (creación de sucursales, actualizaciones, tipos de comprobante, secuenciales — lecturas y escrituras por igual) **y** toda esta ruta `/v1/keys`. |
+| `account:manage` | `/v1/subscriptions`, `/v1/payments` y `/v1/webhooks` completos, además de `PATCH /v1/tenants/language`, `POST /v1/tenants/promote` y `POST /v1/tenants/agreements`. |
+
+Una llave creada sin un campo `scopes` explícito obtiene los **cuatro** — acceso total, idéntico a cómo se comportaba cualquier llave antes de que existieran los scopes. Reducir el acceso es opcional: envía `scopes` al crear la llave (ver [Crear una nueva llave](#crear-una-nueva-llave) más abajo). Las lecturas básicas de identidad (`GET /v1/tenants/me`, `/agreements`, `/events`) y los endpoints de notificaciones/catálogos están exentos de scope — cualquier llave activa puede llamarlos sin importar su arreglo `scopes`.
 
 ---
 
@@ -33,6 +48,7 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
       "id": "00000000-0000-0000-0000-000000000017",
       "label": "frontend-prod",
       "environment": "production",
+      "scopes": ["documents:write", "documents:read", "issuers:manage", "account:manage"],
       "active": true,
       "createdAt": "2026-03-01T12:00:00.000Z",
       "revokedAt": null,
@@ -41,8 +57,9 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
     },
     {
       "id": "00000000-0000-0000-0000-000000000018",
-      "label": "erp-integration",
+      "label": "dashboard-readonly",
       "environment": "production",
+      "scopes": ["documents:read"],
       "active": true,
       "createdAt": "2026-04-12T09:30:00.000Z",
       "revokedAt": null,
@@ -53,7 +70,14 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
 }
 ```
 
-`lastUsedAt` (nullable, `null` if the key has never authenticated a request) and `requestCount` (lifetime counter, not windowed — for time-boxed volume use the structured request logs or an APM tool) update on every request that key successfully authenticates.
+`lastUsedAt` (nullable, `null` si la llave nunca ha autenticado una solicitud) y `requestCount` (contador de por vida, no por ventana — para volumen acotado en el tiempo usa los logs estructurados de solicitudes o una herramienta APM) se actualizan en cada solicitud que esa llave autentica con éxito. `scopes` refleja lo que esa llave tiene permitido hacer actualmente — ver [Scopes](#scopes) arriba.
+
+### Errores
+
+| Estado HTTP | Código | Cuándo ocurre |
+|---|---|---|
+| `401` | `UNAUTHORIZED` | API key ausente o inválida |
+| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `issuers:manage` |
 
 ---
 
@@ -69,8 +93,9 @@ Crea una nueva llave a nivel de tenant. El token en texto plano se muestra **una
 
 ```json
 {
-  "label": "mobile-app",
-  "environment": "sandbox"
+  "label": "dashboard-readonly",
+  "environment": "sandbox",
+  "scopes": ["documents:read"]
 }
 ```
 
@@ -78,6 +103,7 @@ Crea una nueva llave a nivel de tenant. El token en texto plano se muestra **una
 |---|---|---|---|---|
 | `label` | string | No | `null` | Nombre legible para la integración (máx. 100 caracteres). Muy recomendado para fines de observabilidad. |
 | `environment` | string | No | `"sandbox"` | `"sandbox"` o `"production"`. Las llaves de producción solo pueden crearse después de que el tenant haya sido promovido a producción. |
+| `scopes` | string[] | No | los 4 scopes (acceso total) | Arreglo no vacío, cada elemento uno de `documents:write`, `documents:read`, `issuers:manage`, `account:manage` — ver [Scopes](#scopes) arriba. Omítelo para una llave con acceso total, idéntico al comportamiento previo a los scopes. |
 
 ### Respuesta
 
@@ -86,17 +112,21 @@ Crea una nueva llave a nivel de tenant. El token en texto plano se muestra **una
 ```json
 {
   "ok": true,
-  "apiKey": "a3f8c2bd9e10..."
+  "apiKey": "a3f8c2bd9e10...",
+  "scopes": ["documents:read"]
 }
 ```
+
+El token en texto plano (`apiKey`) se muestra una sola vez; `scopes` refleja lo que realmente se otorgó (útil para confirmar que se aplicó el valor por defecto cuando se omitió el campo).
 
 ### Errores
 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `label` demasiado largo o `environment` inválido |
+| `400` | `VALIDATION_FAILED` | `label` demasiado largo, `environment` inválido, o `scopes` está presente pero no es un arreglo no vacío de scopes válidos |
 | `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `403` | `FORBIDDEN` | El correo del tenant no está verificado, O se intenta crear una llave de producción antes de que algún emisor haya sido promovido |
+| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `issuers:manage` |
 
 ---
 
@@ -128,6 +158,7 @@ Marca la llave como inactiva. La llave no podrá usarse para autenticar ninguna 
 |---|---|---|
 | `400` | `BAD_REQUEST` | Se intenta revocar la misma llave que se está usando para hacer esta solicitud — usa una llave diferente, o coordina con soporte de administración |
 | `401` | `UNAUTHORIZED` | API key ausente o inválida |
+| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `issuers:manage` |
 | `404` | `NOT_FOUND` | El id de la llave no existe o ya fue revocado, o pertenece a un tenant diferente |
 
 ---
@@ -175,6 +206,7 @@ La serie viene **rellenada con ceros** — siempre hay exactamente `days` entrad
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `id` no es un UUID válido, o `days` está fuera del rango 1–365 |
 | `401` | `UNAUTHORIZED` | API key ausente o inválida |
+| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `issuers:manage` |
 | `404` | `NOT_FOUND` | El id de la llave no existe o pertenece a un tenant diferente |
 
 ---
