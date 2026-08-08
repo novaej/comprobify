@@ -82,9 +82,10 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/v1/keys` | Lista todas las llaves activas del tenant (etiqueta, entorno, created_at) |
+| `GET` | `/v1/keys` | Lista todas las llaves activas del tenant (etiqueta, entorno, created_at, uso) |
 | `POST` | `/v1/keys` | Genera una nueva llave con nombre (`label`, `environment` opcional) |
 | `DELETE` | `/v1/keys/:id` | Revoca una API key. No se puede revocar la llave usada en la solicitud actual. |
+| `GET` | `/v1/keys/:id/usage` | Serie diaria de uso de una llave, rellenada con ceros, lista para graficar |
 
 ## Comprobantes
 

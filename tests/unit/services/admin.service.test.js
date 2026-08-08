@@ -549,6 +549,74 @@ describe('AdminService', () => {
     });
   });
 
+  describe('listApiKeys', () => {
+    test('rejects when the tenant does not exist', async () => {
+      tenantModel.findById.mockResolvedValue(null);
+
+      await expect(adminService.listApiKeys(1)).rejects.toMatchObject({ statusCode: 404 });
+      expect(apiKeyModel.findActiveByTenantId).not.toHaveBeenCalled();
+    });
+
+    test('returns the tenant\'s active keys formatted with usage stats', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
+      apiKeyModel.findActiveByTenantId.mockResolvedValue([
+        {
+          id: '00000000-0000-0000-0000-000000000017',
+          label: 'frontend-prod',
+          environment: 'production',
+          active: true,
+          created_at: new Date('2026-03-01T12:00:00Z'),
+          revoked_at: null,
+          last_used_at: new Date('2026-08-07T14:22:10Z'),
+          request_count: '15832',
+        },
+      ]);
+
+      const result = await adminService.listApiKeys('00000000-0000-0000-0000-000000000001');
+
+      expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
+      expect(result).toEqual([
+        expect.objectContaining({
+          id: '00000000-0000-0000-0000-000000000017',
+          label: 'frontend-prod',
+          lastUsedAt: new Date('2026-08-07T14:22:10Z'),
+          requestCount: 15832,
+        }),
+      ]);
+    });
+  });
+
+  describe('getApiKeyUsage', () => {
+    test('rejects when the key does not belong to the tenant', async () => {
+      apiKeyModel.findByIdAndTenantId.mockResolvedValue(null);
+
+      await expect(adminService.getApiKeyUsage('00000000-0000-0000-0000-000000000001', 'bad-key', 30))
+        .rejects.toMatchObject({ statusCode: 404 });
+      expect(apiKeyModel.findDailyUsage).not.toHaveBeenCalled();
+    });
+
+    test('returns the zero-filled daily series formatted with numeric counts', async () => {
+      apiKeyModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000017' });
+      apiKeyModel.findDailyUsage.mockResolvedValue([
+        { usage_date: '2026-08-06', request_count: '0' },
+        { usage_date: '2026-08-07', request_count: '42' },
+      ]);
+
+      const result = await adminService.getApiKeyUsage(
+        '00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000017', 2
+      );
+
+      expect(apiKeyModel.findByIdAndTenantId).toHaveBeenCalledWith(
+        '00000000-0000-0000-0000-000000000017', '00000000-0000-0000-0000-000000000001'
+      );
+      expect(apiKeyModel.findDailyUsage).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000017', 2);
+      expect(result).toEqual([
+        { date: '2026-08-06', requestCount: 0 },
+        { date: '2026-08-07', requestCount: 42 },
+      ]);
+    });
+  });
+
   describe('promoteTenant', () => {
     test('rejects when the tenant does not exist', async () => {
       tenantModel.findById.mockResolvedValue(null);

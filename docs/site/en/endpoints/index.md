@@ -82,9 +82,10 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/v1/keys` | List all active keys for the tenant (label, environment, created_at) |
+| `GET` | `/v1/keys` | List all active keys for the tenant (label, environment, created_at, usage) |
 | `POST` | `/v1/keys` | Mint a new named key (`label`, optional `environment`) |
 | `DELETE` | `/v1/keys/:id` | Revoke an API key. Cannot revoke the key used for the current request. |
+| `GET` | `/v1/keys/:id/usage` | Zero-filled daily usage series for one key, ready for a chart |
 
 ## Documents
 

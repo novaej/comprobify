@@ -162,7 +162,7 @@ Content-Type: application/json
 { "label": "ERP integration", "environment": "sandbox" }
 ```
 
-Use `GET /v1/keys` to list them and `DELETE /v1/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that the tenant has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others).
+Use `GET /v1/keys` to list them and `DELETE /v1/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that the tenant has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others). `GET /v1/keys` already includes `lastUsedAt`/`requestCount` per key, and [`GET /v1/keys/:id/usage`](endpoints/api-keys.md#daily-key-usage) returns a chart-ready daily series — handy for spotting a dormant key or an unexpected traffic spike.
 
 ### Key lifecycle
 

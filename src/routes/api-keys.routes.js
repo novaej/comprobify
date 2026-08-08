@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { body, param } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const controller = require('../controllers/api-key.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
@@ -31,8 +31,17 @@ const idParam = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
+const usageValidator = [
+  ...idParam,
+  query('days')
+    .optional()
+    .isInt({ min: 1, max: 365 })
+    .withMessage('days must be between 1 and 365'),
+];
+
 router.get('/', readLimiter, asyncHandler(controller.list));
 router.post('/', writeLimiter, createValidator, validateRequest, asyncHandler(controller.create));
 router.delete('/:id', writeLimiter, idParam, validateRequest, asyncHandler(controller.revoke));
+router.get('/:id/usage', readLimiter, usageValidator, validateRequest, asyncHandler(controller.usage));
 
 module.exports = router;

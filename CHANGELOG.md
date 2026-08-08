@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`api_key_daily_usage` table (migration 083) — persistent, daily-granularity usage tracking per API key, one write per request.** `authenticate` middleware fire-and-forgets a single upsert into today's row on every successful lookup; lifetime `lastUsedAt`/`requestCount` (surfaced on the tenant-facing `GET /v1/keys` and a new `GET /v1/admin/tenants/:id/api-keys` — admin previously had no way to list a tenant's existing keys at all, only blind create/revoke) are an aggregate over the same table, not a separately-maintained counter. New `GET /v1/keys/:id/usage` and `GET /v1/admin/tenants/:id/api-keys/:keyId/usage` (`?days=1-365`, default 30) return a zero-filled daily series ready to feed a chart. Closes NEXT_STEPS' "API Key Usage Tracking" item.
+
+### Fixed
+- **`campoAdicional`'s `Proveedor` entry sent the RUC concatenated with the operator's name; SRI Resolution NAC-DGERCGC26-00000027 expects a standalone RUC-only field.** `base.builder.js` and `ride.service.js` now emit a `RUC Proveedor` entry holding just `config.operator.ruc`, matching what SRI actually requires. Source-only change; no API surface affected (this field was never client-visible).
+
 ## [0.14.1] — 2026-08-06
 
 ### Fixed

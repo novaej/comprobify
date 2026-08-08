@@ -182,6 +182,19 @@ const revokeApiKey = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
+const listApiKeys = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+];
+
+const getApiKeyUsage = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+  param('keyId').isUUID().withMessage('keyId must be a valid UUID'),
+  query('days')
+    .optional()
+    .isInt({ min: 1, max: 365 })
+    .withMessage('days must be between 1 and 365'),
+];
+
 // Subscriptions & payments
 const PAID_TIERS = Object.keys(TIERS).filter((t) => t !== 'FREE');
 
@@ -347,7 +360,7 @@ const getTierPrice = [
 
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
-  createIssuer, renewIssuerCertificate, createApiKey, revokeApiKey,
+  createIssuer, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments, publishAgreement,
   getAgreementVersion,

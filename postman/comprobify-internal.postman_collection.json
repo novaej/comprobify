@@ -2574,6 +2574,55 @@
           }
         },
         {
+          "name": "List API Keys (admin)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/api-keys",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants",
+                "{{tenant_id}}",
+                "api-keys"
+              ]
+            },
+            "description": "Lists every active API key for a tenant, including `lastUsedAt` and `requestCount` (lifetime, not windowed) so an operator can spot dormant or high-volume integrations before revoking a key."
+          }
+        },
+        {
+          "name": "Get API Key Usage (admin)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/api-keys/{{api_key_id}}/usage?days=30",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "tenants",
+                "{{tenant_id}}",
+                "api-keys",
+                "{{api_key_id}}",
+                "usage"
+              ],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "30",
+                  "description": "1-365, defaults to 30"
+                }
+              ]
+            },
+            "description": "Returns a zero-filled daily series of authenticated requests for a tenant's key — same shape as the tenant-facing GET /v1/keys/:id/usage, for operator-side charting/debugging."
+          }
+        },
+        {
           "name": "Create Issuer (P12 upload)",
           "request": {
             "method": "POST",

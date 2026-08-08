@@ -3,6 +3,7 @@ const apiKeyModel = require('../models/api-key.model');
 const attemptTrackerService = require('../services/attempt-tracker.service');
 const AttemptEventTypes = require('../constants/attempt-event-types');
 const AppError = require('../errors/app-error');
+const logger = require('../services/logger.service');
 
 // Identity only — does NOT reject a SUSPENDED tenant. That check lives in
 // require-not-suspended.js, applied selectively per-route so some read-only
@@ -28,6 +29,14 @@ const authenticate = async (req, _res, next) => {
     await attemptTrackerService.recordEvent(AttemptEventTypes.API_KEY_AUTH_FAILURE, keyHash);
     return next(new AppError('Invalid or revoked API key', 401));
   }
+
+  // Fire-and-forget — must not add latency to the hot auth path. Unlike
+  // attemptTrackerService.recordEvent() below (which never throws), a raw
+  // db.query() can reject, so this gets its own .catch() to avoid an
+  // unhandled rejection instead of being left to crash the process.
+  apiKeyModel.touchUsage(row.key_id).catch((err) =>
+    logger.error('api_key_usage_update_failed', { error: err.message, keyId: row.key_id })
+  );
 
   req.keyHash = keyHash;
   req.apiKey = {
