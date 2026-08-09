@@ -267,7 +267,7 @@ describe('RideService', () => {
         subtotal: 100,
         total: 115,
         motivo: null,
-        additionalInfo: null,
+        additionalInfo: [{ name: 'RUC Proveedor', value: config.operator.ruc }],
       });
     });
   });
