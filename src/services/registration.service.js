@@ -160,7 +160,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   await apiKeyModel.create({
     tenantId: tenant.id,
     keyHash: sha256Hex(plainToken),
-    label: 'Initial sandbox key',
+    label: 'Initial master key',
     environment: 'sandbox',
     scopes: ALL_SCOPES,
   });

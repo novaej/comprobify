@@ -50,7 +50,7 @@ If the tenant already started a subscription before promoting — via [`POST /v1
 {
   "ok": true,
   "apiKeys": [
-    { "label": "Initial sandbox key", "apiKey": "a3f8c2bd..." },
+    { "label": "Initial master key", "apiKey": "a3f8c2bd..." },
     { "label": "erp-integration",     "apiKey": "d94e17ac..." }
   ],
   "subscription": { "id": "00000000-0000-0000-0000-000000000012", "tier": "STARTER", "status": "PENDING_PAYMENT", "billing_interval": "MONTHLY" },

@@ -184,7 +184,7 @@ describe('RegistrationService', () => {
       expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', baseFields.branchCode, baseFields.issuePointCode, '01', 1, true);
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({
         tenantId: '00000000-0000-0000-0000-000000000002',
-        label: 'Initial sandbox key',
+        label: 'Initial master key',
         environment: 'sandbox',
         scopes: ALL_SCOPES,
       }));
