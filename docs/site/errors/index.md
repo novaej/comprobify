@@ -155,6 +155,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `AGREEMENT_ACCEPTANCE_REQUIRED` | Promoción bloqueada — uno o más acuerdos siguen en estado `PENDING` (revisa `GET /v1/tenants/agreements`, visualízalos en `GET /v1/tenants/agreements/:type`, acéptalos vía `POST /v1/tenants/agreements`) |
 | `PRODUCTION_KEY_REQUIRES_PROMOTION` | No se puede crear una API key de producción antes de promover a producción |
 | `INSUFFICIENT_SCOPE` | La API key no tiene el scope que exige el endpoint — ver [API keys → Scopes](/endpoints/api-keys#scopes) |
+| `SCOPE_ESCALATION_FORBIDDEN` | `POST /v1/keys` — los scopes solicitados incluyen uno que la llave solicitante no tiene |
 | `FORBIDDEN` | Otro fallo de permisos (respaldo — lee `detail`) |
 
 ### 404 Not Found

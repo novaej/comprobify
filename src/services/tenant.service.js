@@ -94,7 +94,7 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   const apiKeys = [];
   for (const key of sandboxKeys) {
     const plainToken = crypto.randomBytes(32).toString('hex');
-    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production' });
+    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production', scopes: key.scopes });
     apiKeys.push({ label: key.label, apiKey: plainToken });
   }
 

@@ -11,7 +11,7 @@ GET    /v1/keys/:id/usage
 
 ## Autenticación
 
-`Authorization: Bearer <api-key>` — cualquier llave activa del tenant **con el scope `issuers:manage`**. Cada endpoint de esta página administra llaves en sí mismas, así que una llave más restringida (p. ej. una llave de solo `documents:read`) no puede listar, crear, revocar ni ver el uso de otras llaves — de lo contrario una llave reducida podría crearse a sí misma una llave nueva con acceso total. Ver [Scopes](#scopes) más abajo.
+`Authorization: Bearer <api-key>` — cualquier llave activa del tenant **con el scope `keys:manage`**. Cada endpoint de esta página administra llaves en sí mismas, así que una llave más restringida (p. ej. una llave de solo `documents:read`) no puede listar, crear, revocar ni ver el uso de otras llaves. Tener `keys:manage` por sí solo tampoco basta para escalar privilegios — ver la regla de contención de privilegios en [Crear una nueva llave](#crear-una-nueva-llave) más abajo. Ver [Scopes](#scopes) más abajo.
 
 ---
 
@@ -23,10 +23,15 @@ Cada llave lleva un arreglo `scopes`. Una solicitud solo se permite si los scope
 |---|---|
 | `documents:write` | Todas las mutaciones de comprobantes (`POST /v1/documents`, `/send`, `/rebuild`, `/email-retry`, etc.) y `GET /:accessKey/authorize` (dispara una llamada en vivo al SRI y puede enviar un correo, por eso se trata como escritura). También `POST /v1/tenants/retry-failed-documents`. |
 | `documents:read` | Todos los demás `GET` bajo `/v1/documents` (listar, obtener, RIDE, XML, eventos, notas de crédito, respuestas del SRI, estadísticas). |
-| `issuers:manage` | Toda la ruta `/v1/issuers` (creación de sucursales, actualizaciones, tipos de comprobante, secuenciales — lecturas y escrituras por igual) **y** toda esta ruta `/v1/keys`. |
-| `account:manage` | `/v1/subscriptions`, `/v1/payments` y `/v1/webhooks` completos, además de `PATCH /v1/tenants/language`, `POST /v1/tenants/promote` y `POST /v1/tenants/agreements`. |
+| `issuers:read` | Todos los `GET` bajo `/v1/issuers` (listar, obtener, tipos de comprobante, secuenciales). |
+| `issuers:write` | Todos los `POST`/`PATCH`/`DELETE` bajo `/v1/issuers` (creación de sucursales, actualizaciones, logo, renovación de certificado, tipos de comprobante, secuenciales). |
+| `keys:manage` | Toda esta ruta `/v1/keys`. |
+| `billing:manage` | `/v1/subscriptions` y `/v1/payments` completos. |
+| `webhooks:manage` | `/v1/webhooks` completo. |
+| `tenant:manage` | `PATCH /v1/tenants/language` y `POST /v1/tenants/agreements`. |
+| `tenant:promote` | Solo `POST /v1/tenants/promote` — separado de `tenant:manage` porque emite/revoca todas las llaves del tenant y cambia de sandbox a producción de forma irreversible. |
 
-Una llave creada sin un campo `scopes` explícito obtiene los **cuatro** — acceso total, idéntico a cómo se comportaba cualquier llave antes de que existieran los scopes. Reducir el acceso es opcional: envía `scopes` al crear la llave (ver [Crear una nueva llave](#crear-una-nueva-llave) más abajo). Las lecturas básicas de identidad (`GET /v1/tenants/me`, `/agreements`, `/events`) y los endpoints de notificaciones/catálogos están exentos de scope — cualquier llave activa puede llamarlos sin importar su arreglo `scopes`.
+Una llave creada sin un campo `scopes` explícito obtiene los **nueve** — acceso total, idéntico a cómo se comportaba cualquier llave antes de que existieran los scopes. Reducir el acceso es opcional: envía `scopes` al crear la llave (ver [Crear una nueva llave](#crear-una-nueva-llave) más abajo). Las lecturas básicas de identidad (`GET /v1/tenants/me`, `/agreements`, `/events`) y los endpoints de notificaciones/catálogos están exentos de scope — cualquier llave activa puede llamarlos sin importar su arreglo `scopes`.
 
 ---
 
@@ -48,7 +53,7 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
       "id": "00000000-0000-0000-0000-000000000017",
       "label": "frontend-prod",
       "environment": "production",
-      "scopes": ["documents:write", "documents:read", "issuers:manage", "account:manage"],
+      "scopes": ["documents:write", "documents:read", "issuers:read", "issuers:write", "keys:manage", "billing:manage", "webhooks:manage", "tenant:manage", "tenant:promote"],
       "active": true,
       "createdAt": "2026-03-01T12:00:00.000Z",
       "revokedAt": null,
@@ -77,7 +82,7 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `401` | `UNAUTHORIZED` | API key ausente o inválida |
-| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `issuers:manage` |
+| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `keys:manage` |
 
 ---
 
@@ -103,7 +108,9 @@ Crea una nueva llave a nivel de tenant. El token en texto plano se muestra **una
 |---|---|---|---|---|
 | `label` | string | No | `null` | Nombre legible para la integración (máx. 100 caracteres). Muy recomendado para fines de observabilidad. |
 | `environment` | string | No | `"sandbox"` | `"sandbox"` o `"production"`. Las llaves de producción solo pueden crearse después de que el tenant haya sido promovido a producción. |
-| `scopes` | string[] | No | los 4 scopes (acceso total) | Arreglo no vacío, cada elemento uno de `documents:write`, `documents:read`, `issuers:manage`, `account:manage` — ver [Scopes](#scopes) arriba. Omítelo para una llave con acceso total, idéntico al comportamiento previo a los scopes. |
+| `scopes` | string[] | No | una copia de los scopes de la llave solicitante | Arreglo no vacío, cada elemento uno de los 9 valores listados en [Scopes](#scopes) arriba. Omitirlo **no** da acceso total por defecto — clona los scopes que ya tiene la llave que hace esta llamada. |
+
+**Contención de privilegios:** cada elemento de `scopes` debe estar ya presente en la llave que hace esta solicitud — no puedes crear una llave más amplia que la tuya, ni siquiera si tienes `keys:manage`. Una llave con acceso total puede crear cualquier combinación (incluyendo otra llave con acceso total); una llave con solo `["keys:manage", "documents:read"]` puede crear una llave con `["documents:read"]` pero no una con `["documents:write"]`.
 
 ### Respuesta
 
@@ -126,7 +133,8 @@ El token en texto plano (`apiKey`) se muestra una sola vez; `scopes` refleja lo 
 | `400` | `VALIDATION_FAILED` | `label` demasiado largo, `environment` inválido, o `scopes` está presente pero no es un arreglo no vacío de scopes válidos |
 | `401` | `UNAUTHORIZED` | API key ausente o inválida |
 | `403` | `FORBIDDEN` | El correo del tenant no está verificado, O se intenta crear una llave de producción antes de que algún emisor haya sido promovido |
-| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `issuers:manage` |
+| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `keys:manage` |
+| `403` | `SCOPE_ESCALATION_FORBIDDEN` | `scopes` incluye un elemento que la llave solicitante no tiene — ver Contención de privilegios arriba |
 
 ---
 
@@ -158,7 +166,7 @@ Marca la llave como inactiva. La llave no podrá usarse para autenticar ninguna 
 |---|---|---|
 | `400` | `BAD_REQUEST` | Se intenta revocar la misma llave que se está usando para hacer esta solicitud — usa una llave diferente, o coordina con soporte de administración |
 | `401` | `UNAUTHORIZED` | API key ausente o inválida |
-| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `issuers:manage` |
+| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `keys:manage` |
 | `404` | `NOT_FOUND` | El id de la llave no existe o ya fue revocado, o pertenece a un tenant diferente |
 
 ---
@@ -206,7 +214,7 @@ La serie viene **rellenada con ceros** — siempre hay exactamente `days` entrad
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `id` no es un UUID válido, o `days` está fuera del rango 1–365 |
 | `401` | `UNAUTHORIZED` | API key ausente o inválida |
-| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `issuers:manage` |
+| `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `keys:manage` |
 | `404` | `NOT_FOUND` | El id de la llave no existe o pertenece a un tenant diferente |
 
 ---

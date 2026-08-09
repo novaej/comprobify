@@ -4,7 +4,6 @@ const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const TenantStatus = require('../constants/tenant-status');
 const ErrorCodes = require('../constants/error-codes');
-const { ALL_SCOPES } = require('../constants/api-key-scopes');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -29,7 +28,16 @@ async function listKeys(tenantId) {
   return rows.map(formatKey);
 }
 
-async function createKey(tenant, { label, environment, scopes }) {
+// requestingScopes is the scopes array of the key making this request
+// (req.apiKey.scopes, always populated by authenticate.js). Omitting `scopes`
+// in the request body defaults to a copy of the requesting key's own scopes
+// — not a blanket full-access default — so a scoped-down key's "just mint me
+// a key" call can't silently come back broader than itself. An explicit
+// `scopes` array is still honored, but every entry must already be held by
+// the requesting key (privilege containment): otherwise a key that can only
+// manage keys could mint itself a new one with, say, tenant:promote, which
+// it never had. See CLAUDE.md "Tenant-scoped API key permissions".
+async function createKey(tenant, { label, environment, scopes }, requestingScopes) {
   if (tenant.status !== TenantStatus.ACTIVE) {
     throw new AppError(
       'Email verification is required before creating API keys. Check your inbox.',
@@ -50,7 +58,15 @@ async function createKey(tenant, { label, environment, scopes }) {
       );
     }
   }
-  const grantedScopes = Array.isArray(scopes) && scopes.length > 0 ? scopes : ALL_SCOPES;
+  const grantedScopes = Array.isArray(scopes) && scopes.length > 0 ? scopes : requestingScopes;
+  const disallowed = grantedScopes.filter((s) => !requestingScopes.includes(s));
+  if (disallowed.length > 0) {
+    throw new AppError(
+      `Cannot mint a key with scopes the requesting key does not itself have: ${disallowed.join(', ')}`,
+      403,
+      ErrorCodes.SCOPE_ESCALATION_FORBIDDEN
+    );
+  }
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId: tenant.id,

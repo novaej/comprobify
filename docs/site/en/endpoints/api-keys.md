@@ -11,7 +11,7 @@ GET    /v1/keys/:id/usage
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` — any active key for the tenant **with the `issuers:manage` scope**. Every endpoint on this page manages keys themselves, so a narrower key (e.g. a `documents:read`-only key) cannot list, create, revoke, or view usage for keys — otherwise a scoped-down key could mint itself a fresh full-access one. See [Scopes](#scopes) below.
+`Authorization: Bearer <api-key>` — any active key for the tenant **with the `keys:manage` scope**. Every endpoint on this page manages keys themselves, so a narrower key (e.g. a `documents:read`-only key) cannot list, create, revoke, or view usage for keys. Holding `keys:manage` alone still isn't enough to escalate privilege — see [Mint a new key](#mint-a-new-key)'s privilege containment rule below. See [Scopes](#scopes) below.
 
 ---
 
@@ -23,10 +23,15 @@ Every key carries a `scopes` array. A request is only allowed through if the key
 |---|---|
 | `documents:write` | All document mutations (`POST /v1/documents`, `/send`, `/rebuild`, `/email-retry`, etc.) and `GET /:accessKey/authorize` (it triggers a live SRI call and can send an email, so it's treated like a write). Also `POST /v1/tenants/retry-failed-documents`. |
 | `documents:read` | Every other `GET` under `/v1/documents` (list, get, RIDE, XML, events, credit notes, SRI responses, stats). |
-| `issuers:manage` | The entire `/v1/issuers` router (branch creation, updates, document types, sequentials — reads and writes alike) **and** this entire `/v1/keys` router. |
-| `account:manage` | `/v1/subscriptions`, `/v1/payments`, and `/v1/webhooks` in full, plus `PATCH /v1/tenants/language`, `POST /v1/tenants/promote`, and `POST /v1/tenants/agreements`. |
+| `issuers:read` | Every `GET` under `/v1/issuers` (list, get, document types, sequentials). |
+| `issuers:write` | Every `POST`/`PATCH`/`DELETE` under `/v1/issuers` (branch creation, updates, logo, certificate renewal, document types, sequentials). |
+| `keys:manage` | This entire `/v1/keys` router. |
+| `billing:manage` | `/v1/subscriptions` and `/v1/payments` in full. |
+| `webhooks:manage` | `/v1/webhooks` in full. |
+| `tenant:manage` | `PATCH /v1/tenants/language` and `POST /v1/tenants/agreements`. |
+| `tenant:promote` | `POST /v1/tenants/promote` only — split out from `tenant:manage` since it mints/revokes every one of the tenant's keys and flips sandbox→production irreversibly. |
 
-A key created without an explicit `scopes` field gets **all four** — full access, identical to how every key behaved before scopes existed. Scoping down is opt-in: pass `scopes` when minting a key (see [Mint a new key](#mint-a-new-key) below). Basic identity reads (`GET /v1/tenants/me`, `/agreements`, `/events`) and notification/catalog endpoints are scope-exempt — any active key can call them regardless of its `scopes` array.
+A key created without an explicit `scopes` field gets **all nine** — full access, identical to how every key behaved before scopes existed. Scoping down is opt-in: pass `scopes` when minting a key (see [Mint a new key](#mint-a-new-key) below). Basic identity reads (`GET /v1/tenants/me`, `/agreements`, `/events`) and notification/catalog endpoints are scope-exempt — any active key can call them regardless of its `scopes` array.
 
 ---
 
@@ -48,7 +53,7 @@ Returns every active key for the tenant. The plaintext token is **never** return
       "id": "00000000-0000-0000-0000-000000000017",
       "label": "frontend-prod",
       "environment": "production",
-      "scopes": ["documents:write", "documents:read", "issuers:manage", "account:manage"],
+      "scopes": ["documents:write", "documents:read", "issuers:read", "issuers:write", "keys:manage", "billing:manage", "webhooks:manage", "tenant:manage", "tenant:promote"],
       "active": true,
       "createdAt": "2026-03-01T12:00:00.000Z",
       "revokedAt": null,
@@ -77,7 +82,7 @@ Returns every active key for the tenant. The plaintext token is **never** return
 | Status | Code | When |
 |---|---|---|
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `issuers:manage` scope |
+| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `keys:manage` scope |
 
 ---
 
@@ -103,7 +108,9 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 |---|---|---|---|---|
 | `label` | string | No | `null` | Human-readable name for the integration (max 100 chars). Highly recommended for observability. |
 | `environment` | string | No | `"sandbox"` | Either `"sandbox"` or `"production"`. Production keys can only be minted after the tenant has been promoted to production. |
-| `scopes` | string[] | No | all 4 scopes (full access) | Non-empty array, each entry one of `documents:write`, `documents:read`, `issuers:manage`, `account:manage` — see [Scopes](#scopes) above. Omit entirely for a full-access key, identical to pre-scopes behavior. |
+| `scopes` | string[] | No | a copy of the requesting key's own scopes | Non-empty array, each entry one of the 9 values listed in [Scopes](#scopes) above. Omitting it does **not** default to full access — it clones whatever scopes the key making this call already has. |
+
+**Privilege containment:** every entry in `scopes` must already be held by the key making this request — you cannot mint a key broader than yourself, even if you hold `keys:manage`. A full-access key can mint any combination (including another full-access key); a key with only `["keys:manage", "documents:read"]` can mint a key with `["documents:read"]` but not one with `["documents:write"]`.
 
 ### Response
 
@@ -126,7 +133,8 @@ The plaintext token (`apiKey`) is shown once; `scopes` echoes back what was actu
 | `400` | `VALIDATION_FAILED` | `label` too long, `environment` invalid, or `scopes` is present but not a non-empty array of valid scope strings |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `FORBIDDEN` | Tenant email not verified, OR attempting to mint a production key before any issuer has been promoted |
-| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `issuers:manage` scope |
+| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `keys:manage` scope |
+| `403` | `SCOPE_ESCALATION_FORBIDDEN` | `scopes` includes an entry the requesting key doesn't itself hold — see Privilege containment above |
 
 ---
 
@@ -158,7 +166,7 @@ Marks the key as inactive. The key cannot be used to authenticate any future req
 |---|---|---|
 | `400` | `BAD_REQUEST` | Attempting to revoke the same key you are using to make this request — use a different key, or coordinate with admin support |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `issuers:manage` scope |
+| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `keys:manage` scope |
 | `404` | `NOT_FOUND` | Key id does not exist or already revoked, or belongs to a different tenant |
 
 ---
@@ -206,7 +214,7 @@ The series is **zero-filled** — there are always exactly `days` entries, one p
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `id` is not a valid UUID, or `days` is outside the 1–365 range |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
-| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `issuers:manage` scope |
+| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `keys:manage` scope |
 | `404` | `NOT_FOUND` | Key id does not exist or belongs to a different tenant |
 
 ---

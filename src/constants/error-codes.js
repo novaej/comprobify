@@ -72,6 +72,8 @@ const ErrorCodes = Object.freeze({
   PRODUCTION_KEY_REQUIRES_PROMOTION: 'PRODUCTION_KEY_REQUIRES_PROMOTION',
   /** The API key used for this request does not have the required scope */
   INSUFFICIENT_SCOPE: 'INSUFFICIENT_SCOPE',
+  /** Cannot mint a key with scopes broader than the requesting key's own scopes */
+  SCOPE_ESCALATION_FORBIDDEN: 'SCOPE_ESCALATION_FORBIDDEN',
 
   // --- Tenant / plan limits ---
   /** Tenant has reached the maximum number of branches for their plan */

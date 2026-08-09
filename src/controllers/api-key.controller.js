@@ -10,7 +10,7 @@ const create = async (req, res) => {
     label: req.body.label,
     environment: req.body.environment,
     scopes: req.body.scopes,
-  });
+  }, req.apiKey.scopes);
   res.status(201).json({ ok: true, apiKey: token, scopes });
 };
 

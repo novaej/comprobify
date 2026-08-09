@@ -13,7 +13,7 @@ const v = require('../validators/subscription.validator');
 const router = Router();
 
 router.use(authenticate);
-router.use(requireScope(ApiKeyScopes.ACCOUNT_MANAGE));
+router.use(requireScope(ApiKeyScopes.BILLING_MANAGE));
 
 // A SUSPENDED tenant may still view their own subscription/payment history.
 router.get('/me', readLimiter, asyncHandler(controller.getMyStatus));

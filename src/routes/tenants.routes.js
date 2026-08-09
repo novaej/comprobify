@@ -65,10 +65,10 @@ const acceptAgreementsValidator = [
 // also deliberately scope-exempt — GET /me in particular is basic identity
 // resolution any key needs, regardless of scope.
 router.get('/me', readLimiter, requireMatchingEnvironment, asyncHandler(controller.getMe));
-router.patch('/language', requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.ACCOUNT_MANAGE), updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
-router.post('/promote', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.ACCOUNT_MANAGE), promoteValidator, validateRequest, asyncHandler(controller.promote));
+router.patch('/language', requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_MANAGE), updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
+router.post('/promote', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_PROMOTE), promoteValidator, validateRequest, asyncHandler(controller.promote));
 router.get('/agreements', readLimiter, asyncHandler(controller.getAgreementStatus));
-router.post('/agreements', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.ACCOUNT_MANAGE), acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
+router.post('/agreements', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_MANAGE), acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
 router.get('/agreements/history', readLimiter, asyncHandler(controller.listTenantAgreements));
 router.get('/agreements/:type', readLimiter, asyncHandler(controller.getTenantAgreement));
 router.get('/events', readLimiter, asyncHandler(controller.getEvents));

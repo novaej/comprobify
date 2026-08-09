@@ -35,9 +35,15 @@ Una API key de producción solo puede crearse si el tenant ya se ha promovido a 
 
 ### `INSUFFICIENT_SCOPE`
 
-La API key usada en esta solicitud no tiene el scope que exige el endpoint de destino. Cada llave tiene un arreglo `scopes` (`documents:write`, `documents:read`, `issuers:manage`, `account:manage`) — ver [API keys → Scopes](/endpoints/api-keys#scopes) para el vocabulario completo y qué rutas exigen qué scope. Una llave creada sin un campo `scopes` explícito tiene los cuatro (acceso total); este error solo ocurre con una llave deliberadamente reducida.
+La API key usada en esta solicitud no tiene el scope que exige el endpoint de destino. Cada llave tiene un arreglo `scopes` (`documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`) — ver [API keys → Scopes](/endpoints/api-keys#scopes) para el vocabulario completo y qué rutas exigen qué scope. Una llave creada sin un campo `scopes` explícito tiene los nueve (acceso total); este error solo ocurre con una llave deliberadamente reducida.
 
 **Qué hacer:** Crea una nueva llave que incluya el scope requerido, o usa otra llave más amplia que ya tengas para esta llamada.
+
+### `SCOPE_ESCALATION_FORBIDDEN`
+
+Solo se devuelve desde `POST /v1/keys`. Intentaste crear una nueva llave con un scope que tu propia llave no tiene — una llave nunca puede crear una más amplia que ella misma, ni siquiera con `keys:manage`. Ver [API keys → Crear una nueva llave](/endpoints/api-keys#crear-una-nueva-llave) para la regla de contención de privilegios.
+
+**Qué hacer:** Solicita solo scopes que tu propia llave ya tenga, u omite `scopes` por completo para clonar los scopes de tu propia llave en la nueva.
 
 ### `FORBIDDEN` (respaldo)
 
@@ -73,7 +79,18 @@ Un 403 genérico no cubierto por un código específico de los anteriores. Lee `
   "title":    "Forbidden",
   "status":   403,
   "code":     "INSUFFICIENT_SCOPE",
-  "detail":   "This API key does not have the 'issuers:manage' scope",
+  "detail":   "This API key does not have the 'keys:manage' scope",
+  "instance": "/v1/keys"
+}
+```
+
+```json
+{
+  "type":     "https://docs.comprobify.com/errors/forbidden",
+  "title":    "Forbidden",
+  "status":   403,
+  "code":     "SCOPE_ESCALATION_FORBIDDEN",
+  "detail":   "Cannot mint a key with scopes the requesting key does not itself have: tenant:promote",
   "instance": "/v1/keys"
 }
 ```

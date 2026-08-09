@@ -7,6 +7,7 @@ const attemptTrackerService = require('../../../src/services/attempt-tracker.ser
 const logger = require('../../../src/services/logger.service');
 const AttemptEventTypes = require('../../../src/constants/attempt-event-types');
 const authenticate = require('../../../src/middleware/authenticate');
+const { ALL_SCOPES } = require('../../../src/constants/api-key-scopes');
 
 // touchUsage is fire-and-forget on every successful lookup — default it to
 // resolve so the many pre-existing success-path tests below aren't affected.
@@ -17,7 +18,7 @@ const mockRow = {
   tenant_id: '00000000-0000-0000-0000-000000000010',
   label: 'frontend-prod',
   key_environment: 'sandbox',
-  key_scopes: ['documents:write', 'documents:read', 'issuers:manage'],
+  key_scopes: ALL_SCOPES,
   tenant_status: 'ACTIVE',
   tenant_email: 'test@example.com',
   tenant_subscription_tier: 'FREE',
@@ -50,7 +51,7 @@ describe('authenticate middleware', () => {
       id: '00000000-0000-0000-0000-000000000007',
       label: 'frontend-prod',
       environment: 'sandbox',
-      scopes: ['documents:write', 'documents:read', 'issuers:manage'],
+      scopes: ALL_SCOPES,
     });
     expect(req.keyHash).toBeDefined();
     expect(typeof req.keyHash).toBe('string');

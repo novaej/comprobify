@@ -18,7 +18,7 @@ router.use(requireNotPastDue);
 // A key that can only read/write documents must not be able to register a
 // new webhook endpoint and start receiving the tenant's event fan-out — see
 // CLAUDE.md "Tenant-scoped API key permissions."
-router.use(requireScope(ApiKeyScopes.ACCOUNT_MANAGE));
+router.use(requireScope(ApiKeyScopes.WEBHOOKS_MANAGE));
 
 // GET  /api/webhooks        — list active endpoints (secrets excluded)
 // POST /api/webhooks        — register new endpoint (secret shown once)

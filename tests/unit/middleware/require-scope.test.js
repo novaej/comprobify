@@ -15,7 +15,7 @@ describe('requireScope middleware', () => {
   });
 
   test('rejects with 403 INSUFFICIENT_SCOPE when the scope is missing', async () => {
-    const middleware = requireScope('issuers:manage');
+    const middleware = requireScope('issuers:write');
     const req = { apiKey: { scopes: ['documents:read'] } };
 
     await expect(run(middleware, req)).rejects.toMatchObject({ statusCode: 403, code: 'INSUFFICIENT_SCOPE' });

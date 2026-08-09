@@ -29,7 +29,7 @@ const uploadProof = multer({
 const router = Router();
 
 router.use(authenticate);
-router.use(requireScope(ApiKeyScopes.ACCOUNT_MANAGE));
+router.use(requireScope(ApiKeyScopes.BILLING_MANAGE));
 
 const idParam = [param('id').isUUID().withMessage('id must be a valid UUID')];
 const idAndProofIdParams = [

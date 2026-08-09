@@ -18,6 +18,7 @@ const NotFoundError = require('../errors/not-found-error');
 const { TIERS } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const ErrorCodes = require('../constants/error-codes');
+const { ALL_SCOPES } = require('../constants/api-key-scopes');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -290,6 +291,7 @@ async function createApiKey(tenantId, label, environment, revokeExistingInEnv = 
     keyHash: sha256Hex(plainToken),
     label: label || null,
     environment: resolvedEnvironment,
+    scopes: ALL_SCOPES,
   });
   return plainToken;
 }
@@ -327,7 +329,7 @@ async function promoteTenant(tenantId, initialSequentials = []) {
   const apiKeys = [];
   for (const key of sandboxKeys) {
     const plainToken = crypto.randomBytes(32).toString('hex');
-    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production' });
+    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production', scopes: key.scopes });
     apiKeys.push({ label: key.label, apiKey: plainToken });
   }
 

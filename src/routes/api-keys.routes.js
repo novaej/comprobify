@@ -15,10 +15,12 @@ const router = Router();
 router.use(authenticate);
 router.use(requireNotSuspended);
 router.use(requireNotPastDue);
-// Key management is gated behind issuers:manage — otherwise a scoped-down
-// key could mint itself a full-access key. See CLAUDE.md "Tenant-scoped API
-// key permissions."
-router.use(requireScope(ApiKeyScopes.ISSUERS_MANAGE));
+// Key management is its own scope — otherwise a scoped-down key could mint
+// itself a broader one. requireScope only proves the caller can touch keys
+// at all; api-key.service.js's createKey() separately enforces that a new
+// key's scopes can never exceed the requesting key's own (privilege
+// containment) — see CLAUDE.md "Tenant-scoped API key permissions."
+router.use(requireScope(ApiKeyScopes.KEYS_MANAGE));
 
 const createValidator = [
   body('label')

@@ -26,6 +26,7 @@ const attemptTrackerService = require('../../../src/services/attempt-tracker.ser
 const AttemptEventTypes = require('../../../src/constants/attempt-event-types');
 const config = require('../../../src/config');
 const registrationService = require('../../../src/services/registration.service');
+const { ALL_SCOPES } = require('../../../src/constants/api-key-scopes');
 
 const p12Buffer = Buffer.from('fake-p12');
 const p12Password = 'p12-password';
@@ -185,6 +186,7 @@ describe('RegistrationService', () => {
         tenantId: '00000000-0000-0000-0000-000000000002',
         label: 'Initial sandbox key',
         environment: 'sandbox',
+        scopes: ALL_SCOPES,
       }));
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'VERIFICATION_EMAIL_SEND',
@@ -362,6 +364,7 @@ describe('RegistrationService', () => {
         tenantId: '00000000-0000-0000-0000-000000000001',
         label: 'Recovery key',
         environment: 'sandbox',
+        scopes: ALL_SCOPES,
       }));
       expect(result.environment).toBe('sandbox');
       expect(result.apiKey).toEqual(expect.any(String));

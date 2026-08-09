@@ -78,7 +78,7 @@ describe('ApiKeyService', () => {
     test('rejects when the tenant has not verified their email', async () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'PENDING_VERIFICATION' };
 
-      await expect(apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }))
+      await expect(apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES))
         .rejects.toMatchObject({ statusCode: 403, code: 'EMAIL_VERIFICATION_REQUIRED' });
       expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
@@ -89,7 +89,7 @@ describe('ApiKeyService', () => {
         { id: '00000000-0000-0000-0000-000000000001', environment: 'sandbox' },
       ]);
 
-      await expect(apiKeyService.createKey(tenant, { label: 'erp', environment: 'production' }))
+      await expect(apiKeyService.createKey(tenant, { label: 'erp', environment: 'production' }, ALL_SCOPES))
         .rejects.toMatchObject({ statusCode: 403, code: 'PRODUCTION_KEY_REQUIRES_PROMOTION' });
       expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
@@ -101,7 +101,7 @@ describe('ApiKeyService', () => {
       ]);
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
-      const { token, scopes } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'production' });
+      const { token, scopes } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'production' }, ALL_SCOPES);
 
       expect(typeof token).toBe('string');
       expect(token).toHaveLength(64);
@@ -119,7 +119,7 @@ describe('ApiKeyService', () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
-      const { token } = await apiKeyService.createKey(tenant, { label: 'mobile-app', environment: 'sandbox' });
+      const { token } = await apiKeyService.createKey(tenant, { label: 'mobile-app', environment: 'sandbox' }, ALL_SCOPES);
 
       expect(apiKeyModel.findActiveByTenantId).not.toHaveBeenCalled();
       expect(typeof token).toBe('string');
@@ -136,7 +136,7 @@ describe('ApiKeyService', () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
-      await apiKeyService.createKey(tenant, {});
+      await apiKeyService.createKey(tenant, {}, ALL_SCOPES);
 
       expect(apiKeyModel.create).toHaveBeenCalledWith({
         tenantId: '00000000-0000-0000-0000-000000000001',
@@ -152,7 +152,7 @@ describe('ApiKeyService', () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
-      const { token } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' });
+      const { token } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES);
 
       const expectedHash = crypto.createHash('sha256').update(token).digest('hex');
       expect(apiKeyModel.create).toHaveBeenCalledWith(
@@ -168,7 +168,7 @@ describe('ApiKeyService', () => {
         label: 'dashboard-readonly',
         environment: 'sandbox',
         scopes: ['documents:read'],
-      });
+      }, ALL_SCOPES);
 
       expect(scopes).toEqual(['documents:read']);
       expect(apiKeyModel.create).toHaveBeenCalledWith(
@@ -176,7 +176,7 @@ describe('ApiKeyService', () => {
       );
     });
 
-    test('defaults to full access (ALL_SCOPES) when an empty scopes array is passed', async () => {
+    test('defaults to full access (ALL_SCOPES) when an empty scopes array is passed and the requesting key is full-access', async () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
@@ -184,9 +184,59 @@ describe('ApiKeyService', () => {
         label: 'erp',
         environment: 'sandbox',
         scopes: [],
-      });
+      }, ALL_SCOPES);
 
       expect(scopes).toEqual(ALL_SCOPES);
+    });
+
+    // Privilege containment: a key can never mint one broader than itself.
+    test('omitting scopes clones the requesting key\'s own scopes, not a blanket full-access default', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
+
+      const { scopes } = await apiKeyService.createKey(tenant, { label: 'child-key', environment: 'sandbox' }, ['keys:manage']);
+
+      expect(scopes).toEqual(['keys:manage']);
+      expect(apiKeyModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ scopes: ['keys:manage'] })
+      );
+    });
+
+    test('allows minting a key with a strict subset of the requesting key\'s own scopes', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
+
+      const { scopes } = await apiKeyService.createKey(tenant, {
+        label: 'read-only-child',
+        environment: 'sandbox',
+        scopes: ['documents:read'],
+      }, ['documents:read', 'documents:write', 'keys:manage']);
+
+      expect(scopes).toEqual(['documents:read']);
+    });
+
+    test('rejects minting a key with a scope the requesting key does not itself hold', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
+
+      await expect(apiKeyService.createKey(tenant, {
+        label: 'escalated-key',
+        environment: 'sandbox',
+        scopes: ['tenant:promote'],
+      }, ['keys:manage']))
+        .rejects.toMatchObject({ statusCode: 403, code: 'SCOPE_ESCALATION_FORBIDDEN' });
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+    });
+
+    test('rejects when only some requested scopes exceed the requesting key\'s own scopes', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' };
+
+      await expect(apiKeyService.createKey(tenant, {
+        label: 'partially-escalated-key',
+        environment: 'sandbox',
+        scopes: ['documents:read', 'billing:manage'],
+      }, ['documents:read']))
+        .rejects.toMatchObject({ statusCode: 403, code: 'SCOPE_ESCALATION_FORBIDDEN' });
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
   });
 
