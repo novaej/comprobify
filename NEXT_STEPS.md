@@ -25,6 +25,8 @@ Facturas (`01`) and notas de crédito (`04`) are supported. The builder registry
 
 Creation and rebuild services already guard invoice-only logic (e.g. the payments-total check) behind `Array.isArray(body.payments)`, so they need zero changes unless the new type introduces another invoice-only assumption. Transmission and query services need zero changes.
 
+**If a voiding/cancellation endpoint is ever added** (not currently planned as part of this item — SRI document types are additive, not a cancel flow), add `documents:void` to `src/constants/api-key-scopes.js`'s `ApiKeyScopes`/`ALL_SCOPES` and to migration `084_api_key_scopes.sql`'s `CHECK` constraint (new migration) in the same PR — see CLAUDE.md's "Tenant-scoped API key permissions" entry.
+
 ---
 
 ## 2. Reporting
@@ -42,31 +44,7 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 ---
 
-## 3. API Key Scopes
-
-**Priority: Low — defer until first concrete use case**
-
-Today every API key can do everything its tenant can do. Scopes would let tenants mint a read-only key (e.g. for a dashboard pulling stats) without the ability to issue or void documents.
-
-**Proposed scope vocabulary:**
-- `documents:write` — create, send, rebuild, authorize, email-retry
-- `documents:read` — list, get, ride, xml, events, stats
-- `documents:void` — voiding endpoints (when added)
-- `issuers:manage` — promote, create branch, document-type management
-
-**Implementation outline:**
-1. Migration — `ALTER TABLE api_keys ADD COLUMN scopes TEXT[] NOT NULL DEFAULT ARRAY['documents:write','documents:read','issuers:manage']` (full-access default preserves current behaviour)
-2. Tenant key-creation endpoint accepts a `scopes` array, validated against the vocabulary
-3. New `requireScope('documents:read')` middleware factory; mounted per-route alongside `authenticate` / `resolveIssuer`
-4. Surface scopes in `GET /v1/keys` so operators can audit each integration's blast radius
-
-**Why defer:** there is no client today asking for a read-only key. Adding scopes preemptively means writing validation, tests, and docs for code paths nobody is using. Revisit when the first dashboard / read-only consumer appears, or when a security review demands principle-of-least-privilege.
-
-**Effort:** Low–Medium when the use case arrives — migration + one middleware factory + 4–8 route annotations + tests.
-
----
-
-## 4. Payment Gateway Integration
+## 3. Payment Gateway Integration
 
 **Priority: Low — blocked, requires a registered legal entity. Every compliant card processor needs KYC against an entity, not an individual, so this isn't avoidable by picking a different vendor. No vendor has been selected yet — not under active consideration until the entity exists.**
 
@@ -81,11 +59,11 @@ The manual subscription/payment pipeline this depends on is already fully built 
 
 ---
 
-## 5. Overage Billing (Per-Tenant Toggle + Charging)
+## 4. Overage Billing (Per-Tenant Toggle + Charging)
 
-**Priority: Low — depends on the payment gateway integration (#4)**
+**Priority: Low — depends on the payment gateway integration (#3)**
 
-The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#4) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
+The monthly-quota-reset prerequisite this item used to require is already built (`tenant_quotas`, see CLAUDE.md's "Document quota enforcement" entry). What's left is exactly the overage-billing half, still blocked on the payment gateway (#3) — there is no path today that lets a tenant continue past quota and get billed the difference; exceeding `document_quota` always hard-blocks via `QuotaExceededError` (402, `document-creation.service.js`).
 
 **What:**
 1. **Per-tenant overage toggle** — add `tenants.overage_enabled` (boolean). This must be opt-in, not automatic: some tenants will want a hard cap with zero surprise charges (today's behavior — keep it as the default), others will prefer to keep issuing and pay the overage rate rather than get blocked mid-month
@@ -98,7 +76,7 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ---
 
-## 6. Audit Certificate Changes
+## 5. Audit Certificate Changes
 
 **Priority: Low — cheap gap, found while reviewing the billing audit-trail design**
 

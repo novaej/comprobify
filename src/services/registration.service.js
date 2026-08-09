@@ -18,6 +18,7 @@ const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const { TIERS } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
+const { ALL_SCOPES } = require('../constants/api-key-scopes');
 const ErrorCodes = require('../constants/error-codes');
 const config = require('../config');
 
@@ -159,8 +160,9 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   await apiKeyModel.create({
     tenantId: tenant.id,
     keyHash: sha256Hex(plainToken),
-    label: 'Initial sandbox key',
+    label: 'Initial master key',
     environment: 'sandbox',
+    scopes: ALL_SCOPES,
   });
 
   // Durably enqueued (see ADR-022/queueVerificationEmail) — doesn't fail
@@ -230,6 +232,7 @@ async function recover(email, p12Buffer, p12Password) {
     keyHash: sha256Hex(plainToken),
     label: 'Recovery key',
     environment,
+    scopes: ALL_SCOPES,
   });
 
   // Extra validation: a matching certificate proves possession of the P12,

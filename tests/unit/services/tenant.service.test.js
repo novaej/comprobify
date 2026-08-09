@@ -22,6 +22,7 @@ const tenantEventModel = require('../../../src/models/tenant-event.model');
 const sequentialService = require('../../../src/services/sequential.service');
 const subscriptionService = require('../../../src/services/subscription.service');
 const tenantService = require('../../../src/services/tenant.service');
+const { ALL_SCOPES } = require('../../../src/constants/api-key-scopes');
 
 describe('TenantService', () => {
   afterEach(() => {
@@ -106,17 +107,19 @@ describe('TenantService', () => {
       expect(result).toEqual({ apiKeys: [], subscription: { id: '00000000-0000-0000-0000-000000000011', tier: 'STARTER', status: 'PENDING_PAYMENT' } });
     });
 
-    test('rotates sandbox API keys to production, preserving labels', async () => {
+    test('rotates sandbox API keys to production, preserving labels and scopes', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
       apiKeyModel.findActiveByTenantId.mockResolvedValue([
-        { label: 'frontend-prod' },
-        { label: 'erp' },
+        { label: 'frontend-prod', scopes: ALL_SCOPES },
+        { label: 'erp', scopes: ['documents:read'] },
       ]);
 
       const result = await tenantService.promote(1);
 
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
       expect(apiKeyModel.create).toHaveBeenCalledTimes(2);
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'frontend-prod', environment: 'production', scopes: ALL_SCOPES }));
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'erp', environment: 'production', scopes: ['documents:read'] }));
       expect(result.apiKeys).toEqual([
         { label: 'frontend-prod', apiKey: expect.any(String) },
         { label: 'erp', apiKey: expect.any(String) },

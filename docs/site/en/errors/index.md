@@ -154,6 +154,8 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `EMAIL_VERIFICATION_REQUIRED` | Operation requires a verified email address |
 | `AGREEMENT_ACCEPTANCE_REQUIRED` | Promotion blocked — one or more agreements are still `PENDING` (check `GET /v1/tenants/agreements`, view at `GET /v1/tenants/agreements/:type`, accept via `POST /v1/tenants/agreements`) |
 | `PRODUCTION_KEY_REQUIRES_PROMOTION` | Production API key cannot be created before promoting to production |
+| `INSUFFICIENT_SCOPE` | The API key doesn't carry the scope the endpoint requires — see [API Keys → Scopes](/endpoints/api-keys#scopes) |
+| `SCOPE_ESCALATION_FORBIDDEN` | `POST /v1/keys` — requested scopes include one the requesting key doesn't itself hold |
 | `FORBIDDEN` | Other permission failure (fallback — read `detail`) |
 
 ### 404 Not Found

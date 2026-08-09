@@ -33,6 +33,18 @@ Una API key de producción solo puede crearse si el tenant ya se ha promovido a 
 
 **Qué hacer:** Llama a `POST /v1/tenants/promote` para promover el tenant a producción. Las llaves de producción se emitirán automáticamente como parte de esa respuesta. Se pueden generar llaves de producción adicionales después vía `POST /v1/keys`.
 
+### `INSUFFICIENT_SCOPE`
+
+La API key usada en esta solicitud no tiene el scope que exige el endpoint de destino. Cada llave tiene un arreglo `scopes` (`documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`) — ver [API keys → Scopes](/endpoints/api-keys#scopes) para el vocabulario completo y qué rutas exigen qué scope. La primera llave de un tenant (creada en el registro) siempre tiene los nueve (acceso total), pero cualquier llave creada después vía `POST /v1/keys` puede ser más reducida — ya sea por solicitud explícita, o porque clonó los scopes de una llave más reducida al omitir `scopes` (ver [Crear una nueva llave](/endpoints/api-keys#crear-una-nueva-llave)). Este error ocurre siempre que la llave que llama carezca del scope que exige la ruta, sin importar cómo haya llegado a tener ese scope reducido.
+
+**Qué hacer:** Crea una nueva llave que incluya el scope requerido, o usa otra llave más amplia que ya tengas para esta llamada.
+
+### `SCOPE_ESCALATION_FORBIDDEN`
+
+Solo se devuelve desde `POST /v1/keys`. Intentaste crear una nueva llave con un scope que tu propia llave no tiene — una llave nunca puede crear una más amplia que ella misma, ni siquiera con `keys:manage`. Ver [API keys → Crear una nueva llave](/endpoints/api-keys#crear-una-nueva-llave) para la regla de contención de privilegios.
+
+**Qué hacer:** Solicita solo scopes que tu propia llave ya tenga, u omite `scopes` por completo para clonar los scopes de tu propia llave en la nueva.
+
 ### `FORBIDDEN` (respaldo)
 
 Un 403 genérico no cubierto por un código específico de los anteriores. Lee `detail`.
@@ -58,5 +70,27 @@ Un 403 genérico no cubierto por un código específico de los anteriores. Lee `
   "code":     "EMAIL_VERIFICATION_REQUIRED",
   "detail":   "Se requiere verificación de correo antes de crear sucursales adicionales. Revisa tu bandeja de entrada.",
   "instance": "/v1/issuers"
+}
+```
+
+```json
+{
+  "type":     "https://docs.comprobify.com/errors/forbidden",
+  "title":    "Forbidden",
+  "status":   403,
+  "code":     "INSUFFICIENT_SCOPE",
+  "detail":   "This API key does not have the 'keys:manage' scope",
+  "instance": "/v1/keys"
+}
+```
+
+```json
+{
+  "type":     "https://docs.comprobify.com/errors/forbidden",
+  "title":    "Forbidden",
+  "status":   403,
+  "code":     "SCOPE_ESCALATION_FORBIDDEN",
+  "detail":   "Cannot mint a key with scopes the requesting key does not itself have: tenant:promote",
+  "instance": "/v1/keys"
 }
 ```

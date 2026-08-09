@@ -5,6 +5,8 @@ const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireNotPastDue = require('../middleware/require-past-due');
+const requireScope = require('../middleware/require-scope');
+const { ApiKeyScopes } = require('../constants/api-key-scopes');
 const { readLimiter, writeLimiter } = require('../middleware/rate-limit');
 const v = require('../validators/webhook-endpoint.validator');
 
@@ -13,6 +15,10 @@ const router = Router();
 router.use(authenticate);
 router.use(requireNotSuspended);
 router.use(requireNotPastDue);
+// A key that can only read/write documents must not be able to register a
+// new webhook endpoint and start receiving the tenant's event fan-out — see
+// CLAUDE.md "Tenant-scoped API key permissions."
+router.use(requireScope(ApiKeyScopes.WEBHOOKS_MANAGE));
 
 // GET  /api/webhooks        — list active endpoints (secrets excluded)
 // POST /api/webhooks        — register new endpoint (secret shown once)

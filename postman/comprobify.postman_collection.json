@@ -1225,14 +1225,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"label\": \"erp-integration\",\n  \"environment\": \"sandbox\"\n}",
+              "raw": "{\n  \"label\": \"dashboard-readonly\",\n  \"environment\": \"sandbox\",\n  \"scopes\": [\"documents:read\"]\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Creates a new tenant-scoped API key. The plaintext token is shown **once** in the response — store it immediately.\n\n`label` (optional, max 100 chars) — a human-readable name for the integration, e.g. `frontend-prod`, `erp`, `mobile-app`.\n\n`environment` — `\"sandbox\"` (default) or `\"production\"`. Production keys can only be minted after the tenant has been promoted to production.\n\nWhen used on a document request, the key's environment must match the targeted issuer's environment — otherwise the request is rejected with 401."
+            "description": "Creates a new tenant-scoped API key. The plaintext token is shown **once** in the response — store it immediately.\n\n`label` (optional, max 100 chars) — a human-readable name for the integration, e.g. `frontend-prod`, `erp`, `mobile-app`.\n\n`environment` — `\"sandbox\"` (default) or `\"production\"`. Production keys can only be minted after the tenant has been promoted to production.\n\n`scopes` (optional array) — one or more of `documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`. Omitting it does NOT default to full access — it clones the requesting key's own scopes (privilege containment: a key can never mint one broader than itself). Every key still defaults to all 9 scopes when it has no prior key to inherit from (e.g. the very first key at registration).\n\nWhen used on a document request, the key's environment must match the targeted issuer's environment — otherwise the request is rejected with 401."
           }
         },
         {

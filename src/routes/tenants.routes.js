@@ -7,6 +7,8 @@ const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireNotPastDue = require('../middleware/require-past-due');
 const requireMatchingEnvironment = require('../middleware/require-matching-environment');
+const requireScope = require('../middleware/require-scope');
+const { ApiKeyScopes } = require('../constants/api-key-scopes');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_LANGUAGES } = require('../locales');
 const { SUPPORTED_TYPES } = require('../builders');
@@ -59,15 +61,18 @@ const acceptAgreementsValidator = [
 ];
 
 // A SUSPENDED tenant may still view their own account status, agreement
-// status/history, and event log — all reads below stay reachable.
+// status/history, and event log — all reads below stay reachable. Reads are
+// also deliberately scope-exempt — GET /me in particular is basic identity
+// resolution any key needs, regardless of scope.
 router.get('/me', readLimiter, requireMatchingEnvironment, asyncHandler(controller.getMe));
-router.patch('/language', requireNotSuspended, requireNotPastDue, updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
-router.post('/promote', writeLimiter, requireNotSuspended, requireNotPastDue, promoteValidator, validateRequest, asyncHandler(controller.promote));
+router.patch('/language', requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_MANAGE), updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
+router.post('/promote', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_PROMOTE), promoteValidator, validateRequest, asyncHandler(controller.promote));
 router.get('/agreements', readLimiter, asyncHandler(controller.getAgreementStatus));
-router.post('/agreements', writeLimiter, requireNotSuspended, requireNotPastDue, acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
+router.post('/agreements', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_MANAGE), acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
 router.get('/agreements/history', readLimiter, asyncHandler(controller.listTenantAgreements));
 router.get('/agreements/:type', readLimiter, asyncHandler(controller.getTenantAgreement));
 router.get('/events', readLimiter, asyncHandler(controller.getEvents));
-router.post('/retry-failed-documents', writeLimiter, requireNotSuspended, requireNotPastDue, asyncHandler(controller.retryFailedDocuments));
+// Operates on documents, not account settings — scoped like documents.routes.js's writes.
+router.post('/retry-failed-documents', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.DOCUMENTS_WRITE), asyncHandler(controller.retryFailedDocuments));
 
 module.exports = router;

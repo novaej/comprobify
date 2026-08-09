@@ -295,7 +295,7 @@ This is **one-way** — there is no going back to sandbox. On success:
 {
   "ok": true,
   "apiKeys": [
-    { "label": "Initial sandbox key", "apiKey": "<production-token>" },
+    { "label": "Initial master key", "apiKey": "<production-token>" },
     { "label": "ERP integration",     "apiKey": "<production-token>" }
   ]
 }

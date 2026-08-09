@@ -33,6 +33,18 @@ A production API key can only be created if the tenant has already promoted to p
 
 **What to do:** Call `POST /v1/tenants/promote` to promote the tenant to production. Production keys will be issued automatically as part of that response. Additional production keys can be minted afterwards via `POST /v1/keys`.
 
+### `INSUFFICIENT_SCOPE`
+
+The API key making this request doesn't carry the scope the target endpoint requires. Every key has a `scopes` array (`documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`) — see [API Keys → Scopes](/endpoints/api-keys#scopes) for the full vocabulary and which routes need which scope. A tenant's very first key (minted at registration) always has all nine (full access), but any key minted afterward via `POST /v1/keys` can be narrower — either by explicit request, or because it cloned a narrower key's scopes when `scopes` was omitted (see [Mint a new key](/endpoints/api-keys#mint-a-new-key)). This error happens whenever the calling key lacks the scope the route needs, regardless of how it ended up that way.
+
+**What to do:** Either mint a new key with the required scope included, or use a different, broader key you already hold for this call.
+
+### `SCOPE_ESCALATION_FORBIDDEN`
+
+Only returned from `POST /v1/keys`. You tried to mint a new key with a scope your own key doesn't hold — a key can never mint one broader than itself, even with `keys:manage`. See [API Keys → Mint a new key](/endpoints/api-keys#mint-a-new-key) for the privilege containment rule.
+
+**What to do:** Only request scopes your own key already has, or omit `scopes` entirely to clone your own key's scopes onto the new one.
+
 ### `FORBIDDEN` (fallback)
 
 A generic 403 not covered by a specific code above. Read `detail`.
@@ -58,5 +70,27 @@ A generic 403 not covered by a specific code above. Read `detail`.
   "code":     "EMAIL_VERIFICATION_REQUIRED",
   "detail":   "Email verification is required before creating additional branches. Check your inbox.",
   "instance": "/v1/issuers"
+}
+```
+
+```json
+{
+  "type":     "https://docs.comprobify.com/errors/forbidden",
+  "title":    "Forbidden",
+  "status":   403,
+  "code":     "INSUFFICIENT_SCOPE",
+  "detail":   "This API key does not have the 'keys:manage' scope",
+  "instance": "/v1/keys"
+}
+```
+
+```json
+{
+  "type":     "https://docs.comprobify.com/errors/forbidden",
+  "title":    "Forbidden",
+  "status":   403,
+  "code":     "SCOPE_ESCALATION_FORBIDDEN",
+  "detail":   "Cannot mint a key with scopes the requesting key does not itself have: tenant:promote",
+  "instance": "/v1/keys"
 }
 ```

@@ -295,7 +295,7 @@ Esto es de **una sola dirección** — no hay vuelta atrás al sandbox. Al tener
 {
   "ok": true,
   "apiKeys": [
-    { "label": "Initial sandbox key", "apiKey": "<production-token>" },
+    { "label": "Initial master key", "apiKey": "<production-token>" },
     { "label": "ERP integration",     "apiKey": "<production-token>" }
   ]
 }

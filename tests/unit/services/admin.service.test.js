@@ -21,6 +21,7 @@ const tenantQuotaService = require('../../../src/services/tenant-quota.service')
 const cryptoService = require('../../../src/services/crypto.service');
 const certificateService = require('../../../src/services/certificate.service');
 const adminService = require('../../../src/services/admin.service');
+const { ALL_SCOPES } = require('../../../src/constants/api-key-scopes');
 
 describe('AdminService', () => {
   let mockClient;
@@ -535,7 +536,7 @@ describe('AdminService', () => {
       expect(typeof token).toBe('string');
       const expectedHash = crypto.createHash('sha256').update(token).digest('hex');
       expect(apiKeyModel.create).toHaveBeenCalledWith({
-        tenantId: '00000000-0000-0000-0000-000000000001', keyHash: expectedHash, label: 'frontend', environment: 'sandbox',
+        tenantId: '00000000-0000-0000-0000-000000000001', keyHash: expectedHash, label: 'frontend', environment: 'sandbox', scopes: ALL_SCOPES,
       });
     });
 
@@ -646,18 +647,21 @@ describe('AdminService', () => {
       expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005', '001', '001', '04', 1, false);
     });
 
-    test('revokes sandbox keys and mints matching production keys, preserving labels', async () => {
+    test('revokes sandbox keys and mints matching production keys, preserving labels and scopes', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
       issuerModel.findAllByTenantId.mockResolvedValue([]);
-      apiKeyModel.findActiveByTenantId.mockResolvedValue([{ label: 'frontend' }, { label: 'erp' }]);
+      apiKeyModel.findActiveByTenantId.mockResolvedValue([
+        { label: 'frontend', scopes: ALL_SCOPES },
+        { label: 'erp', scopes: ['documents:read'] },
+      ]);
       tenantModel.promote.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: false });
 
       const result = await adminService.promoteTenant(1);
 
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
       expect(apiKeyModel.create).toHaveBeenCalledTimes(2);
-      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'frontend', environment: 'production' }));
-      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'erp', environment: 'production' }));
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'frontend', environment: 'production', scopes: ALL_SCOPES }));
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'erp', environment: 'production', scopes: ['documents:read'] }));
       expect(result.apiKeys).toEqual([
         { label: 'frontend', apiKey: expect.any(String) },
         { label: 'erp', apiKey: expect.any(String) },

@@ -7,6 +7,8 @@ const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireNotPastDue = require('../middleware/require-past-due');
+const requireScope = require('../middleware/require-scope');
+const { ApiKeyScopes } = require('../constants/api-key-scopes');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const { SUPPORTED_TYPES } = require('../builders');
 const v = require('../validators/issuer.validator');
@@ -33,6 +35,9 @@ router.use(authenticate);
 router.use(requireNotSuspended);
 router.use(requireNotPastDue);
 
+const readScope = requireScope(ApiKeyScopes.ISSUERS_READ);
+const writeScope = requireScope(ApiKeyScopes.ISSUERS_WRITE);
+
 const idParam = [
   param('id')
     .isUUID()
@@ -58,8 +63,8 @@ const sequentialDocumentTypeParam = [
 ];
 
 // Tenant-level: list all issuers, create a new branch (no issuer context required)
-router.get('/', readLimiter, asyncHandler(controller.list));
-router.post('/', writeLimiter, upload.single('cert'), v.createBranch, validateRequest, asyncHandler(controller.createBranch));
+router.get('/', readLimiter, readScope, asyncHandler(controller.list));
+router.post('/', writeLimiter, writeScope, upload.single('cert'), v.createBranch, validateRequest, asyncHandler(controller.createBranch));
 
 const handleLogoUpload = (req, res, next) => {
   uploadLogo.single('logo')(req, res, (err) => {
@@ -71,16 +76,16 @@ const handleLogoUpload = (req, res, next) => {
 };
 
 // Single-issuer operations (issuer id in URL; ownership verified in controller)
-router.get('/:id', readLimiter, idParam, validateRequest, asyncHandler(controller.getById));
-router.patch('/:id', writeLimiter, idParam, v.updateIssuer, validateRequest, asyncHandler(controller.updateIssuer));
-router.delete('/:id', writeLimiter, idParam, validateRequest, asyncHandler(controller.removeIssuer));
-router.patch('/:id/activate', writeLimiter, idParam, validateRequest, asyncHandler(controller.activateIssuer));
-router.patch('/:id/logo', writeLimiter, idParam, validateRequest, handleLogoUpload, asyncHandler(controller.uploadLogo));
-router.patch('/:id/certificate', writeLimiter, upload.single('cert'), idParam, validateRequest, asyncHandler(controller.renewCertificate));
-router.get('/:id/document-types', readLimiter, idParam, validateRequest, asyncHandler(controller.listDocumentTypes));
-router.post('/:id/document-types', writeLimiter, idParam, addDocumentTypeValidator, validateRequest, asyncHandler(controller.addDocumentType));
-router.delete('/:id/document-types/:code', writeLimiter, idParam, removeDocumentTypeValidator, validateRequest, asyncHandler(controller.removeDocumentType));
-router.get('/:id/sequentials', readLimiter, idParam, validateRequest, asyncHandler(controller.getSequentials));
-router.patch('/:id/sequentials/:documentType', writeLimiter, idParam, sequentialDocumentTypeParam, v.setSequential, validateRequest, asyncHandler(controller.setSequential));
+router.get('/:id', readLimiter, readScope, idParam, validateRequest, asyncHandler(controller.getById));
+router.patch('/:id', writeLimiter, writeScope, idParam, v.updateIssuer, validateRequest, asyncHandler(controller.updateIssuer));
+router.delete('/:id', writeLimiter, writeScope, idParam, validateRequest, asyncHandler(controller.removeIssuer));
+router.patch('/:id/activate', writeLimiter, writeScope, idParam, validateRequest, asyncHandler(controller.activateIssuer));
+router.patch('/:id/logo', writeLimiter, writeScope, idParam, validateRequest, handleLogoUpload, asyncHandler(controller.uploadLogo));
+router.patch('/:id/certificate', writeLimiter, writeScope, upload.single('cert'), idParam, validateRequest, asyncHandler(controller.renewCertificate));
+router.get('/:id/document-types', readLimiter, readScope, idParam, validateRequest, asyncHandler(controller.listDocumentTypes));
+router.post('/:id/document-types', writeLimiter, writeScope, idParam, addDocumentTypeValidator, validateRequest, asyncHandler(controller.addDocumentType));
+router.delete('/:id/document-types/:code', writeLimiter, writeScope, idParam, removeDocumentTypeValidator, validateRequest, asyncHandler(controller.removeDocumentType));
+router.get('/:id/sequentials', readLimiter, readScope, idParam, validateRequest, asyncHandler(controller.getSequentials));
+router.patch('/:id/sequentials/:documentType', writeLimiter, writeScope, idParam, sequentialDocumentTypeParam, v.setSequential, validateRequest, asyncHandler(controller.setSequential));
 
 module.exports = router;

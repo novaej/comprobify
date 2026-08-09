@@ -11,7 +11,27 @@ GET    /v1/keys/:id/usage
 
 ## Authentication
 
-`Authorization: Bearer <api-key>` — any active key for the tenant.
+`Authorization: Bearer <api-key>` — any active key for the tenant **with the `keys:manage` scope**. Every endpoint on this page manages keys themselves, so a narrower key (e.g. a `documents:read`-only key) cannot list, create, revoke, or view usage for keys. Holding `keys:manage` alone still isn't enough to escalate privilege — see [Mint a new key](#mint-a-new-key)'s privilege containment rule below. See [Scopes](#scopes) below.
+
+---
+
+## Scopes
+
+Every key carries a `scopes` array. A request is only allowed through if the key's scopes include the scope the target route requires — see [Insufficient Scope](/errors/forbidden#insufficient_scope) for the error shape when it doesn't.
+
+| Scope | Covers |
+|---|---|
+| `documents:write` | All document mutations (`POST /v1/documents`, `/send`, `/rebuild`, `/email-retry`, etc.) and `GET /:accessKey/authorize` (it triggers a live SRI call and can send an email, so it's treated like a write). Also `POST /v1/tenants/retry-failed-documents`. |
+| `documents:read` | Every other `GET` under `/v1/documents` (list, get, RIDE, XML, events, credit notes, SRI responses, stats). |
+| `issuers:read` | Every `GET` under `/v1/issuers` (list, get, document types, sequentials). |
+| `issuers:write` | Every `POST`/`PATCH`/`DELETE` under `/v1/issuers` (branch creation, updates, logo, certificate renewal, document types, sequentials). |
+| `keys:manage` | This entire `/v1/keys` router. |
+| `billing:manage` | `/v1/subscriptions` and `/v1/payments` in full. |
+| `webhooks:manage` | `/v1/webhooks` in full. |
+| `tenant:manage` | `PATCH /v1/tenants/language` and `POST /v1/tenants/agreements`. |
+| `tenant:promote` | `POST /v1/tenants/promote` only — split out from `tenant:manage` since it mints/revokes every one of the tenant's keys and flips sandbox→production irreversibly. |
+
+A tenant's very first key (minted automatically at registration) always gets **all nine** — full access, identical to how every key behaved before scopes existed. Minting an *additional* key via `POST /v1/keys` is different: omitting `scopes` there does **not** default to full access — it clones whatever scopes the key making that call already has (see [Mint a new key](#mint-a-new-key) below for the full rule). You can still always create a key without passing `scopes` at all; you just get a copy of your own key's scopes rather than a blanket full-access grant. Scoping down further is opt-in: pass an explicit, narrower `scopes` array. Basic identity reads (`GET /v1/tenants/me`, `/agreements`, `/events`) and notification/catalog endpoints are scope-exempt — any active key can call them regardless of its `scopes` array.
 
 ---
 
@@ -33,6 +53,7 @@ Returns every active key for the tenant. The plaintext token is **never** return
       "id": "00000000-0000-0000-0000-000000000017",
       "label": "frontend-prod",
       "environment": "production",
+      "scopes": ["documents:write", "documents:read", "issuers:read", "issuers:write", "keys:manage", "billing:manage", "webhooks:manage", "tenant:manage", "tenant:promote"],
       "active": true,
       "createdAt": "2026-03-01T12:00:00.000Z",
       "revokedAt": null,
@@ -41,8 +62,9 @@ Returns every active key for the tenant. The plaintext token is **never** return
     },
     {
       "id": "00000000-0000-0000-0000-000000000018",
-      "label": "erp-integration",
+      "label": "dashboard-readonly",
       "environment": "production",
+      "scopes": ["documents:read"],
       "active": true,
       "createdAt": "2026-04-12T09:30:00.000Z",
       "revokedAt": null,
@@ -53,7 +75,14 @@ Returns every active key for the tenant. The plaintext token is **never** return
 }
 ```
 
-`lastUsedAt` (nullable, `null` if the key has never authenticated a request) and `requestCount` (lifetime counter, not windowed — for time-boxed volume use the structured request logs or an APM tool) update on every request that key successfully authenticates.
+`lastUsedAt` (nullable, `null` if the key has never authenticated a request) and `requestCount` (lifetime counter, not windowed — for time-boxed volume use the structured request logs or an APM tool) update on every request that key successfully authenticates. `scopes` reflects what that key is currently permitted to do — see [Scopes](#scopes) above.
+
+### Errors
+
+| Status | Code | When |
+|---|---|---|
+| `401` | `UNAUTHORIZED` | Missing or invalid API key |
+| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `keys:manage` scope |
 
 ---
 
@@ -69,8 +98,9 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 
 ```json
 {
-  "label": "mobile-app",
-  "environment": "sandbox"
+  "label": "dashboard-readonly",
+  "environment": "sandbox",
+  "scopes": ["documents:read"]
 }
 ```
 
@@ -78,6 +108,9 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 |---|---|---|---|---|
 | `label` | string | No | `null` | Human-readable name for the integration (max 100 chars). Highly recommended for observability. |
 | `environment` | string | No | `"sandbox"` | Either `"sandbox"` or `"production"`. Production keys can only be minted after the tenant has been promoted to production. |
+| `scopes` | string[] | No | a copy of the requesting key's own scopes | Non-empty array, each entry one of the 9 values listed in [Scopes](#scopes) above. Omitting it does **not** default to full access — it clones whatever scopes the key making this call already has. |
+
+**Privilege containment:** every entry in `scopes` must already be held by the key making this request — you cannot mint a key broader than yourself, even if you hold `keys:manage`. A full-access key can mint any combination (including another full-access key); a key with only `["keys:manage", "documents:read"]` can mint a key with `["documents:read"]` but not one with `["documents:write"]`.
 
 ### Response
 
@@ -86,17 +119,22 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 ```json
 {
   "ok": true,
-  "apiKey": "a3f8c2bd9e10..."
+  "apiKey": "a3f8c2bd9e10...",
+  "scopes": ["documents:read"]
 }
 ```
+
+The plaintext token (`apiKey`) is shown once; `scopes` echoes back what was actually granted (useful to confirm the default was applied when the field was omitted).
 
 ### Errors
 
 | Status | Code | When |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | `label` too long or `environment` invalid |
+| `400` | `VALIDATION_FAILED` | `label` too long, `environment` invalid, or `scopes` is present but not a non-empty array of valid scope strings |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `403` | `FORBIDDEN` | Tenant email not verified, OR attempting to mint a production key before any issuer has been promoted |
+| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `keys:manage` scope |
+| `403` | `SCOPE_ESCALATION_FORBIDDEN` | `scopes` includes an entry the requesting key doesn't itself hold — see Privilege containment above |
 
 ---
 
@@ -128,6 +166,7 @@ Marks the key as inactive. The key cannot be used to authenticate any future req
 |---|---|---|
 | `400` | `BAD_REQUEST` | Attempting to revoke the same key you are using to make this request — use a different key, or coordinate with admin support |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
+| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `keys:manage` scope |
 | `404` | `NOT_FOUND` | Key id does not exist or already revoked, or belongs to a different tenant |
 
 ---
@@ -175,6 +214,7 @@ The series is **zero-filled** — there are always exactly `days` entries, one p
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `id` is not a valid UUID, or `days` is outside the 1–365 range |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
+| `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `keys:manage` scope |
 | `404` | `NOT_FOUND` | Key id does not exist or belongs to a different tenant |
 
 ---
