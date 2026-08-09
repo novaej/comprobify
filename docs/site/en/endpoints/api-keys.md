@@ -31,7 +31,7 @@ Every key carries a `scopes` array. A request is only allowed through if the key
 | `tenant:manage` | `PATCH /v1/tenants/language` and `POST /v1/tenants/agreements`. |
 | `tenant:promote` | `POST /v1/tenants/promote` only — split out from `tenant:manage` since it mints/revokes every one of the tenant's keys and flips sandbox→production irreversibly. |
 
-A key created without an explicit `scopes` field gets **all nine** — full access, identical to how every key behaved before scopes existed. Scoping down is opt-in: pass `scopes` when minting a key (see [Mint a new key](#mint-a-new-key) below). Basic identity reads (`GET /v1/tenants/me`, `/agreements`, `/events`) and notification/catalog endpoints are scope-exempt — any active key can call them regardless of its `scopes` array.
+A tenant's very first key (minted automatically at registration) always gets **all nine** — full access, identical to how every key behaved before scopes existed. Minting an *additional* key via `POST /v1/keys` is different: omitting `scopes` there does **not** default to full access — it clones whatever scopes the key making that call already has (see [Mint a new key](#mint-a-new-key) below for the full rule). You can still always create a key without passing `scopes` at all; you just get a copy of your own key's scopes rather than a blanket full-access grant. Scoping down further is opt-in: pass an explicit, narrower `scopes` array. Basic identity reads (`GET /v1/tenants/me`, `/agreements`, `/events`) and notification/catalog endpoints are scope-exempt — any active key can call them regardless of its `scopes` array.
 
 ---
 

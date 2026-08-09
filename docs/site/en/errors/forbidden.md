@@ -35,7 +35,7 @@ A production API key can only be created if the tenant has already promoted to p
 
 ### `INSUFFICIENT_SCOPE`
 
-The API key making this request doesn't carry the scope the target endpoint requires. Every key has a `scopes` array (`documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`) — see [API Keys → Scopes](/endpoints/api-keys#scopes) for the full vocabulary and which routes need which scope. A key minted without an explicit `scopes` field has all nine (full access); this error only happens with a deliberately narrowed key.
+The API key making this request doesn't carry the scope the target endpoint requires. Every key has a `scopes` array (`documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`) — see [API Keys → Scopes](/endpoints/api-keys#scopes) for the full vocabulary and which routes need which scope. A tenant's very first key (minted at registration) always has all nine (full access), but any key minted afterward via `POST /v1/keys` can be narrower — either by explicit request, or because it cloned a narrower key's scopes when `scopes` was omitted (see [Mint a new key](/endpoints/api-keys#mint-a-new-key)). This error happens whenever the calling key lacks the scope the route needs, regardless of how it ended up that way.
 
 **What to do:** Either mint a new key with the required scope included, or use a different, broader key you already hold for this call.
 

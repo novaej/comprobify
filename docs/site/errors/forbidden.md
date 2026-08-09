@@ -35,7 +35,7 @@ Una API key de producción solo puede crearse si el tenant ya se ha promovido a 
 
 ### `INSUFFICIENT_SCOPE`
 
-La API key usada en esta solicitud no tiene el scope que exige el endpoint de destino. Cada llave tiene un arreglo `scopes` (`documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`) — ver [API keys → Scopes](/endpoints/api-keys#scopes) para el vocabulario completo y qué rutas exigen qué scope. Una llave creada sin un campo `scopes` explícito tiene los nueve (acceso total); este error solo ocurre con una llave deliberadamente reducida.
+La API key usada en esta solicitud no tiene el scope que exige el endpoint de destino. Cada llave tiene un arreglo `scopes` (`documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`) — ver [API keys → Scopes](/endpoints/api-keys#scopes) para el vocabulario completo y qué rutas exigen qué scope. La primera llave de un tenant (creada en el registro) siempre tiene los nueve (acceso total), pero cualquier llave creada después vía `POST /v1/keys` puede ser más reducida — ya sea por solicitud explícita, o porque clonó los scopes de una llave más reducida al omitir `scopes` (ver [Crear una nueva llave](/endpoints/api-keys#crear-una-nueva-llave)). Este error ocurre siempre que la llave que llama carezca del scope que exige la ruta, sin importar cómo haya llegado a tener ese scope reducido.
 
 **Qué hacer:** Crea una nueva llave que incluya el scope requerido, o usa otra llave más amplia que ya tengas para esta llamada.
 
