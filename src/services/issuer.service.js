@@ -2,6 +2,7 @@ const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const issuerModel = require('../models/issuer.model');
 const documentModel = require('../models/document.model');
 const tenantModel = require('../models/tenant.model');
+const tenantEventModel = require('../models/tenant-event.model');
 const sequentialService = require('./sequential.service');
 const cryptoService = require('./crypto.service');
 const certificateService = require('./certificate.service');
@@ -63,6 +64,11 @@ async function renewCertificate(issuer, p12Buffer, p12Password) {
   if (!updated) {
     throw new AppError('Issuer not found', 404, ErrorCodes.ISSUER_NOT_FOUND);
   }
+  await tenantEventModel.create(issuer.tenant_id, 'CERTIFICATE_RENEWED', {
+    issuerId: issuer.id,
+    certFingerprint: updated.cert_fingerprint,
+    certExpiry: updated.cert_expiry,
+  });
   return { certFingerprint: updated.cert_fingerprint, certExpiry: updated.cert_expiry };
 }
 
@@ -141,6 +147,14 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
       throw new ConflictError(`Issuer with branch ${fields.branchCode}, issue point ${fields.issuePointCode} already exists`);
     }
     throw err;
+  }
+
+  if (p12Buffer) {
+    await tenantEventModel.create(tenant.id, 'CERTIFICATE_UPLOADED', {
+      issuerId: newIssuer.id,
+      certFingerprint: newIssuer.cert_fingerprint,
+      certExpiry: newIssuer.cert_expiry,
+    });
   }
 
   await issuerDocumentTypeModel.bulkCreate(newIssuer.id, documentTypes);

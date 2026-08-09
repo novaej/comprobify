@@ -74,15 +74,3 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 **Effort:** Medium — a new tenant-facing endpoint, the toggle/counter, and the actual charge integration once the gateway exists.
 
----
-
-## 5. Audit Certificate Changes
-
-**Priority: Low — cheap gap, found while reviewing the billing audit-trail design**
-
-`issuer.service.js`'s `renewCertificate` updates `issuers.encrypted_private_key`/`certificate_pem`/etc. and returns — no event is logged anywhere. Given certificates are the thing that makes a signed invoice legally valid, "when was this cert replaced and by what" should be in the audit trail, not just inferable from `updated_at`.
-
-**What:** log a `tenant_events` row (or a new `issuer_events` table if issuer-level granularity matters more than tenant-level) on certificate upload (registration/branch creation) and renewal — fingerprint and expiry are already computed by `certificateService.parseCertificate`, just not persisted as an event.
-
-**Effort:** Low — one event write per existing call site, no new flow.
-
