@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+- **`cat_emission_types` table dropped (migration 088).** Never read by any model or service — `issuer.emission_type` ('1' normal / '2' contingency) is handled directly in `helpers/ride-builder.js`'s `emissionLabel()`, and its seed was already incomplete (only code `'1'` was ever inserted). SRI's XSD (`tipoEmision`'s `[12]{1}` pattern) confirms there's nothing else in the domain to seed.
+
 ### Added
 - **Per-item additional details (`items[].additionalDetails`) on `POST /v1/documents`.** Up to 3 free-form `name`/`value` pairs (≤300 chars each) per line item, matching SRI's `detallesAdicionales`/`detAdicional` schema element — a per-item sibling to the existing document-level Campos Adicionales. Written into the signed XML by both `invoice.builder.js` and `credit-note.builder.js` (in the correct schema position, between `precioTotalSinImpuesto` and `impuestos`; validated against SRI's actual XSDs) and persisted to the new `document_line_items.additional_details` column (migration 087, both schemas) as an audit/query record. `ride.service.js` renders it from the authorized XML, so the RIDE's existing "Detalle Adicional" column now shows real data.
 
