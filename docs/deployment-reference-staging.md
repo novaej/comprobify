@@ -1,6 +1,6 @@
 # Comprobify Deployment Reference (Staging)
 
-Last updated: 2026-07-30
+Last updated: 2026-08-10
 
 This reference describes the staging deployment setup for Comprobify, including infrastructure, required configuration, deployment steps, and post-deployment checks. For the full CI/CD walkthrough, branching model, and env var reference, see `docs/deployment.md`. For the complete Terraform/DigitalOcean mechanics, see `docs/terraform-digitalocean-setup.md`.
 
@@ -10,8 +10,9 @@ This reference describes the staging deployment setup for Comprobify, including 
 - **DigitalOcean** hosts the droplet itself — a plain Ubuntu 24.04 image (not a Marketplace image), with Docker installed and SSH hardened by cloud-init on first boot. A DigitalOcean Cloud Firewall restricts ports 80/443 to Cloudflare's published IP ranges; port 22 is open to the internet, with defense layered at the identity level instead: key-only auth, no root login, an unprivileged deploy user with no sudo, and fail2ban.
 - **GitHub Actions** manages application CI/CD: a `vX.Y.Z` tag push runs `release-staging.yml`, which fast-forwards the `staging` branch to the tag; the resulting push to `staging` triggers `deploy-staging.yml`, which builds the Docker image, pushes it to GHCR, and deploys it to the droplet over SSH. Docs publishing is a separate workflow, `docs.yml`, deploying from `main` on changes under `docs/site/**`.
 - **GHCR** (GitHub Container Registry) stores the built image at `ghcr.io/novaej/comprobify`, tagged with the deploying commit SHA.
-- **Docker Compose** (`deploy/docker-compose.yml`, pushed to the droplet on every deploy) runs three containers: `caddy` (reverse proxy, the only container with ports exposed to the internet), `api` (`node app.js`), and `worker` (`node workers/worker.js`) — `api` and `worker` share the same image, differing only in `command`.
+- **Docker Compose** (`deploy/docker-compose.yml`, pushed to the droplet on every deploy) runs four containers: `caddy` (reverse proxy, the only container with ports exposed to the internet), `api` (`node app.js`), `worker` (`node workers/worker.js`), and `redis` — `api` and `worker` share the same image, differing only in `command`.
 - **Caddy** terminates TLS, automatically obtaining and renewing a Let's Encrypt certificate for `api-staging.comprobify.com`, and reverse-proxies to the `api` container internally.
+- **Redis** (`redis:7-alpine`, self-hosted in the same Compose stack) backs the shared `RedisStore` behind `writeLimiter`/`readLimiter`/`adminLimiter`/`registrationLimiter` (`src/middleware/rate-limit.js`) and `attempt-tracker.service.js`'s repeated-attempt detection — only `api` connects to it, `worker` never rate-limits. No persistence (`--save ""`, disposable short-window counters) and a hard 32MB `--maxmemory` cap. `REDIS_URL` is not a GitHub Secret/Variable — it's hardcoded into the deploy workflow's `.env` heredoc as `redis://redis:6379` (Compose's internal DNS name for the service), identical across environments.
 - **DigitalOcean Managed Postgres** provides the PostgreSQL database, with two schemas: `public` and `sandbox`. The cluster is shared with `comprobify-web` (not comprobify-only) and is not provisioned by this repo's Terraform — it's grouped into the same DO Project as the droplet for dashboard purposes only.
 - **Cloudflare Pages** hosts the VitePress documentation site at `docs.comprobify.com`, project `comprobify-docs`, built via `npm run docs:build` and deployed with Wrangler.
 - Four scheduled admin jobs run via a `cron.d` file (`/etc/cron.d/comprobify-jobs`) written to the droplet by cloud-init at first boot: Notifications every 5 minutes, Subscriptions daily, Quota daily, and Queue Reconciliation every 5 minutes (tightened from hourly since self-hosted cron has no per-invocation cost — see `docs/deployment.md`'s "Scheduled jobs" section). Each entry runs `docker compose exec -T api node scripts/run-admin-job.js <path>` directly inside the running `api` container — no Node install on the bare host, and `ADMIN_SECRET` is picked up automatically from that container's own `.env`.
@@ -27,7 +28,7 @@ This reference describes the staging deployment setup for Comprobify, including 
 
 | Component | Platform | Service / Project name |
 |---|---|---|
-| Compute (API + worker + proxy) | DigitalOcean Droplet | `comprobify-staging` — `s-1vcpu-512mb-10gb`, region `nyc1`, Ubuntu 24.04 |
+| Compute (API + worker + proxy + Redis) | DigitalOcean Droplet | `comprobify-staging` — `s-1vcpu-1gb`, region `nyc1`, Ubuntu 24.04 |
 | Infrastructure-as-code | Terraform | `terraform/environments/staging`, state in DO Spaces bucket `comprobify-terraform-state` |
 | Container registry | GHCR | `ghcr.io/novaej/comprobify` |
 | Database | DigitalOcean Managed Database | Managed Postgres cluster, `public` + `sandbox` schemas — shared with `comprobify-web`, non-superuser app role required for RLS |
@@ -52,7 +53,7 @@ Provisioned by Terraform (`terraform/environments/staging`, using the shared `te
 |---|---|
 | Droplet name | `comprobify-staging` |
 | Region | `nyc1` (moved from `nyc3` to match `comprobify-web`'s App Platform app, which only runs in `nyc1`) |
-| Size | `s-1vcpu-512mb-10gb` |
+| Size | `s-1vcpu-1gb` (resized from `s-1vcpu-512mb-10gb` — the 512MB tier left too little headroom after the `api`/`worker` container `mem_limit`s, causing swapping/OOM under load. `resize_disk = false` means disk stayed at 10GB; only CPU/RAM grew) |
 | Base image | `ubuntu-24-04-x64` (plain distribution image, not a Marketplace image) |
 | Deploy user | `cpfydeploy9x` (unprivileged — docker group only, no sudo, no root SSH login) |
 | Firewall | 80/443 restricted to Cloudflare's published IPv4 ranges; 22 open to `0.0.0.0/0` (defense layered at the identity level instead — see `docs/terraform-digitalocean-setup.md`'s "SSH access model") |
@@ -79,8 +80,9 @@ Provisioned by Terraform (`terraform/environments/staging`, using the shared `te
 | `caddy` | `caddy:2-alpine` | (default) | 80, 443 → internet |
 | `api` | `ghcr.io/novaej/comprobify:${IMAGE_TAG}` | `node app.js` | 8080 → internal (`expose`, not `ports`) — reachable only from `caddy` |
 | `worker` | `ghcr.io/novaej/comprobify:${IMAGE_TAG}` | `node workers/worker.js` | none — outbound only (RabbitMQ, Postgres) |
+| `redis` | `redis:7-alpine` | `redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru --save ""` | 6379 → internal (`expose`) — reachable only from `api` |
 
-`api` and `worker` run the **same image**, built once per deploy from the repo's `Dockerfile` (`node:20-slim`, `libxml2-utils` installed at build time for `xmllint`), differing only in the container `command`.
+`api` and `worker` run the **same image**, built once per deploy from the repo's `Dockerfile` (`node:20-slim`, `libxml2-utils` installed at build time for `xmllint`), differing only in the container `command`. `api` declares `depends_on: [redis]` so Compose starts Redis first; `worker` never connects to it. Both `api` and `worker` also set a `hostname` (`comprobify-api-${APP_ENV}` / `comprobify-worker-${APP_ENV}`) read by `logger.service.js`'s `os.hostname()` call, so log lines are distinguishable across environments once more than staging exists.
 
 Caddy config (`deploy/caddy/Caddyfile` — a directory mount, not a single-file mount, so a redeployed file is actually visible to the running container; see the comment on `caddy`'s `volumes` in `docker-compose.yml`):
 
@@ -328,7 +330,7 @@ Docker, fail2ban, unattended-upgrades, and cron are installed on the droplet its
 
 ```
 curl -s https://api-staging.comprobify.com/health
-# → {"status":"ok","uptime":...,"version":"0.10.1"}
+# → {"status":"ok","uptime":...,"version":"0.14.1"}
 
 curl -s https://api-staging.comprobify.com/v1/admin/tenants \
   -H "Authorization: Bearer $ADMIN_SECRET"
@@ -344,4 +346,4 @@ curl -s https://api-staging.comprobify.com/v1/admin/tenants \
 
 ---
 
-Current deployed version: 0.10.1 (`package.json`, also surfaced at `GET /health`'s `version` field). See `docs/deployment.md` for the full branching strategy and release process, and `docs/terraform-digitalocean-setup.md` for infrastructure day-2 operations (resize, destroy/recreate, SSH key rotation).
+Current deployed version: 0.14.1 (`package.json`, also surfaced at `GET /health`'s `version` field). See `docs/deployment.md` for the full branching strategy and release process, and `docs/terraform-digitalocean-setup.md` for infrastructure day-2 operations (resize, destroy/recreate, SSH key rotation).

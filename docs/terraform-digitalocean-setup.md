@@ -225,7 +225,11 @@ resource "digitalocean_ssh_key" "infra" {
 resource "digitalocean_droplet" "this" {
   name      = "comprobify-${var.environment}"
   region    = var.region             # e.g. "nyc1" (staging's actual value — moved here from nyc3 to match comprobify-web's App Platform app, which only runs in nyc1)
-  size      = var.droplet_size       # e.g. "s-1vcpu-512mb-10gb" — the $4/mo tier, staging
+  size      = var.droplet_size       # e.g. "s-1vcpu-1gb" — staging's actual value, resized up from the
+                                      # original "s-1vcpu-512mb-10gb" $4/mo tier (#140) after the 512MB
+                                      # tier left too little headroom past the api/worker mem_limits and
+                                      # started swapping/OOMing under load. resize_disk stays false (see
+                                      # below), so disk stayed at 10GB — only CPU/RAM grew, to the ~$6/mo tier.
   image     = var.image_slug         # plain base OS image — see note below
   ssh_keys  = [digitalocean_ssh_key.infra.id]
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
@@ -455,26 +459,45 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # Directory mount, not a single-file mount: a single-file bind mount pins to
+    # that file's inode at container-start time, so a deploy that replaces the
+    # host file via unlink+recreate (not truncate-in-place) leaves the running
+    # container reading the old, now-unlinked inode forever - invisible to
+    # `caddy reload`, fixable only by recreating the container. A directory mount
+    # reflects the current file on every read.
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy:/etc/caddy
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - api
 
   api:
-    image: ghcr.io/<org>/comprobify:${IMAGE_TAG:-latest}
+    image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
+    # Read by src/services/logger.service.js's os.hostname() - every log line
+    # carries this so staging/production/local are distinguishable once they
+    # all ship to the same Betterstack source.
+    hostname: comprobify-api-${APP_ENV:-local}
+    environment:
+      # Staging's cluster also hosts comprobify-web's database - this value
+      # leaves headroom for that consumer too, not just this process.
+      - DB_POOL_MAX=6
     command: node app.js
     expose:
       - "8080"
     mem_limit: 300m
+    depends_on:
+      - redis
 
   worker:
-    image: ghcr.io/<org>/comprobify:${IMAGE_TAG:-latest}
+    image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
     restart: unless-stopped
     env_file: .env
+    hostname: comprobify-worker-${APP_ENV:-local}
+    environment:
+      - DB_POOL_MAX=3
     command: node workers/worker.js
     mem_limit: 150m
 
@@ -491,7 +514,7 @@ volumes:
   caddy_config:
 ```
 
-`api` and `worker` run the **same image** — one Dockerfile, one build, one push to GHCR — started with different `command:` values. `expose` (not `ports`) on `api` means it's reachable from `caddy` over the Compose network but never bound to the host directly — only Caddy holds 80/443. `worker` has no `ports`/`expose` at all — it makes outbound connections to RabbitMQ/Postgres and needs nothing inbound. `redis` backs the rate limiters' shared store (`src/services/redis.service.js`, `src/middleware/rate-limit.js`) — only `api` connects to it (`worker` never rate-limits); no persistence (`--save ""`) since rate-limit counters are disposable short-window state, and a hard `--maxmemory` cap since this is a $4/mo 512MB–1GB tier already budgeted for `api`+`worker`.
+`api` and `worker` run the **same image** — one Dockerfile, one build, one push to GHCR — started with different `command:` values. `expose` (not `ports`) on `api` means it's reachable from `caddy` over the Compose network but never bound to the host directly — only Caddy holds 80/443. `worker` has no `ports`/`expose` at all — it makes outbound connections to RabbitMQ/Postgres and needs nothing inbound. `redis` backs the rate limiters' shared store (`src/services/redis.service.js`, `src/middleware/rate-limit.js`) and `attempt-tracker.service.js`'s repeated-attempt detection — only `api` connects to it (`worker` never rate-limits); no persistence (`--save ""`) since rate-limit counters are disposable short-window state, and a hard `--maxmemory` cap since this is a $6/mo 1GB tier already budgeted for `api`+`worker` (resized from the original $4/mo 512MB tier — see the droplet module section below).
 
 ```
 # deploy/caddy/Caddyfile
@@ -627,6 +650,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             OPERATOR_EMAIL=${{ vars.OPERATOR_EMAIL }}
             OPERATOR_ADDRESS=${{ vars.OPERATOR_ADDRESS }}
             RABBITMQ_URL=${{ secrets.RABBITMQ_URL }}
+            REDIS_URL=redis://redis:6379
             EOF
             chmod 600 /opt/comprobify/.env
             cd /opt/comprobify
@@ -729,8 +753,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
@@ -749,8 +773,8 @@ jobs:
     environment: staging-infra
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.7.5
       - run: terraform -chdir=terraform/environments/staging init
