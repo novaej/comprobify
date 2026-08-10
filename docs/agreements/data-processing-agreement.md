@@ -15,6 +15,8 @@ El Encargado procesa, por instrucción documentada del Responsable, los datos pe
 - **Interesados:** compradores/clientes finales del Responsable.
 - **Categorías de datos:** RUC/cédula, nombre o razón social, dirección, correo electrónico, teléfono, y demás datos del comprador incluidos en el comprobante, entre otros datos exigidos por el esquema de comprobantes electrónicos del SRI según el tipo de documento.
 
+Estas categorías incluyen, cuando el Responsable los utiliza, los denominados "Campos Adicionales" (a nivel de comprobante) y "Detalles Adicionales" (a nivel de cada ítem), previstos por el esquema del SRI como campos de texto libre — su contenido es determinado libremente por el Responsable.
+
 El Encargado no trata ninguna otra categoría de datos de los interesados, ni los utiliza para fines distintos a los instruidos por el Responsable.
 
 **Catálogo de compradores (solo interfaz web).** Cuando el Responsable utiliza la interfaz web del Servicio (comprobify-web) para guardar perfiles de comprador con fines de reutilización en futuros comprobantes, el Encargado almacena las mismas categorías de datos indicadas arriba de forma independiente al comprobante. Esta funcionalidad no se activa si el Responsable utiliza el Servicio únicamente a través de la API — en ese caso, el Encargado no almacena datos de comprador fuera de los comprobantes ya emitidos.

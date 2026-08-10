@@ -21,6 +21,8 @@ Para los datos del propio Cliente (su cuenta, su correo, su certificado de firma
 | Dirección IP y user-agent del Cliente | Del Cliente | Evidencia de aceptación al aceptar los Términos de Servicio, la Política de Privacidad o el DPA (ver sección de Registros) |
 | Comprobante de pago (transferencia bancaria) | Del Cliente | Verificación manual de pagos de suscripción |
 
+Los datos contenidos en el comprobante incluyen, cuando el Cliente los utiliza, los denominados "Campos Adicionales" (a nivel de comprobante) y "Detalles Adicionales" (a nivel de cada ítem), previstos por el esquema del SRI como campos de texto libre — su contenido es determinado libremente por el Cliente y puede incluir información adicional a la exigida por la normativa del SRI.
+
 Cuando el Cliente utiliza el Servicio exclusivamente a través de la API, no recopilamos datos de comprador más allá de los exigidos por la normativa aplicable del SRI para el tipo de comprobante electrónico, la cual puede ser actualizada por el Servicio de Rentas Internas (SRI) o la autoridad tributaria competente.
 
 **Datos adicionales si el Cliente utiliza la interfaz web (comprobify-web).** Cuando el Cliente utiliza la interfaz web del Servicio, Comprobify además almacena el nombre, correo electrónico, contraseña (almacenada como hash, nunca en texto plano) y rol de cada usuario que el Cliente invita a acceder a la cuenta, con el fin de gestionar el acceso y los permisos dentro de la interfaz. Comprobify también puede almacenar otros datos que el Cliente decida ingresar para facilitar su uso del Servicio — por ejemplo, catálogos de compradores (con fines de reutilización en futuros comprobantes) y catálogos de productos o servicios propios del Cliente —, así como otra información funcionalmente similar que se incorpore conforme evolucione el Servicio. Esta funcionalidad no se activa si el Cliente utiliza el Servicio únicamente a través de la API; en ese caso, Comprobify no almacena datos de comprador ni de usuarios individuales más allá de los indicados en la tabla anterior.
@@ -68,6 +70,8 @@ Esta lista de proveedores puede actualizarse conforme evolucione la infraestruct
 Comprobify mantiene un registro de auditoría de los eventos relevantes del ciclo de vida de cada comprobante y de la cuenta del Cliente (creación, envío, autorización, cambios de estado, entre otros), con la finalidad de garantizar la seguridad del Servicio, diagnosticar errores y mantener la trazabilidad de las operaciones.
 
 La dirección IP y el user-agent del Cliente se registran al momento de aceptar los Términos de Servicio, la Política de Privacidad o el DPA, como evidencia de dicha aceptación. Adicionalmente, con fines de seguridad y diagnóstico operativo, la dirección IP de cada solicitud individual a la API se incluye en los registros técnicos del Servicio, los cuales se conservan durante un período máximo de tres (3) días, transcurrido el cual se eliminan de forma automática.
+
+Comprobify también utiliza contadores temporales en memoria (Redis), indexados por dirección IP o por identificador de solicitud, con fines de limitación de tasa (rate limiting) y detección de intentos repetidos de acceso no autorizado. Estos contadores se eliminan automáticamente en cuestión de minutos y no constituyen un registro histórico.
 
 ## 7. Cookies y tecnologías similares
 
