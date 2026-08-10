@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Per-item additional details (`items[].additionalDetails`) on `POST /v1/documents`.** Up to 3 free-form `name`/`value` pairs (≤300 chars each) per line item, matching SRI's `detallesAdicionales`/`detAdicional` schema element — a per-item sibling to the existing document-level Campos Adicionales. Written into the signed XML by both `invoice.builder.js` and `credit-note.builder.js` (in the correct schema position, between `precioTotalSinImpuesto` and `impuestos`; validated against SRI's actual XSDs) and persisted to the new `document_line_items.additional_details` column (migration 087, both schemas) as an audit/query record. `ride.service.js` renders it from the authorized XML, so the RIDE's existing "Detalle Adicional" column now shows real data.
+
+### Fixed
+- **RIDE PDFs are now built from the authorized/signed XML, never from `request_payload` or live `issuers`/`config` joins.** Previously an already-`AUTHORIZED` document's RIDE could silently drift from what SRI actually authorized whenever an issuer was edited afterward, or whenever a builder fix changed how a field (e.g. Campos Adicionales) is constructed — the fix would retroactively change old documents' printed RIDE even though their frozen XML never changed. `ride.service.js` now parses `document.authorization_xml || document.signed_xml` (same source `GET /:key/xml` serves) via `fast-xml-parser` and sources every content field from it. New `RIDE_XML_UNAVAILABLE` error code for the (should-never-happen) case where an `AUTHORIZED` document has neither XML stored.
+- **`document_line_items.line_total` (and its underlying tax total) has been `NaN` for every line item ever inserted.** `document-line-item.model.js` computed the per-item tax amount from `t.value`, a field that has never existed on a request-body tax object — only `code`/`rateCode`/`rate` do. `parseFloat(undefined)` silently returns `NaN`, which propagates through `.toFixed(2)` into the literal string `"NaN"`, a value Postgres's `DECIMAL` type accepts without error. Now derived the same way the XML builders derive it (`subtotal * rate / 100`). This table is not currently read back by the application, so no other output was affected.
+
 ## [0.15.0] — 2026-08-10
 
 ### Added

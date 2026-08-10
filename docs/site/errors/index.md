@@ -193,4 +193,5 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | Código | Cuándo ocurre |
 |---|---|
 | `SRI_SUBMISSION_FAILED` | El servicio SOAP del SRI devolvió un error o un estado HTTP inesperado — ya no se expone a través de ninguna respuesta HTTP (ver [Errores del SRI](#errores-del-sri) arriba); ahora se registra como un evento de comprobante `ERROR` |
+| `RIDE_XML_UNAVAILABLE` | Un comprobante `AUTHORIZED` no tiene `authorization_xml` ni `signed_xml` almacenado — no se puede generar el RIDE (caso que no debería ocurrir en la práctica) |
 | `INTERNAL_ERROR` | Error inesperado del servidor |

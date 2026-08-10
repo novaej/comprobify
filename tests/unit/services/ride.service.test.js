@@ -47,6 +47,10 @@ function buildInvoiceXml({
       <precioUnitario>${it.unitPrice}</precioUnitario>
       <descuento>${it.discount}</descuento>
       <precioTotalSinImpuesto>${it.unitPrice}</precioTotalSinImpuesto>
+      ${it.additionalDetails?.length ? `
+      <detallesAdicionales>${it.additionalDetails.map((d) =>
+        `<detAdicional nombre="${d.name}" valor="${d.value}"/>`).join('')}
+      </detallesAdicionales>` : ''}
       <impuestos>${it.taxes.map((t) => `
         <impuesto>
           <codigo>${t.code}</codigo>
@@ -370,6 +374,32 @@ describe('RideService', () => {
       expect(catalogModel.getTaxRateDescription).toHaveBeenCalledWith('2', '0');
       const [rideData] = rideBuilder.build.mock.calls[0];
       expect(rideData.taxDescriptions).toEqual({ '2|4': 'IVA 15%', '2|0': 'IVA 15%' });
+    });
+
+    test('maps each item\'s detAdicional entries into a { name: value } map, defaulting to {} when absent', async () => {
+      issuerModel.findById.mockResolvedValue(baseIssuer);
+      const document = {
+        ...baseDocument,
+        authorization_xml: buildInvoiceXml({
+          items: [
+            {
+              mainCode: '001', description: 'A', quantity: '1', unitPrice: '10.00', discount: '0.00',
+              taxes: [{ code: '2', rateCode: '0', rate: '0' }],
+              additionalDetails: [{ name: 'Color', value: 'Rojo' }, { name: 'Talla', value: 'M' }],
+            },
+            {
+              mainCode: '002', description: 'B', quantity: '1', unitPrice: '10.00', discount: '0.00',
+              taxes: [{ code: '2', rateCode: '0', rate: '0' }],
+            },
+          ],
+        }),
+      };
+
+      await rideService.generate(document);
+
+      const [rideData] = rideBuilder.build.mock.calls[0];
+      expect(rideData.items[0].detallesAdicionales).toEqual({ Color: 'Rojo', Talla: 'M' });
+      expect(rideData.items[1].detallesAdicionales).toEqual({});
     });
 
     test('additionalInfo reflects exactly the campoAdicional entries baked into the authorized XML, regardless of live config', async () => {

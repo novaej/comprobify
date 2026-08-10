@@ -125,6 +125,33 @@ describe('CreditNoteBuilder', () => {
     expect(xml).not.toContain('nombre="email"');
   });
 
+  test('detAdicional entries are included in element order between precioTotalSinImpuesto and impuestos', () => {
+    const bodyWithDetails = {
+      ...validBody,
+      items: [{
+        ...validBody.items[0],
+        additionalDetails: [{ name: 'Color', value: 'Rojo' }],
+      }],
+    };
+
+    const builder = new CreditNoteBuilder(mockIssuer);
+    const xml = builder.build(bodyWithDetails, '1'.repeat(49), 27);
+
+    expect(xml).toContain('nombre="Color" valor="Rojo"');
+    const precioIdx = xml.indexOf('<precioTotalSinImpuesto>');
+    const detallesIdx = xml.indexOf('<detallesAdicionales>');
+    const impuestosIdx = xml.indexOf('<impuestos>');
+    expect(precioIdx).toBeLessThan(detallesIdx);
+    expect(detallesIdx).toBeLessThan(impuestosIdx);
+  });
+
+  test('omits detallesAdicionales entirely when no additionalDetails are provided', () => {
+    const builder = new CreditNoteBuilder(mockIssuer);
+    const xml = builder.build(validBody, '1'.repeat(49), 27);
+
+    expect(xml).not.toContain('<detallesAdicionales>');
+  });
+
   test('handles multiple items', () => {
     const multiItemBody = {
       ...validBody,

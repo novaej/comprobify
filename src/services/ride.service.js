@@ -9,7 +9,7 @@ const DocumentStatus = require('../constants/document-status');
 const ErrorCodes = require('../constants/error-codes');
 
 // Repeating SRI elements that must always parse as arrays, even with a single occurrence.
-const REPEATING_ELEMENTS = new Set(['detalle', 'campoAdicional', 'totalImpuesto', 'pago', 'impuesto']);
+const REPEATING_ELEMENTS = new Set(['detalle', 'campoAdicional', 'totalImpuesto', 'pago', 'impuesto', 'detAdicional']);
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -34,6 +34,15 @@ function parseTaxes(impuestos) {
   return entries.map((tax) => ({ code: tax.codigo, rateCode: tax.codigoPorcentaje, rate: tax.tarifa }));
 }
 
+// ride-builder.js's "Detalle Adicional" item column expects a plain { name: value } map.
+function parseItemAdditionalDetails(detallesAdicionales) {
+  const entries = detallesAdicionales?.detAdicional || [];
+  return entries.reduce((acc, d) => {
+    acc[d['@_nombre']] = d['@_valor'];
+    return acc;
+  }, {});
+}
+
 function parseItems(detalles, mainCodeTag, auxCodeTag) {
   const entries = detalles?.detalle || [];
   return entries.map((item) => ({
@@ -44,6 +53,7 @@ function parseItems(detalles, mainCodeTag, auxCodeTag) {
     unitPrice: item.precioUnitario,
     discount: item.descuento,
     taxes: parseTaxes(item.impuestos),
+    detallesAdicionales: parseItemAdditionalDetails(item.detallesAdicionales),
   }));
 }
 
