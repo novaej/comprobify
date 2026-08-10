@@ -111,6 +111,34 @@ describe('InvoiceBuilder', () => {
     expect(xml).toContain('<codigoPrincipal>002</codigoPrincipal>');
   });
 
+  test('detAdicional entries are included in element order between precioTotalSinImpuesto and impuestos', () => {
+    const bodyWithDetails = {
+      ...validBody,
+      items: [{
+        ...validBody.items[0],
+        additionalDetails: [{ name: 'Color', value: 'Rojo' }, { name: 'Talla', value: 'M' }],
+      }],
+    };
+
+    const builder = new InvoiceBuilder(mockIssuer);
+    const xml = builder.build(bodyWithDetails, '1'.repeat(49), 263);
+
+    expect(xml).toContain('nombre="Color" valor="Rojo"');
+    expect(xml).toContain('nombre="Talla" valor="M"');
+    const precioIdx = xml.indexOf('<precioTotalSinImpuesto>');
+    const detallesIdx = xml.indexOf('<detallesAdicionales>');
+    const impuestosIdx = xml.indexOf('<impuestos>');
+    expect(precioIdx).toBeLessThan(detallesIdx);
+    expect(detallesIdx).toBeLessThan(impuestosIdx);
+  });
+
+  test('omits detallesAdicionales entirely when no additionalDetails are provided', () => {
+    const builder = new InvoiceBuilder(mockIssuer);
+    const xml = builder.build(validBody, '1'.repeat(49), 263);
+
+    expect(xml).not.toContain('<detallesAdicionales>');
+  });
+
   test('handles multiple payments', () => {
     const multiPayBody = {
       ...validBody,

@@ -82,6 +82,13 @@ class InvoiceBuilder extends BaseDocumentBuilder {
           precioUnitario: item.unitPrice,
           descuento: item.discount || '0.00',
           precioTotalSinImpuesto: itemTotal.toFixed(2),
+          ...(item.additionalDetails?.length && {
+            detallesAdicionales: {
+              detAdicional: item.additionalDetails.map((d) => ({
+                '@': { nombre: d.name, valor: d.value },
+              })),
+            },
+          }),
           impuestos: {
             impuesto: item.taxes.map((tax) => {
               const taxValue = itemTotal * (parseFloat(tax.rate) / 100);

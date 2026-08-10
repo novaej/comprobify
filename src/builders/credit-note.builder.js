@@ -60,8 +60,8 @@ class CreditNoteBuilder extends BaseDocumentBuilder {
     return this;
   }
 
-  // Element names (codigoInterno/codigoAdicional) follow the SRI ficha técnica for
-  // notaCredito — confirm against assets/notaCredito_V1.1.0.xsd once available.
+  // Element names (codigoInterno/codigoAdicional) and order match assets/nota_credito_V1.1.0.xsd,
+  // validated via xml-validator.service.js before signing.
   buildDetalles(items) {
     this.data.detalles = {
       detalle: items.map((item) => {
@@ -74,6 +74,13 @@ class CreditNoteBuilder extends BaseDocumentBuilder {
           precioUnitario: item.unitPrice,
           descuento: item.discount || '0.00',
           precioTotalSinImpuesto: itemTotal.toFixed(2),
+          ...(item.additionalDetails?.length && {
+            detallesAdicionales: {
+              detAdicional: item.additionalDetails.map((d) => ({
+                '@': { nombre: d.name, valor: d.value },
+              })),
+            },
+          }),
           impuestos: {
             impuesto: item.taxes.map((tax) => {
               const taxValue = itemTotal * (parseFloat(tax.rate) / 100);

@@ -74,6 +74,19 @@ const createInvoice = [
     .isNumeric()
     .withMessage('Item discount must be numeric'),
 
+  body('items.*.additionalDetails')
+    .optional()
+    .isArray({ max: 3 })
+    .withMessage('An item may have at most 3 additionalDetails entries'),
+  body('items.*.additionalDetails.*.name')
+    .notEmpty()
+    .isLength({ max: 300 })
+    .withMessage('additionalDetails name is required and must be at most 300 characters'),
+  body('items.*.additionalDetails.*.value')
+    .notEmpty()
+    .isLength({ max: 300 })
+    .withMessage('additionalDetails value is required and must be at most 300 characters'),
+
   body('items.*.taxes')
     .isArray({ min: 1 })
     .withMessage('At least one tax per item is required'),
