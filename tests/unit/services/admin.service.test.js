@@ -317,7 +317,10 @@ describe('AdminService', () => {
         privateKeyPem: 'pk-pem', certPem: 'cert-pem', certFingerprint: 'abc123', certExpiry,
       });
       cryptoService.encrypt.mockReturnValue('encrypted-pk-value');
-      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', branch_code: '001', issue_point_code: '001' });
+      issuerModel.create.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', branch_code: '001', issue_point_code: '001',
+        cert_fingerprint: 'abc123', cert_expiry: certExpiry,
+      });
 
       await adminService.createIssuer({ ...baseFields, requiredAccounting: true }, p12Buffer, 'pw');
 
@@ -328,6 +331,9 @@ describe('AdminService', () => {
         encryptedPrivateKey: 'encrypted-pk-value', certificatePem: 'cert-pem',
         certFingerprint: 'abc123', certExpiry, requiredAccounting: 'SI',
       }));
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'CERTIFICATE_UPLOADED', {
+        issuerId: '00000000-0000-0000-0000-000000000010', certFingerprint: 'abc123', certExpiry,
+      });
     });
 
     test('maps a falsy requiredAccounting to "NO"', async () => {
@@ -380,6 +386,7 @@ describe('AdminService', () => {
       expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
         encryptedPrivateKey: 'src-enc', certificatePem: 'src-cert', certFingerprint: 'src-fp', certExpiry,
       }));
+      expect(tenantEventModel.create).not.toHaveBeenCalledWith(expect.anything(), 'CERTIFICATE_UPLOADED', expect.anything());
     });
 
     test('translates a unique-constraint violation on issuer creation into a ConflictError', async () => {
@@ -722,6 +729,9 @@ describe('AdminService', () => {
       expect(cryptoService.encrypt).toHaveBeenCalledWith('new-pk');
       expect(issuerModel.updateCertificate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000005', {
         encryptedPrivateKey: 'new-encrypted-pk', certificatePem: 'new-cert', certFingerprint: 'new-fp', certExpiry,
+      });
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000005', 'CERTIFICATE_RENEWED', {
+        issuerId: '00000000-0000-0000-0000-000000000001', certFingerprint: 'new-fp', certExpiry,
       });
       expect(result).toEqual({ certFingerprint: 'new-fp', certExpiry });
     });

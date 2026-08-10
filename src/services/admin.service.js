@@ -237,6 +237,14 @@ async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
     throw err;
   }
 
+  if (p12Buffer) {
+    await tenantEventModel.create(tenant.id, 'CERTIFICATE_UPLOADED', {
+      issuerId: newIssuer.id,
+      certFingerprint: newIssuer.cert_fingerprint,
+      certExpiry: newIssuer.cert_expiry,
+    });
+  }
+
   const documentTypes = Array.isArray(fields.documentTypes) && fields.documentTypes.length > 0
     ? [...new Set(fields.documentTypes)]
     : ['01'];
@@ -367,6 +375,11 @@ async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
     certificatePem: parsed.certPem,
     certFingerprint: parsed.certFingerprint,
     certExpiry: parsed.certExpiry,
+  });
+  await tenantEventModel.create(issuer.tenant_id, 'CERTIFICATE_RENEWED', {
+    issuerId: issuer.id,
+    certFingerprint: updated.cert_fingerprint,
+    certExpiry: updated.cert_expiry,
   });
   return { certFingerprint: updated.cert_fingerprint, certExpiry: updated.cert_expiry };
 }

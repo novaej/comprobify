@@ -180,6 +180,11 @@ describe('RegistrationService', () => {
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'TENANT_AGREEMENT_GENERATE', '00000000-0000-0000-0000-000000000002', { tenantId: '00000000-0000-0000-0000-000000000002' }
       );
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 'CERTIFICATE_UPLOADED', {
+        issuerId: '00000000-0000-0000-0000-000000000020',
+        certFingerprint: 'AA:BB:CC',
+        certExpiry: createdIssuer.cert_expiry,
+      });
       expect(issuerDocumentTypeModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', ['01']);
       expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', baseFields.branchCode, baseFields.issuePointCode, '01', 1, true);
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({

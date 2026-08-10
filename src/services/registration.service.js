@@ -124,6 +124,12 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
     throw err;
   }
 
+  await tenantEventModel.create(tenant.id, 'CERTIFICATE_UPLOADED', {
+    issuerId: issuer.id,
+    certFingerprint: issuer.cert_fingerprint,
+    certExpiry: issuer.cert_expiry,
+  });
+
   // Generate per-tenant legal document instances (PENDING) after the issuer
   // exists so we can substitute {{cliente.razonSocial}} etc. into the DPA.
   // Durably enqueued (see ADR-022) — registration still succeeds if
