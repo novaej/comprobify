@@ -64,6 +64,8 @@ const ErrorCodes = Object.freeze({
   INVALID_STATE_TRANSITION: 'INVALID_STATE_TRANSITION',
   /** Operation requires document status to be AUTHORIZED */
   DOCUMENT_NOT_AUTHORIZED: 'DOCUMENT_NOT_AUTHORIZED',
+  /** AUTHORIZED document has neither authorization_xml nor signed_xml stored — RIDE cannot be built */
+  RIDE_XML_UNAVAILABLE: 'RIDE_XML_UNAVAILABLE',
 
   // --- API keys ---
   /** The key used to authenticate this request cannot revoke itself */
