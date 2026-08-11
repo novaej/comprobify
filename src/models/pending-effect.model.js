@@ -145,7 +145,9 @@ async function claimForProcessing(client, id) {
 }
 
 async function markDone(client, id) {
-  await client.query(`UPDATE pending_effects SET status = 'DONE', processed_at = NOW() WHERE id = $1`, [id]);
+  // clock_timestamp(), not NOW() — NOW() is fixed to transaction start, which
+  // predates the handler's own run time inside this same transaction.
+  await client.query(`UPDATE pending_effects SET status = 'DONE', processed_at = clock_timestamp() WHERE id = $1`, [id]);
 }
 
 /**

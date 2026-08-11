@@ -74,10 +74,10 @@ describe('WebhookDeliveryService', () => {
       webhookDeliveryModel.findByNotificationId.mockResolvedValue([]);
     });
 
-    test('does nothing when the endpoint query fails (swallows the error)', async () => {
+    test('propagates the error when the endpoint query fails, so the effect retries', async () => {
       webhookEndpointModel.findSubscribedByTenantIdAndType.mockRejectedValue(new Error('DB down'));
 
-      await expect(webhookDeliveryService.fanOut(notification)).resolves.toBeUndefined();
+      await expect(webhookDeliveryService.fanOut(notification)).rejects.toThrow('DB down');
 
       expect(webhookDeliveryModel.create).not.toHaveBeenCalled();
     });
@@ -207,17 +207,15 @@ describe('WebhookDeliveryService', () => {
       expect(webhookDeliveryModel.create).toHaveBeenCalledWith(expect.objectContaining({ webhookId: '00000000-0000-0000-0000-000000000008' }));
     });
 
-    test('dedup guard: falls back to delivering to everyone if the existing-deliveries lookup itself fails', async () => {
+    test('dedup guard: propagates the error if the existing-deliveries lookup itself fails, so the effect retries', async () => {
       webhookEndpointModel.findSubscribedByTenantIdAndType.mockResolvedValue([
         { id: '00000000-0000-0000-0000-000000000007', url: 'https://example.com/hook-a', secret: 'sekret-a' },
       ]);
       webhookDeliveryModel.findByNotificationId.mockRejectedValue(new Error('DB down'));
-      webhookDeliveryModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000055', attempt_count: 0 });
-      global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, text: () => Promise.resolve('ok') });
 
-      await webhookDeliveryService.fanOut(notification);
+      await expect(webhookDeliveryService.fanOut(notification)).rejects.toThrow('DB down');
 
-      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(webhookDeliveryModel.create).not.toHaveBeenCalled();
     });
 
     test('skips an endpoint whose delivery row creation fails, but continues to the next one', async () => {
