@@ -192,4 +192,24 @@ describe('Invoice Validator', () => {
     expect(result.isEmpty()).toBe(false);
     expect(result.array().some(e => e.path === 'payments[0].termUnit')).toBe(true);
   });
+
+  test('accepts item with valid additionalDetails', async () => {
+    const items = [{ ...validBody.items[0], additionalDetails: [{ name: 'Color', value: 'Rojo' }] }];
+    const result = await runValidation({ ...validBody, items });
+    expect(result.isEmpty()).toBe(true);
+  });
+
+  test('rejects additionalDetails value containing a line break', async () => {
+    const items = [{ ...validBody.items[0], additionalDetails: [{ name: 'Nota', value: 'Linea1\nLinea2' }] }];
+    const result = await runValidation({ ...validBody, items });
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'items[0].additionalDetails[0].value')).toBe(true);
+  });
+
+  test('rejects additionalDetails name containing a tab', async () => {
+    const items = [{ ...validBody.items[0], additionalDetails: [{ name: 'Serie\tLote', value: 'X' }] }];
+    const result = await runValidation({ ...validBody, items });
+    expect(result.isEmpty()).toBe(false);
+    expect(result.array().some(e => e.path === 'items[0].additionalDetails[0].name')).toBe(true);
+  });
 });
