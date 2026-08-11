@@ -118,25 +118,16 @@ function buildPayload(notification, deliveryId) {
 /**
  * Fan out a notification to all active, subscribed webhook endpoints.
  *
- * Called fire-and-forget after every notification create/update. Creates a
- * delivery row per endpoint, then attempts delivery immediately and records
- * the result. Failed attempts are left as RETRYING for the admin job to pick up.
- *
- * Never throws — all failures are swallowed and logged.
+ * Called from the WEBHOOK_FANOUT effect handler — endpoint/dedup lookup
+ * failures propagate so the effect retries instead of falsely completing.
  *
  * @param {object} notification  - Raw DB row from notifications table
  */
 async function fanOut(notification) {
-  let endpoints;
-  try {
-    endpoints = await webhookEndpointModel.findSubscribedByTenantIdAndType(
-      notification.tenant_id,
-      notification.type
-    );
-  } catch (err) {
-    console.warn('[webhook] Failed to query endpoints for fan-out:', err.message);
-    return;
-  }
+  const endpoints = await webhookEndpointModel.findSubscribedByTenantIdAndType(
+    notification.tenant_id,
+    notification.type
+  );
 
   if (!endpoints.length) return;
 
@@ -145,14 +136,8 @@ async function fanOut(notification) {
   // (e.g. a worker crash between fanOut() sending and the effect being
   // marked DONE). Skip any endpoint that already has a delivery row for
   // this notification so a retry never double-sends.
-  let alreadyDeliveredEndpointIds;
-  try {
-    const existing = await webhookDeliveryModel.findByNotificationId(notification.id);
-    alreadyDeliveredEndpointIds = new Set(existing.map(row => row.webhook_id));
-  } catch (err) {
-    console.warn('[webhook] Failed to check existing deliveries for dedup:', err.message);
-    alreadyDeliveredEndpointIds = new Set();
-  }
+  const existing = await webhookDeliveryModel.findByNotificationId(notification.id);
+  const alreadyDeliveredEndpointIds = new Set(existing.map(row => row.webhook_id));
 
   for (const endpoint of endpoints) {
     if (alreadyDeliveredEndpointIds.has(endpoint.id)) continue;
