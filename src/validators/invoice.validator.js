@@ -81,11 +81,17 @@ const createInvoice = [
   body('items.*.additionalDetails.*.name')
     .notEmpty()
     .isLength({ max: 300 })
-    .withMessage('additionalDetails name is required and must be at most 300 characters'),
+    .withMessage('additionalDetails name is required and must be at most 300 characters')
+    .bail()
+    .matches(/^[^\t\r\n]*$/)
+    .withMessage('additionalDetails name cannot contain tabs or line breaks'),
   body('items.*.additionalDetails.*.value')
     .notEmpty()
     .isLength({ max: 300 })
-    .withMessage('additionalDetails value is required and must be at most 300 characters'),
+    .withMessage('additionalDetails value is required and must be at most 300 characters')
+    .bail()
+    .matches(/^[^\t\r\n]*$/)
+    .withMessage('additionalDetails value cannot contain tabs or line breaks'),
 
   body('items.*.taxes')
     .isArray({ min: 1 })

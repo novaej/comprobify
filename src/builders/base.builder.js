@@ -61,6 +61,13 @@ class BaseDocumentBuilder {
     return js2xmlparser.parse(rootElement, doc, {
       declaration: { encoding: 'UTF-8' },
       format: { doubleQuotes: true },
+      // signer.js hashes the raw serialized string instead of running real XML
+      // C14N (see its own doc comment) — but C14N always expands a self-closing
+      // empty element (<foo/>) to the open/close form (<foo></foo>) when SRI
+      // recomputes the digest to verify. Left at js2xmlparser's default, any
+      // attribute-only element (e.g. detAdicional) is signed in one tag form
+      // but verified against the other, so the signature never matches.
+      useSelfClosingTagIfEmpty: false,
     });
   }
 }
