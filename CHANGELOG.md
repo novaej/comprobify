@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.2] — 2026-08-12
+
+### Fixed
+- **`INVOICE_AUTHORIZED_EMAIL` `pending_effects` rows never recorded `document_id`, unlike `SRI_SEND`/`SRI_AUTHORIZE`.** It's the only document-scoped effect that left the column null, making it unfindable by `document_id` without parsing the JSONB payload. Now stamped like the other two.
+
+### Docs
+- **Added a deploy-checklist step for publishing `notification_email_templates`.** Publishing the `docs/email-templates/*.txt` source content into the DB is a manual admin API call per `(type, language)`, not automatic on migration/deploy — left undone, it silently breaks every email-capable notification type. Caught via a real staging incident where a tenant never received their payment-verified email.
+
 ## [0.16.1] — 2026-08-11
 
 ### Fixed
