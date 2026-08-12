@@ -32,10 +32,7 @@ function formatEffect(effect) {
   };
 }
 
-// Durable-enqueue + best-effort-dispatch, mirrored at every producer call
-// site in this file (see ADR-022 / pending-effect.service.js). documentId is
-// only meaningful for SRI_SEND/SRI_AUTHORIZE (see migration 082) — every
-// other caller in this file (INVOICE_AUTHORIZED_EMAIL) leaves it null.
+// Durable-enqueue + best-effort-dispatch — every caller here is document-scoped, so all pass documentId.
 async function queueEffect(effectType, tenantId, payload, dedupKey = null, documentId = null) {
   const effect = await pendingEffectService.enqueue(effectType, tenantId, payload, dedupKey, null, documentId);
   pendingEffectService.dispatch(effect);
@@ -216,7 +213,7 @@ async function checkAuthorization(accessKey, issuer) {
         accessKey: updated.access_key,
         issuerId: issuer.id,
         sandbox: issuer.sandbox,
-      });
+      }, null, updated.id);
     }
   }
 

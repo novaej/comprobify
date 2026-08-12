@@ -282,7 +282,7 @@ describe('DocumentTransmissionService', () => {
       const expectedPayload = {
         documentId: updatedDoc.id, accessKey: updatedDoc.access_key, issuerId: mockIssuer.id, sandbox: mockIssuer.sandbox,
       };
-      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('INVOICE_AUTHORIZED_EMAIL', mockIssuer.tenant_id, expectedPayload, null, null, null);
+      expect(pendingEffectService.enqueue).toHaveBeenCalledWith('INVOICE_AUTHORIZED_EMAIL', mockIssuer.tenant_id, expectedPayload, null, null, updatedDoc.id);
       expect(pendingEffectService.enqueue).toHaveBeenCalledTimes(1);
       expect(pendingEffectService.dispatch).toHaveBeenCalledTimes(1);
     });
