@@ -482,6 +482,22 @@ curl https://api.comprobify.com/v1/admin/tenants \
 ### 8. Pipeline smoke test
 - [ ] Push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) and confirm `Release to Staging` workflow runs and fast-forwards the `staging` branch, then `Deploy Staging` fires automatically
 
+### 9. Notification email templates
+`notification_email_templates` (migration 079, ADR-024 Phase C) is **not seeded automatically** by any migration — the source content in `docs/email-templates/*.txt` only reaches the DB once an admin explicitly publishes it via `POST /v1/admin/notification-email-templates`. A freshly migrated environment creates `notifications` rows and fans out webhooks fine, but every email-capable type silently fails at send time (`NOTIFICATION_DISPATCH` retries with `Notification email template not found`, eventually flips to `FAILED` after `PENDING_EFFECTS_MAX_ATTEMPTS`, default 5) until this step is done. This bit staging for real — see `project_notification_email_templates_unpublished` incident notes.
+- [ ] Publish all 6 email-capable types (`src/constants/notification-catalog.js`) × 2 languages — 12 calls, one per `(notificationType, language)`:
+  `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_PAST_DUE_WARNING`, `SUBSCRIPTION_EXPIRED`, `PRICE_CHANGE_ANNOUNCED`
+```bash
+for type in PAYMENT_VERIFIED PAYMENT_REJECTED SUBSCRIPTION_RENEWAL_DUE SUBSCRIPTION_PAST_DUE_WARNING SUBSCRIPTION_EXPIRED PRICE_CHANGE_ANNOUNCED; do
+  for lang in es en; do
+    curl -s -X POST https://api.comprobify.com/v1/admin/notification-email-templates \
+      -H "Authorization: Bearer YOUR_ADMIN_SECRET" -H "Content-Type: application/json" \
+      -d "{\"notificationType\":\"$type\",\"language\":\"$lang\",\"version\":\"v1\"}"
+  done
+done
+```
+- [ ] Verify with `GET /v1/admin/notification-email-templates` that all 12 rows are present and current
+- [ ] Repeat for every new environment, and again whenever a new email-capable `NotificationTypes` value is added (a new `.txt` source file alone does not make it live)
+
 ---
 
 ## System requirements
