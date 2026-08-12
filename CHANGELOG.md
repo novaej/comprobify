@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.1] — 2026-08-11
+
+### Fixed
+- **`WEBHOOK_FANOUT` effects could silently complete with zero deliveries attempted.** `webhookDeliveryService.fanOut()` caught its endpoint/dedup lookup DB errors internally and returned as if successful — a transient DB hiccup during either query marked the effect `DONE` with no HTTP call ever made and no retry, instead of surfacing as a failed attempt. Since `fanOut()` is now only reached via the `WEBHOOK_FANOUT` pending-effect handler (its old fire-and-forget call site is gone), these lookup failures now propagate so the effect's own retry/`attempt_count` machinery handles them like any other transient failure.
+- **`pending_effects.processed_at` under-reported completion time for any handler that ran for more than a moment inside its transaction.** `markDone()` stamped it with `NOW()`, which Postgres fixes to transaction-start time rather than the actual statement's execution time — for `INVOICE_AUTHORIZED_EMAIL` (RIDE PDF + email send), this showed the effect "done" almost immediately even when the real handler took several seconds. Switched to `clock_timestamp()`.
+
 ## [0.16.0] — 2026-08-10
 
 ### Removed
