@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.3] — 2026-08-16
+
+### Changed
+- **Infra SSH deploy keys are now per-environment (`comprobify_deploy_<env>`), not one generic shared key.** Mirrors the split already used for the Terraform Cloudflare tokens and `comprobify-web`'s own deploy keys — a leaked or rotated staging key can no longer be confused with or reused as production's once that environment exists. `docs/terraform-digitalocean-setup.md`'s "Rotating the SSH key" walkthrough is updated to match, and no longer needs the `_new`-suffix rename dance since each environment's key now has a permanent name.
+
 ## [0.16.2] — 2026-08-12
 
 ### Fixed
