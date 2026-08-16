@@ -69,12 +69,15 @@ Everything this setup touches, in one place — what each thing is and what it's
 |---|---|---|
 | DigitalOcean API token | DO dashboard → API → Generate New Token (read+write) | Terraform's `digitalocean` provider |
 | **Two** Cloudflare API tokens — `comprobify-terraform-staging` and `comprobify-terraform-production` | Cloudflare dashboard → My Profile → API Tokens → Create Token → Custom, scoped to the `comprobify.com` zone only, with `Zone:DNS:Edit` + `Zone:Zone:Read`. Keep this separate from any token used for other purposes (e.g. docs site deploys), and don't share one token across both environments — Cloudflare tokens scope permissions at the zone level, not per-record, so this isn't a hard technical wall between environments, but it does mean a leaked staging token can be revoked without touching production's. | Terraform's `cloudflare` provider, one per environment |
-| SSH key pair, dedicated to this infra | Generate one below — don't reuse a personal key | Access for the unprivileged deploy user cloud-init creates (see "SSH access model" below) — not root |
+| **Two** SSH key pairs, dedicated to this infra — one per environment, never shared | Generate below — don't reuse a personal key, and don't reuse staging's key for production | Access for the unprivileged deploy user cloud-init creates (see "SSH access model" below) — not root |
 | DO Spaces access key, scoped to the state bucket only | DO dashboard → API → Spaces Keys | Terraform remote state backend |
 
 ```bash
-ssh-keygen -t ed25519 -C "comprobify-deploy" -f ~/.ssh/comprobify_deploy
+ssh-keygen -t ed25519 -C "comprobify-deploy-staging" -f ~/.ssh/comprobify_deploy_staging
+ssh-keygen -t ed25519 -C "comprobify-deploy-production" -f ~/.ssh/comprobify_deploy_production
 ```
+
+Same per-environment split as the two Cloudflare tokens above, for the same reason: a compromised or leaked staging key should never confer any access to production. (Mirrors the naming convention already used for `comprobify-web`'s deploy keys, e.g. `comprobify_web_deploy_staging`.)
 
 ### Local tools (macOS)
 
@@ -442,7 +445,7 @@ Deliberately does **not** set up the app's `docker-compose.yml` or secrets — o
 
 **If you genuinely need root** (inspecting/editing system config, debugging something `docker`-group access can't reach) — DigitalOcean's browser-based Droplet Console (Droplet → Access → Launch Droplet Console) gives a real root shell through DO's own infrastructure, entirely independent of sshd and everything above. It was always the documented emergency fallback for lockout scenarios; it's now also the *normal* path for anything requiring true root, not just a last resort.
 
-**What this changes for you day to day:** personal SSH access is now `ssh -i ~/.ssh/comprobify_deploy cpfydeploy9x@<ip>`, not `root@<ip>` — `sudo` won't work from this account, so use the Console for anything that genuinely needs it. The CD workflow's `username:` fields changed to match.
+**What this changes for you day to day:** personal SSH access is now `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@<ip>` (swap in `comprobify_deploy_production` for that environment), not `root@<ip>` — `sudo` won't work from this account, so use the Console for anything that genuinely needs it. The CD workflow's `username:` fields changed to match.
 
 ---
 
@@ -698,7 +701,7 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 ## First-time setup, step by step
 
 1. Install prerequisites (above).
-2. Generate the SSH key pair; paste the public half's content (`cat` the `.pub` file) into `ssh_public_key` in `terraform.tfvars`.
+2. Generate that environment's SSH key pair (`comprobify_deploy_staging` / `comprobify_deploy_production` — never reuse one across environments, see Prerequisites above); paste the public half's content (`cat` the `.pub` file) into `ssh_public_key` in that environment's `terraform.tfvars`.
 3. Create the DO API token and Cloudflare API token (see Prerequisites table above for exact scopes).
 4. Create the DO Spaces bucket for state (one-time, dashboard or `doctl`; Standard storage, CDN off — see "Remote state" above) and generate a Spaces key pair scoped to just that bucket. DO shows the Access Key ID and Secret Access Key together, once — capture both before closing that screen, or you'll need to regenerate.
 5. In your own terminal (never paste real token/key values into a chat, commit, or anywhere outside your local shell/GitHub Secrets):
@@ -713,7 +716,7 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 6. `terraform init` — downloads providers, connects to the remote state backend. If this fails with a `403 InvalidClientTokenId` / "AWS account ID not previously found" error, see the `skip_requesting_account_id` note under "Remote state" above — that's a backend config issue, not a credentials problem.
 7. `terraform plan` — review what will be created. Nothing exists yet, so expect a full "create" plan for the droplet, firewall, SSH key, DNS record, and Project. **Read this output before typing yes** — it's the one moment you see exactly what's about to happen.
 8. `terraform apply`, confirm with `yes`. Takes roughly a minute; droplet boots, cloud-init hardens it.
-9. Verify: `terraform output` shows both `droplet_ip` (ephemeral) and `reserved_ip` (stable — use this one from here on); `ssh -i ~/.ssh/comprobify_deploy cpfydeploy9x@$(terraform output -raw reserved_ip)` connects (not `root@` — see "SSH access model" above); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
+9. Verify: `terraform output` shows both `droplet_ip` (ephemeral) and `reserved_ip` (stable — use this one from here on); `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@$(terraform output -raw reserved_ip)` connects (not `root@` — see "SSH access model" above; use `comprobify_deploy_production` when repeating this for production); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
 10. Add the CD pipeline's secrets to the GitHub `staging` Environment (`DROPLET_IP` = the Terraform **`reserved_ip`** output — not `droplet_ip`, see "Reserved IP" above — `INFRA_SSH_PRIVATE_KEY` = the private half of the key from step 2, plus every app secret/variable from `deployment.md`'s env var table, split as above). Run the app deploy workflow once (push to `staging`, or `workflow_dispatch`) — it pushes `docker-compose.yml`/`Caddyfile`, writes `.env`, and starts the containers. No manual droplet setup step needed beyond this.
 11. Repeat steps 3–10 for `environments/production` — separate state, separate apply, same module, its own droplet, its own GitHub `production` Environment secrets, its own `comprobify-terraform-production` tokens.
 
@@ -842,30 +845,32 @@ If all of the above are clean and the reset still reproduces consistently — in
 
 The key is baked into `user_data` at first boot (via the `users:` block in cloud-init — see "SSH access model" above), and `user_data` can only be set when a droplet is created, not changed on a running one. So rotating the key always means recreating the droplet — there's no in-place "swap the key" path. Since a recreate is already required, this is also a reasonable moment to do it if you're not rotating for any specific urgent reason (e.g. suspected key exposure) — no need to wait for one.
 
-1. Generate a new pair, with a name that won't collide with the old one:
+Each environment's permanent key name is `comprobify_deploy_<env>` (e.g. `comprobify_deploy_staging`) — never shared across environments, see Prerequisites above. Steps below use `staging`; swap in `production` and its own `terraform.tfvars`/GitHub Environment when rotating that one.
+
+1. Generate a new pair, with a name that won't collide with the current one for this environment:
    ```bash
-   ssh-keygen -t ed25519 -C "comprobify-deploy" -f ~/.ssh/comprobify_deploy_new
+   ssh-keygen -t ed25519 -C "comprobify-deploy-staging" -f ~/.ssh/comprobify_deploy_staging_new
    ```
-2. Put its public half's content into `terraform.tfvars`:
+2. Put its public half's content into `environments/staging/terraform.tfvars`:
    ```hcl
-   ssh_public_key = "ssh-ed25519 AAAA... comprobify-deploy"   # cat ~/.ssh/comprobify_deploy_new.pub
+   ssh_public_key = "ssh-ed25519 AAAA... comprobify-deploy-staging"   # cat ~/.ssh/comprobify_deploy_staging_new.pub
    ```
 3. `terraform plan` — expect it to show both `digitalocean_ssh_key.infra` (replaced — DO's API treats a key's `public_key` as immutable, so a change forces a new resource, and Terraform deletes the old one from your DO account automatically as part of that) and `digitalocean_droplet.this` (replaced, since `user_data` changed) needing replacement, plus `digitalocean_reserved_ip_assignment.this` updating to point at the new droplet id (in-place update, not a replacement) and everything else downstream (firewall, project assignment) updating to reference the new droplet. `digitalocean_reserved_ip.this` itself should show **no change** — that's the reserved IP doing its job.
 4. `terraform apply`, confirm with `yes`.
 5. Verify the new key actually works before touching anything else — against the reserved IP, which already points at the new droplet by the time `apply` finishes:
    ```bash
-   ssh -i ~/.ssh/comprobify_deploy_new cpfydeploy9x@$(terraform output -raw reserved_ip)
+   ssh -i ~/.ssh/comprobify_deploy_staging_new cpfydeploy9x@$(terraform output -raw reserved_ip)
    ```
 6. Update the one GitHub value this affects — just the SSH key; `DROPLET_IP` doesn't change, since the reserved IP survived the replacement:
    ```bash
-   gh secret set INFRA_SSH_PRIVATE_KEY --env staging --repo novaej/comprobify < ~/.ssh/comprobify_deploy_new
+   gh secret set INFRA_SSH_PRIVATE_KEY --env staging --repo novaej/comprobify < ~/.ssh/comprobify_deploy_staging_new
    ```
-7. Trigger a deploy (`workflow_dispatch`, or push to `staging`) to confirm the CD pipeline works end-to-end with the new key before considering this done.
+7. Trigger a deploy (`workflow_dispatch`, or push to `staging`) to confirm the CD pipeline works end-to-end with the new key before considering this done — the droplet was just recreated from scratch, so there are no app containers running on it yet until this deploy completes.
 8. Only now, with everything confirmed working, clean up the old key — it's no longer referenced by Terraform state, GitHub, or the (now-destroyed) old droplet, so there's nothing left depending on it:
    ```bash
-   rm ~/.ssh/comprobify_infra ~/.ssh/comprobify_infra.pub   # or whatever the old pair was named
+   rm ~/.ssh/comprobify_deploy_staging ~/.ssh/comprobify_deploy_staging.pub   # the pair being replaced
    ```
-   Then, if you'd rather not keep the "_new" suffix permanently, rename the current pair (`mv ~/.ssh/comprobify_deploy_new ~/.ssh/comprobify_deploy` and the `.pub` alongside it) — no `terraform.tfvars` change needed for this part, since it holds the key's *content*, not a path, and a local rename doesn't touch that.
+   Then rename the new pair back to the permanent name (`mv ~/.ssh/comprobify_deploy_staging_new ~/.ssh/comprobify_deploy_staging` and the `.pub` alongside it) — no `terraform.tfvars` change needed for this part, since it holds the key's *content*, not a path, and a local rename doesn't touch that.
 
 Steps 5 and 7 are both worth doing before step 8 specifically — deleting the old key before confirming the new one works end to end (both for interactive access and for CI) is how you'd end up locked out with no way back except the DO Console.
 
