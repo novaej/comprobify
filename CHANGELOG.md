@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.5] — 2026-08-16
+
 ### Fixed
 - **`api` still logged noisy `express-rate-limit: async error during store initialization` lines on every cold start, even after 0.16.4's Compose healthcheck.** Deploy logs proved the 0.16.4 fix's diagnosis wrong: Compose's own `Container comprobify-redis-1 Healthy` line landed *before* `Container comprobify-api-1 Starting`, yet the error still fired — this was never a container-readiness race. The real cause: `redis.service.js`'s `getClient()` only ever connects lazily, on `rate-limit.js`'s first `getClient()` call at module-require time — giving the ioredis client's asynchronous TCP handshake zero head start before `RedisStore.init()`'s `SCRIPT LOAD` command fires synchronously right after construction, on every single `api` process start, droplet recreation or not. `app.js` now calls `redisService.getClient()` eagerly, before `await migrate()` — a real DB round-trip, followed by `src/server.js`'s own require chain, both of which now run before `rate-limit.js` is ever required — giving the connection real wall-clock time to finish first. No behavior change if it hasn't: `getClient()` is idempotent, and every existing fallback (in-memory limiting when `REDIS_URL` is unset, fail-fast `enableOfflineQueue: false` semantics once connected) is unchanged.
 
