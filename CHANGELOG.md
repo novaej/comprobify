@@ -9,11 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **`api` still logged noisy `express-rate-limit: async error during store initialization` lines on every cold start, even after 0.16.4's Compose healthcheck.** Deploy logs proved the 0.16.4 fix's diagnosis wrong: Compose's own `Container comprobify-redis-1 Healthy` line landed *before* `Container comprobify-api-1 Starting`, yet the error still fired — this was never a container-readiness race. The real cause: `redis.service.js`'s `getClient()` only ever connects lazily, on `rate-limit.js`'s first `getClient()` call at module-require time — giving the ioredis client's asynchronous TCP handshake zero head start before `RedisStore.init()`'s `SCRIPT LOAD` command fires synchronously right after construction, on every single `api` process start, droplet recreation or not. `app.js` now calls `redisService.getClient()` eagerly, before `await migrate()` — a real DB round-trip, followed by `src/server.js`'s own require chain, both of which now run before `rate-limit.js` is ever required — giving the connection real wall-clock time to finish first. No behavior change if it hasn't: `getClient()` is idempotent, and every existing fallback (in-memory limiting when `REDIS_URL` is unset, fail-fast `enableOfflineQueue: false` semantics once connected) is unchanged.
+
 ## [0.16.4] — 2026-08-16
 
 ### Fixed
 - **`deploy-staging.yml`'s post-deploy `caddy reload` could fail on a freshly (re)created droplet.** Caddy's admin API (`:2019`) can still be binding a moment after Compose reports the container "Started" — the reload isn't needed there anyway (caddy already loads the Caddyfile on its own normal startup), but the race made an otherwise-healthy deploy show red. Surfaced by the SSH key rotation redeploy in #187/#188. Retries up to 5 times over ~10s before actually failing the step; mirrored into the currently-dormant `deploy-production.yml`.
-- **`api` could log a handful of noisy `express-rate-limit: async error during store initialization` lines on a freshly (re)created droplet.** `rate-limit.js` constructs its `RedisStore` synchronously at module-require time, and `depends_on: [redis]`'s plain list form only waits for the `redis` container to start, not for Redis to actually accept connections — `api`'s Node process could win that race. Harmless either way (`rate-limit-redis` reloads its script on the first real request once Redis is up, and `passOnStoreError: true` fails open in the meantime), but avoided outright now via a `redis` healthcheck (`redis-cli ping`) plus `api`'s `depends_on: condition: service_healthy`.
+- **Added a `redis` healthcheck (`redis-cli ping`) plus `api`'s `depends_on: condition: service_healthy`, so `api` no longer starts before Redis is confirmed reachable.** Legitimate defense on its own merits (protects against a genuinely slow-starting Redis container), but — as the very next release's entry above corrects — this did **not** eliminate the `express-rate-limit` store-initialization log noise it was written to fix; that race turned out to be unrelated to container startup ordering.
 
 ## [0.16.3] — 2026-08-16
 
