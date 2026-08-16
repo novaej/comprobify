@@ -41,7 +41,8 @@ services:
       - "8080"
     mem_limit: 300m
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   worker:
     image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
@@ -66,6 +67,18 @@ services:
     expose:
       - "6379"
     mem_limit: 48m
+    # api's `depends_on: condition: service_healthy` needs this to actually wait
+    # for Redis to accept connections, not just for the container to start - on a
+    # freshly (re)created droplet, api's Node process (and rate-limit.js's
+    # RedisStore init, which runs synchronously at require-time) can otherwise win
+    # the race against Redis still initializing. See deploy-staging.yml's caddy
+    # reload retry fix for the same class of startup race, fixed the Compose way
+    # here instead since this one's cross-container.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
 
 volumes:
   caddy_data:

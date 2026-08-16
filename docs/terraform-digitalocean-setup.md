@@ -492,7 +492,8 @@ services:
       - "8080"
     mem_limit: 300m
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
   worker:
     image: ghcr.io/novaej/comprobify:${IMAGE_TAG:-latest}
@@ -511,13 +512,18 @@ services:
     expose:
       - "6379"
     mem_limit: 48m
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
 
 volumes:
   caddy_data:
   caddy_config:
 ```
 
-`api` and `worker` run the **same image** — one Dockerfile, one build, one push to GHCR — started with different `command:` values. `expose` (not `ports`) on `api` means it's reachable from `caddy` over the Compose network but never bound to the host directly — only Caddy holds 80/443. `worker` has no `ports`/`expose` at all — it makes outbound connections to RabbitMQ/Postgres and needs nothing inbound. `redis` backs the rate limiters' shared store (`src/services/redis.service.js`, `src/middleware/rate-limit.js`) and `attempt-tracker.service.js`'s repeated-attempt detection — only `api` connects to it (`worker` never rate-limits); no persistence (`--save ""`) since rate-limit counters are disposable short-window state, and a hard `--maxmemory` cap since this is a $6/mo 1GB tier already budgeted for `api`+`worker` (resized from the original $4/mo 512MB tier — see the droplet module section below).
+`api` and `worker` run the **same image** — one Dockerfile, one build, one push to GHCR — started with different `command:` values. `expose` (not `ports`) on `api` means it's reachable from `caddy` over the Compose network but never bound to the host directly — only Caddy holds 80/443. `worker` has no `ports`/`expose` at all — it makes outbound connections to RabbitMQ/Postgres and needs nothing inbound. `redis` backs the rate limiters' shared store (`src/services/redis.service.js`, `src/middleware/rate-limit.js`) and `attempt-tracker.service.js`'s repeated-attempt detection — only `api` connects to it (`worker` never rate-limits); no persistence (`--save ""`) since rate-limit counters are disposable short-window state, and a hard `--maxmemory` cap since this is a $6/mo 1GB tier already budgeted for `api`+`worker` (resized from the original $4/mo 512MB tier — see the droplet module section below). `redis`'s `healthcheck` plus `api`'s `depends_on: condition: service_healthy` (not the plain list form) matters on a freshly (re)created droplet — plain `depends_on` only waits for the container to *start*, not for Redis to actually accept connections, and `rate-limit.js` constructs its `RedisStore` synchronously at module-require time. Without the healthcheck gate, `api` can win that race and log a handful of "async error during store initialization" lines at boot — harmless (rate-limit-redis reloads its Lua script on the first real request once Redis is actually up, and `passOnStoreError: true` fails open in the meantime) but noisy, and worth avoiding outright rather than tolerating on every future full droplet recreation. Same underlying race class as the Caddy admin-API reload fix in `deploy-staging.yml`, just fixed at the Compose level here since this one's cross-container rather than a single container racing its own subprocess.
 
 ```
 # deploy/caddy/Caddyfile
