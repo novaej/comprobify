@@ -105,4 +105,17 @@ jobs:
             # Compose and the running caddy container keeps serving whatever
             # config it loaded at startup. Reload explicitly so a Caddyfile-only
             # change (e.g. trusted proxy headers) actually takes effect.
-            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+            #
+            # Retried: on a freshly (re)created caddy container - e.g. right after a
+            # droplet replacement, as with the SSH key rotation flow in
+            # terraform-digitalocean-setup.md - the admin API (:2019) can still be
+            # binding a moment after Compose reports the container "Started", racing
+            # this reload into a false "connection refused" failure even though caddy
+            # already loaded the Caddyfile fine via its own normal startup. A real,
+            # ongoing failure still fails the step - it just survives that one race.
+            for i in 1 2 3 4 5; do
+              docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile && exit 0
+              echo "caddy reload attempt $i/5 failed, retrying in 2s..."
+              sleep 2
+            done
+            exit 1
