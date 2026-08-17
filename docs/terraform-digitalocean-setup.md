@@ -439,13 +439,13 @@ Deliberately does **not** set up the app's `docker-compose.yml` or secrets — o
 **Where it landed: open SSH, with defense moved to the identity/privilege layer instead of the network layer.** The reasoning: key-only auth already means brute-forcing in is not possible regardless of who can reach port 22 — the real value IP-restriction adds on top of that is (a) less scanning noise reaching sshd at all, and (b) protection against a hypothetical unpatched sshd vulnerability being reachable from anywhere. `unattended-upgrades` already mitigates (b) by keeping sshd itself patched automatically, and the layers below more than compensate for (a):
 
 - **No root login at all** (`PermitRootLogin no`) — SSH never grants a root shell directly, full stop.
-- **A single unprivileged deploy user**, `cpfydeploy9x` (deliberately not a guessable name like `deploy`/`admin`/`ubuntu`) — the only account SSH will accept (`AllowUsers`). It's a member of the `docker` group (enough to run `docker`/`docker compose` without elevation) and **has no sudo access at all** — not "sudo for a narrow set of commands," genuinely none. A compromised key gets an attacker a low-privilege shell with no built-in path to root.
+- **A single unprivileged deploy user per environment** — `cpfydeploy9x` on staging, `cpfydeploy4c7a` on production (deliberately not a guessable name like `deploy`/`admin`/`ubuntu`, and deliberately a distinct value per environment — same per-environment isolation already applied to SSH keys, DO/Cloudflare tokens, DB creds, `ENCRYPTION_KEY`, and `ADMIN_SECRET`; knowledge of one environment's username reveals nothing about the other's) — the only account SSH will accept (`AllowUsers`). It's a member of the `docker` group (enough to run `docker`/`docker compose` without elevation) and **has no sudo access at all** — not "sudo for a narrow set of commands," genuinely none. A compromised key gets an attacker a low-privilege shell with no built-in path to root.
 - **`MaxAuthTries 3` / `LoginGraceTime 30`** — caps how many auth attempts a single connection gets and how long an unauthenticated connection can be held open, reducing the cost of scanning noise.
 - **`fail2ban`** — as before, bans an IP outright after repeated failed attempts.
 
 **If you genuinely need root** (inspecting/editing system config, debugging something `docker`-group access can't reach) — DigitalOcean's browser-based Droplet Console (Droplet → Access → Launch Droplet Console) gives a real root shell through DO's own infrastructure, entirely independent of sshd and everything above. It was always the documented emergency fallback for lockout scenarios; it's now also the *normal* path for anything requiring true root, not just a last resort.
 
-**What this changes for you day to day:** personal SSH access is now `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@<ip>` (swap in `comprobify_deploy_production` for that environment), not `root@<ip>` — `sudo` won't work from this account, so use the Console for anything that genuinely needs it. The CD workflow's `username:` fields changed to match.
+**What this changes for you day to day:** personal SSH access is now `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@<ip>` for staging, `ssh -i ~/.ssh/comprobify_deploy_production cpfydeploy4c7a@<ip>` for production — both the key **and** the username swap per environment — not `root@<ip>`, and `sudo` won't work from either account, so use the Console for anything that genuinely needs it. Each environment's CD workflow's `username:` fields are set to match its own `deploy_username` (`terraform/environments/<env>/terraform.tfvars`).
 
 ---
 
@@ -612,7 +612,7 @@ Split, for the "Yes" rows only:
 
 Both stores are scoped per GitHub Environment (`staging`/`production`) — one place per environment, two tabs (Secrets / Variables) within it.
 
-On every deploy, the CD workflow's SSH step writes the full set into `/opt/comprobify/.env` on the droplet — overwritten each run, so the file always reflects whatever's currently in GitHub:
+On every deploy, the CD workflow's SSH step writes the full set into `/opt/comprobify/.env` on the droplet — overwritten each run, so the file always reflects whatever's currently in GitHub. Shown below is `deploy-staging.yml`'s actual content; `deploy-production.yml` mirrors it exactly except `username: cpfydeploy4c7a` (its own `deploy_username`, not staging's `cpfydeploy9x`) and `environment: production` in place of `environment: staging`:
 
 ```yaml
       - uses: appleboy/scp-action@v0.1.7
@@ -693,6 +693,8 @@ Rotation, for either kind: update the value in the GitHub Environment, then trig
 
 The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — see `deployment.md`'s "Scheduled jobs" section for what each one actually does) previously ran as Render Cron Job services. They now run via a system `cron.d` file, written to the droplet by cloud-init:
 
+`cloud-init.yaml.tftpl` templates every occurrence via `${deploy_username}`, so each environment's actual `/etc/cron.d/comprobify-jobs` file gets its own value baked in at first boot — shown below is staging's rendered output (`cpfydeploy9x`); production's reads `cpfydeploy4c7a` in each of the four leftmost username fields instead, nothing else different:
+
 ```
 # terraform/modules/droplet/cloud-init.yaml.tftpl -> /etc/cron.d/comprobify-jobs
 */5 * * * * cpfydeploy9x { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications; } >> /opt/comprobify/logs/cron-notifications.log 2>&1
@@ -704,7 +706,7 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 
 **Why `docker compose exec` instead of installing Node on the droplet:** `scripts/run-admin-job.js` has zero npm dependencies — just Node's built-in `fetch` — so rather than installing Node system-wide on the bare host (one more thing to patch and keep current), the cron entries just run it *inside* the already-running `api` container, reusing the exact deployed script version. This also means it automatically picks up `ADMIN_SECRET` from that container's own `.env` — nothing extra to configure. The only env var this needs that the app itself doesn't is `API_BASE_URL` (distinct name from `APP_BASE_URL`, same value) — see the env var reference table above.
 
-**Runs as `cpfydeploy9x`, not root** — consistent with everything else in "SSH access model" above; this account's `docker` group membership is sufficient, no elevated privileges needed.
+**Runs as that environment's deploy user (`cpfydeploy9x` on staging, `cpfydeploy4c7a` on production), not root** — consistent with everything else in "SSH access model" above; this account's `docker` group membership is sufficient, no elevated privileges needed.
 
 **Harmless if it fires before the first deploy or during a redeploy** — `docker compose exec` just fails (no `api` container to exec into yet, or briefly mid-restart), logged and ignored; the next scheduled run tries again.
 
@@ -734,7 +736,7 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 6. `terraform init` — downloads providers, connects to the remote state backend. If this fails with a `403 InvalidClientTokenId` / "AWS account ID not previously found" error, see the `skip_requesting_account_id` note under "Remote state" above — that's a backend config issue, not a credentials problem.
 7. `terraform plan` — review what will be created. Nothing exists yet, so expect a full "create" plan for the droplet, firewall, SSH key, DNS record, and Project. **Read this output before typing yes** — it's the one moment you see exactly what's about to happen.
 8. `terraform apply`, confirm with `yes`. Takes roughly a minute; droplet boots, cloud-init hardens it.
-9. Verify: `terraform output` shows both `droplet_ip` (ephemeral) and `reserved_ip` (stable — use this one from here on); `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@$(terraform output -raw reserved_ip)` connects (not `root@` — see "SSH access model" above; use `comprobify_deploy_production` when repeating this for production); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
+9. Verify: `terraform output` shows both `droplet_ip` (ephemeral) and `reserved_ip` (stable — use this one from here on); `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@$(terraform output -raw reserved_ip)` connects (not `root@` — see "SSH access model" above; for production, both the key **and** username swap: `ssh -i ~/.ssh/comprobify_deploy_production cpfydeploy4c7a@$(terraform output -raw reserved_ip)`); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
 10. Add the CD pipeline's secrets to the GitHub `staging` Environment (`DROPLET_IP` = the Terraform **`reserved_ip`** output — not `droplet_ip`, see "Reserved IP" above — `INFRA_SSH_PRIVATE_KEY` = the private half of the key from step 2, plus every app secret/variable from `deployment.md`'s env var table, split as above). Run the app deploy workflow once (push to `staging`, or `workflow_dispatch`) — it pushes `docker-compose.yml`/`Caddyfile`, writes `.env`, and starts the containers. No manual droplet setup step needed beyond this.
 11. Repeat steps 3–10 for `environments/production` — separate state, separate apply, same module, its own droplet, its own GitHub `production` Environment secrets, its own `comprobify-terraform-production` tokens.
 
@@ -845,7 +847,7 @@ Note every `init` step also needs the Spaces credentials, not just `plan`/`apply
 
 Full file lives in the repo; the shape is checkout → build/push the image to GHCR → SCP the compose files → SSH in (as `cpfydeploy9x`, not root — see "SSH access model" above) to write `.env` and restart containers. No firewall dance needed — SSH is open, so the runner just connects directly, same as the Terraform-managed pieces below it in the module. An earlier version of this workflow briefly added/removed a just-in-time firewall rule per deploy instead of relying on open SSH; see "SSH access model" for why that approach was tried and then abandoned.
 
-The `production` equivalent triggers on push to the `production` branch, matching the same branch/tag/release pipeline documented in `deployment.md`.
+The `production` equivalent triggers on push to the `production` branch, matching the same branch/tag/release pipeline documented in `deployment.md`. Its `username:` fields read `cpfydeploy4c7a`, not staging's `cpfydeploy9x` — see the env var reference table above for the full CD-workflow SSH-step shape both files share.
 
 ---
 

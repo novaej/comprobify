@@ -2,7 +2,12 @@ name: Deploy Production
 
 # DISABLED — the production droplet and secrets do not exist yet (see
 # docs/deployment.md's "Production status"). This mirrors deploy-staging.yml so it's
-# ready to enable once terraform/environments/production is provisioned.
+# ready to enable once terraform/environments/production is provisioned (it now is - see
+# that directory - but the droplet itself hasn't been terraform apply'd yet).
+#
+# `username:` below (cpfydeploy4c7a) already matches deploy_username in
+# terraform/environments/production/terraform.tfvars - re-confirm if that value ever
+# changes.
 #
 # To enable:
 #   1. Uncomment the `push` trigger below
@@ -11,8 +16,6 @@ name: Deploy Production
 #      `staging` — see docs/terraform-digitalocean-setup.md's env var reference table),
 #      including DROPLET_IP and INFRA_SSH_PRIVATE_KEY (same secret names as `staging`'s
 #      Environment — differentiated by which Environment the job declares, not by name)
-#   4. Confirm `username:` below matches `deploy_username` in
-#      terraform/environments/production/terraform.tfvars
 on:
   # push:
   #   branches: [production]
@@ -45,7 +48,7 @@ jobs:
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DROPLET_IP }}
-          username: cpfydeploy9x
+          username: cpfydeploy4c7a
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           source: "deploy/docker-compose.yml,deploy/caddy/Caddyfile"
           target: /opt/comprobify
@@ -55,7 +58,7 @@ jobs:
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.DROPLET_IP }}
-          username: cpfydeploy9x
+          username: cpfydeploy4c7a
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
           script: |
             cat > /opt/comprobify/.env <<'EOF'
