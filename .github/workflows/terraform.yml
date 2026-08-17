@@ -4,19 +4,27 @@ name: Terraform
 # deploy-staging.yml/deploy-production.yml (those only ship application code, never touch
 # Terraform). See docs/terraform-digitalocean-setup.md's "CI/CD (GitHub Actions)" section.
 #
-# DO_TOKEN and CLOUDFLARE_TOKEN live in the `staging-infra` GitHub Environment (Settings ->
-# Environments -> staging-infra), unprefixed - same convention deploy-staging.yml already
-# uses for DB_HOST/ADMIN_SECRET/etc: one secret name, a different value per Environment,
-# not a name per environment. The comprobify-terraform-staging and comprobify-terraform-
-# production credentials (see the Prerequisites table in terraform-digitalocean-setup.md)
-# are deliberately separate tokens - `staging-infra` holds the staging value, and the
-# not-yet-created `production-infra` Environment will hold the production value under the
-# exact same secret names, DO_TOKEN/CLOUDFLARE_TOKEN, once that job pair exists.
+# One workflow, two job pairs (plan-staging/apply-staging, plan-production/apply-production)
+# rather than two workflow files - both pairs share the same push-to-main + paths trigger
+# below regardless of which environment's directory actually changed (terraform plan/apply
+# is idempotent, so an unrelated environment's pair just reports "no changes"). Contrast
+# with deploy-staging.yml/deploy-production.yml, which stay separate files since each is
+# gated by a different branch-push trigger (`staging` vs `production`).
 #
-# Both `plan` and `apply` declare `environment: staging-infra` - unlike an earlier draft
-# that only gated `apply`, this means a required-reviewer rule added to staging-infra (repo
-# Settings -> Environments -> staging-infra -> add yourself as a required reviewer) would
-# gate `plan` too, i.e. you'd approve before seeing the diff, not after. Deliberate
+# DO_TOKEN and CLOUDFLARE_TOKEN live in each environment's own `<env>-infra` GitHub
+# Environment (Settings -> Environments -> staging-infra / production-infra), unprefixed -
+# same convention deploy-staging.yml/deploy-production.yml already use for
+# DB_HOST/ADMIN_SECRET/etc: one secret name, a different value per Environment, not a name
+# per environment. The comprobify-terraform-staging and comprobify-terraform-production
+# credentials (see the Prerequisites table in terraform-digitalocean-setup.md) are
+# deliberately separate tokens - `staging-infra` holds the staging value, `production-infra`
+# holds the production value, both under the exact same secret names, DO_TOKEN/
+# CLOUDFLARE_TOKEN.
+#
+# Every plan/apply job declares its own `<env>-infra` environment - unlike an earlier draft
+# that only gated `apply`, this means a required-reviewer rule added to an `<env>-infra`
+# Environment (repo Settings -> Environments -> <env>-infra -> add yourself as a required
+# reviewer) gates `plan` too, i.e. you approve before seeing the diff, not after. Deliberate
 # trade-off for staying consistent with deploy-staging.yml's single-environment shape
 # instead of introducing a second, plan-only Environment just to keep plan ungated.
 #
@@ -30,28 +38,35 @@ name: Terraform
 # don't have that collision risk since they're scoped to their own Environment's page in
 # the GitHub UI, which is why DO_TOKEN/CLOUDFLARE_TOKEN don't need the prefix.
 #
-# Production's job pair isn't here yet - terraform/environments/production doesn't exist.
-# Add a near-identical plan/apply pair pointed at it (environment: production-infra) once
-# it's provisioned, reading the same DO_TOKEN/CLOUDFLARE_TOKEN names from that Environment
-# and the same shared TERRAFORM_SPACES_* repository secrets.
-#
 # `destroy` is manual-only, gated by the `action` workflow_dispatch input - a `push` event
 # never has `github.event.inputs`, so `action` is only ever meaningfully set on a manual
 # run, and destroy can never fire from a push no matter what the input default is. Default
 # is `apply` so an unqualified `workflow_dispatch` (no -f action=..., or the UI's "Run
 # workflow" button clicked without touching the dropdown) reproduces the exact plan+apply
-# behavior this workflow always had, before `action` existed.
+# behavior this workflow always had, before `action` existed. Staging-only for now -
+# terraform/environments/production has never been applied for real yet, so there's
+# nothing there worth a destroy path until that changes.
 #
-# destroy reuses the SAME plan/apply jobs (branching their terraform command on `action`)
-# rather than adding a third job, deliberately - `apply` already declares `needs: plan`, so
-# with a required-reviewer rule on staging-infra this gives two separate approval gates for
-# a destroy run: one before `plan` starts (nothing to see yet), and a second one AFTER
-# `plan`'s `-destroy` output is sitting in the logs for you to actually read, before `apply`
-# commits to the real `destroy -auto-approve`. A single combined job (an earlier version of
-# this file had one) can only gate once, before either step - you'd approve blind and both
-# the preview and the real destroy would run back-to-back with no chance to reconsider after
-# seeing what's about to go. Two jobs, same names as every other run, is worth the extra
-# indirection in the `run:` steps below for that alone.
+# destroy reuses the SAME plan-staging/apply-staging jobs (branching their terraform
+# command on `action`) rather than adding a third job, deliberately - apply-staging already
+# declares `needs: plan-staging`, so with a required-reviewer rule on staging-infra this
+# gives two separate approval gates for a destroy run: one before plan-staging starts
+# (nothing to see yet), and a second one AFTER plan-staging's `-destroy` output is sitting
+# in the logs for you to actually read, before apply-staging commits to the real
+# `destroy -auto-approve`. A single combined job (an earlier version of this file had one)
+# can only gate once, before either step - you'd approve blind and both the preview and the
+# real destroy would run back-to-back with no chance to reconsider after seeing what's
+# about to go. Two jobs, same names as every other run, is worth the extra indirection in
+# the `run:` steps below for that alone.
+#
+# Before merging a change that first introduces the production-infra job pair: the
+# `production-infra` GitHub Environment must already exist with real DO_TOKEN/
+# CLOUDFLARE_TOKEN values (comprobify-terraform-production - see Prerequisites in
+# terraform-digitalocean-setup.md), and the "Comprobify Production" DigitalOcean Project
+# must already exist (main.tf's data "digitalocean_project" only looks it up by name, never
+# creates it). Missing either one fails plan-production safely (bad/absent credentials, or a
+# lookup that finds nothing) - it cannot touch real infra, since apply-production only runs
+# if plan-production succeeds - but it's a red check either way, so set both up first.
 
 on:
   push:
@@ -67,7 +82,7 @@ on:
         options: [plan, apply, destroy]
 
 jobs:
-  plan:
+  plan-staging:
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
@@ -93,8 +108,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 
-  apply:
-    needs: plan
+  apply-staging:
+    needs: plan-staging
     # push never has inputs.action, so this stays true (unchanged behavior) for every
     # push-triggered run; a manual run skips this job only for a 'plan'-only dry run -
     # both the 'apply' default and 'destroy' proceed here, and which one actually happens
@@ -120,6 +135,45 @@ jobs:
           else
             terraform -chdir=terraform/environments/staging apply -auto-approve
           fi
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+
+  plan-production:
+    runs-on: ubuntu-latest
+    environment: production-infra
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.7.5
+      - run: terraform -chdir=terraform/environments/production init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+      - run: terraform -chdir=terraform/environments/production plan
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+
+  apply-production:
+    needs: plan-production
+    environment: production-infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.7.5
+      - run: terraform -chdir=terraform/environments/production init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+      - run: terraform -chdir=terraform/environments/production apply -auto-approve
         env:
           TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
           TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}

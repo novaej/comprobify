@@ -760,11 +760,13 @@ Two workflows, gated by path so neither triggers the other.
 
 Full file lives in the repo. Three more design points worth calling out, all easy to get wrong:
 
-**`DO_TOKEN`/`CLOUDFLARE_TOKEN` live in the `staging-infra` GitHub Environment (Settings → Environments → `staging-infra` → Environment secrets), unprefixed — same convention `deploy-staging.yml` already uses for `DB_HOST`/`ADMIN_SECRET`/etc: one secret name, a different value per Environment, not a name per environment.** The `comprobify-terraform-staging` and `comprobify-terraform-production` credentials (see the Prerequisites table above) are deliberately separate tokens, never shared, so a leaked staging credential can be revoked without touching production — `staging-infra` holds the staging value, and the not-yet-created `production-infra` Environment will hold the production value under the exact same secret names once that job pair exists.
+**`DO_TOKEN`/`CLOUDFLARE_TOKEN` live in each environment's own `<env>-infra` GitHub Environment (Settings → Environments → `staging-infra` / `production-infra` → Environment secrets), unprefixed — same convention `deploy-staging.yml`/`deploy-production.yml` already use for `DB_HOST`/`ADMIN_SECRET`/etc: one secret name, a different value per Environment, not a name per environment.** The `comprobify-terraform-staging` and `comprobify-terraform-production` credentials (see the Prerequisites table above) are deliberately separate tokens, never shared, so a leaked staging credential can be revoked without touching production — `staging-infra` holds the staging value, `production-infra` holds the production value, both under the exact same secret names.
 
-**Both `plan` and `apply` declare `environment: staging-infra`.** GitHub only grants a job access to an Environment's secrets if that job declares it — which also means that Environment's protection rules (like a required reviewer) apply to that job too. Declaring it on both jobs means adding a required reviewer to `staging-infra` later would gate `plan` as well as `apply`: you'd approve *before* seeing the plan's diff, not after reading it. This was a deliberate trade-off in favor of staying consistent with `deploy-staging.yml`'s single-environment shape, rather than introducing a second, plan-only Environment just to keep `plan` ungated.
+**Every `plan-<env>`/`apply-<env>` job declares its own `<env>-infra` Environment.** GitHub only grants a job access to an Environment's secrets if that job declares it — which also means that Environment's protection rules (like a required reviewer) apply to that job too. Declaring it on both `plan` and `apply` means a required reviewer added to an `<env>-infra` Environment gates `plan` as well as `apply`: you approve *before* seeing the plan's diff, not after reading it. This was a deliberate trade-off in favor of staying consistent with `deploy-staging.yml`'s single-environment shape, rather than introducing a second, plan-only Environment just to keep `plan` ungated. `staging-infra` already has a required reviewer configured; add the same to `production-infra` for a deliberate, auditable approval gate before anything touches production infrastructure — separate from whatever Environment `deploy-production.yml` uses for app secrets.
 
 **The Spaces state-backend credentials (`TERRAFORM_SPACES_ACCESS_KEY_ID`/`TERRAFORM_SPACES_SECRET_ACCESS_KEY`) are the one exception and stay as plain repository secrets, not Environment secrets.** Staging and production share one state bucket with different key prefixes (see "Remote state" above) via one Spaces key pair created once — there's only ever one correct value, and every job needs it regardless of which Environment it declares. They keep the `TERRAFORM_` prefix because, as repository secrets, they sit in the same flat Secrets list as `docs.yml`'s unrelated `DOCS_CLOUDFLARE_API_TOKEN`/`DOCS_CLOUDFLARE_ACCOUNT_ID` pair — Environment secrets don't have that collision risk, since they're scoped to their own Environment's page in the GitHub UI, which is why `DO_TOKEN`/`CLOUDFLARE_TOKEN` don't need a prefix.
+
+One workflow, two job pairs — `plan-staging`/`apply-staging` and `plan-production`/`apply-production` — sharing the same trigger below regardless of which environment's directory actually changed (`terraform plan`/`apply` is idempotent, so an unrelated environment's pair just reports "no changes"):
 
 ```yaml
 on:
@@ -781,7 +783,7 @@ on:
         options: [plan, apply, destroy]
 
 jobs:
-  plan:
+  plan-staging:
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
@@ -805,8 +807,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 
-  apply:
-    needs: plan
+  apply-staging:
+    needs: plan-staging
     if: github.event_name == 'push' || github.event.inputs.action != 'plan'
     environment: staging-infra
     runs-on: ubuntu-latest
@@ -830,11 +832,14 @@ jobs:
           TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+
+  # plan-production / apply-production mirror the pair above exactly, just pointed at
+  # terraform/environments/production and declaring environment: production-infra instead.
 ```
 
 Note every `init` step also needs the Spaces credentials, not just `plan`/`apply` — `init` is what actually connects to the remote state backend. `plan` always runs regardless of `action` (there's no dry-run-only skip on it); `apply` skips only when a manual run explicitly chose `plan` (dry-run) — both the `apply` default and `destroy` fall through to `apply`'s `if`, and its `run:` step picks the actual command.
 
-Production's equivalent pair doesn't exist yet — add it once `terraform/environments/production` does, pointed at that directory, with both jobs declaring `environment: production-infra` and reading the same `DO_TOKEN`/`CLOUDFLARE_TOKEN` names from that Environment (its own distinct values — see above) plus the same shared `TERRAFORM_SPACES_*` repository secrets. Add a required reviewer to `production-infra` for a deliberate, auditable approval gate before anything touches production infrastructure — separate from whatever Environment `deploy-production.yml` ends up using for app secrets.
+**Before the first push that introduces `plan-production`/`apply-production` (or any push to `main` touching `terraform/**` after that): the `production-infra` GitHub Environment must already exist with real `DO_TOKEN`/`CLOUDFLARE_TOKEN` values, and the "Comprobify Production" DigitalOcean Project must already exist** (`main.tf`'s `data "digitalocean_project"` only looks it up by name, never creates it — see "DO Projects" above). Missing either one fails `plan-production` safely — bad/absent credentials, or a lookup that finds nothing, neither of which can touch real infra, since `apply-production` only runs if `plan-production` succeeds — but it's a red check either way, so set both up first.
 
 ### App deploy workflow — `.github/workflows/deploy-staging.yml`
 
