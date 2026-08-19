@@ -1,6 +1,6 @@
 # Comprobify Deployment Reference (Staging)
 
-Last updated: 2026-08-10
+Last updated: 2026-08-17
 
 This reference describes the staging deployment setup for Comprobify, including infrastructure, required configuration, deployment steps, and post-deployment checks. For the full CI/CD walkthrough, branching model, and env var reference, see `docs/deployment.md`. For the complete Terraform/DigitalOcean mechanics, see `docs/terraform-digitalocean-setup.md`.
 
@@ -32,7 +32,7 @@ This reference describes the staging deployment setup for Comprobify, including 
 | Infrastructure-as-code | Terraform | `terraform/environments/staging`, state in DO Spaces bucket `comprobify-terraform-state` |
 | Container registry | GHCR | `ghcr.io/novaej/comprobify` |
 | Database | DigitalOcean Managed Database | Managed Postgres cluster, `public` + `sandbox` schemas — shared with `comprobify-web`, non-superuser app role required for RLS |
-| Frontend | DigitalOcean App Platform | `comprobify-web` — moved off Vercel |
+| Frontend | DigitalOcean Droplet | `comprobify-web-staging` — `s-1vcpu-1gb`, region `nyc1`; own Terraform config in the `comprobify-web` repo |
 | Message broker | CloudAMQP | `shared-broker` — AWS `us-east-1`, one vhost (free tier) |
 | Docs site | Cloudflare Pages | `comprobify-docs` — deployed from `main` via `docs.yml` |
 | Scheduled jobs | `cron.d` on the droplet | `/etc/cron.d/comprobify-jobs`, written by cloud-init — four jobs (see schedule table below) |
@@ -41,7 +41,7 @@ This reference describes the staging deployment setup for Comprobify, including 
 | DNS / proxy | Cloudflare | Domain: `comprobify.com` — `api-staging.comprobify.com` → droplet IP (A record, proxied, Terraform-managed) |
 | App CI/CD | GitHub Actions | `comprobify` repo — `release-staging.yml`, `deploy-staging.yml` |
 | Infra CI/CD | GitHub Actions | `comprobify` repo — `terraform.yml` |
-| DO Project | DigitalOcean (dashboard) | `Comprobify Staging` — groups the droplet, the App Platform app, and the Managed Database together (organizational only, not a security boundary) |
+| DO Project | DigitalOcean (dashboard) | `Comprobify Staging` — groups this droplet, `comprobify-web-staging`'s own droplet, and the Managed Database together (organizational only, not a security boundary) |
 
 ---
 
@@ -52,22 +52,22 @@ Provisioned by Terraform (`terraform/environments/staging`, using the shared `te
 | Setting | Value |
 |---|---|
 | Droplet name | `comprobify-staging` |
-| Region | `nyc1` (moved from `nyc3` to match `comprobify-web`'s App Platform app, which only runs in `nyc1`) |
-| Size | `s-1vcpu-1gb` (resized from `s-1vcpu-512mb-10gb` — the 512MB tier left too little headroom after the `api`/`worker` container `mem_limit`s, causing swapping/OOM under load. `resize_disk = false` means disk stayed at 10GB; only CPU/RAM grew) |
+| Region | `nyc1` — same datacenter as `comprobify-web-staging`'s own droplet and the shared Managed Postgres cluster |
+| Size | `s-1vcpu-1gb`, 10GB disk (`resize_disk = false` on the droplet resource keeps a `droplet_size` change from also growing disk — see `docs/terraform-digitalocean-setup.md`'s "Resize" section) |
 | Base image | `ubuntu-24-04-x64` (plain distribution image, not a Marketplace image) |
 | Deploy user | `cpfydeploy9x` (unprivileged — docker group only, no sudo, no root SSH login) |
 | Firewall | 80/443 restricted to Cloudflare's published IPv4 ranges; 22 open to `0.0.0.0/0` (defense layered at the identity level instead — see `docs/terraform-digitalocean-setup.md`'s "SSH access model") |
 | Provisioning | cloud-init on first boot only — installs Docker Engine + Compose plugin, hardens sshd, enables fail2ban and unattended-upgrades, writes the `cron.d` schedule |
-| DigitalOcean Project | `Comprobify Staging` (dashboard grouping only, not a security boundary — also holds `comprobify-web`'s App Platform app and the shared Managed Postgres database, neither provisioned by this repo's Terraform) |
+| DigitalOcean Project | `Comprobify Staging` (dashboard grouping only, not a security boundary — also holds `comprobify-web-staging`'s own droplet and the shared Managed Postgres database, neither provisioned by this repo's Terraform) |
 
 ### Terraform state backend
 
 | Setting | Value |
 |---|---|
 | Backend | S3-compatible, DigitalOcean Spaces |
-| Endpoint | `https://nyc3.digitaloceanspaces.com` (deliberately still `nyc3` — matches the existing Spaces bucket's region, independent of the droplet's `nyc1`) |
+| Endpoint | `https://nyc3.digitaloceanspaces.com` — the Spaces bucket's region, independent of the droplet's own `nyc1` region |
 | Bucket | `comprobify-terraform-state` |
-| State key | `staging/terraform.tfstate` |
+| State key | `staging/comprobify/terraform.tfstate` |
 
 ---
 
@@ -113,7 +113,7 @@ Three separate scopes are in play: the `staging` Environment (app deploy secrets
 
 Written into `/opt/comprobify/.env` on the droplet on every app deploy. `DB_SSL_CA` is required here now that staging's database is DigitalOcean Managed Postgres, which signs with a private CA.
 
-Not a GitHub Secret, but also written into this same `.env` by the workflow itself: `SENTRY_RELEASE=${{ github.sha }}`. Without it, Sentry's release auto-detection has nothing to key off of inside a plain Docker container (it used to auto-detect via Render's `RENDER_GIT_COMMIT` env var before the DigitalOcean migration) — releases silently stopped showing up in Sentry after that move until this was added.
+Not a GitHub Secret, but also written into this same `.env` by the workflow itself: `SENTRY_RELEASE=${{ github.sha }}`. Without it, Sentry's release auto-detection has nothing to key off of inside a plain Docker container.
 
 | Secret | Value |
 |---|---|
@@ -191,7 +191,7 @@ Written to `/etc/cron.d/comprobify-jobs` by cloud-init at first boot. Each entry
 | Quota | `10 6 * * *` | `docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota` |
 | Queue Reconciliation | `*/5 * * * *` | `docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
 
-Output is tagged and forwarded to the system log (`logger -t comprobify-cron`) — monitor with `journalctl -t comprobify-cron` on the droplet. `scripts/run-admin-job.js` needs `API_BASE_URL` and `ADMIN_SECRET`; both are picked up from the `api` container's own `.env`, so nothing extra is configured for cron itself. Harmless no-op if a job fires before the first deploy or mid-redeploy (no `api` container to exec into yet).
+Each entry writes to its own plain log file — `/opt/comprobify/logs/cron-<name>.log`, prefixed per-run with an ISO timestamp (`date -Is`) — not `logger`/syslog: root SSH is fully disabled on this box, and reading the systemd journal needs root or the `systemd-journal` group, neither of which the unprivileged deploy user has. Monitor with `tail -100 /opt/comprobify/logs/cron-notifications.log` (swap in `-subscriptions`/`-quota`/`-queue-reconciliation`; `tail -f` to follow live) on the droplet. Rotated weekly, 4 weeks kept, via `/etc/logrotate.d/comprobify-cron`. `scripts/run-admin-job.js` needs `API_BASE_URL` and `ADMIN_SECRET`; both are picked up from the `api` container's own `.env`, so nothing extra is configured for cron itself. Harmless no-op if a job fires before the first deploy or mid-redeploy (no `api` container to exec into yet).
 
 If the schedule itself needs to change, `cloud-init.yaml.tftpl` must be edited and the droplet recreated — `user_data` only applies at first boot.
 
@@ -297,7 +297,7 @@ A Configuration Rule disables obfuscation on just the API hostnames:
 | Expression | `(http.host eq "api.comprobify.com") or (http.host eq "api-staging.comprobify.com")` |
 | Action | Email Obfuscation → Off |
 
-Email Obfuscation stays on for `comprobify.com` / `staging.comprobify.com`, the marketing site, since it's still useful there. `app-staging.comprobify.com`, the frontend, now runs on DigitalOcean App Platform (moved off Vercel) — whether it needs adding to this rule depends on whether that hostname is Cloudflare-proxied: if App Platform serves it directly (unproxied), it's unaffected and needs no rule, same as before; if it's since been put behind Cloudflare, it should be added to the expression above. Verify current proxy status before assuming either way.
+Email Obfuscation stays on for `comprobify.com` / `staging.comprobify.com`, the marketing site, since it's still useful there. `app-staging.comprobify.com` (the frontend, on its own DigitalOcean droplet, `comprobify-web-staging`) is Cloudflare-proxied — both of that droplet's DNS records are `proxied = true` in its own Terraform config. Whether it needs adding to the expression above depends on whether it independently renders unobfuscated email addresses on any of its own pages, separate from the API-hostname mechanism this rule already covers (the agreement HTML it proxies from the API server-side is unaffected by its own proxy status, since that fetch never goes through Cloudflare).
 
 Full rationale is in `docs/deployment.md`'s "Cloudflare configuration" section and CLAUDE.md Common Mistake #33.
 
@@ -330,7 +330,7 @@ Docker, fail2ban, unattended-upgrades, and cron are installed on the droplet its
 
 ```
 curl -s https://api-staging.comprobify.com/health
-# → {"status":"ok","uptime":...,"version":"0.14.1"}
+# → {"status":"ok","uptime":...,"version":"0.16.5"}
 
 curl -s https://api-staging.comprobify.com/v1/admin/tenants \
   -H "Authorization: Bearer $ADMIN_SECRET"
@@ -338,7 +338,7 @@ curl -s https://api-staging.comprobify.com/v1/admin/tenants \
 ```
 
 - Confirm the deploy succeeded: `ssh cpfydeploy9x@<droplet-ip> "cd /opt/comprobify && docker compose logs api"` shows all pending migrations applied before the server starts accepting requests.
-- Confirm all four cron jobs are running via `journalctl -t comprobify-cron` on the droplet. A missing or erroring entry usually means `ADMIN_SECRET` has drifted out of sync between the container's `.env` and what's expected, or the `api` container is down.
+- Confirm all four cron jobs are running via `tail -n 50 /opt/comprobify/logs/cron-*.log` on the droplet. A missing or erroring entry usually means `ADMIN_SECRET` has drifted out of sync between the container's `.env` and what's expected, or the `api` container is down.
 - Confirm the worker container is running (`docker compose ps`) and its logs show it consuming `sri.send`, `sri.authorize`, and `app.effects`; CloudAMQP's management UI should show non-zero consumers on all three queues.
 - Confirm the Mailgun webhook is registered against the staging domain and pointed at `https://api-staging.comprobify.com/v1/mailgun/webhook`.
 - Confirm agreement HTML renders real, non-obfuscated email addresses: `curl -s https://api-staging.comprobify.com/v1/agreements/TERMS | grep -o '\[email.*protected\]'` should return nothing.
@@ -346,4 +346,4 @@ curl -s https://api-staging.comprobify.com/v1/admin/tenants \
 
 ---
 
-Current deployed version: 0.14.1 (`package.json`, also surfaced at `GET /health`'s `version` field). See `docs/deployment.md` for the full branching strategy and release process, and `docs/terraform-digitalocean-setup.md` for infrastructure day-2 operations (resize, destroy/recreate, SSH key rotation).
+Current deployed version is surfaced at `GET /health`'s `version` field (source: `package.json`). See `docs/deployment.md` for the full branching strategy and release process, and `docs/terraform-digitalocean-setup.md` for infrastructure day-2 operations (resize, destroy/recreate, SSH key rotation).

@@ -4,7 +4,7 @@ Reference for how the API/worker compute layer is provisioned and deployed on Di
 
 **What lives on DigitalOcean:** one droplet per environment (`staging`, `production`), each running the `api` and `worker` containers behind a Caddy reverse proxy.
 
-**What doesn't:** CloudAMQP (RabbitMQ), Mailgun, Sentry, and Cloudflare (DNS/proxy, registrar) — external managed services, unaffected by anything in this document. The Postgres database (DigitalOcean Managed Database, shared by comprobify's API/worker and `comprobify-web`) and `comprobify-web` itself (DigitalOcean App Platform, moved off Vercel) are also outside this repo's Terraform — neither is provisioned by `terraform/` here — but both are grouped into the same `Comprobify Staging` DO Project as the droplet for dashboard purposes; see "DO Projects" below.
+**What doesn't:** CloudAMQP (RabbitMQ), Mailgun, Sentry, and Cloudflare (DNS/proxy, registrar) — external managed services, unaffected by anything in this document. The Postgres database (DigitalOcean Managed Database, shared by comprobify's API/worker and `comprobify-web`) and `comprobify-web` itself (its own DigitalOcean droplet, provisioned by that repo's own Terraform config) are also outside *this repo's* Terraform — neither is provisioned by `terraform/` here — but both are grouped into the same `Comprobify Staging` DO Project as this droplet for dashboard purposes; see "DO Projects" below.
 
 ---
 
@@ -137,7 +137,7 @@ resource "digitalocean_project_resources" "this" {
 }
 ```
 
-It used to be a managed `resource`. Staging's project now also holds resources this repo's Terraform doesn't own — `comprobify-web`'s DigitalOcean App Platform app and the shared Managed Postgres database, each assigned into the project through their own respective flows, not this Terraform config — so letting Terraform manage the project resource itself risked a config drift on either of those triggering Terraform to try to recreate the *project*, which would orphan everything else already living in it. `data.digitalocean_project` only looks the already-existing project up by name; `digitalocean_project_resources` still moves this repo's own droplet into it (DigitalOcean's droplet-creation API has no `project_id` argument — every droplet lands in the account's Default project first).
+It used to be a managed `resource`. Staging's project also holds resources this repo's Terraform doesn't own — `comprobify-web`'s own droplet and the shared Managed Postgres database, each assigned into the project through their own respective flows (the droplet via that repo's own Terraform config), not this Terraform config — so letting this repo's Terraform manage the project resource itself risked a config drift on either of those triggering Terraform to try to recreate the *project*, which would orphan everything else already living in it. `data.digitalocean_project` only looks the already-existing project up by name; `digitalocean_project_resources` still moves this repo's own droplet into it (DigitalOcean's droplet-creation API has no `project_id` argument — every droplet lands in the account's Default project first).
 
 Two entirely separate Projects (`Comprobify Staging`, `Comprobify Production`) — DO has no nested "one Project, multiple Environments" concept.
 
@@ -227,7 +227,7 @@ resource "digitalocean_ssh_key" "infra" {
 
 resource "digitalocean_droplet" "this" {
   name      = "comprobify-${var.environment}"
-  region    = var.region             # e.g. "nyc1" (staging's actual value — moved here from nyc3 to match comprobify-web's App Platform app, which only runs in nyc1)
+  region    = var.region             # e.g. "nyc1" (staging's actual value — moved here from nyc3 to match comprobify-web's own droplet, which also runs in nyc1)
   size      = var.droplet_size       # e.g. "s-1vcpu-1gb" — staging's actual value, resized up from the
                                       # original "s-1vcpu-512mb-10gb" $4/mo tier (#140) after the 512MB
                                       # tier left too little headroom past the api/worker mem_limits and
@@ -563,7 +563,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `DB_SSL_CA` | **Yes** | Staging's DB is DigitalOcean Managed Postgres, which signs with a private CA — required or connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. See `docs/deployment.md`'s env var table for the exact single-line format the deploy workflow's heredoc needs. |
 | `ENCRYPTION_KEY` | **Yes** | No default |
 | `ADMIN_SECRET` | **Yes** | No default |
-| `INTERNAL_SERVICE_SECRET` | No | Shared secret with `comprobify-web`'s BFF for forwarding the real visitor IP (`src/middleware/trusted-forwarded-ip.js`). Absent means the feature is inactive — no functional loss until `comprobify-web`'s own side is built (see its `NEXT_STEPS.md`). When set, must match the value configured in `comprobify-web`'s App Platform environment exactly. |
+| `INTERNAL_SERVICE_SECRET` | No | Shared secret with `comprobify-web`'s BFF for forwarding the real visitor IP (`src/middleware/trusted-forwarded-ip.js`). Absent means the feature is inactive — no functional loss until `comprobify-web`'s own side is built (see its `NEXT_STEPS.md`). When set, must match the value configured in `comprobify-web`'s own environment exactly. |
 | `EMAIL_FROM` | **Yes** | No default, and email is enabled by default (`EMAIL_PROVIDER` defaults to `mailgun`) |
 | `EMAIL_FROM_DOCUMENTS` | No | Falls back to `EMAIL_FROM` when unset — a legitimate, often-desired default (same sender for everything). Only set if you want document emails from a different address. |
 | `MAILGUN_API_KEY` | **Yes** | No default, required while email is enabled |
@@ -686,10 +686,10 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 
 ```
 # terraform/modules/droplet/cloud-init.yaml.tftpl -> /etc/cron.d/comprobify-jobs
-*/5 * * * * cpfydeploy9x cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications 2>&1 | logger -t comprobify-cron-notifications
-0 6 * * * cpfydeploy9x cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions 2>&1 | logger -t comprobify-cron-subscriptions
-10 6 * * * cpfydeploy9x cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota 2>&1 | logger -t comprobify-cron-quota
-*/5 * * * * cpfydeploy9x cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation 2>&1 | logger -t comprobify-cron-queue-reconciliation
+*/5 * * * * cpfydeploy9x { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/notifications; } >> /opt/comprobify/logs/cron-notifications.log 2>&1
+0 6 * * * cpfydeploy9x { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions; } >> /opt/comprobify/logs/cron-subscriptions.log 2>&1
+10 6 * * * cpfydeploy9x { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota; } >> /opt/comprobify/logs/cron-quota.log 2>&1
+*/5 * * * * cpfydeploy9x { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation; } >> /opt/comprobify/logs/cron-queue-reconciliation.log 2>&1
 ```
 
 **Why `docker compose exec` instead of installing Node on the droplet:** `scripts/run-admin-job.js` has zero npm dependencies — just Node's built-in `fetch` — so rather than installing Node system-wide on the bare host (one more thing to patch and keep current), the cron entries just run it *inside* the already-running `api` container, reusing the exact deployed script version. This also means it automatically picks up `ADMIN_SECRET` from that container's own `.env` — nothing extra to configure. The only env var this needs that the app itself doesn't is `API_BASE_URL` (distinct name from `APP_BASE_URL`, same value) — see the env var reference table above.
@@ -698,7 +698,9 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 
 **Harmless if it fires before the first deploy or during a redeploy** — `docker compose exec` just fails (no `api` container to exec into yet, or briefly mid-restart), logged and ignored; the next scheduled run tries again.
 
-**Monitoring:** each job logs under its own `SYSLOG_IDENTIFIER` — `comprobify-cron-notifications`, `comprobify-cron-subscriptions`, `comprobify-cron-quota`, `comprobify-cron-queue-reconciliation` — so `journalctl -t comprobify-cron-quota` (for example) shows just that job's runs. `journalctl` OR's repeated `-t` flags together, so `journalctl -t comprobify-cron-notifications -t comprobify-cron-subscriptions -t comprobify-cron-quota -t comprobify-cron-queue-reconciliation --since '30 minutes ago'` shows all four interleaved, each line still labelled with its own tag — replaces watching the Render Cron Job dashboard.
+**Logs to a plain file per job under `/opt/comprobify/logs/`, not `logger`/syslog — this was a deliberate design decision, not an oversight.** An earlier version piped each job's output through `logger -t comprobify-cron-<name>`, monitorable via `journalctl -t comprobify-cron-<name>`. That stopped being viable once root SSH was fully disabled (see "SSH access model" above): reading the systemd journal requires either root or membership in the `systemd-journal` group, and this box's `AllowUsers` only ever admits the unprivileged deploy user — granting that group would mean either re-enabling some form of elevated access (defeating the point) or recreating the droplet just to add a group, for a monitoring nicety. Plain files sidestep the permission question entirely: each job's `{ date -Is; ...; } >> /opt/comprobify/logs/cron-<name>.log 2>&1` (the `date -Is` prefix stands in for `journalctl`'s own timestamp column, so a run is still correlatable to a time window) writes as the deploy user, who already owns `/opt/comprobify/logs` (see `runcmd`'s `chown`). Rotated weekly via `/etc/logrotate.d/comprobify-cron` (`rotate 4`, `compress`) so the two 5-minute-cadence jobs can't grow unbounded; `create 0644 ${deploy_username} ${deploy_username}` re-creates each file owned by the deploy user after rotation, so the next run can still write to it without root.
+
+**Monitoring** (as the deploy user, over SSH — see "SSH access model" above): `tail -100 /opt/comprobify/logs/cron-quota.log` (for example) shows just that job's runs; `tail -f` to follow live. All four at once, most-recent-first: `tail -n 50 /opt/comprobify/logs/cron-*.log`.
 
 **If the schedule itself needs to change:** edit `cloud-init.yaml.tftpl`, then recreate the droplet (`user_data` only applies at first boot, same constraint as everything else in cloud-init — see "Day-2 operations" below). Not something you'd expect to do often.
 

@@ -246,7 +246,7 @@ Fix: a Cloudflare **Configuration Rule** scoped to just the API hostnames, with 
 
 This leaves Email Obfuscation active on the marketing site (`comprobify.com`, `staging.comprobify.com`), where it's still useful, and only disables it on the API hostnames that actually serve HTML with real embedded email addresses.
 
-`app.comprobify.com` / `app-staging.comprobify.com` (the frontend, `comprobify-web`) now run on DigitalOcean App Platform (moved off Vercel). Whether this rule needs to cover them depends on whether that hostname is Cloudflare-proxied — if App Platform serves it directly (not proxied), the rule still can't reach it; if it's since been put behind Cloudflare, add it to the expression above.
+`app.comprobify.com` / `app-staging.comprobify.com` (the frontend, `comprobify-web`) run on their own DigitalOcean droplet, Cloudflare-proxied (both DNS records are `proxied = true` in that repo's own Terraform config). Whether this rule needs to cover them depends on whether the frontend independently renders unobfuscated email addresses on any of its own pages — the agreement HTML it proxies from the API server-side is unaffected by its own proxy status, since that fetch never goes through Cloudflare.
 
 > Applies to any Cloudflare-proxied API hostname serving `GET /v1/agreements/:type` or `GET /v1/tenants/agreements/:type` HTML. If a new API hostname is added later (e.g. a second staging environment), add it to this rule's expression too, or its agreement pages will silently break the same way.
 
@@ -254,7 +254,7 @@ This leaves Email Obfuscation active on the marketing site (`comprobify.com`, `s
 
 ## Scheduled jobs
 
-The API has four scheduled jobs that must be triggered externally — none is self-scheduled. These previously ran as Render Cron Job services; staging now runs them via a `cron.d` schedule on the droplet itself, calling `scripts/run-admin-job.js` inside the already-running `api` container (`docker compose exec`) rather than needing a separate scheduler service — see `docs/terraform-digitalocean-setup.md`'s "Scheduled jobs" section for the actual mechanics (the schedule file, why no host-level Node install is needed, monitoring via `journalctl`). See `docs/guides/testing-scheduled-jobs.md` for how to exercise each job's scenarios locally by pushing dates into the past.
+The API has four scheduled jobs that must be triggered externally — none is self-scheduled. These previously ran as Render Cron Job services; staging now runs them via a `cron.d` schedule on the droplet itself, calling `scripts/run-admin-job.js` inside the already-running `api` container (`docker compose exec`) rather than needing a separate scheduler service — see `docs/terraform-digitalocean-setup.md`'s "Scheduled jobs" section for the actual mechanics (the schedule file, why no host-level Node install is needed, monitoring via per-job log files under `/opt/comprobify/logs/`). See `docs/guides/testing-scheduled-jobs.md` for how to exercise each job's scenarios locally by pushing dates into the past.
 
 > Staging's history: cron-job.org (third-party, no SLA) → Render Cron Job → the current droplet `cron.d` schedule. Each move kept the same underlying jobs and cadence, just changed who triggers them.
 
@@ -297,7 +297,7 @@ Idempotent. Runs every 5 minutes — the same cadence as the Notifications job, 
 
 ### Where the schedule actually lives now
 
-Defined in `terraform/modules/droplet/cloud-init.yaml.tftpl` as a `/etc/cron.d/comprobify-jobs` file, written to the droplet at first boot. Full mechanics — why it runs inside the `api` container instead of needing Node on the bare host, how it picks up `ADMIN_SECRET`, monitoring via per-job `journalctl -t comprobify-cron-<name>` tags — are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
+Defined in `terraform/modules/droplet/cloud-init.yaml.tftpl` as a `/etc/cron.d/comprobify-jobs` file, written to the droplet at first boot. Full mechanics — why it runs inside the `api` container instead of needing Node on the bare host, how it picks up `ADMIN_SECRET`, monitoring via per-job plain log files under `/opt/comprobify/logs/cron-<name>.log` (not `journalctl` — root SSH is fully disabled on this box, and reading the systemd journal needs root or the `systemd-journal` group) — are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
 
 Reference table (schedule matches the Render Cron Job days except Queue Reconciliation, tightened from hourly since self-hosted cron has no per-invocation cost — see above):
 
@@ -359,7 +359,7 @@ Queue reconciliation job:
 }
 ```
 
-Monitor via `journalctl -t comprobify-cron-notifications` / `-subscriptions` / `-quota` / `-queue-reconciliation` on the droplet for non-zero exit codes — see `docs/terraform-digitalocean-setup.md`. A sustained failure usually means `ADMIN_SECRET` has drifted out of sync between the container's `.env` and what's expected, or the `api` container itself is down.
+Monitor via `tail -100 /opt/comprobify/logs/cron-notifications.log` / `-subscriptions.log` / `-quota.log` / `-queue-reconciliation.log` on the droplet (`tail -f` to follow live) — see `docs/terraform-digitalocean-setup.md`. A sustained failure usually means `ADMIN_SECRET` has drifted out of sync between the container's `.env` and what's expected, or the `api` container itself is down.
 
 ---
 
