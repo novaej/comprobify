@@ -47,7 +47,7 @@ El Responsable autoriza el uso de los siguientes subencargados, ya en operación
 |---|---|---|
 | DigitalOcean | Infraestructura y alojamiento del Servicio (API) | Todos los clientes |
 | DigitalOcean Managed Postgres | Base de datos del Servicio, utilizada tanto por la API como por la interfaz web (comprobify-web) cuando el Responsable la utiliza | Todos los clientes |
-| DigitalOcean App Platform | Alojamiento de la interfaz web del Servicio (comprobify-web) | Solo clientes que utilizan la interfaz web |
+| DigitalOcean | Alojamiento de la interfaz web del Servicio (comprobify-web) | Solo clientes que utilizan la interfaz web |
 | Mailgun | Envío de correos transaccionales | Todos los clientes |
 | Sentry | Monitoreo y diagnóstico de errores | Todos los clientes |
 | CloudAMQP | Enrutamiento de mensajes para el procesamiento asíncrono de comprobantes electrónicos (identificadores del comprobante únicamente, sin datos del comprador) | Todos los clientes |
