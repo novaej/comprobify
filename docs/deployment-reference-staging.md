@@ -1,6 +1,6 @@
 # Comprobify Deployment Reference (Staging)
 
-Last updated: 2026-08-10
+Last updated: 2026-08-17
 
 This reference describes the staging deployment setup for Comprobify, including infrastructure, required configuration, deployment steps, and post-deployment checks. For the full CI/CD walkthrough, branching model, and env var reference, see `docs/deployment.md`. For the complete Terraform/DigitalOcean mechanics, see `docs/terraform-digitalocean-setup.md`.
 
@@ -67,7 +67,7 @@ Provisioned by Terraform (`terraform/environments/staging`, using the shared `te
 | Backend | S3-compatible, DigitalOcean Spaces |
 | Endpoint | `https://nyc3.digitaloceanspaces.com` (deliberately still `nyc3` — matches the existing Spaces bucket's region, independent of the droplet's `nyc1`) |
 | Bucket | `comprobify-terraform-state` |
-| State key | `staging/terraform.tfstate` |
+| State key | `staging/comprobify/terraform.tfstate` |
 
 ---
 
@@ -191,7 +191,7 @@ Written to `/etc/cron.d/comprobify-jobs` by cloud-init at first boot. Each entry
 | Quota | `10 6 * * *` | `docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota` |
 | Queue Reconciliation | `*/5 * * * *` | `docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
 
-Output is tagged and forwarded to the system log (`logger -t comprobify-cron`) — monitor with `journalctl -t comprobify-cron` on the droplet. `scripts/run-admin-job.js` needs `API_BASE_URL` and `ADMIN_SECRET`; both are picked up from the `api` container's own `.env`, so nothing extra is configured for cron itself. Harmless no-op if a job fires before the first deploy or mid-redeploy (no `api` container to exec into yet).
+Each entry writes to its own plain log file — `/opt/comprobify/logs/cron-<name>.log`, prefixed per-run with an ISO timestamp (`date -Is`) — not `logger`/syslog: root SSH is fully disabled on this box, and reading the systemd journal needs root or the `systemd-journal` group, neither of which the unprivileged deploy user has. Monitor with `tail -100 /opt/comprobify/logs/cron-notifications.log` (swap in `-subscriptions`/`-quota`/`-queue-reconciliation`; `tail -f` to follow live) on the droplet. Rotated weekly, 4 weeks kept, via `/etc/logrotate.d/comprobify-cron`. `scripts/run-admin-job.js` needs `API_BASE_URL` and `ADMIN_SECRET`; both are picked up from the `api` container's own `.env`, so nothing extra is configured for cron itself. Harmless no-op if a job fires before the first deploy or mid-redeploy (no `api` container to exec into yet).
 
 If the schedule itself needs to change, `cloud-init.yaml.tftpl` must be edited and the droplet recreated — `user_data` only applies at first boot.
 
@@ -330,7 +330,7 @@ Docker, fail2ban, unattended-upgrades, and cron are installed on the droplet its
 
 ```
 curl -s https://api-staging.comprobify.com/health
-# → {"status":"ok","uptime":...,"version":"0.14.1"}
+# → {"status":"ok","uptime":...,"version":"0.16.5"}
 
 curl -s https://api-staging.comprobify.com/v1/admin/tenants \
   -H "Authorization: Bearer $ADMIN_SECRET"
@@ -346,4 +346,4 @@ curl -s https://api-staging.comprobify.com/v1/admin/tenants \
 
 ---
 
-Current deployed version: 0.14.1 (`package.json`, also surfaced at `GET /health`'s `version` field). See `docs/deployment.md` for the full branching strategy and release process, and `docs/terraform-digitalocean-setup.md` for infrastructure day-2 operations (resize, destroy/recreate, SSH key rotation).
+Current deployed version: 0.16.5 (`package.json`, also surfaced at `GET /health`'s `version` field — check there for the actual current value, since this number drifts with every release and isn't kept in sync here). See `docs/deployment.md` for the full branching strategy and release process, and `docs/terraform-digitalocean-setup.md` for infrastructure day-2 operations (resize, destroy/recreate, SSH key rotation).
