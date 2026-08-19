@@ -246,7 +246,7 @@ Fix: a Cloudflare **Configuration Rule** scoped to just the API hostnames, with 
 
 This leaves Email Obfuscation active on the marketing site (`comprobify.com`, `staging.comprobify.com`), where it's still useful, and only disables it on the API hostnames that actually serve HTML with real embedded email addresses.
 
-`app.comprobify.com` / `app-staging.comprobify.com` (the frontend, `comprobify-web`) now run on DigitalOcean App Platform (moved off Vercel). Whether this rule needs to cover them depends on whether that hostname is Cloudflare-proxied — if App Platform serves it directly (not proxied), the rule still can't reach it; if it's since been put behind Cloudflare, add it to the expression above.
+`app.comprobify.com` / `app-staging.comprobify.com` (the frontend, `comprobify-web`) run on their own DigitalOcean droplet, Cloudflare-proxied (both DNS records are `proxied = true` in that repo's own Terraform config). Whether this rule needs to cover them depends on whether the frontend independently renders unobfuscated email addresses on any of its own pages — the agreement HTML it proxies from the API server-side is unaffected by its own proxy status, since that fetch never goes through Cloudflare.
 
 > Applies to any Cloudflare-proxied API hostname serving `GET /v1/agreements/:type` or `GET /v1/tenants/agreements/:type` HTML. If a new API hostname is added later (e.g. a second staging environment), add it to this rule's expression too, or its agreement pages will silently break the same way.
 

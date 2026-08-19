@@ -32,7 +32,7 @@ This reference describes the staging deployment setup for Comprobify, including 
 | Infrastructure-as-code | Terraform | `terraform/environments/staging`, state in DO Spaces bucket `comprobify-terraform-state` |
 | Container registry | GHCR | `ghcr.io/novaej/comprobify` |
 | Database | DigitalOcean Managed Database | Managed Postgres cluster, `public` + `sandbox` schemas — shared with `comprobify-web`, non-superuser app role required for RLS |
-| Frontend | DigitalOcean App Platform | `comprobify-web` |
+| Frontend | DigitalOcean Droplet | `comprobify-web-staging` — `s-1vcpu-1gb`, region `nyc1`; own Terraform config in the `comprobify-web` repo |
 | Message broker | CloudAMQP | `shared-broker` — AWS `us-east-1`, one vhost (free tier) |
 | Docs site | Cloudflare Pages | `comprobify-docs` — deployed from `main` via `docs.yml` |
 | Scheduled jobs | `cron.d` on the droplet | `/etc/cron.d/comprobify-jobs`, written by cloud-init — four jobs (see schedule table below) |
@@ -41,7 +41,7 @@ This reference describes the staging deployment setup for Comprobify, including 
 | DNS / proxy | Cloudflare | Domain: `comprobify.com` — `api-staging.comprobify.com` → droplet IP (A record, proxied, Terraform-managed) |
 | App CI/CD | GitHub Actions | `comprobify` repo — `release-staging.yml`, `deploy-staging.yml` |
 | Infra CI/CD | GitHub Actions | `comprobify` repo — `terraform.yml` |
-| DO Project | DigitalOcean (dashboard) | `Comprobify Staging` — groups the droplet, the App Platform app, and the Managed Database together (organizational only, not a security boundary) |
+| DO Project | DigitalOcean (dashboard) | `Comprobify Staging` — groups this droplet, `comprobify-web-staging`'s own droplet, and the Managed Database together (organizational only, not a security boundary) |
 
 ---
 
@@ -52,13 +52,13 @@ Provisioned by Terraform (`terraform/environments/staging`, using the shared `te
 | Setting | Value |
 |---|---|
 | Droplet name | `comprobify-staging` |
-| Region | `nyc1` — matches `comprobify-web`'s App Platform app, which only runs in `nyc1` |
+| Region | `nyc1` — same datacenter as `comprobify-web-staging`'s own droplet and the shared Managed Postgres cluster |
 | Size | `s-1vcpu-1gb`, 10GB disk (`resize_disk = false` on the droplet resource keeps a `droplet_size` change from also growing disk — see `docs/terraform-digitalocean-setup.md`'s "Resize" section) |
 | Base image | `ubuntu-24-04-x64` (plain distribution image, not a Marketplace image) |
 | Deploy user | `cpfydeploy9x` (unprivileged — docker group only, no sudo, no root SSH login) |
 | Firewall | 80/443 restricted to Cloudflare's published IPv4 ranges; 22 open to `0.0.0.0/0` (defense layered at the identity level instead — see `docs/terraform-digitalocean-setup.md`'s "SSH access model") |
 | Provisioning | cloud-init on first boot only — installs Docker Engine + Compose plugin, hardens sshd, enables fail2ban and unattended-upgrades, writes the `cron.d` schedule |
-| DigitalOcean Project | `Comprobify Staging` (dashboard grouping only, not a security boundary — also holds `comprobify-web`'s App Platform app and the shared Managed Postgres database, neither provisioned by this repo's Terraform) |
+| DigitalOcean Project | `Comprobify Staging` (dashboard grouping only, not a security boundary — also holds `comprobify-web-staging`'s own droplet and the shared Managed Postgres database, neither provisioned by this repo's Terraform) |
 
 ### Terraform state backend
 
@@ -297,7 +297,7 @@ A Configuration Rule disables obfuscation on just the API hostnames:
 | Expression | `(http.host eq "api.comprobify.com") or (http.host eq "api-staging.comprobify.com")` |
 | Action | Email Obfuscation → Off |
 
-Email Obfuscation stays on for `comprobify.com` / `staging.comprobify.com`, the marketing site, since it's still useful there. Whether `app-staging.comprobify.com` (the frontend, on DigitalOcean App Platform) needs adding to this rule depends on whether that hostname is Cloudflare-proxied: if App Platform serves it directly (unproxied), it's unaffected and needs no rule; if it's behind Cloudflare, it should be added to the expression above. Verify current proxy status before assuming either way.
+Email Obfuscation stays on for `comprobify.com` / `staging.comprobify.com`, the marketing site, since it's still useful there. `app-staging.comprobify.com` (the frontend, on its own DigitalOcean droplet, `comprobify-web-staging`) is Cloudflare-proxied — both of that droplet's DNS records are `proxied = true` in its own Terraform config. Whether it needs adding to the expression above depends on whether it independently renders unobfuscated email addresses on any of its own pages, separate from the API-hostname mechanism this rule already covers (the agreement HTML it proxies from the API server-side is unaffected by its own proxy status, since that fetch never goes through Cloudflare).
 
 Full rationale is in `docs/deployment.md`'s "Cloudflare configuration" section and CLAUDE.md Common Mistake #33.
 

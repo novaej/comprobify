@@ -4,7 +4,7 @@ Reference for how the API/worker compute layer is provisioned and deployed on Di
 
 **What lives on DigitalOcean:** one droplet per environment (`staging`, `production`), each running the `api` and `worker` containers behind a Caddy reverse proxy.
 
-**What doesn't:** CloudAMQP (RabbitMQ), Mailgun, Sentry, and Cloudflare (DNS/proxy, registrar) — external managed services, unaffected by anything in this document. The Postgres database (DigitalOcean Managed Database, shared by comprobify's API/worker and `comprobify-web`) and `comprobify-web` itself (DigitalOcean App Platform, moved off Vercel) are also outside this repo's Terraform — neither is provisioned by `terraform/` here — but both are grouped into the same `Comprobify Staging` DO Project as the droplet for dashboard purposes; see "DO Projects" below.
+**What doesn't:** CloudAMQP (RabbitMQ), Mailgun, Sentry, and Cloudflare (DNS/proxy, registrar) — external managed services, unaffected by anything in this document. The Postgres database (DigitalOcean Managed Database, shared by comprobify's API/worker and `comprobify-web`) and `comprobify-web` itself (its own DigitalOcean droplet, provisioned by that repo's own Terraform config) are also outside *this repo's* Terraform — neither is provisioned by `terraform/` here — but both are grouped into the same `Comprobify Staging` DO Project as this droplet for dashboard purposes; see "DO Projects" below.
 
 ---
 
@@ -137,7 +137,7 @@ resource "digitalocean_project_resources" "this" {
 }
 ```
 
-It used to be a managed `resource`. Staging's project now also holds resources this repo's Terraform doesn't own — `comprobify-web`'s DigitalOcean App Platform app and the shared Managed Postgres database, each assigned into the project through their own respective flows, not this Terraform config — so letting Terraform manage the project resource itself risked a config drift on either of those triggering Terraform to try to recreate the *project*, which would orphan everything else already living in it. `data.digitalocean_project` only looks the already-existing project up by name; `digitalocean_project_resources` still moves this repo's own droplet into it (DigitalOcean's droplet-creation API has no `project_id` argument — every droplet lands in the account's Default project first).
+It used to be a managed `resource`. Staging's project also holds resources this repo's Terraform doesn't own — `comprobify-web`'s own droplet and the shared Managed Postgres database, each assigned into the project through their own respective flows (the droplet via that repo's own Terraform config), not this Terraform config — so letting this repo's Terraform manage the project resource itself risked a config drift on either of those triggering Terraform to try to recreate the *project*, which would orphan everything else already living in it. `data.digitalocean_project` only looks the already-existing project up by name; `digitalocean_project_resources` still moves this repo's own droplet into it (DigitalOcean's droplet-creation API has no `project_id` argument — every droplet lands in the account's Default project first).
 
 Two entirely separate Projects (`Comprobify Staging`, `Comprobify Production`) — DO has no nested "one Project, multiple Environments" concept.
 
@@ -227,7 +227,7 @@ resource "digitalocean_ssh_key" "infra" {
 
 resource "digitalocean_droplet" "this" {
   name      = "comprobify-${var.environment}"
-  region    = var.region             # e.g. "nyc1" (staging's actual value — moved here from nyc3 to match comprobify-web's App Platform app, which only runs in nyc1)
+  region    = var.region             # e.g. "nyc1" (staging's actual value — moved here from nyc3 to match comprobify-web's own droplet, which also runs in nyc1)
   size      = var.droplet_size       # e.g. "s-1vcpu-1gb" — staging's actual value, resized up from the
                                       # original "s-1vcpu-512mb-10gb" $4/mo tier (#140) after the 512MB
                                       # tier left too little headroom past the api/worker mem_limits and
@@ -563,7 +563,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `DB_SSL_CA` | **Yes** | Staging's DB is DigitalOcean Managed Postgres, which signs with a private CA — required or connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. See `docs/deployment.md`'s env var table for the exact single-line format the deploy workflow's heredoc needs. |
 | `ENCRYPTION_KEY` | **Yes** | No default |
 | `ADMIN_SECRET` | **Yes** | No default |
-| `INTERNAL_SERVICE_SECRET` | No | Shared secret with `comprobify-web`'s BFF for forwarding the real visitor IP (`src/middleware/trusted-forwarded-ip.js`). Absent means the feature is inactive — no functional loss until `comprobify-web`'s own side is built (see its `NEXT_STEPS.md`). When set, must match the value configured in `comprobify-web`'s App Platform environment exactly. |
+| `INTERNAL_SERVICE_SECRET` | No | Shared secret with `comprobify-web`'s BFF for forwarding the real visitor IP (`src/middleware/trusted-forwarded-ip.js`). Absent means the feature is inactive — no functional loss until `comprobify-web`'s own side is built (see its `NEXT_STEPS.md`). When set, must match the value configured in `comprobify-web`'s own environment exactly. |
 | `EMAIL_FROM` | **Yes** | No default, and email is enabled by default (`EMAIL_PROVIDER` defaults to `mailgun`) |
 | `EMAIL_FROM_DOCUMENTS` | No | Falls back to `EMAIL_FROM` when unset — a legitimate, often-desired default (same sender for everything). Only set if you want document emails from a different address. |
 | `MAILGUN_API_KEY` | **Yes** | No default, required while email is enabled |
