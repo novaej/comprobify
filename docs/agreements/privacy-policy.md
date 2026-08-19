@@ -37,7 +37,7 @@ Los datos se almacenan y procesan utilizando los siguientes proveedores, cada un
 
 - **DigitalOcean** — hosting de la API (todos los Clientes).
 - **DigitalOcean Managed Postgres** — base de datos PostgreSQL, utilizada tanto por la API como por la interfaz web del Servicio (comprobify-web) cuando el Cliente la utiliza.
-- **DigitalOcean App Platform** — hosting de la interfaz web del Servicio (comprobify-web) (solo Clientes que utilizan la interfaz web).
+- **DigitalOcean** — hosting de la interfaz web del Servicio (comprobify-web) (solo Clientes que utilizan la interfaz web).
 - **Mailgun** — envío de correos transaccionales (verificación de cuenta, RIDE/PDF de comprobantes autorizados, notificaciones) (todos los Clientes).
 - **Sentry** — monitoreo de errores (configurado para minimizar el tratamiento de datos personales) (todos los Clientes).
 - **Betterstack** — plataforma de registro (logging) para monitoreo operativo y diagnóstico de errores; puede incluir la dirección IP de cada solicitud a la API, conforme a lo descrito en la sección 6 (todos los Clientes).
