@@ -1,42 +1,15 @@
 name: Terraform
 
-# Applies infrastructure changes under terraform/ - separate from and never triggered by
-# deploy-staging.yml/deploy-production.yml (those only ship application code, never touch
-# Terraform). See docs/terraform-digitalocean-setup.md's "CI/CD (GitHub Actions)" section.
+# Applies infrastructure changes under terraform/ - never triggered by, and never
+# triggers, deploy-staging.yml/deploy-production.yml (those only ship application code).
 #
 # One workflow, two job pairs (plan-staging/apply-staging, plan-production/apply-production)
-# rather than two workflow files - both pairs share the same push-to-main + paths trigger
-# below regardless of which environment's directory actually changed (terraform plan/apply
-# is idempotent, so an unrelated environment's pair just reports "no changes"). Contrast
-# with deploy-staging.yml/deploy-production.yml, which stay separate files since each is
-# gated by a different branch-push trigger (`staging` vs `production`).
+# sharing the same trigger below - terraform plan/apply is idempotent, so an unrelated
+# environment's pair just reports "no changes".
 #
-# DO_TOKEN and CLOUDFLARE_TOKEN live in each environment's own `<env>-infra` GitHub
-# Environment (Settings -> Environments -> staging-infra / production-infra), unprefixed -
-# same convention deploy-staging.yml/deploy-production.yml already use for
-# DB_HOST/ADMIN_SECRET/etc: one secret name, a different value per Environment, not a name
-# per environment. The comprobify-terraform-staging and comprobify-terraform-production
-# credentials (see the Prerequisites table in terraform-digitalocean-setup.md) are
-# deliberately separate tokens - `staging-infra` holds the staging value, `production-infra`
-# holds the production value, both under the exact same secret names, DO_TOKEN/
-# CLOUDFLARE_TOKEN.
-#
-# Every plan/apply job declares its own `<env>-infra` environment - unlike an earlier draft
-# that only gated `apply`, this means a required-reviewer rule added to an `<env>-infra`
-# Environment (repo Settings -> Environments -> <env>-infra -> add yourself as a required
-# reviewer) gates `plan` too, i.e. you approve before seeing the diff, not after. Deliberate
-# trade-off for staying consistent with deploy-staging.yml's single-environment shape
-# instead of introducing a second, plan-only Environment just to keep plan ungated.
-#
-# The Spaces state-backend credentials (TERRAFORM_SPACES_ACCESS_KEY_ID/SECRET_ACCESS_KEY)
-# are the exception and stay as REPOSITORY secrets, not Environment secrets - staging and
-# production share one state bucket with different key prefixes (see "Remote state" in
-# terraform-digitalocean-setup.md) via one Spaces key pair created once, so there's only
-# ever one correct value, and every job (regardless of which Environment it declares) needs
-# it. They keep the TERRAFORM_ prefix because, as repository secrets, they sit in the same
-# flat Secrets list as docs.yml's unrelated DOCS_CLOUDFLARE_* pair - Environment secrets
-# don't have that collision risk since they're scoped to their own Environment's page in
-# the GitHub UI, which is why DO_TOKEN/CLOUDFLARE_TOKEN don't need the prefix.
+# DO_TOKEN/CLOUDFLARE_TOKEN live in each environment's own <env>-infra GitHub Environment,
+# unprefixed. TERRAFORM_SPACES_* stay as repository secrets instead - staging and
+# production share one state bucket, so there's only one correct value for either.
 #
 # `destroy` is manual-only, gated by the `action` workflow_dispatch input - a `push` event
 # never has `github.event.inputs`, so `action` is only ever meaningfully set on a manual
