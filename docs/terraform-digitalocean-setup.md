@@ -786,6 +786,7 @@ on:
 
 jobs:
   plan-staging:
+    if: vars.STAGING_INFRA_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
@@ -811,7 +812,7 @@ jobs:
 
   apply-staging:
     needs: plan-staging
-    if: github.event_name == 'push' || github.event.inputs.action != 'plan'
+    if: (github.event_name == 'push' || github.event.inputs.action != 'plan') && vars.STAGING_INFRA_ENABLED == 'true'
     environment: staging-infra
     runs-on: ubuntu-latest
     steps:
@@ -842,6 +843,14 @@ jobs:
 Note every `init` step also needs the Spaces credentials, not just `plan`/`apply` — `init` is what actually connects to the remote state backend. `plan` always runs regardless of `action` (there's no dry-run-only skip on it); `apply` skips only when a manual run explicitly chose `plan` (dry-run) — both the `apply` default and `destroy` fall through to `apply`'s `if`, and its `run:` step picks the actual command.
 
 **Before the first push that introduces `plan-production`/`apply-production` (or any push to `main` touching `terraform/**` after that): the `production-infra` GitHub Environment must already exist with real `DO_TOKEN`/`CLOUDFLARE_TOKEN` values, and the "Comprobify Production" DigitalOcean Project must already exist** (`main.tf`'s `data "digitalocean_project"` only looks it up by name, never creates it — see "DO Projects" above). Missing either one fails `plan-production` safely — bad/absent credentials, or a lookup that finds nothing, neither of which can touch real infra, since `apply-production` only runs if `plan-production` succeeds — but it's a red check either way, so set both up first.
+
+### Toggling staging infra on/off — `STAGING_INFRA_ENABLED`
+
+Once production is live, the plan is to keep only production running continuously — staging's droplet (and its DigitalOcean Managed Postgres cluster, not Terraform-managed, torn down by hand) gets destroyed between uses rather than left running idle, since staging's only ongoing job at that point is validating an infra change before it reaches production, not serving real traffic. `plan-staging`/`apply-staging` are gated on `if: vars.STAGING_INFRA_ENABLED == 'true'` — a plain **repository variable** (Settings → Secrets and variables → Actions → Variables tab, not Environment-scoped, since a job's own `if:` is evaluated before its `environment:` context resolves), not a code change, so flipping it needs no PR. `plan-production`/`apply-production` carry no such gate — production always applies.
+
+The intended cycle: flip `STAGING_INFRA_ENABLED` to `true`, `terraform apply` staging (plus recreate the Postgres cluster and anything else destroyed by hand), push/land the infra change and validate it there, then flip the variable back to `false` — the droplet and DB get destroyed by hand again, but the Terraform code for staging stays in the repo untouched, ready for the next cycle. Since `staging-infra` already has a required reviewer (gating both `plan-staging` and `apply-staging`, same as `production-infra` is meant to once it's set up — see above), that approval step is what actually sequences "validate in staging, then let it apply to production" — a human can approve staging's run, check the result, and only then approve production's, entirely independent of this variable.
+
+A `terraform/**` push that lands while `STAGING_INFRA_ENABLED` is `false` still runs `plan-production`/`apply-production` normally — `plan-staging`/`apply-staging` just show as skipped in the Actions UI, not failed, and the change simply doesn't reach staging until the variable is flipped back on and the workflow re-run (`workflow_dispatch`) against it.
 
 ### App deploy workflow — `.github/workflows/deploy-staging.yml`
 

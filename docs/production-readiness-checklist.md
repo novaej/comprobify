@@ -39,6 +39,10 @@ Not a separate action: the 4 scheduled cron jobs. `cloud-init.yaml.tftpl` alread
 
 ---
 
-## Open question: keeping staging running after production launches
+## Staging lifecycle once production is live
 
-Not yet decided — see the conversation this file came out of. Running both environments continuously means paying for two droplets (plus, per `docs/deployment.md`'s "Production status," production is planned to get its **own** Managed Postgres cluster, not share staging's), but the release pipeline (`docs/deployment.md`'s branching strategy) is built around validating every tag in staging *before* promoting it to production — permanently removing staging changes that pipeline, it doesn't just save money. Needs a deliberate decision, not a default.
+Decided: only production runs continuously. Staging's droplet and its Managed Postgres cluster (not Terraform-managed, torn down by hand) get destroyed between uses instead of left running idle — the Terraform code for staging stays in the repo, just not applied against anything most of the time.
+
+- [ ] Set the `STAGING_INFRA_ENABLED` repository variable (`terraform.yml` gates `plan-staging`/`apply-staging` on it — see `docs/terraform-digitalocean-setup.md`'s "Toggling staging infra on/off")
+
+Cycle going forward: flip `STAGING_INFRA_ENABLED` to `true` → `terraform apply` staging + manually recreate the DB cluster and anything else destroyed → land and validate the infra change there → flip back to `false` → destroy the droplet/cluster by hand again. `production-infra`'s required-reviewer gate (once set up, matching `staging-infra`'s existing one) is what actually sequences "validate in staging, then apply to production" — approve staging's run, check it, then separately approve production's.

@@ -11,6 +11,10 @@ name: Terraform
 # unprefixed. TERRAFORM_SPACES_* stay as repository secrets instead - staging and
 # production share one state bucket, so there's only one correct value for either.
 #
+# plan-staging/apply-staging are gated on the STAGING_INFRA_ENABLED repository variable
+# (Settings -> Actions -> Variables) - flip it off, no code change, when staging's droplet
+# is torn down between uses. plan-production/apply-production are never gated.
+#
 # `destroy` is manual-only, gated by the `action` workflow_dispatch input - a `push` event
 # never has `github.event.inputs`, so `action` is only ever meaningfully set on a manual
 # run, and destroy can never fire from a push no matter what the input default is. Default
@@ -56,6 +60,7 @@ on:
 
 jobs:
   plan-staging:
+    if: vars.STAGING_INFRA_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
@@ -86,8 +91,9 @@ jobs:
     # push never has inputs.action, so this stays true (unchanged behavior) for every
     # push-triggered run; a manual run skips this job only for a 'plan'-only dry run -
     # both the 'apply' default and 'destroy' proceed here, and which one actually happens
-    # is decided inside the step below.
-    if: github.event_name == 'push' || github.event.inputs.action != 'plan'
+    # is decided inside the step below. ANDed with STAGING_INFRA_ENABLED so a manual
+    # destroy/apply run still no-ops while staging's infra is disabled.
+    if: (github.event_name == 'push' || github.event.inputs.action != 'plan') && vars.STAGING_INFRA_ENABLED == 'true'
     environment: staging-infra
     runs-on: ubuntu-latest
     steps:
