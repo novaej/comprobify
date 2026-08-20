@@ -107,7 +107,7 @@ Caddy obtains/renews its Let's Encrypt certificate automatically on first reques
 
 ## GitHub — Environments and Secrets
 
-Three separate scopes are in play: the `staging` Environment (app deploy secrets/variables, read by `deploy-staging.yml`), the `staging-infra` Environment (Terraform credentials, read by `terraform.yml`), and repository-level secrets (not environment-scoped).
+Four separate scopes are in play: the `staging` Environment (app deploy secrets/variables, read by `deploy-staging.yml`), the `staging-infra` Environment (Terraform credentials, read by `terraform.yml`), repository-level secrets, and repository-level variables (the latter two not environment-scoped).
 
 ### GitHub Environment: `staging` — Secrets
 
@@ -180,6 +180,12 @@ Read by `terraform.yml`'s plan/apply jobs only.
 | `DOCS_CLOUDFLARE_ACCOUNT_ID` | |
 | `TERRAFORM_SPACES_ACCESS_KEY_ID` | |
 | `TERRAFORM_SPACES_SECRET_ACCESS_KEY` | |
+
+### Repository variables (not environment-scoped)
+
+| Variable | Value |
+|---|---|
+| `STAGING_INFRA_ENABLED` | `true` — gates `terraform.yml`'s `plan-staging`/`apply-staging` jobs; flip to `false` when staging's droplet is torn down between uses. See `docs/terraform-digitalocean-setup.md`'s "Toggling staging infra on/off". |
 
 ---
 

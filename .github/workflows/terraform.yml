@@ -11,9 +11,8 @@ name: Terraform
 # unprefixed. TERRAFORM_SPACES_* stay as repository secrets instead - staging and
 # production share one state bucket, so there's only one correct value for either.
 #
-# plan-staging/apply-staging are gated on the STAGING_INFRA_ENABLED repository variable
-# (Settings -> Actions -> Variables) - flip it off, no code change, when staging's droplet
-# is torn down between uses. plan-production/apply-production are never gated.
+# plan-production/apply-production are deliberately never gated; plan-staging/apply-staging
+# are, via STAGING_INFRA_ENABLED - see terraform-digitalocean-setup.md.
 #
 # `destroy` is manual-only, gated by the `action` workflow_dispatch input - a `push` event
 # never has `github.event.inputs`, so `action` is only ever meaningfully set on a manual
