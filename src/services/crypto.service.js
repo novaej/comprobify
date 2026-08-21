@@ -104,9 +104,22 @@ function decrypt(ciphertext) {
   // the integrity of the ciphertext at the end of decryption
   decipher.setAuthTag(authTag);
 
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8'); // throws if auth tag does not match
-  return decrypted;
+  try {
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8'); // throws if auth tag does not match
+    return decrypted;
+  } catch {
+    // final() throws a raw Node "Unsupported state or unable to authenticate
+    // data" Error on auth tag mismatch (tampered/corrupted ciphertext, or the
+    // ENCRYPTION_KEY changed since this value was stored) — wrap it so callers
+    // get a stable code instead of a generic 500 with no code.
+    throw new AppError(
+      'Failed to decrypt stored credential — data may be corrupted or was encrypted with a different key.',
+      500,
+      ErrorCodes.DECRYPTION_FAILED,
+      false
+    );
+  }
 }
 
 module.exports = { encrypt, decrypt };

@@ -26,7 +26,7 @@ Items are grouped by whether they're currently blocked, and on what.
 - [ ] Extend the Cloudflare Email Obfuscation rule to `api.comprobify.com`
 - [ ] Publish all 12 notification email templates (6 types × es/en) via the admin API
 - [ ] Run through the 18-item production security checklist in `docs/deployment.md`
-- [ ] Write and test an `ENCRYPTION_KEY` rotation script (none exists yet — do this before it's ever needed for real)
+- [x] Write and test an `ENCRYPTION_KEY` rotation script — `scripts/rotate-encryption-key.js`, `--dry-run` support, unit-tested (`tests/unit/scripts/rotate-encryption-key.test.js`), and both dry-run and real commit paths verified against a real local database
 
 Not a separate action: the 4 scheduled cron jobs. `cloud-init.yaml.tftpl` already templates them per environment via `${deploy_username}`, so they land automatically the moment `terraform apply` provisions the production droplet.
 
