@@ -11,7 +11,7 @@ Items are grouped by whether they're currently blocked, and on what.
 - [x] Create the `production` git branch (fast-forward-only, mirrors `staging`)
 - [x] Write `terraform/environments/production` (droplet + DO Managed Postgres, mirroring staging's setup)
 - [x] Add the `plan-production`/`apply-production` job pair to `terraform.yml`
-- [ ] Fix `deploy/caddy/Caddyfile` for the production domain (currently hardcoded to `api-staging.comprobify.com`)
+- [x] Fix `deploy/caddy/Caddyfile` for the production domain (was hardcoded to `api-staging.comprobify.com`; now `{$PUBLIC_DOMAIN}`, Caddy's own env-var substitution, fed per-environment by each deploy workflow)
 - [ ] Generate unique production secrets: `ENCRYPTION_KEY`, `ADMIN_SECRET`, DB creds, RabbitMQ vhost/creds
 - [ ] Set up the `production` GitHub Environment's app secrets/variables (full set mirroring `staging`'s)
 - [ ] Set up the `production-infra` GitHub Environment (`DO_TOKEN`/`CLOUDFLARE_TOKEN`) — required-reviewer rule added *before* the secrets, never after

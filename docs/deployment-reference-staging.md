@@ -84,7 +84,7 @@ Provisioned by Terraform (`terraform/environments/staging`, using the shared `te
 
 `api` and `worker` run the **same image**, built once per deploy from the repo's `Dockerfile` (`node:20-slim`, `libxml2-utils` installed at build time for `xmllint`), differing only in the container `command`. `api` declares `depends_on: redis: condition: service_healthy`, gated on `redis`'s own `healthcheck` (`redis-cli ping`) — not the plain list form, which only waits for the container to start, not for Redis to actually accept connections; `worker` never connects to it. Both `api` and `worker` also set a `hostname` (`comprobify-api-${APP_ENV}` / `comprobify-worker-${APP_ENV}`) read by `logger.service.js`'s `os.hostname()` call, so log lines are distinguishable across environments once more than staging exists.
 
-Caddy config (`deploy/caddy/Caddyfile` — a directory mount, not a single-file mount, so a redeployed file is actually visible to the running container; see the comment on `caddy`'s `volumes` in `docker-compose.yml`):
+Caddy config (`deploy/caddy/Caddyfile` — a directory mount, not a single-file mount, so a redeployed file is actually visible to the running container; see the comment on `caddy`'s `volumes` in `docker-compose.yml`). The site address is `{$PUBLIC_DOMAIN}` — Caddy's own env-var substitution, fed by the `PUBLIC_DOMAIN` GitHub Environment Variable (see below) — shown below resolved to staging's actual value:
 
 ```
 {
@@ -142,6 +142,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 |---|---|
 | `APP_ENV` | |
 | `APP_BASE_URL` | |
+| `PUBLIC_DOMAIN` | `api-staging.comprobify.com` — bare hostname (no scheme), consumed only by `caddy`'s Caddyfile, not the app itself |
 | `DB_SSL` | |
 | `EMAIL_FROM` | |
 | `EMAIL_FROM_DOCUMENTS` | |

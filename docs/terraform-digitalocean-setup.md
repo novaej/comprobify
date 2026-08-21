@@ -472,6 +472,8 @@ services:
       - ./caddy:/etc/caddy
       - caddy_data:/data
       - caddy_config:/config
+    environment:
+      - PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
     depends_on:
       - api
 
@@ -534,12 +536,14 @@ volumes:
     }
 }
 
-api-staging.comprobify.com {
+{$PUBLIC_DOMAIN} {
     reverse_proxy api:8080 {
         header_up X-Real-Client-IP {client_ip}
     }
 }
 ```
+
+One Caddyfile for both environments — `{$PUBLIC_DOMAIN}` is Caddy's own native env-var substitution (resolved from the `caddy` container's process environment, not Compose-file interpolation), fed by the `environment:` block above. `PUBLIC_DOMAIN` is written into `.env` per environment (`api-staging.comprobify.com` / `api.comprobify.com`) by each deploy workflow, same as `APP_ENV`/`APP_BASE_URL`. A dedicated GitHub Environment Variable rather than reusing `APP_BASE_URL` deliberately — that value carries a `https://` scheme prefix, and a scheme-prefixed Caddy site address disables Caddy's automatic HTTP listener/redirect for that site, a real behavior change from the bare-hostname address this already relied on.
 
 Caddy requests its own Let's Encrypt certificate automatically on first request (no config needed) — this works fine sitting behind Cloudflare's proxy since Cloudflare forwards the ACME HTTP-01 challenge through on port 80, which the firewall already allows from Cloudflare's IP ranges.
 
