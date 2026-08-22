@@ -45,6 +45,12 @@ Only returned from `POST /v1/keys`. You tried to mint a new key with a scope you
 
 **What to do:** Only request scopes your own key already has, or omit `scopes` entirely to clone your own key's scopes onto the new one.
 
+### `ISSUER_ISSUING_PAUSED`
+
+The issuer is active but has been paused from creating new documents via `PATCH /v1/issuers/:id/can-issue`. Applies to both `POST /v1/documents` and `POST /:accessKey/rebuild` (a rebuild re-signs and re-submits to SRI, the same risk as a fresh create). Documents already issued by this issuer are unaffected — RIDE, XML, and other read-only endpoints keep working normally.
+
+**What to do:** Resume issuing by calling `PATCH /v1/issuers/:id/can-issue` with `{ "canIssue": true }`, or use a different issuer.
+
 ### `FORBIDDEN` (fallback)
 
 A generic 403 not covered by a specific code above. Read `detail`.
@@ -92,5 +98,16 @@ A generic 403 not covered by a specific code above. Read `detail`.
   "code":     "SCOPE_ESCALATION_FORBIDDEN",
   "detail":   "Cannot mint a key with scopes the requesting key does not itself have: tenant:promote",
   "instance": "/v1/keys"
+}
+```
+
+```json
+{
+  "type":     "https://docs.comprobify.com/errors/forbidden",
+  "title":    "Forbidden",
+  "status":   403,
+  "code":     "ISSUER_ISSUING_PAUSED",
+  "detail":   "This issue point is not currently allowed to create new documents",
+  "instance": "/v1/documents"
 }
 ```

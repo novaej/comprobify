@@ -70,6 +70,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `PATCH` | `/v1/issuers/:id` | Edit `tradeName` and/or `branchAddress` |
 | `DELETE` | `/v1/issuers/:id` | Soft-delete an issuer (blocked if it's the last one or has issued documents) |
 | `PATCH` | `/v1/issuers/:id/activate` | Reactivate a soft-deleted issuer (re-checks plan branch/issue-point limits) |
+| `PATCH` | `/v1/issuers/:id/can-issue` | Pause or resume new document creation on the issuer, without deactivating it |
 | `PATCH` | `/v1/issuers/:id/logo` | Upload or replace the issuer logo shown in RIDE PDFs (PNG/JPEG/GIF, max 500 KB) |
 | `PATCH` | `/v1/issuers/:id/certificate` | Renew the issuer's P12 certificate (private key + cert) — e.g. when it has expired |
 | `GET` | `/v1/issuers/:id/document-types` | List active document types for the issuer |

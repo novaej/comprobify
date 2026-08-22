@@ -70,6 +70,7 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 | `PATCH` | `/v1/issuers/:id` | Edita `tradeName` y/o `branchAddress` |
 | `DELETE` | `/v1/issuers/:id` | Elimina (soft-delete) un emisor (bloqueado si es el último o si ya emitió comprobantes) |
 | `PATCH` | `/v1/issuers/:id/activate` | Reactiva un emisor eliminado (soft-delete) (vuelve a verificar los límites de sucursales/puntos de emisión del plan) |
+| `PATCH` | `/v1/issuers/:id/can-issue` | Pausa o reanuda la creación de comprobantes nuevos en el emisor, sin desactivarlo |
 | `PATCH` | `/v1/issuers/:id/logo` | Sube o reemplaza el logo del emisor mostrado en los PDF RIDE (PNG/JPEG/GIF, máx. 500 KB) |
 | `PATCH` | `/v1/issuers/:id/certificate` | Renueva el certificado P12 del emisor (llave privada + certificado) — por ejemplo, cuando ha vencido |
 | `GET` | `/v1/issuers/:id/document-types` | Lista los tipos de comprobante activos para el emisor |

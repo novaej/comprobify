@@ -34,7 +34,8 @@ GET /v1/issuers/:id
     "issuePointCode": "001",
     "branchAddress": "Av. Amazonas 123",
     "certFingerprint": "a1b2c3d4e5f6...",
-    "certExpiry": "2027-03-15T00:00:00.000Z"
+    "certExpiry": "2027-03-15T00:00:00.000Z",
+    "canIssue": true
   }
 }
 ```
@@ -50,6 +51,7 @@ GET /v1/issuers/:id
 | `branchAddress` | string \| null | Dirección de la sucursal, si está definida |
 | `certFingerprint` | string \| null | Huella SHA-256 del certificado de firma |
 | `certExpiry` | string \| null | Marca de tiempo ISO 8601 de expiración del certificado de firma |
+| `canIssue` | boolean | `false` si el emisor fue pausado vía [Pausar/Reanudar Emisión](set-can-issue.md) — bloquea `POST /v1/documents` y `POST /:accessKey/rebuild` sin afectar comprobantes existentes |
 
 ## Errores
 

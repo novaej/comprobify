@@ -34,7 +34,8 @@ GET /v1/issuers/:id
     "issuePointCode": "001",
     "branchAddress": "Av. Amazonas 123",
     "certFingerprint": "a1b2c3d4e5f6...",
-    "certExpiry": "2027-03-15T00:00:00.000Z"
+    "certExpiry": "2027-03-15T00:00:00.000Z",
+    "canIssue": true
   }
 }
 ```
@@ -50,6 +51,7 @@ GET /v1/issuers/:id
 | `branchAddress` | string \| null | Branch address, if set |
 | `certFingerprint` | string \| null | SHA-256 fingerprint of the signing certificate |
 | `certExpiry` | string \| null | ISO 8601 expiry timestamp of the signing certificate |
+| `canIssue` | boolean | `false` if the issuer was paused via [Pause/Resume Issuing](set-can-issue.md) — blocks `POST /v1/documents` and `POST /:accessKey/rebuild` without affecting existing documents |
 
 ## Errors
 
