@@ -207,6 +207,7 @@ async function listIssuers(tenantId) {
     branchAddress: i.branch_address || null,
     certFingerprint: i.cert_fingerprint || null,
     certExpiry: i.cert_expiry || null,
+    canIssue: i.can_issue,
   }));
 }
 
@@ -278,4 +279,10 @@ async function activateIssuer(issuer, tenant) {
   if (!updated) throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
 }
 
-module.exports = { createBranch, listDocumentTypes, addDocumentType, removeDocumentType, listIssuers, renewCertificate, removeIssuer, getSequentials, setSequential, activateIssuer };
+async function setCanIssue(issuer, canIssue) {
+  const updated = await issuerModel.setCanIssue(issuer.id, issuer.tenant_id, canIssue);
+  if (!updated) throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
+  return updated;
+}
+
+module.exports = { createBranch, listDocumentTypes, addDocumentType, removeDocumentType, listIssuers, renewCertificate, removeIssuer, getSequentials, setSequential, activateIssuer, setCanIssue };

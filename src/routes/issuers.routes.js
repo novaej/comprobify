@@ -80,6 +80,7 @@ router.get('/:id', readLimiter, readScope, idParam, validateRequest, asyncHandle
 router.patch('/:id', writeLimiter, writeScope, idParam, v.updateIssuer, validateRequest, asyncHandler(controller.updateIssuer));
 router.delete('/:id', writeLimiter, writeScope, idParam, validateRequest, asyncHandler(controller.removeIssuer));
 router.patch('/:id/activate', writeLimiter, writeScope, idParam, validateRequest, asyncHandler(controller.activateIssuer));
+router.patch('/:id/can-issue', writeLimiter, writeScope, idParam, v.setCanIssue, validateRequest, asyncHandler(controller.setCanIssue));
 router.patch('/:id/logo', writeLimiter, writeScope, idParam, validateRequest, handleLogoUpload, asyncHandler(controller.uploadLogo));
 router.patch('/:id/certificate', writeLimiter, writeScope, upload.single('cert'), idParam, validateRequest, asyncHandler(controller.renewCertificate));
 router.get('/:id/document-types', readLimiter, readScope, idParam, validateRequest, asyncHandler(controller.listDocumentTypes));

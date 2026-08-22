@@ -96,6 +96,8 @@ const ErrorCodes = Object.freeze({
   LAST_ISSUER_CANNOT_BE_REMOVED: 'LAST_ISSUER_CANNOT_BE_REMOVED',
   /** Issuer has only one active document type left — it cannot be removed */
   LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED: 'LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED',
+  /** Issuer is active but has been paused from creating new documents */
+  ISSUER_ISSUING_PAUSED: 'ISSUER_ISSUING_PAUSED',
   /** Issuer has issued documents and cannot be removed */
   ISSUER_HAS_DOCUMENTS: 'ISSUER_HAS_DOCUMENTS',
   /** Requested nextSequential is not greater than the current counter value */

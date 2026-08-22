@@ -108,6 +108,7 @@ const getById = async (req, res) => {
       branchAddress: i.branch_address || null,
       certFingerprint: i.cert_fingerprint || null,
       certExpiry: i.cert_expiry || null,
+      canIssue: i.can_issue,
     },
   });
 };
@@ -183,4 +184,10 @@ const activateIssuer = async (req, res) => {
   res.json({ ok: true });
 };
 
-module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType, uploadLogo, renewCertificate, updateIssuer, removeIssuer, getSequentials, setSequential, activateIssuer };
+const setCanIssue = async (req, res) => {
+  const issuer = await loadOwnedIssuer(req);
+  const updated = await issuerService.setCanIssue(issuer, req.body.canIssue);
+  res.json({ ok: true, canIssue: updated.can_issue });
+};
+
+module.exports = { createBranch, list, getById, listDocumentTypes, addDocumentType, removeDocumentType, uploadLogo, renewCertificate, updateIssuer, removeIssuer, getSequentials, setSequential, activateIssuer, setCanIssue };

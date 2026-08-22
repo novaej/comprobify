@@ -31,6 +31,7 @@ const documentRebuildService = require('../../../src/services/document-rebuild.s
 const mockIssuer = {
   id: '00000000-0000-0000-0000-000000000005',
   sandbox: true,
+  can_issue: true,
   branch_code: '001',
   issue_point_code: '001',
   encrypted_private_key: 'encrypted-private-key',
@@ -85,6 +86,14 @@ describe('DocumentRebuildService', () => {
     documentLineItemModel.deleteByDocumentId.mockResolvedValue();
     documentLineItemModel.bulkCreate.mockResolvedValue([]);
     documentEventModel.create.mockResolvedValue({});
+  });
+
+  test('throws ISSUER_ISSUING_PAUSED when the issuer has been paused, without looking up the document', async () => {
+    const pausedIssuer = { ...mockIssuer, can_issue: false };
+
+    await expect(documentRebuildService.rebuild(accessKey, body, pausedIssuer))
+      .rejects.toMatchObject({ statusCode: 403, code: 'ISSUER_ISSUING_PAUSED' });
+    expect(documentModel.findByAccessKey).not.toHaveBeenCalled();
   });
 
   test('throws NotFoundError when the document does not exist', async () => {

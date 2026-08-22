@@ -134,6 +134,26 @@ describe('IssuerService', () => {
     });
   });
 
+  describe('setCanIssue', () => {
+    const issuer = { id: '00000000-0000-0000-0000-000000000001', tenant_id: '00000000-0000-0000-0000-000000000009' };
+
+    test('delegates to issuerModel.setCanIssue and returns the updated row', async () => {
+      issuerModel.setCanIssue.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', can_issue: false });
+
+      const result = await issuerService.setCanIssue(issuer, false);
+
+      expect(issuerModel.setCanIssue).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000009', false);
+      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000001', can_issue: false });
+    });
+
+    test('throws NotFoundError when the issuer no longer exists', async () => {
+      issuerModel.setCanIssue.mockResolvedValue(null);
+
+      await expect(issuerService.setCanIssue(issuer, true))
+        .rejects.toMatchObject({ statusCode: 404, code: 'ISSUER_NOT_FOUND' });
+    });
+  });
+
   describe('renewCertificate', () => {
     const issuer = { id: '00000000-0000-0000-0000-000000000001', tenant_id: '00000000-0000-0000-0000-000000000009' };
     const p12Buffer = Buffer.from('fake-p12');

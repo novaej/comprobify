@@ -64,7 +64,7 @@ async function findByTenantId(tenantId) {
 async function findAllByTenantId(tenantId) {
   const { rows } = await db.query(
     `SELECT id, ruc, business_name, trade_name, branch_code, issue_point_code,
-            branch_address, cert_fingerprint, cert_expiry
+            branch_address, cert_fingerprint, cert_expiry, can_issue
      FROM issuers WHERE tenant_id = $1 AND active = true ORDER BY id`,
     [tenantId]
   );
@@ -113,4 +113,12 @@ async function activate(issuerId, tenantId) {
   return rows[0] || null;
 }
 
-module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo, updateCertificate, update, deactivate, countActiveByTenantId, findByIdAny, activate };
+async function setCanIssue(issuerId, tenantId, canIssue) {
+  const { rows } = await db.query(
+    'UPDATE issuers SET can_issue = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3 AND active = true RETURNING id, can_issue',
+    [canIssue, issuerId, tenantId]
+  );
+  return rows[0] || null;
+}
+
+module.exports = { findById, findByRuc, findFirst, findByTenantId, findAllByTenantId, create, findAll, updateLogo, updateCertificate, update, deactivate, countActiveByTenantId, findByIdAny, activate, setCanIssue };

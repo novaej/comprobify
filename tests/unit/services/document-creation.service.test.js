@@ -45,6 +45,7 @@ const prodIssuer = {
   issue_point_code: '001',
   emission_type: '1',
   sandbox: false,
+  can_issue: true,
   encrypted_private_key: 'encrypted-private-key',
   certificate_pem: '-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----',
 };
@@ -233,6 +234,19 @@ describe('DocumentCreationService', () => {
 
       expect(accessKeyService.generate).toHaveBeenCalledWith(expect.objectContaining({ environment: '1' }));
       expect(builders.getBuilder).toHaveBeenCalledWith('01', expect.objectContaining({ environment: '1' }));
+    });
+  });
+
+  describe('create — issuing paused', () => {
+    test('throws when the issuer has been paused, without opening a transaction', async () => {
+      const pausedIssuer = { ...prodIssuer, can_issue: false };
+
+      await expect(documentCreationService.create(validBody, null, pausedIssuer)).rejects.toMatchObject({
+        statusCode: 403,
+        code: 'ISSUER_ISSUING_PAUSED',
+      });
+      expect(db.getClient).not.toHaveBeenCalled();
+      expect(issuerDocumentTypeModel.findActiveByIssuerId).not.toHaveBeenCalled();
     });
   });
 

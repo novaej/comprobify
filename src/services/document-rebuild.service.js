@@ -7,14 +7,26 @@ const documentEventModel = require('../models/document-event.model');
 const signingService = require('./signing.service');
 const xmlValidator = require('./xml-validator.service');
 const { getBuilder } = require('../builders');
+const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const ValidationError = require('../errors/validation-error');
+const ErrorCodes = require('../constants/error-codes');
 const DocumentStatus = require('../constants/document-status');
 const { assertTransition } = require('../constants/document-state-machine');
 const EventType = require('../constants/event-type');
 const { formatDocument } = require('../presenters/document.presenter');
 
+// A rebuild re-signs and re-submits to SRI under the same access key — the same
+// "new SRI submission" risk as create(), so it's gated by the same pause flag.
 async function rebuild(accessKey, body, issuer) {
+  if (!issuer.can_issue) {
+    throw new AppError(
+      'This issue point is not currently allowed to create new documents',
+      403,
+      ErrorCodes.ISSUER_ISSUING_PAUSED
+    );
+  }
+
   const document = await documentModel.findByAccessKey(accessKey, issuer.id, issuer.sandbox);
   if (!document) {
     throw new NotFoundError('Document');
