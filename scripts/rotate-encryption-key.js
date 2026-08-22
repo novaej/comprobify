@@ -37,6 +37,13 @@
  * after a successful (non-dry-run) run; don't leave a gap.
  */
 
+// Unlike app.js, nothing else guarantees this has run before src/config/database.js
+// reads process.env.DB_* - without it, every DB_* var is undefined when run directly
+// (`node scripts/rotate-encryption-key.js`), which pg surfaces as an opaque
+// "SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string" instead of a
+// clear "missing env var" error.
+require('dotenv').config();
+
 const crypto = require('crypto');
 
 const ALGORITHM = 'aes-256-gcm';
