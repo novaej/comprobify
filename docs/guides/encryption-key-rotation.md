@@ -16,6 +16,8 @@ Runs the whole rotation as one transaction: `SELECT ... FOR UPDATE` on every `is
 
 ---
 
+Test against a copy of real data before ever rotating for real — see `docs/guides/database-backups.md` for getting an importable dump from staging or production.
+
 ## Local / dev / staging, with direct DB access
 
 ```bash
