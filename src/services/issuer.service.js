@@ -47,7 +47,11 @@ async function removeDocumentType(issuerId, documentType) {
     );
   }
   if (active.length <= 1) {
-    throw new AppError('Cannot remove the last document type — at least one must remain active', 400);
+    throw new AppError(
+      'Cannot remove the last document type — at least one must remain active',
+      400,
+      ErrorCodes.LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED
+    );
   }
   await issuerDocumentTypeModel.deactivate(issuerId, documentType);
   return issuerDocumentTypeModel.findActiveByIssuerId(issuerId);

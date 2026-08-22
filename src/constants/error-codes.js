@@ -94,6 +94,8 @@ const ErrorCodes = Object.freeze({
   RUC_MISMATCH: 'RUC_MISMATCH',
   /** Tenant has only one active issuer left — it cannot be removed */
   LAST_ISSUER_CANNOT_BE_REMOVED: 'LAST_ISSUER_CANNOT_BE_REMOVED',
+  /** Issuer has only one active document type left — it cannot be removed */
+  LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED: 'LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED',
   /** Issuer has issued documents and cannot be removed */
   ISSUER_HAS_DOCUMENTS: 'ISSUER_HAS_DOCUMENTS',
   /** Requested nextSequential is not greater than the current counter value */
