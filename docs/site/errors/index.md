@@ -122,6 +122,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `PROOF_FILE_LIMIT_REACHED` | El pago ya tiene el número máximo de archivos de comprobante activos (10) — elimina uno antes de subir más |
 | `VERSION_MISMATCH` | `termsVersion` en `POST /v1/tenants/agreements` no coincide con la versión actualmente publicada del documento TERMS — vuelve a consultar `GET /v1/agreements` y presenta la versión actual antes de pedirle al usuario que acepte de nuevo |
 | `LAST_ISSUER_CANNOT_BE_REMOVED` | El tenant tiene solo un emisor activo restante — no se puede eliminar |
+| `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED` | El emisor tiene solo un tipo de comprobante activo restante — no se puede eliminar |
 | `ISSUER_HAS_DOCUMENTS` | El emisor tiene comprobantes emitidos (en cualquiera de los dos ambientes) y no se puede eliminar |
 | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` no es mayor que el valor actual del contador |
 | `TIER_CHANGE_NO_OP` | El tier y el intervalo de facturación solicitados en Change Tier coinciden con los valores actuales de la suscripción |
@@ -156,6 +157,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `PRODUCTION_KEY_REQUIRES_PROMOTION` | No se puede crear una API key de producción antes de promover a producción |
 | `INSUFFICIENT_SCOPE` | La API key no tiene el scope que exige el endpoint — ver [API keys → Scopes](/endpoints/api-keys#scopes) |
 | `SCOPE_ESCALATION_FORBIDDEN` | `POST /v1/keys` — los scopes solicitados incluyen uno que la llave solicitante no tiene |
+| `ISSUER_ISSUING_PAUSED` | El emisor está activo pero fue pausado (`PATCH /v1/issuers/:id/can-issue`) — no puede crear ni reconstruir comprobantes |
 | `FORBIDDEN` | Otro fallo de permisos (respaldo — lee `detail`) |
 
 ### 404 Not Found

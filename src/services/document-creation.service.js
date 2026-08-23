@@ -25,6 +25,14 @@ function hashPayload(body) {
 }
 
 async function create(body, idempotencyKey = null, issuer) {
+  if (!issuer.can_issue) {
+    throw new AppError(
+      'This issue point is not currently allowed to create new documents',
+      403,
+      ErrorCodes.ISSUER_ISSUING_PAUSED
+    );
+  }
+
   if (idempotencyKey) {
     const existing = await documentModel.findByIdempotencyKey(idempotencyKey, issuer.id, issuer.sandbox);
     if (existing) {

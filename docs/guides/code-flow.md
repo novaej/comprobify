@@ -225,6 +225,9 @@ The original monolith (`document.service.js`) was split into five focused servic
 Step-by-step:
 
 ```
+-1. [Before anything else] issuer.can_issue check
+    → false → throw AppError 403 ISSUER_ISSUING_PAUSED (no transaction opened, idempotency check never runs)
+
 0. [If Idempotency-Key header present]
    documentModel.findByIdempotencyKey(key)
    → Found + hash matches  → return existing document, created=false (200, no transaction opened)
@@ -382,6 +385,8 @@ checkAuthorization:
 Used when SRI returns `RETURNED` (structural issue) or `NOT_AUTHORIZED` (content issue, e.g. wrong tax rate). The same access key and sequential are reused — SRI specs allow fixing and resubmitting with the same identity.
 
 ```
+0. issuer.can_issue check
+   → false → throw AppError 403 ISSUER_ISSUING_PAUSED (before the document is even looked up)
 1. findByAccessKey(accessKey, issuer.id)
 2. assertTransition(document.status, DocumentStatus.SIGNED)
    → Valid from RETURNED or NOT_AUTHORIZED only

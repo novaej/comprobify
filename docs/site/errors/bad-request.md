@@ -92,6 +92,12 @@ Un archivo subido (p. ej. un certificado P12 o el logo del emisor) falta, es del
 
 **Qué hacer:** Verifica el archivo contra los límites documentados en el endpoint (p. ej. [Upload Issuer Logo](../endpoints/upload-issuer-logo.md)) y vuelve a subirlo.
 
+### `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED`
+
+`DELETE /v1/issuers/:id/document-types/:code` fue llamado sobre el último tipo de comprobante activo del emisor. Un emisor siempre debe poder emitir al menos un tipo de comprobante.
+
+**Qué hacer:** Habilita otro tipo de comprobante primero vía `POST /v1/issuers/:id/document-types` si necesitas remover este.
+
 ### `BAD_REQUEST` (respaldo)
 
 Una solicitud incorrecta genérica no cubierta por un código específico de los anteriores. Lee el campo `detail` para conocer la razón.

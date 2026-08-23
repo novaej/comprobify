@@ -27,7 +27,8 @@ GET /v1/issuers
       "issuePointCode": "001",
       "branchAddress": "Av. Amazonas 123",
       "certFingerprint": "AA:BB:CC:...",
-      "certExpiry": "2027-01-01T00:00:00.000Z"
+      "certExpiry": "2027-01-01T00:00:00.000Z",
+      "canIssue": true
     }
   ]
 }
@@ -46,6 +47,7 @@ GET /v1/issuers
 | `branchAddress` | Dirección de la sucursal (null si no está definida) |
 | `certFingerprint` | Huella digital del certificado (null si no hay certificado cargado) |
 | `certExpiry` | Fecha de vencimiento del certificado (null si no hay certificado cargado) |
+| `canIssue` | `false` si el emisor fue pausado vía [Pausar/Reanudar Emisión](set-can-issue.md) |
 
 ## Errores
 

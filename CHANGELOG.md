@@ -9,6 +9,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`PATCH /v1/issuers/:id/can-issue` lets a tenant pause new document creation on an issuer (issue point) without deactivating it.** `DELETE /v1/issuers/:id` already refuses to soft-delete an issuer with any document history (`ISSUER_HAS_DOCUMENTS`) — this gives a way to stop a stale-but-historied issue point from taking new work while its existing documents (RIDE, XML, email) and every read endpoint keep working unaffected. Backed by a new `issuers.can_issue` column (migration 089, default `true`); `POST /v1/documents` and `POST /:accessKey/rebuild` both return `403 ISSUER_ISSUING_PAUSED` when paused.
+
+### Fixed
+- **`DELETE /v1/issuers/:id/document-types/:code` returned a generic `400` with no stable `code` when removing an issuer's last active document type.** Now returns `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED`, mirroring the existing `LAST_ISSUER_CANNOT_BE_REMOVED` code on the analogous issuer-removal guard.
+
 ## [0.16.5] — 2026-08-16
 
 ### Fixed

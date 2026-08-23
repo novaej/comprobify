@@ -56,6 +56,7 @@ const mockIssuer = {
   environment: '1',
   emission_type: '1',
   sandbox: false,
+  can_issue: true,
   encrypted_private_key: 'encrypted-private-key',
   certificate_pem: '-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----',
   branch_address: 'AV. TEST',

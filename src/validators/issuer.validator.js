@@ -90,4 +90,10 @@ const setSequential = [
     .withMessage('nextSequential must be an integer >= 1'),
 ];
 
-module.exports = { createBranch, updateIssuer, setSequential };
+const setCanIssue = [
+  body('canIssue')
+    .isBoolean()
+    .withMessage('canIssue must be a boolean'),
+];
+
+module.exports = { createBranch, updateIssuer, setSequential, setCanIssue };

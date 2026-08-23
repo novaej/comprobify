@@ -45,6 +45,12 @@ Solo se devuelve desde `POST /v1/keys`. Intentaste crear una nueva llave con un 
 
 **Qué hacer:** Solicita solo scopes que tu propia llave ya tenga, u omite `scopes` por completo para clonar los scopes de tu propia llave en la nueva.
 
+### `ISSUER_ISSUING_PAUSED`
+
+El emisor está activo pero fue pausado para no crear comprobantes nuevos vía `PATCH /v1/issuers/:id/can-issue`. Aplica tanto a `POST /v1/documents` como a `POST /:accessKey/rebuild` (una reconstrucción vuelve a firmar y reenviar al SRI, el mismo riesgo que una creación nueva). Los comprobantes ya emitidos por este emisor no se ven afectados — RIDE, XML, y otros endpoints de solo lectura siguen funcionando con normalidad.
+
+**Qué hacer:** Reanuda la emisión llamando `PATCH /v1/issuers/:id/can-issue` con `{ "canIssue": true }`, o usa un emisor distinto.
+
 ### `FORBIDDEN` (respaldo)
 
 Un 403 genérico no cubierto por un código específico de los anteriores. Lee `detail`.
@@ -92,5 +98,16 @@ Un 403 genérico no cubierto por un código específico de los anteriores. Lee `
   "code":     "SCOPE_ESCALATION_FORBIDDEN",
   "detail":   "Cannot mint a key with scopes the requesting key does not itself have: tenant:promote",
   "instance": "/v1/keys"
+}
+```
+
+```json
+{
+  "type":     "https://docs.comprobify.com/errors/forbidden",
+  "title":    "Forbidden",
+  "status":   403,
+  "code":     "ISSUER_ISSUING_PAUSED",
+  "detail":   "This issue point is not currently allowed to create new documents",
+  "instance": "/v1/documents"
 }
 ```

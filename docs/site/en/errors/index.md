@@ -122,6 +122,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `PROOF_FILE_LIMIT_REACHED` | Payment already has the maximum number of active proof files (10) — delete one before uploading more |
 | `VERSION_MISMATCH` | `termsVersion` in `POST /v1/tenants/agreements` does not match the currently published TERMS document version — re-fetch `GET /v1/agreements` and present the current version before asking the user to accept again |
 | `LAST_ISSUER_CANNOT_BE_REMOVED` | Tenant has only one active issuer left — it cannot be removed |
+| `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED` | Issuer has only one active document type left — it cannot be removed |
 | `ISSUER_HAS_DOCUMENTS` | Issuer has issued documents (in either environment) and cannot be removed |
 | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` is not greater than the counter's current value |
 | `TIER_CHANGE_NO_OP` | Requested tier and billing interval on Change Tier both match the subscription's current values |
@@ -156,6 +157,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `PRODUCTION_KEY_REQUIRES_PROMOTION` | Production API key cannot be created before promoting to production |
 | `INSUFFICIENT_SCOPE` | The API key doesn't carry the scope the endpoint requires — see [API Keys → Scopes](/endpoints/api-keys#scopes) |
 | `SCOPE_ESCALATION_FORBIDDEN` | `POST /v1/keys` — requested scopes include one the requesting key doesn't itself hold |
+| `ISSUER_ISSUING_PAUSED` | Issuer is active but has been paused (`PATCH /v1/issuers/:id/can-issue`) — cannot create or rebuild documents |
 | `FORBIDDEN` | Other permission failure (fallback — read `detail`) |
 
 ### 404 Not Found

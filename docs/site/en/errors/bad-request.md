@@ -92,6 +92,12 @@ A file upload (e.g. a P12 certificate or issuer logo) is missing, the wrong MIME
 
 **What to do:** Check the file against the limits documented on the endpoint (e.g. [Upload Issuer Logo](../endpoints/upload-issuer-logo.md)) and re-upload.
 
+### `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED`
+
+`DELETE /v1/issuers/:id/document-types/:code` was called on the issuer's last active document type. An issuer must always be able to issue at least one document type.
+
+**What to do:** Enable another document type first via `POST /v1/issuers/:id/document-types` if you need to remove this one.
+
 ### `BAD_REQUEST` (fallback)
 
 A generic bad request not covered by a specific code above. Read the `detail` field for the reason.

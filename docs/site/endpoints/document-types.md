@@ -114,7 +114,7 @@ Devuelve la lista completa actualizada de tipos de comprobante activos.
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `code` no es un tipo soportado |
-| `400` | `BAD_REQUEST` | Se intenta remover el último tipo de comprobante activo |
+| `400` | `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED` | Se intenta remover el último tipo de comprobante activo del emisor |
 | `403` | `FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `NOT_FOUND` | El id del emisor no existe, o el tipo de comprobante no está actualmente activo para este emisor |
 
