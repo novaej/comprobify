@@ -120,8 +120,6 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `SELF_REVOCATION_FORBIDDEN` | No se puede revocar la API key usada para autenticar esta solicitud |
 | `INVALID_FILE_UPLOAD` | El archivo subido falta, es del tipo incorrecto, o excede el límite de tamaño del campo (p. ej. un logo de más de 500 KB) |
 | `PROOF_FILE_LIMIT_REACHED` | El pago ya tiene el número máximo de archivos de comprobante activos (10) — elimina uno antes de subir más |
-| `INVALID_SUSPENSION_REASON` | Falta `suspensionReasonCode` al suspender un tenant, o no es uno de los valores permitidos (`PAYMENT_REVERSED`, `FRAUD_SUSPECTED`, `TERMS_VIOLATION`, `VOLUNTARY_CLOSURE`, `UNPAID_BALANCE`, `OTHER`) |
-| `PAYMENT_NOT_REFUNDABLE` | El pago se aplicó antes de que existieran los snapshots de reversión (`applied_from`), por lo que no puede revertirse automáticamente — ajusta el tier y la suscripción manualmente |
 | `VERSION_MISMATCH` | `termsVersion` en `POST /v1/tenants/agreements` no coincide con la versión actualmente publicada del documento TERMS — vuelve a consultar `GET /v1/agreements` y presenta la versión actual antes de pedirle al usuario que acepte de nuevo |
 | `LAST_ISSUER_CANNOT_BE_REMOVED` | El tenant tiene solo un emisor activo restante — no se puede eliminar |
 | `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED` | El emisor tiene solo un tipo de comprobante activo restante — no se puede eliminar |
@@ -183,7 +181,6 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `NO_ACTIVE_SUBSCRIPTION` | Se solicitó Cancel o Change Tier pero el tenant no tiene una suscripción `ACTIVE` |
 | `TIER_CHANGE_ALREADY_PENDING` | Ya hay un cambio de tier/intervalo de facturación programado, o su pago ya está en curso, para esta suscripción |
 | `CANCELLATION_ALREADY_PENDING` | Ya hay una cancelación (`DELETE /v1/subscriptions`) programada para esta suscripción |
-| `PAYMENT_NOT_REFUNDABLE` | Solo un pago `VERIFIED` puede revertirse (409 cuando el pago está en otro estado; ver también 400 arriba) |
 | `CONFLICT` | Se reutilizó una llave de idempotencia con un payload distinto, el pago ya fue decidido, u otro conflicto |
 
 ### 429 Too Many Requests

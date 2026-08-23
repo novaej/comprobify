@@ -20,6 +20,7 @@ GET /v1/tenants/me
     "email": "owner@example.com",
     "subscriptionTier": "GROWTH",
     "status": "ACTIVE",
+    "suspensionReasonCode": null,
     "documentCount": 128,
     "documentQuota": 1000,
     "sandbox": false,
@@ -34,7 +35,8 @@ GET /v1/tenants/me
 | `id` | Tenant UUID. Use this to correlate webhook deliveries and other tenant-scoped resources. |
 | `email` | Tenant's registered email address. |
 | `subscriptionTier` | `FREE`, `STARTER`, `GROWTH`, or `BUSINESS`. |
-| `status` | `PENDING_VERIFICATION`, `ACTIVE`, or `SUSPENDED`. |
+| `status` | `PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED`, or `PAST_DUE`. |
+| `suspensionReasonCode` | Why the account is suspended: `PAYMENT_REVERSED`, `FRAUD_SUSPECTED`, `TERMS_VIOLATION`, `VOLUNTARY_CLOSURE`, `UNPAID_BALANCE`, or `OTHER`. `null` unless `status` is `SUSPENDED`. A stable code meant for your UI to map to its own localized copy — `VOLUNTARY_CLOSURE` is an account closure you requested, not a sanction. |
 | `documentCount` | Documents issued in the current billing period. |
 | `documentQuota` | Document limit for the current `subscriptionTier`. |
 | `sandbox` | `true` if the tenant is in the SRI test environment, `false` if promoted to production. |
@@ -53,5 +55,6 @@ GET /v1/tenants/me
 - No `X-Issuer-Id` header is required — this endpoint resolves the tenant, not an issuer.
 - The response reflects exactly what the `authenticate` middleware already resolved from the API key — there is no separate database lookup, so any active key (sandbox or production) returns its tenant's current state.
 - This does not return the list of issuers (branches) — use `GET /v1/issuers` for that.
+- `suspensionReasonCode` tells you *why* the account was suspended without reading [`GET /v1/tenants/events`](tenant-events.md); the full history (including earlier suspensions already lifted) still lives there, in each `STATUS_CHANGED` event's `detail`.
 - Unlike most authenticated endpoints, this one stays reachable even when `status` is `SUSPENDED` — it's one of a small set of read-only endpoints a suspended tenant can still use (see the `ACCOUNT_SUSPENDED` entry in the [error catalogue](../errors/index.md)). Polling this endpoint is a valid way to detect a suspension and check the account's current `status`.
-- **This is also how you find out a paid-tier upgrade completed.** After requesting a tier at [promotion](promote-tenant.md) and [submitting payment proof](submit-payment-proof.md), you'll get a [notification](notifications.md) and email the moment your provider records a decision, but final activation (once SRI authorizes the self-billed invoice) still has no notification of its own — poll this endpoint periodically; `subscriptionTier` and `documentQuota` update the moment the subscription activates. For the in-between states (pending, rejected, why) see [`GET /v1/subscriptions/me`](get-my-subscriptions.md) instead — this endpoint only shows the end result.
+- **This is also how you find out a paid-tier upgrade completed.** After requesting a tier at [promotion](promote-tenant.md) and [submitting payment proof](submit-payment-proof.md), you'll get a [notification](notifications.md) and email the moment your provider records a decision, and that decision *is* the activation: `subscriptionTier` and `documentQuota` already reflect the new tier by the time the `PAYMENT_VERIFIED` notification arrives. There is no later invoicing step to wait on. For the in-between states (pending, rejected, why) see [`GET /v1/subscriptions/me`](get-my-subscriptions.md) instead — this endpoint only shows the end result.

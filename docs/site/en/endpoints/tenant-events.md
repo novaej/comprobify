@@ -94,17 +94,20 @@ This is the one place that shows the full sequence of changes to your subscripti
 | `EMAIL_VERIFIED` | Tenant's email was verified |
 | `SUBSCRIPTION_CREATED` | A subscription was started (`POST /v1/subscriptions` or at promotion) |
 | `PAYMENT_REPORTED` | Proof of transfer was submitted for a payment |
-| `PAYMENT_VERIFIED` / `PAYMENT_REJECTED` | Provider reviewed a payment's proof |
-| `INVOICE_LINKED` | A self-billed invoice was linked to a subscription or payment |
-| `SUBSCRIPTION_ACTIVATED` | Subscription reached `ACTIVE` (first billing period opened) |
+| `PAYMENT_VERIFIED` / `PAYMENT_REJECTED` | Provider reviewed a payment's proof. `PAYMENT_VERIFIED` is also the moment the tier is applied |
+| `PAYMENT_REFUNDED` | A verified payment was reversed (returned transfer, duplicate charge) and its effect undone — `detail` carries `restoredTier`, the tier the account went back to |
+| `INVOICE_LINKED` | A self-billed invoice was linked to a subscription or payment. Bookkeeping only: it does not change your subscription's state, which already applied when the payment was verified |
+| `SUBSCRIPTION_ACTIVATED` | Subscription reached `ACTIVE` (first billing period opened), when its payment was verified |
 | `TIER_CHANGE_REQUESTED` | [Change Tier](change-tier.md) created a payment (same-interval upgrade, or any billing-interval change) |
-| `TIER_CHANGE_SCHEDULED` | A tier/interval change was scheduled to apply at `current_period_end` — either a free same-interval downgrade (immediately, at request time) or a paid billing-interval change (once its payment's invoice authorizes) |
+| `TIER_CHANGE_SCHEDULED` | A tier/interval change was scheduled to apply at `current_period_end` — either a free same-interval downgrade (immediately, at request time) or a paid billing-interval change (once its payment is verified) |
 | `TIER_CHANGED` | A tier and/or billing-interval change actually took effect |
 | `SUBSCRIPTION_CANCELLATION_SCHEDULED` | [`DELETE /v1/subscriptions`](cancel-subscription.md) scheduled an end-of-period cancellation |
 | `SUBSCRIPTION_CANCELLED` | Subscription reached `CANCELLED` (scheduled cancellation applied, or admin override) |
 | `RENEWAL_DUE` | A renewal payment was opened ahead of `current_period_end` |
-| `SUBSCRIPTION_RENEWED` | A renewal payment's invoice authorized, extending the billing period |
+| `SUBSCRIPTION_RENEWED` | A renewal payment was verified, extending the billing period |
 | `SUBSCRIPTION_EXPIRED` | Subscription ran past its renewal grace period with no payment and was downgraded to FREE |
+| `STATUS_CHANGED` | The account's status changed — `detail` carries `from`, `to`, and, when suspending, `reasonCode` (see `suspensionReasonCode` on [`GET /v1/tenants/me`](tenant-me.md)) |
+| `CERTIFICATE_UPLOADED` / `CERTIFICATE_RENEWED` | A new P12 certificate was uploaded for an issuer, or an existing one renewed — `detail` carries `issuerId`, `certFingerprint`, and `certExpiry` |
 
 ## Errors
 
