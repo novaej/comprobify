@@ -606,18 +606,31 @@ describe('SubscriptionService', () => {
 
         const fields = subscriptionModel.updateStatus.mock.calls[0][2];
         // Anchored to the old period end, NOT "now" — an early or late review
-        // must not drift the billing date. Length is asserted in whole months
-        // rather than an exact date because addBillingPeriod's setMonth() can
-        // overflow across a local-timezone month boundary.
+        // must not drift the billing date.
         expect(fields.current_period_start).toEqual(new Date('2026-04-15T12:00:00Z'));
-        const months = (fields.current_period_end.getFullYear() - fields.current_period_start.getFullYear()) * 12
-          + (fields.current_period_end.getMonth() - fields.current_period_start.getMonth());
-        expect(months).toBe(1);
+        expect(fields.current_period_end).toEqual(new Date('2026-05-15T12:00:00Z'));
         expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'SUBSCRIPTION_RENEWED', expect.objectContaining({
           subscriptionId: SUB, tier: 'GROWTH', paymentId: PAY,
         }));
         // A renewal never changes tier.
         expect(tenantModel.updateTier).not.toHaveBeenCalled();
+      });
+
+      // Regression: addBillingPeriod used to overflow a month-end anchor
+      // (Jan 31 + 1 month = "Feb 31" = Mar 3), handing the customer a free
+      // extra month and permanently shifting the anniversary, since the next
+      // renewal anchors to this already-drifted date. See src/utils/add-months.js.
+      test('a period ending on a 31st clamps to month-end instead of overflowing', async () => {
+        const payment = { id: PAY, purpose: 'RENEWAL', status: 'VERIFIED' };
+
+        await subscriptionService.applyVerifiedPayment(payment, {
+          id: SUB, tenant_id: TENANT, tier: 'GROWTH', billing_interval: 'MONTHLY', status: 'ACTIVE',
+          current_period_start: new Date('2025-12-31T12:00:00Z'),
+          current_period_end: new Date('2026-01-31T12:00:00Z'),
+        });
+
+        const fields = subscriptionModel.updateStatus.mock.calls[0][2];
+        expect(fields.current_period_end).toEqual(new Date('2026-02-28T12:00:00Z'));
       });
     });
   });
@@ -1127,9 +1140,7 @@ describe('SubscriptionService', () => {
 
       const fields = subscriptionModel.updateStatus.mock.calls[0][2];
       expect(fields.current_period_start).toEqual(new Date('2026-04-15T12:00:00Z'));
-      const months = (fields.current_period_end.getFullYear() - fields.current_period_start.getFullYear()) * 12
-        + (fields.current_period_end.getMonth() - fields.current_period_start.getMonth());
-      expect(months).toBe(1);
+      expect(fields.current_period_end).toEqual(new Date('2026-05-15T12:00:00Z'));
     });
 
     test('REJECTED leaves the subscription untouched and stores the rejection reason code', async () => {

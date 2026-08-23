@@ -9,6 +9,7 @@ const pendingEffectService = require('./pending-effect.service');
 const pricingService = require('./pricing.service');
 const notificationService = require('./notification.service');
 const { EffectTypes } = require('../constants/effect-types');
+const { addMonths } = require('../utils/add-months');
 const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const RejectionReasons = require('../constants/rejection-reasons');
@@ -51,14 +52,9 @@ const SUSPENSION_WARNING_DAYS = 5;
 // Shared period math for activation, renewal, and the free period-rollover a
 // downgrade gets. Always advances from a fixed anchor date (never "now") so
 // repeated calls can't drift the billing date earlier or later than intended.
+// addMonths clamps to month-end rather than overflowing — see src/utils/add-months.js.
 function addBillingPeriod(fromDate, billingInterval) {
-  const next = new Date(fromDate);
-  if (billingInterval === 'YEARLY') {
-    next.setFullYear(next.getFullYear() + 1);
-  } else {
-    next.setMonth(next.getMonth() + 1);
-  }
-  return next;
+  return addMonths(fromDate, billingInterval === 'YEARLY' ? 12 : 1);
 }
 
 // Durable-enqueue + best-effort-dispatch (ADR-022) — replaces the old
