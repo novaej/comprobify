@@ -2451,14 +2451,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"status\": \"SUSPENDED\",\n  \"reason\": \"Voluntary account closure requested by tenant\"\n}",
+              "raw": "{\n  \"status\": \"SUSPENDED\",\n  \"suspensionReasonCode\": \"VOLUNTARY_CLOSURE\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Activate or suspend a tenant. Accepted values: `ACTIVE`, `SUSPENDED`.\n\nOptional `reason` (max 200 chars) is recorded on the `STATUS_CHANGED` tenant event alongside `from`/`to` — useful for distinguishing why a tenant landed in SUSPENDED (e.g. a voluntary closure request per the Terms of Service, vs. fraud or non-payment), since the product intentionally has no separate \"terminated\" status."
+            "description": "Activate or suspend a tenant. Accepted values: `ACTIVE`, `SUSPENDED`, `PAST_DUE`.\n\n`suspensionReasonCode` is **required when status is SUSPENDED** — one of `PAYMENT_REVERSED`, `FRAUD_SUSPECTED`, `TERMS_VIOLATION`, `VOLUNTARY_CLOSURE`, `UNPAID_BALANCE`, `OTHER`. It replaced a free-text `reason` field: GET /v1/tenants/events echoes tenant_events.detail verbatim, so anything typed here is readable by whoever holds that tenant API key. The code is stored on `tenants.suspension_reason_code` (surfaced to the tenant via GET /v1/tenants/me, cleared on reactivation) and mirrored into the STATUS_CHANGED event as `reasonCode` so the history survives.\n\nThe product intentionally has no separate \"terminated\" status — `VOLUNTARY_CLOSURE` is how a closure request per the Terms of Service is distinguished from a fraud or non-payment suspension."
           }
         },
         {
@@ -2961,6 +2961,49 @@
               ]
             },
             "description": "List payments awaiting manual review. Default status=REPORTED (proof submitted, decision pending). Captures payment_id of the first result."
+          }
+        },
+        {
+          "name": "List Pending Invoices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "console.log(r.count, 'payment(s) awaiting an invoice');",
+                  "if (r.items?.length) {",
+                  "  pm.collectionVariables.set('payment_id', String(r.items[0].payment.id));",
+                  "  pm.collectionVariables.set('subscription_id', String(r.items[0].subscription.id));",
+                  "  r.items.forEach(i => console.log(' ', i.buyer.businessName, i.buyer.ruc, '—', i.subscription.tier, i.subscription.billingInterval, '$' + i.payment.totalAmount, '(' + i.payment.purpose + ')'));",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/invoicing/pending",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "invoicing",
+                "pending"
+              ]
+            },
+            "description": "Your invoicing work queue: every VERIFIED payment whose factura you still owe (`payments.invoiced_at IS NULL`).\n\nSince ADR-027 the tenant is already activated by the time a payment lands here — the invoice is your legal obligation, not a gate on their service. This endpoint is what keeps that obligation visible.\n\nEach item carries everything needed to actually cut the invoice without a second lookup: `payment` (purpose, method, amount / ivaRate / ivaAmount / totalAmount, verifiedAt), `subscription` (tier and billingInterval — the TARGET ones for a TIER_CHANGE payment, not the subscription current values — plus the period being billed), and `buyer` (tenant email, businessName, ruc, address, resolved from the tenant oldest active issuer).\n\n`count` backs a nav badge. Issue the invoice via Create Invoice using Comprobify own issuer, then Link Invoice to Subscription to clear it from this list."
           }
         },
         {
@@ -3759,7 +3802,7 @@
                 "subscriptions"
               ]
             },
-            "description": "Runs three things, in this order (order matters — see below):\n\n1. **Pending invoice links** — reconciles subscriptions/payments that were linked to a self-billed invoice (via link-invoice) before SRI had authorized it yet. linkInvoice() already applies immediately when the invoice is already AUTHORIZED at link time (the common case); this only ever matters for the reverse ordering, and runs first since a renewal/tier-change applied here extends current_period_end, which steps 2-3 need to see in this same tick (see ADR-022's addendum).\n2. **Scheduled downgrades** — every subscription with a `pending_tier` whose `current_period_end` has passed: flips `tier` to the scheduled `pending_tier`, clears `pending_tier`, grants the new (lower) quota, and rolls `current_period_start`/`current_period_end` forward by one billing interval so it re-enters the renewal cycle below at its new tier (a downgrade owes no payment, but it still needs a fresh period).\n3. **Renewals** — opens a `RENEWAL` payment + reminder (notification + email) for every ACTIVE subscription within 7 days of `current_period_end` that doesn't already have one open, then downgrades to FREE (with its own notification + email) any subscription more than 7 days past `current_period_end` with no renewal ever verified. This step must run after step 2 in the same call — a downgrade that just rolled its period forward would otherwise look identical to an expired renewal.\n\nUpgrades apply immediately on invoice authorization in the common case and need no scheduled job for that path — only downgrades, renewals, and the rare not-yet-authorized-at-link-time case wait for this job.\n\nDesigned to be called by an external scheduler on a daily cadence (no need for the minute-level frequency the notification job uses). Idempotent — running it multiple times is safe; nothing due is simply skipped.\n\nResponse includes `invoiceLinksActivated`/`invoiceLinksTierChangesApplied`/`invoiceLinksRenewalsApplied`, `applied` (downgrades), `remindersSent`, and `expired` (counts from this run)."
+            "description": "Runs two things, in this order (order matters — see below):\n\n1. **Scheduled downgrades** — every subscription with a `pending_tier` whose `current_period_end` has passed: flips `tier` to the scheduled `pending_tier`, clears `pending_tier`, grants the new (lower) quota, and rolls `current_period_start`/`current_period_end` forward by one billing interval so it re-enters the renewal cycle below at its new tier (a downgrade owes no payment, but it still needs a fresh period).\n2. **Renewals** — opens a `RENEWAL` payment + reminder (notification + email) for every ACTIVE subscription within 7 days of `current_period_end` that doesn't already have one open, then downgrades to FREE (with its own notification + email) any subscription more than 7 days past `current_period_end` with no renewal ever verified. This step must run after step 1 in the same call — a downgrade that just rolled its period forward would otherwise look identical to an expired renewal.\n\nUpgrades apply immediately on invoice authorization in the common case and need no scheduled job for that path — only downgrades, renewals, and the rare not-yet-authorized-at-link-time case wait for this job.\n\nDesigned to be called by an external scheduler on a daily cadence (no need for the minute-level frequency the notification job uses). Idempotent — running it multiple times is safe; nothing due is simply skipped.\n\nResponse includes `invoiceLinksActivated`/`invoiceLinksTierChangesApplied`/`invoiceLinksRenewalsApplied`, `applied` (downgrades), `remindersSent`, and `expired` (counts from this run)."
           }
         },
         {
@@ -3907,7 +3950,7 @@
                 }
               }
             },
-            "description": "Records your decision after checking the proof the tenant uploaded (Submit Payment Proof) against the bank. `decision` must be `VERIFIED` or `REJECTED`.\n\n`rejectionReasonCode` is **required when `decision` is `REJECTED`** — one of `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`. The tenant sees this code via `GET /v1/subscriptions/me` and their UI maps it to a message; the tenant-facing email and notification each resolve it to human text automatically. Not used for `VERIFIED`.\n\n`VERIFIED` moves the subscription to PAYMENT_RECEIVED — your next step is self-billing the invoice and Link Invoice to Subscription. `REJECTED` leaves the subscription at PENDING_PAYMENT; the tenant can submit a new proof for the *same* payment (Submit Payment Proof works again once REJECTED — it only refuses once a payment is VERIFIED).\n\nEither decision fires a notification + email to the tenant automatically (PAYMENT_VERIFIED/PAYMENT_REJECTED) — covers initial subscriptions, tier changes, and renewals uniformly, so there's nothing extra to do here.\n\nView the uploaded files first — List Payment Proofs, then Get Payment Proof for a specific one."
+            "description": "Records your decision after checking the proof the tenant uploaded (Submit Payment Proof) against the bank. `decision` must be `VERIFIED` or `REJECTED`.\n\n`rejectionReasonCode` is **required when `decision` is `REJECTED`** — one of `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`. The tenant sees this code via `GET /v1/subscriptions/me` and their UI maps it to a message; the tenant-facing email and notification each resolve it to human text automatically. Not used for `VERIFIED`.\n\n`VERIFIED` **applies the payment immediately** — the subscription activates (or the tier change / renewal lands) and the tenant gets their quota right here. Since ADR-027 there is no invoice gate: self-billing the invoice is still your obligation, but it no longer holds up the tenant. Your next step is List Pending Invoices, then Link Invoice to Subscription once issued. `REJECTED` leaves the subscription at PENDING_PAYMENT; the tenant can submit a new proof for the *same* payment (Submit Payment Proof works again once REJECTED — it only refuses once a payment is VERIFIED).\n\nEither decision fires a notification + email to the tenant automatically (PAYMENT_VERIFIED/PAYMENT_REJECTED) — covers initial subscriptions, tier changes, and renewals uniformly, so there's nothing extra to do here.\n\nView the uploaded files first — List Payment Proofs, then Get Payment Proof for a specific one."
           },
           "event": [
             {
@@ -3922,6 +3965,54 @@
               }
             }
           ]
+        },
+        {
+          "name": "Refund Payment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.payment?.status) console.log('Payment status now:', r.payment.status);",
+                  "if (r.subscription) console.log('Subscription rolled back to tier', r.subscription.tier, '- status', r.subscription.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"SPI transfer reversed by the bank — ref 8891\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/admin/payments/{{payment_id}}/refund",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "payments",
+                "{{payment_id}}",
+                "refund"
+              ]
+            },
+            "description": "Records that a VERIFIED payment money came back — a reversed SPI transfer you found on the bank statement, a duplicate charge, a chargeback — and undoes its effect.\n\nDetection is manual: no payment rail notifies the API. This is only the \"I found out, undo it\" half.\n\n**Do not do this by hand via Update Tenant Tier.** That writes only `tenants.subscription_tier` and never `subscriptions.tier`, so the subscription keeps claiming the reversed tier and the next renewal is priced off it — the tenant gets billed for an upgrade they never paid for.\n\nRolling back is **not** \"downgrade to FREE\": it restores `payments.applied_from`, the snapshot taken just before the payment was applied. A reversed TIER_CHANGE returns to the previous PAID tier; a reversed RENEWAL rolls the period back without touching tier; only a reversed INITIAL ends at FREE (and cancels the subscription so the tenant can start fresh).\n\n`reason` is optional free text (max 200 chars) recorded on the PAYMENT_REFUNDED tenant event — unlike suspensionReasonCode, there is no fixed vocabulary for how money comes back.\n\nDeliberately does **not** suspend the tenant; whether this warrants SUSPENDED (fraud) or nothing (an honest duplicate) is your call via Update Tenant Status.\n\nFails 409 if the payment is not VERIFIED, or 400 PAYMENT_NOT_REFUNDABLE if it was applied before migration 090 introduced the rollback snapshot."
+          }
         },
         {
           "name": "List Payment Proofs",
@@ -4010,7 +4101,7 @@
                 }
               }
             },
-            "description": "Attaches the self-billed invoice (created the normal way via Create Invoice, using Comprobify's own issuer) to a subscription, by `accessKey` — the 49-digit SRI key, the same identifier every document response already exposes. `documents.id` is never returned anywhere, public or admin, so this couldn't take a document id directly. Moves the subscription to INVOICE_PROCESSING.\n\nOnce that invoice reaches AUTHORIZED (via the normal Send to SRI / Check Authorization flow), the subscription activates automatically — no further admin action needed."
+            "description": "Records the self-billed invoice (created the normal way via Create Invoice, using Comprobify's own issuer) against the payment it settles, by `accessKey` — the 49-digit SRI key, the same identifier every document response already exposes. `documents.id` is never returned anywhere, public or admin, so this couldn't take a document id directly.\n\n**Pure bookkeeping since ADR-027 — it changes no subscription state.** The subscription was already activated (or upgraded, or renewed) when its payment was verified. All this does is stamp `payments.invoiced_at`, which clears the payment off List Pending Invoices, and record the document id on `subscriptions.initial_invoice_document_id` (INITIAL payment) or `payments.invoice_document_id` (TIER_CHANGE/RENEWAL). A sandbox document gets neither FK but is still stamped.\n\nReturns 409 if the subscription has no VERIFIED payment awaiting an invoice."
           },
           "event": [
             {
@@ -4019,7 +4110,7 @@
                 "exec": [
                   "const r = pm.response.json();",
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "if (r.subscription?.status) console.log('Subscription status now:', r.subscription.status, '— awaiting SRI authorization');"
+                  "if (r.subscription?.status) console.log('Subscription status:', r.subscription.status, '— unchanged; linking is bookkeeping only');"
                 ],
                 "type": "text/javascript"
               }

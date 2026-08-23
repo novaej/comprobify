@@ -407,7 +407,7 @@ Using the tenant's `api_key` from Step 4:
 
 ✓ Test script captures `subscription_id` and `payment_id`.
 
-Response includes `bankTransfer` instructions showing where to send the SPI transfer. The subscription stays `PENDING_PAYMENT` until the payment is reviewed and an invoice is linked.
+Response includes `bankTransfer` instructions showing where to send the SPI transfer. The subscription stays `PENDING_PAYMENT` until the payment is reviewed.
 
 ---
 
@@ -452,9 +452,11 @@ To reject:
 { "decision": "REJECTED", "rejectionReasonCode": "AMOUNT_MISMATCH" }
 ```
 
-✓ Test script logs the new payment status. On `VERIFIED`, the subscription moves to `PAYMENT_RECEIVED`.
+✓ Test script logs the new payment status. **On `VERIFIED` the subscription activates right here** — status `ACTIVE`, billing period opened, tier and quota granted. Since ADR-027 there is no invoice gate; Steps 9–10 below are the operator's own invoicing obligation and no longer block the tenant.
 
-> **What fires at this step:** (1) A `PAYMENT_VERIFIED` notification is inserted into the `notifications` table (visible via `GET /v1/notifications` with the tenant's API key, and fanned out to any subscribed webhooks). (2) The payment verification **email** is sent to the tenant: *"Tu pago ha sido verificado... tu plan se activará automáticamente una vez que la factura sea autorizada por el SRI."* Both are telling the tenant their payment was approved — not that the subscription is active yet. The subscription only activates after Step 10.
+> **What fires at this step:** (1) A `PAYMENT_VERIFIED` notification is inserted into the `notifications` table (visible via `GET /v1/notifications` with the tenant's API key, and fanned out to any subscribed webhooks). (2) The payment verification **email** is sent to the tenant. Both now coincide with the tier actually being granted, so this is the tenant's activation signal — verify `GET /v1/tenants/me` already shows the new `subscriptionTier`/`documentQuota` immediately after this call.
+>
+> **Note:** the `PAYMENT_VERIFIED` email template still says *"tu plan se activará automáticamente una vez que la factura sea autorizada por el SRI"* — stale since ADR-027. The templates are DB-backed (`notification_email_templates`) and are republished through `POST /v1/admin/notification-email-templates`, so fixing the copy is an admin-API step, not a code change. See `docs/email-templates/PAYMENT_VERIFIED.{es,en}.txt`.
 
 ---
 
@@ -464,7 +466,9 @@ Issue an invoice from your **own** issuer (the operator's issuer) to the tenant 
 
 **Sandbox vs production:** the invoice can come from either environment. For testing, issuing from a sandbox issuer is fine — `link-invoice` searches both `public.documents` and `sandbox.documents`. In production, the self-billed invoice should come from your operator's production issuer so it is a legally valid fiscal document.
 
-After creating the invoice, authorize it: `POST /v1/documents/:accessKey/send` then `GET /v1/documents/:accessKey/authorize` — wait for `AUTHORIZED` status before linking (if not yet authorized, the subscription will sit in `INVOICE_PROCESSING` until SRI authorizes it).
+After creating the invoice, authorize it: `POST /v1/documents/:accessKey/send` then `GET /v1/documents/:accessKey/authorize`. You can link it at any point — linking no longer changes the subscription, so there is nothing waiting on the authorization.
+
+**Find what you owe:** `GET /v1/admin/invoicing/pending` *(Admin folder → List Pending Invoices)* lists every verified payment still awaiting an invoice, with the buyer's `businessName`/`ruc`/`address` and the exact amounts to bill.
 
 ---
 
@@ -476,9 +480,9 @@ After creating the invoice, authorize it: `POST /v1/documents/:accessKey/send` t
 { "accessKey": "<your-self-billed-invoice-access-key>" }
 ```
 
-✓ Test script logs the new subscription status (`INVOICE_PROCESSING` or `ACTIVE` if already authorized).
+✓ Test script logs the subscription status — **unchanged**, since linking is pure bookkeeping. It stamps `payments.invoiced_at`, which clears the payment from `GET /v1/admin/invoicing/pending`. Returns 409 if the subscription has no verified payment awaiting an invoice.
 
-Once SRI authorizes the linked invoice, the subscription automatically activates and the tenant's tier upgrades. **There is no activation notification or email** — the tenant finds out by polling:
+The tenant was already activated back at Step 8. To confirm:
 
 - `GET /v1/tenants/me` → `subscriptionTier` and `documentQuota` will reflect the new plan
 - `GET /v1/subscriptions/me` → subscription `status` will be `ACTIVE` with `current_period_start`/`current_period_end` set
