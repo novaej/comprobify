@@ -34,14 +34,6 @@ async function findActiveOrPendingByTenantId(tenantId) {
   return rows[0] || null;
 }
 
-async function findByInitialInvoiceDocumentId(documentId) {
-  const { rows } = await db.query(
-    'SELECT * FROM subscriptions WHERE initial_invoice_document_id = $1',
-    [documentId]
-  );
-  return rows[0] || null;
-}
-
 async function findByTenantId(tenantId) {
   const { rows } = await db.query(
     'SELECT * FROM subscriptions WHERE tenant_id = $1 ORDER BY created_at DESC',
@@ -62,7 +54,7 @@ async function findActiveByTenantId(tenantId) {
 // the active tier/interval/quota — applied later, at current_period_end, by
 // applyScheduledTierChanges(). pendingBillingInterval is null for a plain
 // free tier downgrade (interval unchanged); set when a paid interval switch
-// (see applyTierChangeIfLinked) is being scheduled for period-end instead of
+// (see applyVerifiedPayment) is being scheduled for period-end instead of
 // applied immediately.
 async function scheduleDowngrade(id, pendingTier, pendingBillingInterval = null) {
   const { rows } = await db.query(
@@ -104,8 +96,8 @@ async function findDuePendingDowngrades() {
 // payment already open for this period (avoids re-creating one on every job run).
 // "already open" is period_start IS NULL, not invoice_document_id IS NULL — a
 // sandbox-linked renewal invoice never sets invoice_document_id (see
-// linkSandboxDocument), so that check would never stop matching a sandbox
-// renewal that already applied, permanently suppressing the next reminder.
+// linkInvoice), so that check would never stop matching a sandbox renewal that
+// already applied, permanently suppressing the next reminder.
 // Mirrors the same fix in payment.model.js's findPendingRenewalBySubscriptionId.
 async function findDueForRenewalReminder(reminderDays) {
   const { rows } = await db.query(
@@ -158,7 +150,7 @@ async function findDueForSuspensionWarning(warningDays, graceDays) {
 // ACTIVE subscriptions whose current_period_end passed more than graceDays ago
 // with no renewal ever completing — these get downgraded to FREE. A renewal that
 // completed in time always re-stamps current_period_end into the future (see
-// applyRenewalIfLinked), so a still-ACTIVE row this far past its old period_end
+// applyVerifiedPayment), so a still-ACTIVE row this far past its old period_end
 // genuinely never renewed.
 async function findExpiredPastGrace(graceDays) {
   const { rows } = await db.query(
@@ -170,21 +162,18 @@ async function findExpiredPastGrace(graceDays) {
   return rows;
 }
 
-// Subscriptions still sitting at INVOICE_PROCESSING whose linked initial
-// invoice has since become AUTHORIZED — the case linkInvoice() itself
-// couldn't apply immediately because the invoice wasn't authorized yet at
-// link time (see ADR-022's addendum: no per-document RabbitMQ effect fires
-// this anymore, this periodic scan is the reconciling path instead).
-// Joins documents directly since initial_invoice_document_id only ever
-// references public.documents (sandbox documents never set this FK — see
-// linkSandboxDocument).
-async function findPendingActivationWithAuthorizedDocument() {
+// Write-once: records the invoice that funded this subscription's original
+// activation. Never repointed at a later TIER_CHANGE/RENEWAL invoice — those
+// each write their own payments.invoice_document_id instead. The WHERE guard
+// makes that structural rather than a convention someone has to remember.
+async function setInitialInvoiceDocument(id, documentId) {
   const { rows } = await db.query(
-    `SELECT s.* FROM subscriptions s
-     JOIN documents d ON d.id = s.initial_invoice_document_id
-     WHERE s.status = 'INVOICE_PROCESSING' AND d.status = 'AUTHORIZED'`
+    `UPDATE subscriptions SET initial_invoice_document_id = $2
+     WHERE id = $1 AND initial_invoice_document_id IS NULL
+     RETURNING *`,
+    [id, documentId]
   );
-  return rows;
+  return rows[0] || null;
 }
 
 async function updateStatus(id, status, extraFields = {}) {
@@ -214,7 +203,6 @@ module.exports = {
   create,
   findById,
   findActiveOrPendingByTenantId,
-  findByInitialInvoiceDocumentId,
   findByTenantId,
   findActiveByTenantId,
   scheduleDowngrade,
@@ -223,6 +211,6 @@ module.exports = {
   findDueForRenewalReminder,
   findDueForSuspensionWarning,
   findExpiredPastGrace,
-  findPendingActivationWithAuthorizedDocument,
+  setInitialInvoiceDocument,
   updateStatus,
 };

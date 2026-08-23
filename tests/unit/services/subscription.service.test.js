@@ -423,170 +423,202 @@ describe('SubscriptionService', () => {
     });
   });
 
-  describe('applyTierChangeIfLinked', () => {
-    test('is a no-op when no payment is linked to the document', async () => {
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue(null);
+  // Replaces the old activateIfLinked/applyTierChangeIfLinked/
+  // applyRenewalIfLinked trio: since ADR-027 a verified payment is applied at
+  // verification time, not when its invoice authorizes.
+  describe('applyVerifiedPayment', () => {
+    const TENANT = '00000000-0000-0000-0000-000000000001';
+    const SUB = '00000000-0000-0000-0000-000000000010';
+    const PAY = '00000000-0000-0000-0000-000000000020';
 
-      const result = await subscriptionService.applyTierChangeIfLinked(999);
-
-      expect(result).toBeNull();
-      expect(tenantModel.updateTier).not.toHaveBeenCalled();
-    });
-
-    test('is a no-op for a non-TIER_CHANGE payment', async () => {
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000030', purpose: 'INITIAL', status: 'VERIFIED' });
-
-      const result = await subscriptionService.applyTierChangeIfLinked(999);
-
-      expect(result).toBeNull();
-    });
-
-    test('is a no-op when the payment is not yet VERIFIED', async () => {
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000030', purpose: 'TIER_CHANGE', status: 'REPORTED' });
-
-      const result = await subscriptionService.applyTierChangeIfLinked(999);
-
-      expect(result).toBeNull();
-    });
-
-    test('flips the tier, grants the new quota, stamps the payment period, and logs TIER_CHANGED', async () => {
-      const periodStart = new Date('2026-06-01T00:00:00Z');
-      const periodEnd = new Date('2026-07-01T00:00:00Z');
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH',
-      });
-      subscriptionModel.findById.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', current_period_start: periodStart, current_period_end: periodEnd,
-      });
-      subscriptionModel.applyTierChange.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' });
-
-      const result = await subscriptionService.applyTierChangeIfLinked(999);
-
-      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'GROWTH');
-      expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
-      expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000030', 'VERIFIED', {
-        period_start: periodStart, period_end: periodEnd,
-      });
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGED', {
-        subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'STARTER', toTier: 'GROWTH', paymentId: '00000000-0000-0000-0000-000000000030',
-      });
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' });
-    });
-
-    test('a payment with target_billing_interval set schedules the change for period-end instead of applying it now', async () => {
-      const periodEnd = new Date('2026-08-01T00:00:00Z');
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000031', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', status: 'VERIFIED',
-        target_tier: 'STARTER', target_billing_interval: 'YEARLY',
-      });
-      subscriptionModel.findById.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', billing_interval: 'MONTHLY', current_period_end: periodEnd,
-      });
-      subscriptionModel.scheduleDowngrade.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: 'YEARLY' });
-
-      const result = await subscriptionService.applyTierChangeIfLinked(999);
-
-      expect(subscriptionModel.scheduleDowngrade).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'STARTER', 'YEARLY');
-      expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
-      expect(tenantModel.updateTier).not.toHaveBeenCalled();
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGE_SCHEDULED', {
-        subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'GROWTH', toTier: 'STARTER',
-        fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY',
-        effectiveAt: periodEnd, paymentId: '00000000-0000-0000-0000-000000000031',
-      });
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', pending_tier: 'STARTER', pending_billing_interval: 'YEARLY' });
-    });
-  });
-
-  describe('applyPendingInvoiceLinks', () => {
-    // See ADR-022's addendum: linkInvoice() applies immediately when the
-    // linked invoice is already AUTHORIZED at link time; this reconciles
-    // the reverse ordering (linked before authorization completed) via a
-    // periodic scan instead of a RabbitMQ effect fired on every document
-    // authorization system-wide.
     beforeEach(() => {
-      subscriptionModel.findPendingActivationWithAuthorizedDocument.mockResolvedValue([]);
-      paymentModel.findPendingApplicationWithAuthorizedDocument.mockResolvedValue([]);
+      tenantModel.findById.mockResolvedValue({ id: TENANT, status: 'ACTIVE', subscription_tier: 'FREE' });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: SUB, status: 'ACTIVE' });
+      subscriptionModel.applyTierChange.mockResolvedValue({ id: SUB, tier: 'GROWTH' });
+      subscriptionModel.scheduleDowngrade.mockResolvedValue({ id: SUB, pending_tier: 'STARTER' });
     });
 
-    test('reports all zeros when nothing is pending', async () => {
-      const result = await subscriptionService.applyPendingInvoiceLinks();
+    // The snapshot is what makes refundPayment able to restore the right prior
+    // state, so it must be written before anything is changed.
+    test('records a rollback snapshot of the pre-change state on the payment', async () => {
+      const payment = { id: PAY, purpose: 'INITIAL', status: 'VERIFIED' };
+      const subscription = {
+        id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'MONTHLY',
+        status: 'PENDING_PAYMENT', current_period_start: null, current_period_end: null,
+      };
 
-      expect(result).toEqual({ invoiceLinksActivated: 0, invoiceLinksTierChangesApplied: 0, invoiceLinksRenewalsApplied: 0 });
+      await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'VERIFIED', {
+        applied_from: {
+          tier: 'STARTER',
+          billingInterval: 'MONTHLY',
+          periodStart: null,
+          periodEnd: null,
+          subscriptionStatus: 'PENDING_PAYMENT',
+          // The tenant's tier, not the subscription's — an INITIAL payment's
+          // subscription already reads STARTER while the tenant is still FREE.
+          tenantTier: 'FREE',
+        },
+      });
     });
 
-    test('activates a subscription whose linked initial invoice is now authorized', async () => {
-      subscriptionModel.findPendingActivationWithAuthorizedDocument.mockResolvedValue([
-        { id: '00000000-0000-0000-0000-000000000010', initial_invoice_document_id: '00000000-0000-0000-0000-000000000999' },
-      ]);
-      // activateIfLinked re-fetches by documentId itself — same convention every effect handler uses.
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
+    describe('INITIAL', () => {
+      const payment = { id: PAY, purpose: 'INITIAL', status: 'VERIFIED' };
+
+      test('activates the subscription and grants the tier (MONTHLY, +1 month)', async () => {
+        const subscription = {
+          id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'MONTHLY', status: 'PENDING_PAYMENT',
+        };
+
+        const result = await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        const [, status, fields] = subscriptionModel.updateStatus.mock.calls[0];
+        expect(status).toBe('ACTIVE');
+        const months = (fields.current_period_end.getFullYear() - fields.current_period_start.getFullYear()) * 12
+          + (fields.current_period_end.getMonth() - fields.current_period_start.getMonth());
+        expect(months).toBe(1);
+
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'STARTER');
+        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'STARTER');
+        expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'SUBSCRIPTION_ACTIVATED', {
+          subscriptionId: SUB, tier: 'STARTER', paymentId: PAY,
+        });
+        expect(result).toEqual({ id: SUB, status: 'ACTIVE' });
       });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-      paymentModel.findBySubscriptionId.mockResolvedValue([]);
 
-      const result = await subscriptionService.applyPendingInvoiceLinks();
+      test('uses a +1 year period when billing_interval is YEARLY', async () => {
+        await subscriptionService.applyVerifiedPayment(payment, {
+          id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'YEARLY', status: 'PENDING_PAYMENT',
+        });
 
-      expect(subscriptionModel.findByInitialInvoiceDocumentId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000999');
-      expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-      expect(result).toEqual({ invoiceLinksActivated: 1, invoiceLinksTierChangesApplied: 0, invoiceLinksRenewalsApplied: 0 });
+        const fields = subscriptionModel.updateStatus.mock.calls[0][2];
+        expect(fields.current_period_end.getFullYear() - fields.current_period_start.getFullYear()).toBe(1);
+      });
+
+      // Per-cycle history: the subscription's own period columns are
+      // overwritten every renewal, so the funding payment carries its own copy.
+      test('stamps period_start/period_end onto the funding payment', async () => {
+        await subscriptionService.applyVerifiedPayment(payment, {
+          id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'MONTHLY', status: 'PENDING_PAYMENT',
+        });
+
+        expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'VERIFIED', {
+          period_start: expect.any(Date), period_end: expect.any(Date),
+        });
+      });
+
+      test('flips a PAST_DUE tenant back to ACTIVE and logs STATUS_CHANGED', async () => {
+        tenantModel.findById.mockResolvedValue({ id: TENANT, status: 'PAST_DUE', subscription_tier: 'FREE' });
+        pricingService.notifyPendingPriceChangesForTenant.mockResolvedValue();
+
+        await subscriptionService.applyVerifiedPayment(payment, {
+          id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'MONTHLY', status: 'PENDING_PAYMENT',
+        });
+
+        expect(tenantModel.updateStatus).toHaveBeenCalledWith(TENANT, 'ACTIVE');
+        expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'STATUS_CHANGED', {
+          from: 'PAST_DUE', to: 'ACTIVE', reason: 'payment_recovered',
+        });
+      });
+
+      test('does not touch tenants.status when the tenant is already ACTIVE', async () => {
+        await subscriptionService.applyVerifiedPayment(payment, {
+          id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'MONTHLY', status: 'PENDING_PAYMENT',
+        });
+
+        expect(tenantModel.updateStatus).not.toHaveBeenCalled();
+      });
+
+      test('does not fail activation if the price-change catch-up notification throws', async () => {
+        tenantModel.findById.mockResolvedValue({ id: TENANT, status: 'PAST_DUE', subscription_tier: 'FREE' });
+        pricingService.notifyPendingPriceChangesForTenant.mockRejectedValue(new Error('boom'));
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        await expect(subscriptionService.applyVerifiedPayment(payment, {
+          id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'MONTHLY', status: 'PENDING_PAYMENT',
+        })).resolves.toBeTruthy();
+
+        console.error.mockRestore();
+      });
     });
 
-    test('applies a VERIFIED TIER_CHANGE payment whose linked invoice is now authorized', async () => {
-      paymentModel.findPendingApplicationWithAuthorizedDocument.mockResolvedValue([
-        { id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', invoice_document_id: '00000000-0000-0000-0000-000000000998' },
-      ]);
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH',
-      });
-      subscriptionModel.findById.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER',
-        current_period_start: new Date('2026-06-01'), current_period_end: new Date('2026-07-01'),
-      });
-      subscriptionModel.applyTierChange.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' });
+    describe('TIER_CHANGE', () => {
+      const subscription = {
+        id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'MONTHLY', status: 'ACTIVE',
+        current_period_start: new Date('2026-03-01'), current_period_end: new Date('2026-04-01'),
+      };
 
-      const result = await subscriptionService.applyPendingInvoiceLinks();
+      test('flips the tier, grants the new quota, stamps the payment period, and logs TIER_CHANGED', async () => {
+        const payment = { id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: null };
 
-      expect(paymentModel.findByInvoiceDocumentId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000998');
-      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'GROWTH');
-      expect(result).toEqual({ invoiceLinksActivated: 0, invoiceLinksTierChangesApplied: 1, invoiceLinksRenewalsApplied: 0 });
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH');
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
+        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'GROWTH');
+        // The upgrade takes over the remainder of the SAME cycle — period unchanged.
+        expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'VERIFIED', {
+          period_start: subscription.current_period_start,
+          period_end: subscription.current_period_end,
+        });
+        expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'TIER_CHANGED', {
+          subscriptionId: SUB, fromTier: 'STARTER', toTier: 'GROWTH', paymentId: PAY,
+        });
+      });
+
+      test('a payment with target_billing_interval set schedules the change for period-end instead of applying it now', async () => {
+        const payment = { id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' };
+
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        expect(subscriptionModel.scheduleDowngrade).toHaveBeenCalledWith(SUB, 'GROWTH', 'YEARLY');
+        expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+        expect(tenantModel.updateTier).not.toHaveBeenCalled();
+        expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'TIER_CHANGE_SCHEDULED', expect.objectContaining({
+          toTier: 'GROWTH', toBillingInterval: 'YEARLY', effectiveAt: subscription.current_period_end,
+        }));
+      });
+
+      // period_start is what marks a TIER_CHANGE payment as still-unapplied
+      // (findPendingTierChangeBySubscriptionId); applyScheduledTierChanges
+      // stamps it when the deferred change actually lands.
+      test('a deferred change leaves period_start unstamped', async () => {
+        const payment = { id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' };
+
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        const periodStamps = paymentModel.updateStatus.mock.calls.filter(([, , f]) => f && 'period_start' in f);
+        expect(periodStamps).toHaveLength(0);
+      });
     });
 
-    test('applies a VERIFIED RENEWAL payment whose linked invoice is now authorized', async () => {
-      paymentModel.findPendingApplicationWithAuthorizedDocument.mockResolvedValue([
-        { id: '00000000-0000-0000-0000-000000000031', subscription_id: '00000000-0000-0000-0000-000000000011', purpose: 'RENEWAL', invoice_document_id: '00000000-0000-0000-0000-000000000997' },
-      ]);
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000031', subscription_id: '00000000-0000-0000-0000-000000000011', purpose: 'RENEWAL', status: 'VERIFIED',
+    describe('RENEWAL', () => {
+      test('extends the period from the OLD current_period_end and logs SUBSCRIPTION_RENEWED', async () => {
+        const payment = { id: PAY, purpose: 'RENEWAL', status: 'VERIFIED' };
+        const subscription = {
+          id: SUB, tenant_id: TENANT, tier: 'GROWTH', billing_interval: 'MONTHLY', status: 'ACTIVE',
+          current_period_start: new Date('2026-03-15T12:00:00Z'),
+          current_period_end: new Date('2026-04-15T12:00:00Z'),
+        };
+
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        const fields = subscriptionModel.updateStatus.mock.calls[0][2];
+        // Anchored to the old period end, NOT "now" — an early or late review
+        // must not drift the billing date. Length is asserted in whole months
+        // rather than an exact date because addBillingPeriod's setMonth() can
+        // overflow across a local-timezone month boundary.
+        expect(fields.current_period_start).toEqual(new Date('2026-04-15T12:00:00Z'));
+        const months = (fields.current_period_end.getFullYear() - fields.current_period_start.getFullYear()) * 12
+          + (fields.current_period_end.getMonth() - fields.current_period_start.getMonth());
+        expect(months).toBe(1);
+        expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'SUBSCRIPTION_RENEWED', expect.objectContaining({
+          subscriptionId: SUB, tier: 'GROWTH', paymentId: PAY,
+        }));
+        // A renewal never changes tier.
+        expect(tenantModel.updateTier).not.toHaveBeenCalled();
       });
-      subscriptionModel.findById.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000011', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', billing_interval: 'MONTHLY',
-        current_period_end: new Date('2026-07-01'),
-      });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000011', status: 'ACTIVE' });
-
-      const result = await subscriptionService.applyPendingInvoiceLinks();
-
-      expect(paymentModel.findByInvoiceDocumentId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000997');
-      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', 'ACTIVE', expect.any(Object));
-      expect(result).toEqual({ invoiceLinksActivated: 0, invoiceLinksTierChangesApplied: 0, invoiceLinksRenewalsApplied: 1 });
-    });
-
-    test('does not count a row whose downstream apply function no-ops (e.g. already applied by a race)', async () => {
-      subscriptionModel.findPendingActivationWithAuthorizedDocument.mockResolvedValue([
-        { id: '00000000-0000-0000-0000-000000000010', initial_invoice_document_id: '00000000-0000-0000-0000-000000000999' },
-      ]);
-      // Already ACTIVE by the time this runs (e.g. linkInvoice's own
-      // immediate check beat this sweep to it) — activateIfLinked no-ops.
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE',
-      });
-
-      const result = await subscriptionService.applyPendingInvoiceLinks();
-
-      expect(result.invoiceLinksActivated).toBe(0);
     });
   });
 
@@ -804,61 +836,6 @@ describe('SubscriptionService', () => {
       expect(result).toEqual({ remindersSent: 0, pastDueWarningsSent: 0, expired: 0 });
       expect(paymentModel.create).not.toHaveBeenCalled();
       expect(tenantModel.updateTier).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('applyRenewalIfLinked', () => {
-    test('is a no-op when no payment is linked to the document', async () => {
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue(null);
-
-      const result = await subscriptionService.applyRenewalIfLinked(999);
-
-      expect(result).toBeNull();
-      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
-    });
-
-    test('is a no-op for a non-RENEWAL payment', async () => {
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000040', purpose: 'TIER_CHANGE', status: 'VERIFIED' });
-
-      const result = await subscriptionService.applyRenewalIfLinked(999);
-
-      expect(result).toBeNull();
-    });
-
-    test('is a no-op when the payment is not yet VERIFIED', async () => {
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000040', purpose: 'RENEWAL', status: 'REPORTED' });
-
-      const result = await subscriptionService.applyRenewalIfLinked(999);
-
-      expect(result).toBeNull();
-    });
-
-    test('extends the period from the OLD current_period_end, stamps the payment, and logs SUBSCRIPTION_RENEWED', async () => {
-      const oldPeriodEnd = new Date('2026-07-01T00:00:00Z');
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'RENEWAL', status: 'VERIFIED',
-      });
-      subscriptionModel.findById.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: oldPeriodEnd,
-      });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-
-      const result = await subscriptionService.applyRenewalIfLinked(999);
-
-      const [, , extra] = subscriptionModel.updateStatus.mock.calls[0];
-      expect(extra.current_period_start).toEqual(oldPeriodEnd);
-      const monthsApart = (extra.current_period_end.getFullYear() - extra.current_period_start.getFullYear()) * 12
-        + (extra.current_period_end.getMonth() - extra.current_period_start.getMonth());
-      expect(monthsApart).toBe(1);
-
-      expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000040', 'VERIFIED', {
-        period_start: extra.current_period_start,
-        period_end: extra.current_period_end,
-      });
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_RENEWED', {
-        subscriptionId: '00000000-0000-0000-0000-000000000010', tier: 'STARTER', periodStart: extra.current_period_start, periodEnd: extra.current_period_end,
-      });
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
     });
   });
 
@@ -1089,47 +1066,70 @@ describe('SubscriptionService', () => {
       expect(paymentModel.findById).not.toHaveBeenCalled();
     });
 
-    test('VERIFIED moves the linked subscription to PAYMENT_RECEIVED for an INITIAL payment', async () => {
+    test('VERIFIED applies the payment: an INITIAL payment activates the subscription and grants the tier', async () => {
       paymentModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'INITIAL' });
-      paymentModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', status: 'VERIFIED' });
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', status: 'PENDING_PAYMENT' });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'PAYMENT_RECEIVED' });
+      paymentModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', status: 'VERIFIED', purpose: 'INITIAL' });
+      subscriptionModel.findById.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001',
+        tier: 'STARTER', billing_interval: 'MONTHLY', status: 'PENDING_PAYMENT',
+      });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscription_tier: 'FREE' });
 
       const result = await subscriptionService.reviewPayment('00000000-0000-0000-0000-000000000020', 'VERIFIED');
 
       expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', 'VERIFIED', { verified_at: expect.any(Date) });
-      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'PAYMENT_RECEIVED');
+      // ADR-027: straight to ACTIVE, no PAYMENT_RECEIVED/INVOICE_PROCESSING
+      // stopover waiting on the operator's invoice.
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'ACTIVE', expect.any(Object));
+      expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'PAYMENT_VERIFIED', { paymentId: '00000000-0000-0000-0000-000000000020' });
-      expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'PAYMENT_RECEIVED' });
+      expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
       // createPaymentReviewed owns creating the in-app row synchronously and
       // durably enqueuing NOTIFICATION_DISPATCH for email internally (ADR-024).
       expect(notificationService.createPaymentReviewed).toHaveBeenCalledWith(
-        { id: '00000000-0000-0000-0000-000000000020', status: 'VERIFIED' },
-        { id: '00000000-0000-0000-0000-000000000010', status: 'PAYMENT_RECEIVED' },
+        { id: '00000000-0000-0000-0000-000000000020', status: 'VERIFIED', purpose: 'INITIAL' },
+        { id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' },
         'VERIFIED',
       );
     });
 
-    test('VERIFIED leaves an already-ACTIVE subscription untouched for a TIER_CHANGE payment', async () => {
+    test('VERIFIED applies a TIER_CHANGE payment immediately, flipping the tier', async () => {
       paymentModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000021', subscription_id: '00000000-0000-0000-0000-000000000011', purpose: 'TIER_CHANGE' });
-      paymentModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000021', status: 'VERIFIED' });
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000011', tenant_id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
+      paymentModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000021', status: 'VERIFIED', purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: null });
+      subscriptionModel.findById.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000011', tenant_id: '00000000-0000-0000-0000-000000000001',
+        tier: 'STARTER', billing_interval: 'MONTHLY', status: 'ACTIVE',
+        current_period_start: new Date('2026-03-01'), current_period_end: new Date('2026-04-01'),
+      });
+      subscriptionModel.applyTierChange.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000011', tier: 'GROWTH' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscription_tier: 'STARTER' });
 
-      const result = await subscriptionService.reviewPayment(21, 'VERIFIED');
+      const result = await subscriptionService.reviewPayment('00000000-0000-0000-0000-000000000021', 'VERIFIED');
 
-      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
-      expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000011', tenant_id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', 'GROWTH');
+      expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
+      expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000011', tier: 'GROWTH' });
     });
 
-    test('VERIFIED leaves an already-ACTIVE subscription untouched for a RENEWAL payment', async () => {
+    test('VERIFIED applies a RENEWAL payment, extending the period from the old period end', async () => {
       paymentModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000022', subscription_id: '00000000-0000-0000-0000-000000000012', purpose: 'RENEWAL' });
-      paymentModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000022', status: 'VERIFIED' });
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000012', tenant_id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
+      paymentModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000022', status: 'VERIFIED', purpose: 'RENEWAL' });
+      subscriptionModel.findById.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000012', tenant_id: '00000000-0000-0000-0000-000000000001',
+        tier: 'GROWTH', billing_interval: 'MONTHLY', status: 'ACTIVE',
+        current_period_start: new Date('2026-03-15T12:00:00Z'), current_period_end: new Date('2026-04-15T12:00:00Z'),
+      });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000012', status: 'ACTIVE' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscription_tier: 'GROWTH' });
 
-      const result = await subscriptionService.reviewPayment(22, 'VERIFIED');
+      await subscriptionService.reviewPayment('00000000-0000-0000-0000-000000000022', 'VERIFIED');
 
-      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
-      expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000012', tenant_id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
+      const fields = subscriptionModel.updateStatus.mock.calls[0][2];
+      expect(fields.current_period_start).toEqual(new Date('2026-04-15T12:00:00Z'));
+      const months = (fields.current_period_end.getFullYear() - fields.current_period_start.getFullYear()) * 12
+        + (fields.current_period_end.getMonth() - fields.current_period_start.getMonth());
+      expect(months).toBe(1);
     });
 
     test('REJECTED leaves the subscription untouched and stores the rejection reason code', async () => {
@@ -1172,363 +1172,288 @@ describe('SubscriptionService', () => {
     });
   });
 
-  describe('activateIfLinked', () => {
-    beforeEach(() => {
-      paymentModel.findBySubscriptionId.mockResolvedValue([]);
-      // Default: an ordinary ACTIVE tenant — no PAST_DUE recovery flip.
-      // Individual tests override this to exercise the recovery path.
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
-    });
-
-    test('is a no-op when no subscription is linked to the document', async () => {
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue(null);
-
-      const result = await subscriptionService.activateIfLinked(999);
-
-      expect(result).toBeNull();
-      expect(tenantModel.updateTier).not.toHaveBeenCalled();
-    });
-
-    test('is a no-op when the linked subscription is not awaiting invoice processing', async () => {
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'CANCELLED' });
-
-      const result = await subscriptionService.activateIfLinked(999);
-
-      expect(result).toBeNull();
-      expect(tenantModel.updateTier).not.toHaveBeenCalled();
-    });
-
-    test('activates the subscription and grants the tier when authorized (MONTHLY, +1 month)', async () => {
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
-      });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-
-      const result = await subscriptionService.activateIfLinked(999);
-
-      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'ACTIVE', {
-        current_period_start: expect.any(Date),
-        current_period_end: expect.any(Date),
-      });
-      const [, , extra] = subscriptionModel.updateStatus.mock.calls[0];
-      const monthsApart = (extra.current_period_end.getFullYear() - extra.current_period_start.getFullYear()) * 12
-        + (extra.current_period_end.getMonth() - extra.current_period_start.getMonth());
-      expect(monthsApart).toBe(1);
-      expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_ACTIVATED', { subscriptionId: '00000000-0000-0000-0000-000000000010', tier: 'STARTER' });
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-    });
-
-    test('uses a +1 year period when billing_interval is YEARLY', async () => {
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'YEARLY',
-      });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-
-      await subscriptionService.activateIfLinked(999);
-
-      const [, , extra] = subscriptionModel.updateStatus.mock.calls[0];
-      expect(extra.current_period_end.getFullYear() - extra.current_period_start.getFullYear()).toBe(1);
-    });
-
-    test('stamps period_start/period_end onto the verified payment that funded this cycle', async () => {
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
-      });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-      paymentModel.findBySubscriptionId.mockResolvedValue([
-        { id: '00000000-0000-0000-0000-000000000020', status: 'VERIFIED', period_start: null },
-      ]);
-
-      await subscriptionService.activateIfLinked(999);
-
-      expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', 'VERIFIED', {
-        period_start: expect.any(Date),
-        period_end: expect.any(Date),
-      });
-    });
-
-    // Self-service recovery: a tenant who went PAST_DUE and started a fresh
-    // subscription to pay their way back in lands here on that
-    // subscription's first activation. See docs/adr/025-past-due-tenant-status.md.
-    test('flips a PAST_DUE tenant back to ACTIVE and logs STATUS_CHANGED', async () => {
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
-      });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'PAST_DUE' });
-
-      await subscriptionService.activateIfLinked(999);
-
-      expect(tenantModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'ACTIVE');
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STATUS_CHANGED', {
-        from: 'PAST_DUE', to: 'ACTIVE', reason: 'payment_recovered',
-      });
-      // Catch-up: a price change may have published while this tenant was
-      // PAST_DUE — same pattern as every other reactivation point.
-      expect(pricingService.notifyPendingPriceChangesForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
-    });
-
-    test('does not fail activation if the price-change catch-up notification throws', async () => {
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
-      });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'PAST_DUE' });
-      pricingService.notifyPendingPriceChangesForTenant.mockRejectedValue(new Error('db hiccup'));
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-
-      const result = await subscriptionService.activateIfLinked(999);
-
-      expect(tenantModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'ACTIVE');
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to notify tenant 00000000-0000-0000-0000-000000000001 of pending price changes'),
-        'db hiccup'
-      );
-
-      consoleErrorSpy.mockRestore();
-    });
-
-    test('does not touch tenants.status when the tenant is already ACTIVE', async () => {
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
-      });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-
-      await subscriptionService.activateIfLinked(999);
-
-      expect(tenantModel.updateStatus).not.toHaveBeenCalled();
-      expect(pricingService.notifyPendingPriceChangesForTenant).not.toHaveBeenCalled();
-    });
-  });
-
   describe('linkInvoice', () => {
     const accessKey = '1234567890123456789012345678901234567890123456789';
+    const TENANT = '00000000-0000-0000-0000-000000000001';
+    const SUB = '00000000-0000-0000-0000-000000000010';
+    const DOC = '00000000-0000-0000-0000-000000000999';
 
     beforeEach(() => {
-      paymentModel.findBySubscriptionId.mockResolvedValue([]);
-      // Explicit, not implicit via jest.clearAllMocks() (which only clears call
-      // history, not mockResolvedValue implementations) — without this, a truthy
-      // value left behind by an unrelated test earlier in the run (e.g.
-      // requestTierChange's "upgrade payment already in flight" case) can leak in
-      // under randomized test ordering and silently steer linkInvoice into the
-      // wrong branch.
-      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
-      paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue(null);
+      subscriptionModel.findById.mockResolvedValue({ id: SUB, tenant_id: TENANT, status: 'ACTIVE' });
+      subscriptionModel.setInitialInvoiceDocument.mockResolvedValue({ id: SUB });
+      paymentModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020' });
     });
 
     test('rejects when the subscription does not exist', async () => {
       subscriptionModel.findById.mockResolvedValue(null);
-
-      await expect(subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey))
+      await expect(subscriptionService.linkInvoice(SUB, accessKey))
         .rejects.toMatchObject({ statusCode: 404, code: 'SUBSCRIPTION_NOT_FOUND' });
     });
 
     test('rejects when the document does not exist', async () => {
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001' });
       documentModel.findByAccessKey.mockResolvedValue(null);
-
-      await expect(subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey))
+      await expect(subscriptionService.linkInvoice(SUB, accessKey))
         .rejects.toMatchObject({ statusCode: 404 });
     });
 
-    test('links the document (looked up by accessKey, no issuer scoping) and moves the subscription to INVOICE_PROCESSING', async () => {
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001' });
-      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999' });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'INVOICE_PROCESSING' });
+    test('rejects when no verified payment is awaiting an invoice', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({ id: DOC, status: 'AUTHORIZED', sandbox: false });
+      paymentModel.findOldestUninvoicedBySubscriptionId.mockResolvedValue(null);
 
-      const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
-
-      expect(documentModel.findByAccessKey).toHaveBeenCalledWith(accessKey);
-      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'INVOICE_PROCESSING', { initial_invoice_document_id: '00000000-0000-0000-0000-000000000999' });
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'INVOICE_LINKED', { subscriptionId: '00000000-0000-0000-0000-000000000010', documentId: '00000000-0000-0000-0000-000000000999' });
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'INVOICE_PROCESSING' });
+      await expect(subscriptionService.linkInvoice(SUB, accessKey))
+        .rejects.toMatchObject({ statusCode: 409 });
     });
 
-    test('activates immediately when the document being linked is already AUTHORIZED', async () => {
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
-      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'AUTHORIZED' });
-      subscriptionModel.updateStatus
-        .mockResolvedValueOnce({ id: '00000000-0000-0000-0000-000000000010', status: 'INVOICE_PROCESSING' }) // the link itself
-        .mockResolvedValueOnce({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });           // inside activateIfLinked
-      subscriptionModel.findByInitialInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', status: 'INVOICE_PROCESSING', billing_interval: 'MONTHLY',
+    // The whole point of ADR-027: linking is bookkeeping. The subscription was
+    // already activated when the payment was verified.
+    test('an INITIAL payment writes subscriptions.initial_invoice_document_id and stamps invoiced_at', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({ id: DOC, status: 'AUTHORIZED', sandbox: false });
+      paymentModel.findOldestUninvoicedBySubscriptionId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000020', purpose: 'INITIAL', status: 'VERIFIED',
       });
 
-      const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
+      await subscriptionService.linkInvoice(SUB, accessKey);
 
-      expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-    });
-
-    test('links a VERIFIED TIER_CHANGE payment to its own invoice_document_id, leaving the subscription untouched', async () => {
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
-      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'RECEIVED' });
-      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', status: 'VERIFIED', target_tier: 'GROWTH',
+      expect(subscriptionModel.setInitialInvoiceDocument).toHaveBeenCalledWith(SUB, DOC);
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000020', 'VERIFIED', {
+        invoiced_at: expect.any(Date),
       });
-
-      const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
-
-      expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000030', 'VERIFIED', { invoice_document_id: '00000000-0000-0000-0000-000000000999' });
+      // No state transition at all.
       expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'INVOICE_LINKED', { subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000030', documentId: '00000000-0000-0000-0000-000000000999' });
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
+      expect(tenantModel.updateTier).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'INVOICE_LINKED', {
+        subscriptionId: SUB, paymentId: '00000000-0000-0000-0000-000000000020', documentId: DOC, sandbox: false,
+      });
     });
 
-    test('applies the tier change immediately when the linked TIER_CHANGE invoice is already AUTHORIZED', async () => {
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
-      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'AUTHORIZED' });
-      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', status: 'VERIFIED', target_tier: 'GROWTH',
+    // initial_invoice_document_id records what ORIGINALLY activated the
+    // subscription and is never repointed — a later funding event writes its
+    // own payments.invoice_document_id instead.
+    test('a TIER_CHANGE payment writes payments.invoice_document_id, never the subscription column', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({ id: DOC, status: 'AUTHORIZED', sandbox: false });
+      paymentModel.findOldestUninvoicedBySubscriptionId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000021', purpose: 'TIER_CHANGE', status: 'VERIFIED',
       });
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH',
+
+      await subscriptionService.linkInvoice(SUB, accessKey);
+
+      expect(subscriptionModel.setInitialInvoiceDocument).not.toHaveBeenCalled();
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000021', 'VERIFIED', {
+        invoiced_at: expect.any(Date), invoice_document_id: DOC,
       });
-      subscriptionModel.applyTierChange.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' });
-
-      const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
-
-      expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' });
     });
 
-    test('links a VERIFIED RENEWAL payment to its own invoice_document_id, leaving the subscription untouched', async () => {
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
-      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'RECEIVED' });
-      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
-      paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', status: 'VERIFIED',
+    test('a RENEWAL payment behaves the same as TIER_CHANGE', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({ id: DOC, status: 'AUTHORIZED', sandbox: false });
+      paymentModel.findOldestUninvoicedBySubscriptionId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000022', purpose: 'RENEWAL', status: 'VERIFIED',
       });
 
-      const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
+      await subscriptionService.linkInvoice(SUB, accessKey);
 
-      expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000040', 'VERIFIED', { invoice_document_id: '00000000-0000-0000-0000-000000000999' });
-      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'INVOICE_LINKED', { subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000040', documentId: '00000000-0000-0000-0000-000000000999' });
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000022', 'VERIFIED', {
+        invoiced_at: expect.any(Date), invoice_document_id: DOC,
+      });
     });
 
-    test('extends the period immediately when the linked RENEWAL invoice is already AUTHORIZED', async () => {
-      const oldPeriodEnd = new Date('2026-07-01T00:00:00Z');
-      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: oldPeriodEnd });
-      documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'AUTHORIZED' });
-      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
-      paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', status: 'VERIFIED',
-      });
-      paymentModel.findByInvoiceDocumentId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'RENEWAL', status: 'VERIFIED',
-      });
-      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-
-      const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
-
-      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'ACTIVE', {
-        current_period_start: oldPeriodEnd,
-        current_period_end: expect.any(Date),
-      });
-      expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
-    });
-
+    // Both FK columns reference public.documents; sandbox.documents is an
+    // independent id sequence that can collide with it. invoiced_at is still
+    // stamped, which is what the queue reads.
     describe('sandbox documents', () => {
-      test('a pending TIER_CHANGE payment applies immediately (correct target tier/interval), never touching invoice_document_id', async () => {
-        const periodStart = new Date('2026-06-01T00:00:00Z');
-        const periodEnd = new Date('2026-07-01T00:00:00Z');
-        subscriptionModel.findById.mockResolvedValue({
-          id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY',
-          current_period_start: periodStart, current_period_end: periodEnd,
+      test('stamps invoiced_at but writes neither FK', async () => {
+        documentModel.findByAccessKey.mockResolvedValue({ id: DOC, status: 'AUTHORIZED', sandbox: true });
+        paymentModel.findOldestUninvoicedBySubscriptionId.mockResolvedValue({
+          id: '00000000-0000-0000-0000-000000000023', purpose: 'TIER_CHANGE', status: 'VERIFIED',
         });
-        documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'AUTHORIZED', sandbox: true });
-        paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({
-          id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'YEARLY',
-        });
-        subscriptionModel.applyTierChange.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', billing_interval: 'YEARLY' });
 
-        const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
+        await subscriptionService.linkInvoice(SUB, accessKey);
 
-        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'GROWTH', 'YEARLY');
-        expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
-        expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
-        expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000030', 'VERIFIED', {
-          period_start: periodStart, period_end: periodEnd,
+        expect(subscriptionModel.setInitialInvoiceDocument).not.toHaveBeenCalled();
+        expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000023', 'VERIFIED', {
+          invoiced_at: expect.any(Date),
         });
-        expect(paymentModel.updateStatus).not.toHaveBeenCalledWith(30, expect.anything(), expect.objectContaining({ invoice_document_id: expect.anything() }));
-        expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGED', expect.objectContaining({
-          subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'STARTER', toTier: 'GROWTH',
-          fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY', paymentId: '00000000-0000-0000-0000-000000000030',
-        }));
-        expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', billing_interval: 'YEARLY' });
       });
 
-      test('a pending RENEWAL payment extends the period immediately from the OLD current_period_end', async () => {
-        const oldPeriodEnd = new Date('2026-07-01T00:00:00Z');
-        subscriptionModel.findById.mockResolvedValue({
-          id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: oldPeriodEnd,
+      test('an INITIAL sandbox invoice also skips the subscription FK', async () => {
+        documentModel.findByAccessKey.mockResolvedValue({ id: DOC, status: 'AUTHORIZED', sandbox: true });
+        paymentModel.findOldestUninvoicedBySubscriptionId.mockResolvedValue({
+          id: '00000000-0000-0000-0000-000000000024', purpose: 'INITIAL', status: 'VERIFIED',
         });
-        documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'AUTHORIZED', sandbox: true });
-        paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
-        paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue({
-          id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', status: 'VERIFIED',
-        });
-        subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
 
-        const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
+        await subscriptionService.linkInvoice(SUB, accessKey);
 
-        expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'ACTIVE', {
-          current_period_start: oldPeriodEnd,
-          current_period_end: expect.any(Date),
-        });
-        expect(paymentModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000040', 'VERIFIED', {
-          period_start: oldPeriodEnd, period_end: expect.any(Date),
-        });
-        expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_RENEWED', expect.objectContaining({ subscriptionId: '00000000-0000-0000-0000-000000000010' }));
-        expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
+        expect(subscriptionModel.setInitialInvoiceDocument).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('listPendingInvoices', () => {
+    test('returns a count plus a per-payment block with the buyer identity for the factura', async () => {
+      paymentModel.findPendingInvoice.mockResolvedValue([
+        {
+          id: '00000000-0000-0000-0000-000000000020', purpose: 'INITIAL', method: 'SPI_TRANSFER',
+          amount: '17.39', iva_rate: '0.15', iva_amount: '2.61', total_amount: '20.00',
+          verified_at: new Date('2026-03-02'),
+          subscription_id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001',
+          tier: 'STARTER', billing_interval: 'MONTHLY',
+          current_period_start: new Date('2026-03-01'), current_period_end: new Date('2026-04-01'),
+          period_start: null, period_end: null,
+          target_tier: null, target_billing_interval: null,
+          tenant_email: 'a@b.com', business_name: 'ACME SA', ruc: '1790012345001', main_address: 'Av. Siempre Viva 123',
+        },
+      ]);
+
+      const result = await subscriptionService.listPendingInvoices();
+
+      expect(result.count).toBe(1);
+      expect(result.items[0].buyer).toEqual({
+        tenantId: '00000000-0000-0000-0000-000000000001', email: 'a@b.com',
+        businessName: 'ACME SA', ruc: '1790012345001', address: 'Av. Siempre Viva 123',
+      });
+      expect(result.items[0].subscription.tier).toBe('STARTER');
+      expect(result.items[0].payment.totalAmount).toBe('20.00');
+    });
+
+    // Common Mistake #28: for a TIER_CHANGE the subscription's own columns
+    // describe what it is now, not what this payment bought.
+    test('a TIER_CHANGE payment reports the target tier/interval, not the subscription current ones', async () => {
+      paymentModel.findPendingInvoice.mockResolvedValue([
+        {
+          id: '00000000-0000-0000-0000-000000000021', purpose: 'TIER_CHANGE', method: 'SPI_TRANSFER',
+          amount: '60.87', iva_rate: '0.15', iva_amount: '9.13', total_amount: '70.00',
+          verified_at: new Date('2026-03-10'),
+          subscription_id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001',
+          tier: 'STARTER', billing_interval: 'MONTHLY',
+          current_period_start: new Date('2026-03-01'), current_period_end: new Date('2026-04-01'),
+          period_start: new Date('2026-03-01'), period_end: new Date('2026-04-01'),
+          target_tier: 'GROWTH', target_billing_interval: 'YEARLY',
+          tenant_email: 'a@b.com', business_name: 'ACME SA', ruc: '1790012345001', main_address: 'Av. 1',
+        },
+      ]);
+
+      const result = await subscriptionService.listPendingInvoices();
+
+      expect(result.items[0].subscription.tier).toBe('GROWTH');
+      expect(result.items[0].subscription.billingInterval).toBe('YEARLY');
+    });
+
+    test('reports zero when nothing is owed', async () => {
+      paymentModel.findPendingInvoice.mockResolvedValue([]);
+      await expect(subscriptionService.listPendingInvoices()).resolves.toEqual({ count: 0, items: [] });
+    });
+  });
+
+  describe('refundPayment', () => {
+    const TENANT = '00000000-0000-0000-0000-000000000001';
+    const SUB = '00000000-0000-0000-0000-000000000010';
+    const PAY = '00000000-0000-0000-0000-000000000020';
+
+    beforeEach(() => {
+      subscriptionModel.applyTierChange.mockResolvedValue({ id: SUB });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: SUB, status: 'ACTIVE' });
+      paymentModel.updateStatus.mockResolvedValue({ id: PAY, status: 'REFUNDED' });
+      subscriptionModel.findById.mockResolvedValue({ id: SUB, tenant_id: TENANT, tier: 'GROWTH', status: 'ACTIVE' });
+    });
+
+    test('rejects a payment that is not VERIFIED', async () => {
+      paymentModel.findById.mockResolvedValue({ id: PAY, status: 'REPORTED' });
+      await expect(subscriptionService.refundPayment(PAY))
+        .rejects.toMatchObject({ statusCode: 409, code: 'PAYMENT_NOT_REFUNDABLE' });
+    });
+
+    // Payments applied before migration 090 have no snapshot; guessing would
+    // corrupt state, so refuse rather than approximate.
+    test('rejects a payment with no applied_from snapshot', async () => {
+      paymentModel.findById.mockResolvedValue({ id: PAY, status: 'VERIFIED', applied_from: null });
+      await expect(subscriptionService.refundPayment(PAY))
+        .rejects.toMatchObject({ statusCode: 400, code: 'PAYMENT_NOT_REFUNDABLE' });
+    });
+
+    // The case that motivated the endpoint: a hand-rolled downgrade via
+    // PATCH /admin/tenants/:id/tier leaves subscriptions.tier stale, and
+    // createRenewalReminder then prices the next renewal off it.
+    test('a reversed TIER_CHANGE restores the PREVIOUS PAID tier on both the subscription and the tenant', async () => {
+      paymentModel.findById.mockResolvedValue({
+        id: PAY, status: 'VERIFIED', purpose: 'TIER_CHANGE', subscription_id: SUB,
+        applied_from: {
+          tier: 'STARTER', billingInterval: 'MONTHLY',
+          periodStart: '2026-03-01T00:00:00.000Z', periodEnd: '2026-04-01T00:00:00.000Z',
+          subscriptionStatus: 'ACTIVE', tenantTier: 'STARTER',
+        },
       });
 
-      test('no pending TIER_CHANGE/RENEWAL: falls back to initial activation using the subscription\'s own tier', async () => {
-        subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY' });
-        documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'AUTHORIZED', sandbox: true });
-        paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue(null);
-        paymentModel.findPendingRenewalBySubscriptionId.mockResolvedValue(null);
-        subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
+      const result = await subscriptionService.refundPayment(PAY, 'Chargeback 8891');
 
-        const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'STARTER', 'MONTHLY');
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(SUB, 'ACTIVE', {
+        current_period_start: '2026-03-01T00:00:00.000Z',
+        current_period_end: '2026-04-01T00:00:00.000Z',
+      });
+      // Never FREE — that was the bug this endpoint exists to avoid.
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'STARTER');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'STARTER');
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'REFUNDED');
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'PAYMENT_REFUNDED', expect.objectContaining({
+        paymentId: PAY, purpose: 'TIER_CHANGE', reason: 'Chargeback 8891', restoredTier: 'STARTER',
+      }));
+      expect(result.payment.status).toBe('REFUNDED');
+    });
 
-        expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-        expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-        expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_ACTIVATED', expect.objectContaining({ subscriptionId: '00000000-0000-0000-0000-000000000010' }));
-        expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
+    test('a reversed RENEWAL rolls the period back and leaves the tier alone', async () => {
+      paymentModel.findById.mockResolvedValue({
+        id: PAY, status: 'VERIFIED', purpose: 'RENEWAL', subscription_id: SUB,
+        applied_from: {
+          tier: 'GROWTH', billingInterval: 'MONTHLY',
+          periodStart: '2026-03-01T00:00:00.000Z', periodEnd: '2026-04-01T00:00:00.000Z',
+          subscriptionStatus: 'ACTIVE', tenantTier: 'GROWTH',
+        },
       });
 
-      test('not yet AUTHORIZED: a pending TIER_CHANGE payment leaves the subscription untouched', async () => {
-        subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
-        documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'RECEIVED', sandbox: true });
-        paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({
-          id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: null,
-        });
+      await subscriptionService.refundPayment(PAY);
 
-        const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(SUB, 'ACTIVE', {
+        current_period_start: '2026-03-01T00:00:00.000Z',
+        current_period_end: '2026-04-01T00:00:00.000Z',
+      });
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
+    });
 
-        expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
-        expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
-        expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
+    // Restoring PENDING_PAYMENT verbatim would leave a subscription that looks
+    // payable but whose only payment is REFUNDED, and would block the tenant
+    // from starting a new one via findActiveOrPendingByTenantId.
+    test('a reversed INITIAL cancels the subscription and drops the tenant to their pre-subscription tier', async () => {
+      paymentModel.findById.mockResolvedValue({
+        id: PAY, status: 'VERIFIED', purpose: 'INITIAL', subscription_id: SUB,
+        applied_from: {
+          tier: 'STARTER', billingInterval: 'MONTHLY',
+          periodStart: null, periodEnd: null,
+          subscriptionStatus: 'PENDING_PAYMENT', tenantTier: 'FREE',
+        },
       });
 
-      test('not yet AUTHORIZED, no pending payment: moves to INVOICE_PROCESSING', async () => {
-        subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
-        documentModel.findByAccessKey.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000999', status: 'RECEIVED', sandbox: true });
-        subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'INVOICE_PROCESSING' });
+      await subscriptionService.refundPayment(PAY);
 
-        const result = await subscriptionService.linkInvoice('00000000-0000-0000-0000-000000000010', accessKey);
-
-        expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'INVOICE_PROCESSING', {});
-        expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'INVOICE_PROCESSING' });
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(SUB, 'CANCELLED', {
+        canceled_at: expect.any(Date), current_period_start: null, current_period_end: null,
       });
+      expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'FREE');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'FREE');
+    });
+
+    // Suspension is a separate operator judgement — an honest duplicate charge
+    // is not a reason to lock the tenant out.
+    test('never suspends the tenant', async () => {
+      paymentModel.findById.mockResolvedValue({
+        id: PAY, status: 'VERIFIED', purpose: 'INITIAL', subscription_id: SUB,
+        applied_from: {
+          tier: 'STARTER', billingInterval: 'MONTHLY', periodStart: null, periodEnd: null,
+          subscriptionStatus: 'PENDING_PAYMENT', tenantTier: 'FREE',
+        },
+      });
+
+      await subscriptionService.refundPayment(PAY);
+
+      expect(tenantModel.updateStatus).not.toHaveBeenCalled();
     });
   });
 

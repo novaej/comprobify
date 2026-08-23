@@ -68,7 +68,8 @@ async function findAllByStatus(status) {
 async function activate(id) {
   const { rows } = await db.query(
     `UPDATE tenants
-     SET status = $1, verification_token = NULL, verification_token_expires_at = NULL, updated_at = NOW()
+     SET status = $1, verification_token = NULL, verification_token_expires_at = NULL,
+         suspension_reason_code = NULL, updated_at = NOW()
      WHERE id = $2
      RETURNING *`,
     [TenantStatus.ACTIVE, id]
@@ -102,10 +103,16 @@ async function updateTier(id, tier) {
   return rows[0] || null;
 }
 
-async function updateStatus(id, status) {
+// suspensionReasonCode is only meaningful alongside SUSPENDED; every other
+// status clears it, so a reactivated tenant never carries a stale reason.
+// Callers pass a SuspensionReasons value — see src/constants/suspension-reasons.js.
+async function updateStatus(id, status, suspensionReasonCode = null) {
   const { rows } = await db.query(
-    `UPDATE tenants SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
-    [status, id]
+    `UPDATE tenants
+     SET status = $1, suspension_reason_code = $3, updated_at = NOW()
+     WHERE id = $2
+     RETURNING *`,
+    [status, id, status === 'SUSPENDED' ? suspensionReasonCode : null]
   );
   return rows[0] || null;
 }

@@ -129,7 +129,7 @@ async function createSubscriptionForTenant(tenantId, tier, billingInterval = 'MO
   }
   // PAST_DUE is deliberately allowed through — starting a fresh subscription
   // and paying is the self-service recovery path back to ACTIVE (see
-  // activateIfLinked's PAST_DUE -> ACTIVE step). SUSPENDED never reaches
+  // applyVerifiedPayment's PAST_DUE -> ACTIVE step). SUSPENDED never reaches
   // here: requireNotSuspended already blocks POST /v1/subscriptions upstream.
   // See docs/adr/025-past-due-tenant-status.md.
 
@@ -139,7 +139,7 @@ async function createSubscriptionForTenant(tenantId, tier, billingInterval = 'MO
 // Tenant-initiated tier and/or billing-interval change on an already-ACTIVE
 // subscription. Same-interval upgrades take effect immediately once a
 // prorated payment is verified and its self-billed invoice authorizes (see
-// applyTierChangeIfLinked); same-interval downgrades are scheduled and
+// applyVerifiedPayment); same-interval downgrades are scheduled and
 // applied at current_period_end (see applyScheduledTierChanges) — no payment
 // is owed since the current period is already paid for at the higher tier.
 //
@@ -327,7 +327,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
 }
 
 // Sandbox variant of requestTierChange's pricing/application logic. Every
-// sandbox tier/interval change applies immediately (see linkSandboxDocument,
+// sandbox tier/interval change applies immediately (see applyVerifiedPayment,
 // which is where a paid change actually lands once its self-billed invoice
 // authorizes) and is priced at the target plan's FULL sticker price — never
 // prorated. Proration only makes sense against a real, running billing
@@ -566,18 +566,13 @@ async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   const subscription = await subscriptionModel.findById(payment.subscription_id);
   if (!subscription) throw new NotFoundError('Subscription', ErrorCodes.SUBSCRIPTION_NOT_FOUND);
 
-  // PAYMENT_RECEIVED is a step in the INITIAL activation flow only
-  // (PENDING_PAYMENT -> ... -> PAYMENT_RECEIVED -> INVOICE_PROCESSING -> ACTIVE).
-  // A TIER_CHANGE/RENEWAL payment's subscription is already ACTIVE by the time
-  // its payment is reviewed (both are only opened for an ACTIVE subscription)
-  // and nothing downstream ever restores ACTIVE for the immediate-apply tier
-  // path — demoting it here would leave the subscription permanently stuck at
-  // PAYMENT_RECEIVED even after the tier change has fully applied, which also
-  // silently blocks findActiveByTenantId-gated flows (further tier changes,
-  // renewal reminders, expiry) from ever finding it again.
+  // Verification alone grants access now — no invoice gate (ADR-027). The
+  // intermediate PAYMENT_RECEIVED/INVOICE_PROCESSING statuses this used to
+  // step through are gone; the operator's still-owed invoice is tracked by
+  // listPendingInvoices() instead of by withholding the tier.
   let updatedSubscription = subscription;
-  if (decision === 'VERIFIED' && payment.purpose === 'INITIAL') {
-    updatedSubscription = await subscriptionModel.updateStatus(subscription.id, 'PAYMENT_RECEIVED');
+  if (decision === 'VERIFIED') {
+    updatedSubscription = await applyVerifiedPayment(updatedPayment, subscription);
   }
 
   await tenantEventModel.create(subscription.tenant_id, decision === 'VERIFIED' ? 'PAYMENT_VERIFIED' : 'PAYMENT_REJECTED', { paymentId });
@@ -592,168 +587,53 @@ async function reviewPayment(paymentId, decision, rejectionReasonCode = null) {
   return { payment: updatedPayment, subscription: updatedSubscription };
 }
 
-async function linkInvoice(subscriptionId, accessKey) {
-  const subscription = await subscriptionModel.findById(subscriptionId);
-  if (!subscription) throw new NotFoundError('Subscription', ErrorCodes.SUBSCRIPTION_NOT_FOUND);
-
-  // No issuerId passed — this is an admin-only, cross-tenant lookup. accessKey is the
-  // identifier every other document response already exposes; documents.id never is.
-  // findByAccessKey searches both public and sandbox schemas (UNION ALL); the returned
-  // row includes `sandbox: true/false` to indicate which schema it came from.
-  const document = await documentModel.findByAccessKey(accessKey);
-  if (!document) throw new NotFoundError('Document');
-
-  // Purpose detection runs BEFORE the sandbox/production fork so both paths
-  // route TIER_CHANGE/RENEWAL payments correctly — a sandbox self-billed
-  // invoice can fund any of the three purposes, not just the initial
-  // activation (see linkSandboxDocument's comment for why sandbox needs its
-  // own application path rather than reusing applyTierChangeIfLinked/
-  // applyRenewalIfLinked/activateIfLinked).
-  const pendingTierChange = await paymentModel.findPendingTierChangeBySubscriptionId(subscriptionId);
-  const pendingRenewal = !pendingTierChange
-    ? await paymentModel.findPendingRenewalBySubscriptionId(subscriptionId)
-    : null;
-
-  if (document.sandbox) {
-    return linkSandboxDocument(subscription, document, pendingTierChange, pendingRenewal);
-  }
-
-  // A VERIFIED, unlinked TIER_CHANGE payment means this is an upgrade's
-  // self-billed invoice, not the subscription's original activation invoice —
-  // link it to the payment instead so the subscription's own
-  // initial_invoice_document_id (already spent on activation) is left untouched.
-  if (pendingTierChange && pendingTierChange.status === 'VERIFIED') {
-    await paymentModel.updateStatus(pendingTierChange.id, 'VERIFIED', { invoice_document_id: document.id });
-    await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
-      subscriptionId, paymentId: pendingTierChange.id, documentId: document.id,
-    });
-
-    if (document.status === 'AUTHORIZED') {
-      const applied = await applyTierChangeIfLinked(document.id);
-      if (applied) return applied;
-    }
-
-    return subscription;
-  }
-
-  // Same idea, but for a renewal payment opened by processDueRenewals ahead of
-  // current_period_end — link to the payment, not the subscription's own
-  // initial_invoice_document_id (already spent on initial activation).
-  if (pendingRenewal && pendingRenewal.status === 'VERIFIED') {
-    await paymentModel.updateStatus(pendingRenewal.id, 'VERIFIED', { invoice_document_id: document.id });
-    await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
-      subscriptionId, paymentId: pendingRenewal.id, documentId: document.id,
-    });
-
-    if (document.status === 'AUTHORIZED') {
-      const applied = await applyRenewalIfLinked(document.id);
-      if (applied) return applied;
-    }
-
-    return subscription;
-  }
-
-  let updated = await subscriptionModel.updateStatus(subscriptionId, 'INVOICE_PROCESSING', {
-    initial_invoice_document_id: document.id,
-  });
-
-  await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', { subscriptionId, documentId: document.id });
-
-  // The activation hook only fires on a *new* authorization event inside
-  // checkAuthorization() — it never runs for a document that was authorized
-  // before being linked. Check immediately so linking an already-authorized
-  // invoice doesn't leave the subscription stuck in INVOICE_PROCESSING.
-  if (document.status === 'AUTHORIZED') {
-    const activated = await activateIfLinked(document.id);
-    if (activated) updated = activated;
-  }
-
-  return updated;
+// Snapshot of the state a verified payment is about to change, stored on the
+// payment itself (payments.applied_from) at apply time. Restoring it verbatim
+// is the whole of refundPayment(): a reversed TIER_CHANGE must return to the
+// previous *paid* tier rather than FREE, and a reversed RENEWAL must roll the
+// period back rather than change tier at all — neither is reconstructible
+// after the fact. tenantTier is captured separately from the subscription's
+// own tier because they legitimately differ: an INITIAL payment's
+// subscription already reads STARTER at creation while the tenant is still
+// FREE, so restoring subscription.tier alone would leave the tenant paying
+// nothing on a paid tier.
+function snapshotState(subscription, tenant) {
+  return {
+    tier: subscription.tier,
+    billingInterval: subscription.billing_interval,
+    periodStart: subscription.current_period_start,
+    periodEnd: subscription.current_period_end,
+    subscriptionStatus: subscription.status,
+    tenantTier: tenant.subscription_tier,
+  };
 }
 
-// Sandbox documents cannot be stored in subscriptions.initial_invoice_document_id
-// or payments.invoice_document_id — both FKs reference public.documents only, and
-// sandbox.documents is a fully independent id sequence that can (and will)
-// collide with public.documents ids. So this applies whatever payment is
-// pending directly, without ever writing either FK, and — unlike
-// the production applyTierChangeIfLinked — always IMMEDIATELY: a sandbox
-// current_period_end is thrown away entirely at promotion
-// (resetPeriodOnPromotion), so there's nothing meaningful to defer a change
-// to (see requestSandboxTierChange, which already priced this payment at the
-// full sticker price for exactly this reason).
-async function linkSandboxDocument(subscription, document, pendingTierChange, pendingRenewal) {
-  const pendingPayment = pendingTierChange || pendingRenewal;
-  await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
-    subscriptionId: subscription.id, documentId: document.id,
-    paymentId: pendingPayment?.id ?? null, note: 'sandbox document — no FK stored',
+// The single place a verified payment becomes access. Called from
+// reviewPayment() once an operator verifies a transfer.
+//
+// Activation is deliberately NOT gated on the operator's self-billed invoice
+// being SRI-AUTHORIZED any more (that was ADR-017's original design, replaced
+// by ADR-027): issuing the factura is the operator's obligation on the
+// operator's clock, and withholding a paid-for service until it clears made
+// the customer absorb an SRI outage. The invoice is now tracked as a work
+// queue instead — see listPendingInvoices().
+async function applyVerifiedPayment(payment, subscription) {
+  const tenant = await tenantModel.findById(subscription.tenant_id);
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  await paymentModel.updateStatus(payment.id, payment.status, {
+    applied_from: snapshotState(subscription, tenant),
   });
 
-  if (document.status !== 'AUTHORIZED') {
-    return pendingPayment ? subscription : subscriptionModel.updateStatus(subscription.id, 'INVOICE_PROCESSING', {});
-  }
-
-  if (pendingTierChange && pendingTierChange.status === 'VERIFIED') {
-    const updated = await subscriptionModel.applyTierChange(
-      subscription.id, pendingTierChange.target_tier, pendingTierChange.target_billing_interval
-    );
-    await tenantModel.updateTier(subscription.tenant_id, pendingTierChange.target_tier);
-    await tenantQuotaService.setCap(subscription.tenant_id, pendingTierChange.target_tier);
-    await paymentModel.updateStatus(pendingTierChange.id, pendingTierChange.status, {
-      period_start: subscription.current_period_start,
-      period_end: subscription.current_period_end,
-    });
-    await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
-      subscriptionId: subscription.id,
-      fromTier: subscription.tier,
-      toTier: pendingTierChange.target_tier,
-      fromBillingInterval: subscription.billing_interval,
-      toBillingInterval: pendingTierChange.target_billing_interval,
-      paymentId: pendingTierChange.id,
-      note: 'sandbox invoice — applied immediately',
-    });
-    return updated;
-  }
-
-  if (pendingRenewal && pendingRenewal.status === 'VERIFIED') {
-    const periodStart = new Date(subscription.current_period_end);
-    const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
-    const updated = await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
-      current_period_start: periodStart,
-      current_period_end: periodEnd,
-    });
-    await paymentModel.updateStatus(pendingRenewal.id, pendingRenewal.status, { period_start: periodStart, period_end: periodEnd });
-    await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_RENEWED', {
-      subscriptionId: subscription.id, tier: subscription.tier, periodStart, periodEnd, note: 'sandbox invoice',
-    });
-    return updated;
-  }
-
-  // No pending TIER_CHANGE/RENEWAL — this is the subscription's initial activation.
-  const periodStart = new Date();
-  const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
-  const activated = await subscriptionModel.updateStatus(subscription.id, 'ACTIVE', {
-    current_period_start: periodStart,
-    current_period_end: periodEnd,
-  });
-  const payments = await paymentModel.findBySubscriptionId(subscription.id);
-  const funding = payments.find((p) => p.status === 'VERIFIED' && !p.period_start);
-  if (funding) {
-    await paymentModel.updateStatus(funding.id, funding.status, { period_start: periodStart, period_end: periodEnd });
-  }
-  await tenantModel.updateTier(subscription.tenant_id, subscription.tier);
-  await tenantQuotaService.setCap(subscription.tenant_id, subscription.tier);
-  await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
-    subscriptionId: subscription.id, note: 'sandbox invoice',
-  });
-  return activated;
+  if (payment.purpose === 'TIER_CHANGE') return applyTierChangePayment(payment, subscription);
+  if (payment.purpose === 'RENEWAL') return applyRenewalPayment(payment, subscription);
+  return applyInitialPayment(payment, subscription, tenant);
 }
 
-async function activateIfLinked(documentId) {
-  const subscription = await subscriptionModel.findByInitialInvoiceDocumentId(documentId);
-  if (!subscription || subscription.status !== 'INVOICE_PROCESSING') {
-    return null;
-  }
-
+// First cycle — "now" is the correct anchor here (one of the two documented
+// exceptions to the never-anchor-on-now rule; the other is
+// resetPeriodOnPromotion), since no prior period exists to drift from.
+async function applyInitialPayment(payment, subscription, tenant) {
   const periodStart = new Date();
   const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
 
@@ -762,32 +642,25 @@ async function activateIfLinked(documentId) {
     current_period_end: periodEnd,
   });
 
-  // Stamp the period onto the payment that funded this cycle too — subscriptions'
-  // current_period_start/end gets overwritten every renewal, so without this the
-  // per-cycle history would be lost. payments supports many rows per
-  // subscription, one per billing cycle.
-  const payments = await paymentModel.findBySubscriptionId(subscription.id);
-  const fundingPayment = payments.find((p) => p.status === 'VERIFIED' && !p.period_start);
-  if (fundingPayment) {
-    await paymentModel.updateStatus(fundingPayment.id, fundingPayment.status, {
-      period_start: periodStart,
-      period_end: periodEnd,
-    });
-  }
+  // Stamp the period onto the funding payment too — the subscription's own
+  // current_period_start/end is overwritten every renewal, so without this the
+  // per-cycle history would be lost.
+  await paymentModel.updateStatus(payment.id, payment.status, {
+    period_start: periodStart,
+    period_end: periodEnd,
+  });
 
   await tenantModel.updateTier(subscription.tenant_id, subscription.tier);
   await tenantQuotaService.setCap(subscription.tenant_id, subscription.tier);
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
     subscriptionId: subscription.id,
     tier: subscription.tier,
+    paymentId: payment.id,
   });
 
   // Self-service recovery: a tenant who went PAST_DUE (unpaid renewal grace
   // period lapsed — see expireSubscription) and started a fresh subscription
-  // to pay their way back in lands here on that subscription's first
-  // activation. Flip them back to ACTIVE now that it's actually paid for.
-  // See docs/adr/025-past-due-tenant-status.md.
-  const tenant = await tenantModel.findById(subscription.tenant_id);
+  // to pay their way back in lands here. See docs/adr/025-past-due-tenant-status.md.
   if (tenant.status === TenantStatus.PAST_DUE) {
     await tenantModel.updateStatus(subscription.tenant_id, TenantStatus.ACTIVE);
     await tenantEventModel.create(subscription.tenant_id, 'STATUS_CHANGED', {
@@ -800,9 +673,8 @@ async function activateIfLinked(documentId) {
     // PAST_DUE — same pattern as admin.service.js's updateTenantStatus/
     // verifyTenant and registration.service.js's verifyEmail. Not strictly
     // required (the periodic reconciliation sweep would catch this tenant
-    // within ~5 minutes regardless, since it re-scans every ACTIVE tenant),
-    // but every other reactivation point notifies immediately rather than
-    // relying on the sweep, so this one does too for consistency.
+    // within ~5 minutes regardless), but every other reactivation point
+    // notifies immediately rather than relying on the sweep.
     try {
       await pricingService.notifyPendingPriceChangesForTenant(subscription.tenant_id);
     } catch (err) {
@@ -813,23 +685,16 @@ async function activateIfLinked(documentId) {
   return updated;
 }
 
-// Mirrors activateIfLinked, but for a TIER_CHANGE payment rather than a
-// subscription's initial activation. No-op for the vast majority of
-// authorized documents, which aren't linked to any tier-change payment.
-async function applyTierChangeIfLinked(documentId) {
-  const payment = await paymentModel.findByInvoiceDocumentId(documentId);
-  if (!payment || payment.purpose !== 'TIER_CHANGE' || payment.status !== 'VERIFIED') {
-    return null;
-  }
-
-  const subscription = await subscriptionModel.findById(payment.subscription_id);
-  if (!subscription) return null;
-
+async function applyTierChangePayment(payment, subscription) {
   // A billing-interval change can't neatly prorate mid-cycle — now that it's
-  // paid in full for the new interval, defer it to current_period_end (same
-  // as a free downgrade) instead of applying it now. Tier-only changes (no
-  // interval change) keep applying immediately, taking over the remainder of
-  // the current cycle.
+  // paid in full for the new interval, defer it to current_period_end (same as
+  // a free downgrade) instead of applying it now. Tier-only changes keep
+  // applying immediately, taking over the remainder of the current cycle.
+  //
+  // period_start is deliberately left unstamped here: it's what marks a
+  // TIER_CHANGE payment as still-unapplied (see
+  // findPendingTierChangeBySubscriptionId), and applyScheduledTierChanges
+  // stamps it when the deferred change actually lands.
   if (payment.target_billing_interval) {
     const updated = await subscriptionModel.scheduleDowngrade(
       subscription.id,
@@ -857,8 +722,7 @@ async function applyTierChangeIfLinked(documentId) {
 
   // The upgrade takes over the remainder of the same billing cycle — the
   // subscription's period dates don't change, only the tier does — so stamp
-  // those same dates onto the payment for per-cycle history, same as the
-  // funding-payment stamp in activateIfLinked.
+  // those same dates onto the payment for per-cycle history.
   await paymentModel.updateStatus(payment.id, payment.status, {
     period_start: subscription.current_period_start,
     period_end: subscription.current_period_end,
@@ -874,19 +738,10 @@ async function applyTierChangeIfLinked(documentId) {
   return updated;
 }
 
-// Mirrors activateIfLinked, but extends the existing period instead of opening
-// a first one. Anchored to the OLD current_period_end (not "now") so an early
-// or late admin review can't drift the billing date — back-to-back periods,
-// no gap and no overlap.
-async function applyRenewalIfLinked(documentId) {
-  const payment = await paymentModel.findByInvoiceDocumentId(documentId);
-  if (!payment || payment.purpose !== 'RENEWAL' || payment.status !== 'VERIFIED') {
-    return null;
-  }
-
-  const subscription = await subscriptionModel.findById(payment.subscription_id);
-  if (!subscription) return null;
-
+// Extends the existing period instead of opening a first one. Anchored to the
+// OLD current_period_end (never "now") so an early or late operator review
+// can't drift the billing date — back-to-back periods, no gap, no overlap.
+async function applyRenewalPayment(payment, subscription) {
   const periodStart = new Date(subscription.current_period_end);
   const periodEnd = addBillingPeriod(periodStart, subscription.billing_interval);
 
@@ -905,45 +760,178 @@ async function applyRenewalIfLinked(documentId) {
     tier: subscription.tier,
     periodStart,
     periodEnd,
+    paymentId: payment.id,
   });
 
   return updated;
 }
 
-// Reconciles invoices that were linked to a subscription/payment via
-// linkInvoice() before SRI had authorized them yet. linkInvoice() itself
-// already applies immediately when the invoice is already AUTHORIZED at
-// link time (the common case, since a real deployment issues+authorizes an
-// invoice before linking it) — this only ever matters for the reverse
-// ordering. Deliberately a periodic scan, not a RabbitMQ effect fired on
-// every document authorization system-wide: see ADR-022's addendum for why
-// that was cut. Called first in runSubscriptionJobs, ahead of
-// applyScheduledTierChanges/processDueRenewals, so a renewal or tier change
-// applied here (extending current_period_end) is reflected before the
-// expiry/reminder checks below read it in the same job tick.
-async function applyPendingInvoiceLinks() {
-  let activated = 0;
-  let tierChangesApplied = 0;
-  let renewalsApplied = 0;
+// Records the operator's self-billed invoice against the payment it settles.
+// Pure bookkeeping since ADR-027 — it triggers no state transition at all;
+// the subscription was already activated/renewed/upgraded when the payment was
+// verified. Its only side effect that matters operationally is stamping
+// invoiced_at, which clears the payment off the invoicing queue.
+async function linkInvoice(subscriptionId, accessKey) {
+  const subscription = await subscriptionModel.findById(subscriptionId);
+  if (!subscription) throw new NotFoundError('Subscription', ErrorCodes.SUBSCRIPTION_NOT_FOUND);
 
-  const pendingActivations = await subscriptionModel.findPendingActivationWithAuthorizedDocument();
-  for (const subscription of pendingActivations) {
-    const result = await activateIfLinked(subscription.initial_invoice_document_id);
-    if (result) activated++;
+  // No issuerId passed — this is an admin-only, cross-tenant lookup. accessKey is the
+  // identifier every other document response already exposes; documents.id never is.
+  // findByAccessKey searches both public and sandbox schemas (UNION ALL); the returned
+  // row includes `sandbox: true/false` to indicate which schema it came from.
+  const document = await documentModel.findByAccessKey(accessKey);
+  if (!document) throw new NotFoundError('Document');
+
+  const payment = await paymentModel.findOldestUninvoicedBySubscriptionId(subscriptionId);
+  if (!payment) {
+    throw new ConflictError(
+      'This subscription has no verified payment awaiting an invoice',
+      ErrorCodes.PAYMENT_NOT_FOUND
+    );
   }
 
-  const pendingApplications = await paymentModel.findPendingApplicationWithAuthorizedDocument();
-  for (const payment of pendingApplications) {
-    if (payment.purpose === 'TIER_CHANGE') {
-      const result = await applyTierChangeIfLinked(payment.invoice_document_id);
-      if (result) tierChangesApplied++;
-    } else if (payment.purpose === 'RENEWAL') {
-      const result = await applyRenewalIfLinked(payment.invoice_document_id);
-      if (result) renewalsApplied++;
+  // Which FK the document id lands on depends on the payment's purpose, and the
+  // two are not interchangeable: subscriptions.initial_invoice_document_id is
+  // write-once and records what originally activated the subscription, while
+  // every later funding event writes its own payments.invoice_document_id.
+  // Never repoint the former at a later invoice.
+  //
+  // A sandbox document gets neither: both columns are FKs into public.documents
+  // and sandbox.documents is an independent id sequence that can collide with
+  // it. invoiced_at is still stamped, which is what the queue reads — see
+  // db/migrations/090 and CLAUDE.md Common Mistake #35.
+  const paymentFields = { invoiced_at: new Date() };
+  if (!document.sandbox) {
+    if (payment.purpose === 'INITIAL') {
+      await subscriptionModel.setInitialInvoiceDocument(subscription.id, document.id);
+    } else {
+      paymentFields.invoice_document_id = document.id;
     }
   }
 
-  return { invoiceLinksActivated: activated, invoiceLinksTierChangesApplied: tierChangesApplied, invoiceLinksRenewalsApplied: renewalsApplied };
+  await paymentModel.updateStatus(payment.id, payment.status, paymentFields);
+
+  await tenantEventModel.create(subscription.tenant_id, 'INVOICE_LINKED', {
+    subscriptionId,
+    paymentId: payment.id,
+    documentId: document.id,
+    sandbox: document.sandbox,
+  });
+
+  return subscriptionModel.findById(subscriptionId);
+}
+
+// The operator's invoicing work queue — money received, factura still owed.
+// This is what replaced the invoice gate: the obligation stays visible instead
+// of being enforced by withholding service from a tenant who already paid.
+async function listPendingInvoices() {
+  const rows = await paymentModel.findPendingInvoice();
+
+  return {
+    count: rows.length,
+    items: rows.map((row) => ({
+      payment: {
+        id: row.id,
+        purpose: row.purpose,
+        method: row.method,
+        amount: row.amount,
+        ivaRate: row.iva_rate,
+        ivaAmount: row.iva_amount,
+        totalAmount: row.total_amount,
+        verifiedAt: row.verified_at,
+      },
+      subscription: {
+        id: row.subscription_id,
+        // target_tier/target_billing_interval win for a TIER_CHANGE payment —
+        // the subscription's own columns describe what it is now, not what
+        // this payment bought. See CLAUDE.md Common Mistake #28.
+        tier: row.target_tier || row.tier,
+        billingInterval: row.target_billing_interval || row.billing_interval,
+        currentPeriodStart: row.period_start || row.current_period_start,
+        currentPeriodEnd: row.period_end || row.current_period_end,
+      },
+      buyer: {
+        tenantId: row.tenant_id,
+        email: row.tenant_email,
+        businessName: row.business_name,
+        ruc: row.ruc,
+        address: row.main_address,
+      },
+    })),
+  };
+}
+
+// Records that a verified payment's money went away — a reversed SPI transfer
+// found on the bank statement, a duplicate charge refunded, a chargeback.
+// Detection is inherently manual (no payment rail notifies us), so this is
+// purely the "I found out, undo it" half.
+//
+// Rolling back is emphatically NOT "downgrade to FREE": a reversed TIER_CHANGE
+// must return to the previous paid tier, and a reversed RENEWAL must roll the
+// period back without touching tier at all. payments.applied_from is the
+// snapshot that makes each case recoverable.
+//
+// Deliberately does not suspend the tenant — whether this warrants SUSPENDED
+// (fraud) or nothing at all (an honest duplicate) is a separate operator
+// judgement, made through PATCH /v1/admin/tenants/:id/status.
+async function refundPayment(paymentId, reason = null) {
+  const payment = await paymentModel.findById(paymentId);
+  if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
+
+  if (payment.status !== 'VERIFIED') {
+    throw new ConflictError(
+      `Only a VERIFIED payment can be refunded; this one is ${payment.status}`,
+      ErrorCodes.PAYMENT_NOT_REFUNDABLE
+    );
+  }
+  if (!payment.applied_from) {
+    throw new AppError(
+      'This payment was applied before rollback snapshots were recorded, so it cannot be refunded automatically. Adjust the tenant\'s tier and subscription manually.',
+      400,
+      ErrorCodes.PAYMENT_NOT_REFUNDABLE
+    );
+  }
+
+  const subscription = await subscriptionModel.findById(payment.subscription_id);
+  if (!subscription) throw new NotFoundError('Subscription', ErrorCodes.SUBSCRIPTION_NOT_FOUND);
+
+  const snapshot = payment.applied_from;
+
+  // applyTierChange also clears pending_tier/pending_billing_interval, which is
+  // what undoes a deferred billing-interval change this payment had scheduled.
+  await subscriptionModel.applyTierChange(subscription.id, snapshot.tier, snapshot.billingInterval);
+
+  // An INITIAL payment's snapshot status is a pre-activation one
+  // (PENDING_PAYMENT). Restoring it verbatim would leave the tenant with a
+  // subscription that looks payable but whose only payment is REFUNDED, and
+  // findActiveOrPendingByTenantId would block them from starting a new one.
+  // Cancel it instead so they can subscribe again cleanly.
+  const isInitial = payment.purpose === 'INITIAL';
+  const updated = isInitial
+    ? await subscriptionModel.updateStatus(subscription.id, 'CANCELLED', {
+      canceled_at: new Date(),
+      current_period_start: snapshot.periodStart,
+      current_period_end: snapshot.periodEnd,
+    })
+    : await subscriptionModel.updateStatus(subscription.id, snapshot.subscriptionStatus, {
+      current_period_start: snapshot.periodStart,
+      current_period_end: snapshot.periodEnd,
+    });
+
+  await tenantModel.updateTier(subscription.tenant_id, snapshot.tenantTier);
+  await tenantQuotaService.setCap(subscription.tenant_id, snapshot.tenantTier);
+
+  const refundedPayment = await paymentModel.updateStatus(paymentId, 'REFUNDED');
+
+  await tenantEventModel.create(subscription.tenant_id, 'PAYMENT_REFUNDED', {
+    subscriptionId: subscription.id,
+    paymentId,
+    purpose: payment.purpose,
+    reason,
+    restoredTier: snapshot.tenantTier,
+  });
+
+  return { payment: refundedPayment, subscription: updated };
 }
 
 // Applies every downgrade scheduled via requestTierChange whose
@@ -952,7 +940,7 @@ async function applyPendingInvoiceLinks() {
 // notification-scheduler.service.js's runAll().
 //
 // Also rolls the period forward (anchored to the OLD current_period_end, same
-// as applyRenewalIfLinked) so the subscription re-enters the renewal cycle at
+// as applyVerifiedPayment's renewal path) so the subscription re-enters the renewal cycle at
 // its new, lower tier instead of sitting on a current_period_end already in
 // the past — a downgrade owes no payment, but it still needs a fresh period or
 // processDueRenewals would immediately treat it as expired.
@@ -971,7 +959,7 @@ async function applyScheduledTierChanges() {
       });
     } else {
       // pending_billing_interval is only set for a paid interval switch (see
-      // applyTierChangeIfLinked); a plain free tier downgrade leaves it null
+      // applyVerifiedPayment); a plain free tier downgrade leaves it null
       // and the period keeps the subscription's existing cadence.
       const newInterval = subscription.pending_billing_interval || subscription.billing_interval;
       const periodStart = new Date(subscription.current_period_end);
@@ -988,7 +976,7 @@ async function applyScheduledTierChanges() {
       // If this pending change was funded by a paid TIER_CHANGE payment (an
       // interval switch — free tier-only downgrades have no such payment),
       // stamp the new period onto it for per-cycle payment history, same as
-      // activateIfLinked/applyRenewalIfLinked do for their own funding payment.
+      // applyVerifiedPayment does for its own funding payment.
       if (subscription.pending_billing_interval) {
         const payments = await paymentModel.findBySubscriptionId(subscription.id);
         const funding = payments.find((p) =>
@@ -1165,11 +1153,10 @@ module.exports = {
   listPaymentProofsForAdmin,
   deletePaymentProofForTenant,
   reviewPayment,
+  applyVerifiedPayment,
   linkInvoice,
-  activateIfLinked,
-  applyTierChangeIfLinked,
-  applyRenewalIfLinked,
-  applyPendingInvoiceLinks,
+  listPendingInvoices,
+  refundPayment,
   applyScheduledTierChanges,
   processDueRenewals,
   cancelSubscription,
@@ -1184,7 +1171,7 @@ module.exports = {
 // time. Called from tenant.service.js when a sandbox tenant promotes to
 // production — the paid period should count production usage, not sandbox
 // testing time. Also resets the funding payment's period stamps for audit
-// trail consistency (mirrors activateIfLinked's stamping logic).
+// trail consistency (mirrors applyVerifiedPayment's stamping logic).
 async function resetPeriodOnPromotion(subscriptionId) {
   const subscription = await subscriptionModel.findById(subscriptionId);
   if (!subscription || subscription.status !== 'ACTIVE') return null;

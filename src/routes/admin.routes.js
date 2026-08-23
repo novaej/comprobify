@@ -40,8 +40,12 @@ router.patch('/subscriptions/:id/link-invoice', v.linkInvoice,        validateRe
 router.patch('/subscriptions/:id/cancel',       v.cancelSubscription, validateRequest, asyncHandler(controller.cancelSubscription));
 router.get('/payments',                         v.listPayments,       validateRequest, asyncHandler(controller.listPayments));
 router.patch('/payments/:id/review',            v.reviewPayment,      validateRequest, asyncHandler(controller.reviewPayment));
+router.patch('/payments/:id/refund',            v.refundPayment,      validateRequest, asyncHandler(controller.refundPayment));
 router.get('/payments/:id/proofs',              v.listPaymentProofs,  validateRequest, asyncHandler(controller.listPaymentProofs));
 router.get('/payments/:id/proofs/:proofId',     v.getPaymentProof,    validateRequest, asyncHandler(controller.getPaymentProof));
+
+// Invoicing queue — verified payments whose factura the operator still owes.
+router.get('/invoicing/pending', asyncHandler(controller.listPendingInvoices));
 
 // Documents
 router.get('/documents/:accessKey/ride', asyncHandler(controller.getDocumentRide));

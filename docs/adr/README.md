@@ -111,3 +111,4 @@ YYYY-MM-DD
 | [024](024-unified-notification-service.md) | Unified Notification Service, Per-Channel Preferences, and DB-Backed Email Templates | Accepted | 2026-07-26 |
 | [025](025-past-due-tenant-status.md) | PAST_DUE Tenant Status, Distinct from SUSPENDED | Accepted | 2026-07-27 |
 | [026](026-redis-shared-counter-store.md) | Redis for Shared Rate-Limiting and Repeated-Attempt Counters | Accepted | 2026-08-03 |
+| [027](027-decouple-activation-from-invoice.md) | Subscription Activation Decoupled from the Operator's Invoice | Accepted | 2026-08-23 |

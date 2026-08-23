@@ -16,7 +16,7 @@ function capForTier(tier) {
 
 // Seeds a tenant's first quota period, anchored to now — there is no prior
 // period to anchor to, same exception already established for
-// subscription.service.js's activateIfLinked/resetPeriodOnPromotion.
+// subscription.service.js's applyVerifiedPayment/resetPeriodOnPromotion.
 async function initializeForTenant(tenantId, documentQuota, client = null) {
   const periodStart = new Date();
   const periodEnd = addMonths(periodStart, QUOTA_PERIOD_MONTHS);

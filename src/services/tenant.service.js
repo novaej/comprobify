@@ -75,7 +75,8 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   }
 
   // Check for any existing subscription before touching keys — an in-flight
-  // subscription (PENDING_PAYMENT, PAYMENT_RECEIVED, INVOICE_PROCESSING, ACTIVE)
+  // subscription (PENDING_PAYMENT or ACTIVE; PAYMENT_RECEIVED/INVOICE_PROCESSING
+  // are legacy statuses no longer written — see ADR-027)
   // must be detected here so we never attempt createSubscription after key
   // revocation has already committed (which would leave the tenant with no valid key).
   const existingSubscription = await subscriptionModel.findActiveOrPendingByTenantId(tenantId);

@@ -73,13 +73,11 @@ const handlers = {
   // now (ADR-024). INVOICE_AUTHORIZED_EMAIL below is unrelated to it — it
   // emails the document's BUYER, not a tenant notification channel.
 
-  // No SUBSCRIPTION_ACTIVATE_IF_LINKED / _APPLY_TIER_CHANGE_IF_LINKED /
-  // _APPLY_RENEWAL_IF_LINKED here — see effect-types.js's comment. linkInvoice()
-  // in subscription.service.js still calls activateIfLinked/
-  // applyTierChangeIfLinked/applyRenewalIfLinked directly and synchronously
-  // when the invoice being linked is already AUTHORIZED; the reverse ordering
-  // is caught by a periodic scan in POST /v1/admin/jobs/subscriptions instead
-  // of a queued effect.
+  // No subscription effects here at all. They were originally planned to fire
+  // on every document authorization to apply subscription state; ADR-027 then
+  // removed the invoice gate entirely, so a document authorizing no longer
+  // changes any subscription — applyVerifiedPayment() does that at payment
+  // verification time, and linkInvoice() is pure bookkeeping.
 
   [EffectTypes.INVOICE_AUTHORIZED_EMAIL]: async (payload) => {
     const { document, issuer } = await resolveDocument(payload);

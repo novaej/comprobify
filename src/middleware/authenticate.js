@@ -50,6 +50,9 @@ const authenticate = async (req, _res, next) => {
     email: row.tenant_email,
     subscriptionTier: row.tenant_subscription_tier,
     status: row.tenant_status,
+    // Null unless SUSPENDED. Surfaced through GET /v1/tenants/me so a suspended
+    // tenant can be told why rather than only getting 403 ACCOUNT_SUSPENDED.
+    suspensionReasonCode: row.tenant_suspension_reason_code,
     documentCount: row.tenant_document_count,
     documentQuota: row.tenant_document_quota,
     sandbox: row.tenant_sandbox,

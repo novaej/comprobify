@@ -2,6 +2,7 @@ const { body, param, query } = require('express-validator');
 const { TIERS } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const RejectionReasons = require('../constants/rejection-reasons');
+const SuspensionReasons = require('../constants/suspension-reasons');
 const { SUPPORTED_TYPES } = require('../builders');
 const agreementService = require('../services/agreement.service');
 const { EMAIL_TEMPLATE_TYPES } = require('../services/notification-email-template.service');
@@ -35,11 +36,15 @@ const updateTenantStatus = [
     .isIn(Object.values(TenantStatus))
     .withMessage(`status must be one of: ${Object.values(TenantStatus).join(', ')}`),
 
-  body('reason')
-    .optional()
-    .isString()
-    .isLength({ max: 200 })
-    .withMessage('reason must be a string of max 200 characters'),
+  // A predefined code, not free text: GET /v1/tenants/events passes
+  // tenant_events.detail through verbatim, so anything stored here is readable
+  // by whoever holds that tenant's API key. Same reasoning as
+  // rejectionReasonCode, and required on the same conditional shape.
+  body('suspensionReasonCode')
+    .if(body('status').equals(TenantStatus.SUSPENDED))
+    .notEmpty()
+    .isIn(Object.values(SuspensionReasons))
+    .withMessage(`suspensionReasonCode is required when status is SUSPENDED and must be one of: ${Object.values(SuspensionReasons).join(', ')}`),
 ];
 
 const verifyTenant = [
@@ -243,6 +248,19 @@ const reviewPayment = [
     .withMessage(`rejectionReasonCode is required when decision is REJECTED and must be one of: ${Object.values(RejectionReasons).join(', ')}`),
 ];
 
+const refundPayment = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+
+  // Free text is acceptable here, unlike suspensionReasonCode: this lands in a
+  // PAYMENT_REFUNDED tenant event as operator context (e.g. the bank's reversal
+  // reference), and there's no fixed vocabulary for how money comes back.
+  body('reason')
+    .optional()
+    .isString()
+    .isLength({ max: 200 })
+    .withMessage('reason must be a string of max 200 characters'),
+];
+
 const listPaymentProofs = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
@@ -362,7 +380,7 @@ module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof, listPaymentProofs, listPayments, publishAgreement,
+  reviewPayment, refundPayment, getPaymentProof, listPaymentProofs, listPayments, publishAgreement,
   getAgreementVersion,
   activateAgreement: [param('id').isUUID().withMessage('id must be a valid UUID')],
   listAgreementVersions: [param('type').isIn(agreementService.AGREEMENT_TYPES).withMessage('type must be TERMS, PRIVACY or DPA')],

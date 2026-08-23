@@ -29,7 +29,7 @@ const updateTenantTier = async (req, res) => {
 };
 
 const updateTenantStatus = async (req, res) => {
-  const tenant = await adminService.updateTenantStatus(req.params.id, req.body.status, req.body.reason);
+  const tenant = await adminService.updateTenantStatus(req.params.id, req.body.status, req.body.suspensionReasonCode ?? null);
   res.json({ ok: true, tenant });
 };
 
@@ -160,6 +160,19 @@ const getPaymentProof = async (req, res) => {
 const listPayments = async (req, res) => {
   const payments = await subscriptionService.listPendingPayments(req.query.status || 'REPORTED');
   res.json({ ok: true, payments });
+};
+
+// The operator's invoicing work queue — verified payments whose factura is
+// still owed. Since ADR-027 this is what tracks the invoice obligation, rather
+// than the tenant's access being withheld until it clears.
+const listPendingInvoices = async (req, res) => {
+  const result = await subscriptionService.listPendingInvoices();
+  res.json({ ok: true, ...result });
+};
+
+const refundPayment = async (req, res) => {
+  const result = await subscriptionService.refundPayment(req.params.id, req.body.reason ?? null);
+  res.json({ ok: true, ...result });
 };
 
 // Legal documents
@@ -345,15 +358,13 @@ const runNotificationJobs = async (req, res) => {
  * for the minute-level frequency the notification job uses).
  */
 const runSubscriptionJobs = async (req, res) => {
-  // Must run first: reconciles subscriptions/payments linked to an invoice
-  // that wasn't authorized yet at link time (see ADR-022's addendum) — a
-  // renewal/tier-change applied here extends current_period_end, which
-  // applyScheduledTierChanges/processDueRenewals below need to see before
-  // their own due/expiry checks run in this same tick.
-  const invoiceLinks = await subscriptionService.applyPendingInvoiceLinks();
+  // Order matters: a downgrade applied here also rolls its period forward, and
+  // processDueRenewals' warning/expiry checks read that same
+  // current_period_end in this tick. Reversing these would flag every
+  // subscription downgrading today as freshly expired.
   const tierChanges = await subscriptionService.applyScheduledTierChanges();
   const renewals = await subscriptionService.processDueRenewals();
-  res.json({ ok: true, ...invoiceLinks, ...tierChanges, ...renewals });
+  res.json({ ok: true, ...tierChanges, ...renewals });
 };
 
 /**
@@ -411,7 +422,7 @@ module.exports = {
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, runNotificationJobs,
   runSubscriptionJobs, runQuotaJobs, runQueueReconciliationJob,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
-  reviewPayment, getPaymentProof, listPaymentProofs, listPayments,
+  reviewPayment, getPaymentProof, listPaymentProofs, listPayments, listPendingInvoices, refundPayment,
   publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion, generateTenantAgreements,
   publishNotificationEmailTemplate, activateNotificationEmailTemplate, listNotificationEmailTemplateVersions, getNotificationEmailTemplateVersion,
   listCurrentNotificationEmailTemplates,
