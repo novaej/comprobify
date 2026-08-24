@@ -60,12 +60,27 @@ const readLimiter = rateLimit({
   passOnStoreError: true,
 });
 
-// Fixed IP-based limiter for admin endpoints: 20 req/min
+// IP-based limiter for admin endpoints. Mounted BEFORE authenticateAdmin, so
+// its actual job is brute-force protection on ADMIN_SECRET — not throttling a
+// legitimate operator. Those are two different populations, and counting both
+// against one budget made the attacker case set the ceiling for everyone:
+// every admin panel request arrives from one IP (comprobify-web is a
+// server-side BFF, so the API never sees a browser IP), which exhausted a
+// 20/min bucket within a couple of page renders.
+//
+// skipSuccessfulRequests + requestWasSuccessful fixes that by counting only
+// requests whose secret did NOT check out. Brute force stays capped at
+// adminMax guesses/min/IP; an authenticated operator is never throttled.
+// "Successful" is deliberately req.adminAuthenticated (set by
+// authenticate-admin.js), not the default status < 400 — an operator hitting
+// a 404 or a validation error is not a guessing attempt.
 const adminLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 20,
+  max: config.rateLimit.adminMax,
   keyGenerator: (req) => ipKeyGenerator(req.ip),
   handler,
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (req) => req.adminAuthenticated === true,
   store: buildStore('rl:admin:'),
   passOnStoreError: true,
 });

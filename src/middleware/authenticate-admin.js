@@ -30,6 +30,11 @@ const authenticateAdmin = (req, _res, next) => {
     return next(new AppError('Unauthorized', 401));
   }
 
+  // Read by adminLimiter's requestWasSuccessful (rate-limit.js) to decide
+  // whether this request counts against the brute-force budget. Deliberately
+  // "did the secret check out", not "was the response 2xx" — an authenticated
+  // operator hitting a 404 or a validation error is not a guessing attempt.
+  req.adminAuthenticated = true;
   next();
 };
 
