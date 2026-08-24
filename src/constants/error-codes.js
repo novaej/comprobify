@@ -118,6 +118,10 @@ const ErrorCodes = Object.freeze({
   CANCELLATION_ALREADY_PENDING: 'CANCELLATION_ALREADY_PENDING',
   /** rejectionReasonCode is missing or not a recognised value when rejecting a payment */
   INVALID_REJECTION_REASON: 'INVALID_REJECTION_REASON',
+  /** suspensionReasonCode is missing or not a recognised value when suspending a tenant */
+  INVALID_SUSPENSION_REASON: 'INVALID_SUSPENSION_REASON',
+  /** Payment cannot be refunded — not VERIFIED, already REFUNDED, or applied before applied_from existed */
+  PAYMENT_NOT_REFUNDABLE: 'PAYMENT_NOT_REFUNDABLE',
 
   // --- Tier pricing ---
   /** No tier_prices row found for the requested id, or none published for a tier/interval as of the requested date */

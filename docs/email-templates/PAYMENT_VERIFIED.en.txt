@@ -11,7 +11,7 @@ SUBJECT: Your {{purposeLabel}} payment was verified
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Billing Frequency</td><td style="padding: 6px 12px;">{{billingInterval}}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Amount</td><td style="padding: 6px 12px;">${{amount}}</td></tr>
   </table>
-  <p>No further action is needed — your plan activates automatically once the corresponding invoice is authorized by SRI.</p>
+  <p>Your plan is now active — no further action is needed. We'll send the corresponding invoice separately.</p>
   <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
   <p style="font-size: 11px; color: #999;">Do not reply — this is an automated message.</p>
 </body>
@@ -25,6 +25,6 @@ Your {{purposeLabel}} payment for the {{tier}} plan has been verified.
   Billing Frequency: {{billingInterval}}
   Amount: ${{amount}}
 
-No further action is needed — your plan activates automatically once the corresponding invoice is authorized by SRI.
+Your plan is now active — no further action is needed. We'll send the corresponding invoice separately.
 
 Do not reply — this is an automated message.

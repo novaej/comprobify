@@ -20,6 +20,7 @@ GET /v1/tenants/me
     "email": "owner@example.com",
     "subscriptionTier": "GROWTH",
     "status": "ACTIVE",
+    "suspensionReasonCode": null,
     "documentCount": 128,
     "documentQuota": 1000,
     "sandbox": false,
@@ -34,7 +35,8 @@ GET /v1/tenants/me
 | `id` | UUID del tenant. Úsalo para correlacionar envíos de webhooks y otros recursos asociados al tenant. |
 | `email` | Correo electrónico registrado del tenant. |
 | `subscriptionTier` | `FREE`, `STARTER`, `GROWTH` o `BUSINESS`. |
-| `status` | `PENDING_VERIFICATION`, `ACTIVE` o `SUSPENDED`. |
+| `status` | `PENDING_VERIFICATION`, `ACTIVE`, `SUSPENDED` o `PAST_DUE`. |
+| `suspensionReasonCode` | Por qué la cuenta está suspendida: `PAYMENT_REVERSED`, `FRAUD_SUSPECTED`, `TERMS_VIOLATION`, `VOLUNTARY_CLOSURE`, `UNPAID_BALANCE` u `OTHER`. `null` salvo que `status` sea `SUSPENDED`. Es un código estable pensado para que tu interfaz muestre su propio mensaje localizado — `VOLUNTARY_CLOSURE` corresponde a un cierre de cuenta solicitado por ti, no a una sanción. |
 | `documentCount` | Comprobantes emitidos en el periodo de facturación actual. |
 | `documentQuota` | Límite de comprobantes para el `subscriptionTier` actual. |
 | `sandbox` | `true` si el tenant está en el entorno de pruebas del SRI, `false` si fue promovido a producción. |
@@ -53,5 +55,6 @@ GET /v1/tenants/me
 - No se requiere el header `X-Issuer-Id` — este endpoint resuelve el tenant, no un emisor.
 - La respuesta refleja exactamente lo que el middleware `authenticate` ya resolvió a partir de la API key — no hay una consulta separada a la base de datos, por lo que cualquier llave activa (sandbox o producción) devuelve el estado actual de su tenant.
 - Esto no devuelve la lista de emisores (sucursales) — usa `GET /v1/issuers` para eso.
+- `suspensionReasonCode` te dice *por qué* la cuenta fue suspendida sin tener que revisar [`GET /v1/tenants/events`](tenant-events.md); el historial completo (incluidas suspensiones anteriores ya levantadas) sigue estando ahí, en el `detail` de los eventos `STATUS_CHANGED`.
 - A diferencia de la mayoría de los endpoints autenticados, este sigue siendo accesible incluso cuando `status` es `SUSPENDED` — es uno de un pequeño conjunto de endpoints de solo lectura que un tenant suspendido todavía puede usar (ver la entrada `ACCOUNT_SUSPENDED` en el [catálogo de errores](../errors/index.md)). Consultar este endpoint periódicamente es una forma válida de detectar una suspensión y revisar el `status` actual de la cuenta.
-- **Esta es también la forma de saber que una mejora a un plan pago se completó.** Después de solicitar un plan en la [promoción](promote-tenant.md) y [enviar el comprobante de pago](submit-payment-proof.md), recibirás una [notificación](notifications.md) y un correo en el momento en que tu proveedor registre una decisión, pero la activación final (una vez que el SRI autoriza la factura autofacturada) todavía no tiene notificación propia — consulta este endpoint periódicamente; `subscriptionTier` y `documentQuota` se actualizan en el momento en que la suscripción se activa. Para los estados intermedios (pendiente, rechazado, motivo) usa [`GET /v1/subscriptions/me`](get-my-subscriptions.md) en su lugar — este endpoint solo muestra el resultado final.
+- **Esta es también la forma de saber que una mejora a un plan pago se completó.** Después de solicitar un plan en la [promoción](promote-tenant.md) y [enviar el comprobante de pago](submit-payment-proof.md), recibirás una [notificación](notifications.md) y un correo en el momento en que tu proveedor registre su decisión — y esa decisión *es* la activación: `subscriptionTier` y `documentQuota` ya reflejan el plan nuevo cuando llega la notificación `PAYMENT_VERIFIED`. No hay que esperar a ningún paso posterior de facturación. Para los estados intermedios (pendiente, rechazado, motivo) usa [`GET /v1/subscriptions/me`](get-my-subscriptions.md) en su lugar — este endpoint solo muestra el resultado final.

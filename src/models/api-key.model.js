@@ -6,6 +6,7 @@ async function findByKeyHash(keyHash) {
             ak.scopes AS key_scopes,
             t.subscription_tier AS tenant_subscription_tier,
             t.status            AS tenant_status,
+            t.suspension_reason_code AS tenant_suspension_reason_code,
             t.email             AS tenant_email,
             tq.document_count   AS tenant_document_count,
             tq.document_quota   AS tenant_document_quota,

@@ -17,6 +17,7 @@ const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
 const { TIERS } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
+const SuspensionReasons = require('../constants/suspension-reasons');
 const ErrorCodes = require('../constants/error-codes');
 const { ALL_SCOPES } = require('../constants/api-key-scopes');
 
@@ -30,6 +31,7 @@ function formatTenant(row, quotaRow = null) {
     email: row.email,
     subscriptionTier: row.subscription_tier,
     status: row.status,
+    suspensionReasonCode: row.suspension_reason_code ?? null,
     documentQuota: quotaRow?.document_quota ?? null,
     documentCount: quotaRow?.document_count ?? null,
     createdAt: row.created_at,
@@ -103,23 +105,40 @@ async function updateTenantTier(id, tier) {
   return formatTenant(row, quotaRow);
 }
 
-async function updateTenantStatus(id, status, reason = null) {
+async function updateTenantStatus(id, status, suspensionReasonCode = null) {
   const allowed = Object.values(TenantStatus);
   if (!allowed.includes(status)) {
     throw new AppError(`Invalid status: '${status}'. Valid values: ${allowed.join(', ')}`, 400, ErrorCodes.INVALID_TENANT_STATUS);
   }
+  // Re-checked here as well as in the validator, mirroring reviewPayment's
+  // treatment of rejectionReasonCode — the service is reachable from tests and
+  // any future non-HTTP caller.
+  if (status === TenantStatus.SUSPENDED && !Object.values(SuspensionReasons).includes(suspensionReasonCode)) {
+    throw new AppError(
+      `Invalid suspensionReasonCode '${suspensionReasonCode}'. Valid values: ${Object.values(SuspensionReasons).join(', ')}`,
+      400,
+      ErrorCodes.INVALID_SUSPENSION_REASON
+    );
+  }
+
   const previous = await tenantModel.findById(id);
   if (!previous) throw new NotFoundError('Tenant');
 
-  const row = await tenantModel.updateStatus(id, status);
+  const row = await tenantModel.updateStatus(id, status, suspensionReasonCode);
   const quotaRow = await tenantQuotaService.getCurrentForTenant(id);
-  // reason distinguishes why a tenant landed in SUSPENDED — e.g. a
+  // reasonCode distinguishes why a tenant landed in SUSPENDED — e.g. a
   // voluntary account-closure request (docs/agreements/terms-of-service.md
-  // §10) reads very differently in the audit trail from a fraud/non-payment
-  // suspension, even though both use the same status value — account
-  // closure is intentionally not a separate status (unlike unpaid renewals,
-  // which do get their own PAST_DUE status — see ADR-025).
-  await tenantEventModel.create(id, 'STATUS_CHANGED', { from: previous.status, to: status, reason });
+  // §10) reads very differently from a fraud/non-payment suspension, even
+  // though both use the same status value — account closure is intentionally
+  // not a separate status (unlike unpaid renewals, which do get their own
+  // PAST_DUE status — see ADR-025). Written to the event as well as the
+  // tenants column so the history survives reactivation, which clears the
+  // column.
+  await tenantEventModel.create(id, 'STATUS_CHANGED', {
+    from: previous.status,
+    to: status,
+    reasonCode: status === TenantStatus.SUSPENDED ? suspensionReasonCode : null,
+  });
 
   // Catch-up: a tenant reactivated out of SUSPENDED (e.g. after settling an
   // irregular payment) may have missed a price change that published while

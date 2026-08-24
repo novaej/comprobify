@@ -61,7 +61,7 @@ describe('AdminService', () => {
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
       expect(result).toEqual({
         id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE',
-        documentQuota: 5, documentCount: 0, createdAt: new Date('2026-01-01'),
+        suspensionReasonCode: null, documentQuota: 5, documentCount: 0, createdAt: new Date('2026-01-01'),
       });
     });
 
@@ -107,7 +107,7 @@ describe('AdminService', () => {
 
       expect(tenantQuotaService.getCurrentForTenants).toHaveBeenCalledWith(['00000000-0000-0000-0000-000000000001']);
       expect(result).toEqual([
-        { id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE', documentQuota: 5, documentCount: 1, createdAt: new Date('2026-01-01') },
+        { id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE', suspensionReasonCode: null, documentQuota: 5, documentCount: 1, createdAt: new Date('2026-01-01') },
       ]);
     });
   });
@@ -155,41 +155,60 @@ describe('AdminService', () => {
     test('rejects when the tenant does not exist', async () => {
       tenantModel.findById.mockResolvedValue(null);
 
-      await expect(adminService.updateTenantStatus(1, 'SUSPENDED'))
+      await expect(adminService.updateTenantStatus(1, 'SUSPENDED', 'FRAUD_SUSPECTED'))
         .rejects.toMatchObject({ statusCode: 404 });
       expect(tenantModel.updateStatus).not.toHaveBeenCalled();
     });
 
-    test('updates the status, logs a STATUS_CHANGED event with from/to/reason, and returns the formatted tenant', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
-      tenantModel.updateStatus.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscription_tier: 'FREE', status: 'SUSPENDED',
-        created_at: new Date('2026-01-01'),
-      });
-      tenantQuotaService.getCurrentForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
-
-      const result = await adminService.updateTenantStatus(1, 'SUSPENDED');
-
-      expect(tenantModel.updateStatus).toHaveBeenCalledWith(1, 'SUSPENDED');
-      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'STATUS_CHANGED', { from: 'ACTIVE', to: 'SUSPENDED', reason: null });
-      expect(result.status).toBe('SUSPENDED');
+    // Re-checked in the service as well as the validator, mirroring
+    // reviewPayment's treatment of rejectionReasonCode.
+    test('rejects SUSPENDED without a suspensionReasonCode', async () => {
+      await expect(adminService.updateTenantStatus(1, 'SUSPENDED'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_SUSPENSION_REASON' });
+      expect(tenantModel.findById).not.toHaveBeenCalled();
+      expect(tenantModel.updateStatus).not.toHaveBeenCalled();
     });
 
-    test('records an optional reason on the STATUS_CHANGED event (e.g. voluntary account closure)', async () => {
+    test('rejects a suspensionReasonCode outside the enum', async () => {
+      await expect(adminService.updateTenantStatus(1, 'SUSPENDED', 'BECAUSE_I_SAID_SO'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_SUSPENSION_REASON' });
+      expect(tenantModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    test('suspends with a reason code, passing it to the model and logging it on the event', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
       tenantModel.updateStatus.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscription_tier: 'FREE', status: 'SUSPENDED',
-        created_at: new Date('2026-01-01'),
+        suspension_reason_code: 'VOLUNTARY_CLOSURE', created_at: new Date('2026-01-01'),
       });
       tenantQuotaService.getCurrentForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
 
-      await adminService.updateTenantStatus(1, 'SUSPENDED', 'Voluntary account closure requested by tenant');
+      const result = await adminService.updateTenantStatus(1, 'SUSPENDED', 'VOLUNTARY_CLOSURE');
+
+      expect(tenantModel.updateStatus).toHaveBeenCalledWith(1, 'SUSPENDED', 'VOLUNTARY_CLOSURE');
+      expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'STATUS_CHANGED', {
+        from: 'ACTIVE', to: 'SUSPENDED', reasonCode: 'VOLUNTARY_CLOSURE',
+      });
+      expect(result.status).toBe('SUSPENDED');
+      expect(result.suspensionReasonCode).toBe('VOLUNTARY_CLOSURE');
+    });
+
+    // Reactivation needs no reason code, and must not carry a stale one into
+    // the event — the tenants column is cleared by the model on the same write.
+    test('reactivating to ACTIVE needs no reason code and logs a null one', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'SUSPENDED' });
+      tenantModel.updateStatus.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscription_tier: 'FREE', status: 'ACTIVE',
+        suspension_reason_code: null, created_at: new Date('2026-01-01'),
+      });
+      tenantQuotaService.getCurrentForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
+
+      const result = await adminService.updateTenantStatus(1, 'ACTIVE');
 
       expect(tenantEventModel.create).toHaveBeenCalledWith(1, 'STATUS_CHANGED', {
-        from: 'ACTIVE',
-        to: 'SUSPENDED',
-        reason: 'Voluntary account closure requested by tenant',
+        from: 'SUSPENDED', to: 'ACTIVE', reasonCode: null,
       });
+      expect(result.suspensionReasonCode).toBeNull();
     });
   });
 

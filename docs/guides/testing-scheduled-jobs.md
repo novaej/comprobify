@@ -16,7 +16,7 @@ All four are **idempotent** — re-running them when nothing is due is always sa
 - A running local server with a test DB migrated (`npm run migrate`).
 - `ADMIN_SECRET` from your `.env`.
 - At least one tenant with an issuer (see `postman/TESTING.md` for the full registration walkthrough) — every tenant already gets a `tenant_quotas` row automatically on creation.
-- For subscription tests, an `ACTIVE` subscription — either created through the real proof/review/link-invoice flow, or inserted directly for speed:
+- For subscription tests, an `ACTIVE` subscription — either created through the real proof/review flow, or inserted directly for speed:
   ```sql
   INSERT INTO subscriptions (tenant_id, tier, billing_interval, status, current_period_start, current_period_end)
   VALUES (<TENANT_ID>, 'GROWTH', 'MONTHLY', 'ACTIVE', NOW() - INTERVAL '1 month', NOW() + INTERVAL '10 days')
@@ -80,22 +80,9 @@ SELECT status, attempt_count, next_retry_at, last_response FROM webhook_deliveri
 
 ## 2. Subscriptions job
 
-Runs `applyPendingInvoiceLinks()`, then `applyScheduledTierChanges()`, then `processDueRenewals()`, in that order (order matters — a renewal/tier-change applied by the first step extends `current_period_end`, which the downgrade/expiry steps below need to see in the same tick; a downgrade must also roll its period forward before the expiry check runs, or it would look freshly expired).
+Runs `applyScheduledTierChanges()`, then `processDueRenewals()`, in that order. Order matters: a downgrade applied by the first step also rolls its period forward, and the second step's past-due-warning and expiry checks read that same `current_period_end` in the same tick — reversing them would flag every subscription downgrading today as freshly expired.
 
-### 2a0. Pending invoice link (the reverse-ordering case — see ADR-022's addendum)
-```sql
--- Simulate an admin having linked an invoice before SRI authorized it —
--- linkInvoice() itself only applies immediately when the document is
--- already AUTHORIZED at link time.
-UPDATE subscriptions SET status = 'INVOICE_PROCESSING', initial_invoice_document_id = '<DOCUMENT_ID>'
-WHERE id = <SUB_ID>;
-UPDATE documents SET status = 'AUTHORIZED' WHERE id = '<DOCUMENT_ID>';
-```
-Run the subscriptions job — expect `invoiceLinksActivated: 1` in the response, and the subscription to be `ACTIVE` with a fresh `current_period_start`/`current_period_end`:
-```sql
-SELECT status, current_period_start, current_period_end FROM subscriptions WHERE id = <SUB_ID>;
-```
-The same pattern applies to a pending `TIER_CHANGE`/`RENEWAL` payment — set `payments.invoice_document_id` to an `AUTHORIZED` document with `period_start IS NULL`, `status = 'VERIFIED'`, and the matching `purpose`; expect `invoiceLinksTierChangesApplied`/`invoiceLinksRenewalsApplied` to include it.
+> Since [ADR-027](../adr/027-decouple-activation-from-invoice.md) there is no invoice-link reconciliation step. A subscription is activated (and a tier change or renewal applied) the moment its payment is verified — `PATCH /v1/admin/payments/:id/review` with `{"decision":"VERIFIED"}` — not when an invoice authorizes. The operator's still-owed invoices are a work queue instead: `GET /v1/admin/invoicing/pending`, cleared by `PATCH /v1/admin/subscriptions/:id/link-invoice`, which changes no subscription state.
 
 ### 2a. Scheduled downgrade
 ```sql
@@ -148,13 +135,13 @@ SELECT event_type, detail FROM tenant_events WHERE tenant_id = <TENANT_ID> ORDER
 **Important:** `expireSubscription()` sets `tenants.status = 'PAST_DUE'` — but only if the tenant isn't already `SUSPENDED` or `PAST_DUE` (idempotent, won't overwrite an admin suspension or re-flag on a second lapse). `PAST_DUE` is distinct from `SUSPENDED` (see ADR-025 and CLAUDE.md's "Suspension" section): it's automated, not admin-lifted, and **self-resolving** — `require-past-due.js` blocks the same broad set of writes `require-not-suspended.js` does, except `POST /v1/subscriptions` and `PATCH /v1/payments/:id/proof` are deliberately exempt so the tenant can pay their way back in without contacting support. `findActiveOrPendingByTenantId` only blocks a new subscription while an existing one is still non-terminal, and `EXPIRED`/`CANCELLED` don't count, so `POST /v1/subscriptions` succeeds immediately for a `PAST_DUE` tenant.
 
 ### 2c1. Recovery — PAST_DUE tenant pays and flips back to ACTIVE
-Continue the flow from 2c: call `POST /v1/subscriptions` for the same tenant, walk it through proof upload → admin review (`VERIFIED`) → self-billed invoice → `PATCH /v1/admin/subscriptions/:id/link-invoice`. If the linked document is already `AUTHORIZED`, `activateIfLinked()` applies immediately:
+Continue the flow from 2c: call `POST /v1/subscriptions` for the same tenant, walk it through proof upload → admin review (`VERIFIED`). Activation happens on that review, with no invoice step involved:
 ```sql
 SELECT status FROM tenants WHERE id = <TENANT_ID>;  -- back to ACTIVE
 SELECT event_type, detail FROM tenant_events WHERE tenant_id = <TENANT_ID> ORDER BY created_at DESC LIMIT 1;
 -- STATUS_CHANGED, detail: {"from":"PAST_DUE","to":"ACTIVE","reason":"payment_recovered"}
 ```
-`activateIfLinked()` also re-runs the price-change reactivation catch-up (`pricingService.notifyPendingPriceChangesForTenant`) at this point, same as every other place a tenant transitions to `ACTIVE` — if a price change published while the tenant was `PAST_DUE`, expect a `PRICE_CHANGE_ANNOUNCED` notification to appear here too if one hadn't already been sent.
+`applyVerifiedPayment()` also re-runs the price-change reactivation catch-up (`pricingService.notifyPendingPriceChangesForTenant`) at this point, same as every other place a tenant transitions to `ACTIVE` — if a price change published while the tenant was `PAST_DUE`, expect a `PRICE_CHANGE_ANNOUNCED` notification to appear here too if one hadn't already been sent.
 
 ### 2d. Yearly plan — confirm it's unaffected mid-year
 ```sql
@@ -238,7 +225,7 @@ Run the job again immediately after 4a-4c with no further SQL changes — expect
 
 1. Run **2c** above to simulate the lapse — tier drops to FREE, tenant flips to `PAST_DUE`.
 2. Confirm quota records keep being created regardless — run **3a** any time during the gap; the rollover happens on schedule with whatever cap currently applies (FREE, in this case), completely unaware a subscription ever existed.
-3. To "start again": follow **2c1** above — `POST /v1/subscriptions` succeeds immediately since the old subscription is terminal and `PAST_DUE` doesn't block that route. Walk it through proof upload → admin review (`VERIFIED`) → self-billed invoice → `PATCH /v1/admin/subscriptions/:id/link-invoice`. If the linked document is already `AUTHORIZED`, activation applies immediately — no need to wait for a webhook — and the tenant flips back to `ACTIVE` in the same step.
+3. To "start again": follow **2c1** above — `POST /v1/subscriptions` succeeds immediately since the old subscription is terminal and `PAST_DUE` doesn't block that route. Walk it through proof upload → admin review (`VERIFIED`). Activation applies on that review and the tenant flips back to `ACTIVE` in the same step — no invoice needed (ADR-027).
 4. Check `tenant_quotas` again — the cap already reflects the new paid tier, same day, independent of whether the quota job has run since.
 
 This is the same asymmetry noted in CLAUDE.md's quota section: billing periods get an explicit "restart the clock now" moment at (re)activation, but quota periods just keep ticking on their own schedule since the tenant was created — harmless here since nothing was consumed during the gap, but worth knowing if you're checking exact period boundaries in a test.

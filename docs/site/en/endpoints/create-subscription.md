@@ -30,7 +30,7 @@ The tenant's email must be ACTIVE (verified) — same gate `POST /v1/tenants/pro
 
 ## What happens next
 
-Same manual proof/review pipeline as the rest of the subscription system: upload proof of the SPI transfer via [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md), the provider reviews it and links the self-billed invoice, and the tier/quota lands once that invoice is SRI-authorized. Poll [`GET /v1/subscriptions/me`](get-my-subscriptions.md) for status.
+Same manual proof/review pipeline as the rest of the subscription system: upload proof of the SPI transfer via [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md), and the provider reviews it. **The tier and quota land as soon as the payment is verified** — there is no wait on the provider's invoice being SRI-authorized; issuing it is the provider's obligation on their own clock and no longer holds up your service. Poll [`GET /v1/subscriptions/me`](get-my-subscriptions.md) for status.
 
 The tier/quota grant itself does not depend on the tenant's sandbox status — it can land while still in sandbox. It only matters for production document quota enforcement, so granting it early has no effect until the tenant promotes.
 

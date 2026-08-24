@@ -94,17 +94,20 @@ Este es el único lugar que muestra la secuencia completa de cambios en tu suscr
 | `EMAIL_VERIFIED` | El correo del tenant fue verificado |
 | `SUBSCRIPTION_CREATED` | Se inició una suscripción (`POST /v1/subscriptions` o en la promoción) |
 | `PAYMENT_REPORTED` | Se envió el comprobante de transferencia para un pago |
-| `PAYMENT_VERIFIED` / `PAYMENT_REJECTED` | El proveedor revisó el comprobante de un pago |
-| `INVOICE_LINKED` | Se vinculó una factura autofacturada a una suscripción o pago |
-| `SUBSCRIPTION_ACTIVATED` | La suscripción alcanzó el estado `ACTIVE` (se abrió el primer periodo de facturación) |
+| `PAYMENT_VERIFIED` / `PAYMENT_REJECTED` | El proveedor revisó el comprobante de un pago. `PAYMENT_VERIFIED` es también el momento en que el plan se aplica |
+| `PAYMENT_REFUNDED` | Un pago verificado fue revertido (transferencia devuelta, cargo duplicado) y su efecto se deshizo — `detail` incluye `restoredTier`, el plan al que volvió la cuenta |
+| `INVOICE_LINKED` | Se vinculó una factura autofacturada a una suscripción o pago. Es únicamente registro contable: no cambia el estado de tu suscripción, que ya se aplicó al verificarse el pago |
+| `SUBSCRIPTION_ACTIVATED` | La suscripción alcanzó el estado `ACTIVE` (se abrió el primer periodo de facturación), al verificarse su pago |
 | `TIER_CHANGE_REQUESTED` | [Cambiar de Plan](change-tier.md) creó un pago (mejora en el mismo intervalo, o cualquier cambio de intervalo de facturación) |
-| `TIER_CHANGE_SCHEDULED` | Se programó un cambio de plan/intervalo para aplicarse en `current_period_end` — ya sea una degradación gratuita en el mismo intervalo (de inmediato, al momento de la solicitud) o un cambio de intervalo de facturación pagado (una vez que la factura de su pago se autoriza) |
+| `TIER_CHANGE_SCHEDULED` | Se programó un cambio de plan/intervalo para aplicarse en `current_period_end` — ya sea una degradación gratuita en el mismo intervalo (de inmediato, al momento de la solicitud) o un cambio de intervalo de facturación pagado (una vez que su pago se verifica) |
 | `TIER_CHANGED` | Un cambio de plan y/o intervalo de facturación realmente tomó efecto |
 | `SUBSCRIPTION_CANCELLATION_SCHEDULED` | [`DELETE /v1/subscriptions`](cancel-subscription.md) programó una cancelación al final del periodo |
 | `SUBSCRIPTION_CANCELLED` | La suscripción alcanzó el estado `CANCELLED` (se aplicó la cancelación programada, o hubo intervención administrativa) |
 | `RENEWAL_DUE` | Se abrió un pago de renovación antes de `current_period_end` |
-| `SUBSCRIPTION_RENEWED` | La factura de un pago de renovación fue autorizada, extendiendo el periodo de facturación |
+| `SUBSCRIPTION_RENEWED` | Un pago de renovación fue verificado, extendiendo el periodo de facturación |
 | `SUBSCRIPTION_EXPIRED` | La suscripción superó su periodo de gracia de renovación sin ningún pago y fue degradada a FREE |
+| `STATUS_CHANGED` | El estado de la cuenta cambió — `detail` trae `from`, `to` y, al suspender, `reasonCode` (ver `suspensionReasonCode` en [`GET /v1/tenants/me`](tenant-me.md)) |
+| `CERTIFICATE_UPLOADED` / `CERTIFICATE_RENEWED` | Se cargó un certificado P12 nuevo para un emisor, o se renovó uno existente — `detail` trae `issuerId`, `certFingerprint` y `certExpiry` |
 
 ## Errores
 

@@ -91,6 +91,11 @@ const config = {
   // an env var here.
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60000,
+    // Failed admin-auth attempts per minute per IP. Only requests whose secret
+    // did NOT check out count against this (see adminLimiter in
+    // src/middleware/rate-limit.js), so it caps guessing without throttling a
+    // legitimate operator's dashboard.
+    adminMax: parseInt(process.env.ADMIN_RATE_LIMIT_MAX, 10) || 20,
   },
   // Optional — backs the rate limiters' shared store (src/services/redis.service.js).
   // Unset means every limiter falls back to express-rate-limit's own in-memory

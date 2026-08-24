@@ -1,14 +1,9 @@
 const tenantQuotaModel = require('../models/tenant-quota.model');
+const { addMonths } = require('../utils/add-months');
 const { TIERS } = require('../constants/subscription-tiers');
 const QuotaExceededError = require('../errors/quota-exceeded-error');
 
 const QUOTA_PERIOD_MONTHS = 1;
-
-function addMonths(date, months) {
-  const d = new Date(date);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d;
-}
 
 function capForTier(tier) {
   return TIERS[tier]?.documentQuota ?? TIERS.FREE.documentQuota;
@@ -16,7 +11,7 @@ function capForTier(tier) {
 
 // Seeds a tenant's first quota period, anchored to now — there is no prior
 // period to anchor to, same exception already established for
-// subscription.service.js's activateIfLinked/resetPeriodOnPromotion.
+// subscription.service.js's applyVerifiedPayment/resetPeriodOnPromotion.
 async function initializeForTenant(tenantId, documentQuota, client = null) {
   const periodStart = new Date();
   const periodEnd = addMonths(periodStart, QUOTA_PERIOD_MONTHS);

@@ -1,7 +1,9 @@
 # ADR-017: Manual Subscription/Payment Pipeline with Invoice-Gated Activation
 
 ## Status
-Accepted
+Accepted — **activation clause superseded by [ADR-027](027-decouple-activation-from-invoice.md)** (2026-08-23).
+
+The pipeline described below (manual proof upload → operator review → self-billed invoice) is still current. What changed is the *activation trigger*: a subscription no longer waits for its linked invoice to be SRI-`AUTHORIZED` before becoming `ACTIVE` — payment verification alone grants access, and the invoice obligation is tracked by an operator work queue (`GET /v1/admin/invoicing/pending`) instead. Read this ADR for the pipeline's design and ADR-027 for why the gate was removed; everything below about invoice-gated activation is historical.
 
 ## Date
 2026-06-28
