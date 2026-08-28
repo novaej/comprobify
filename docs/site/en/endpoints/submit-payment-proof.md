@@ -58,6 +58,8 @@ After requesting a paid tier — either via [`POST /v1/subscriptions`](create-su
 }
 ```
 
+> This endpoint is for **SPI transfer** payments. You can also pay by card from the Comprobify web app, which needs no proof and no review.
+
 `proofs` lists only the file(s) uploaded **in this request** — call [List Payment Proofs](list-payment-proofs.md) for the full set uploaded so far (this payment may already have others from an earlier attempt). The raw file bytes are never echoed back, only metadata; use [Download Payment Proof](download-payment-proof.md) with a `proofId` from this response to fetch them again. `status` moves to `REPORTED`. Your provider reviews the files and verifies or rejects the payment; **the moment they verify it, the subscription activates and the tier/quota land**. The provider's invoice is issued afterwards and never holds up your service. Once a payment is `VERIFIED`, no further uploads (or deletes) are accepted for it — everything about its proof is locked in at that point.
 
 ## What happens next

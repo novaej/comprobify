@@ -122,6 +122,16 @@ const ErrorCodes = Object.freeze({
   INVALID_SUSPENSION_REASON: 'INVALID_SUSPENSION_REASON',
   /** Payment cannot be refunded — not VERIFIED, already REFUNDED, or applied before applied_from existed */
   PAYMENT_NOT_REFUNDABLE: 'PAYMENT_NOT_REFUNDABLE',
+  /** Card payments are not configured in this environment (PAYPHONE_TOKEN unset) */
+  PAYMENT_GATEWAY_NOT_CONFIGURED: 'PAYMENT_GATEWAY_NOT_CONFIGURED',
+  /** Payphone's confirm call could not be completed (network/transport failure) — the charge is unresolved, not declined */
+  PAYPHONE_CONFIRM_FAILED: 'PAYPHONE_CONFIRM_FAILED',
+  /** Payphone confirmed an amount that does not match the one the session was created for */
+  PAYPHONE_AMOUNT_MISMATCH: 'PAYPHONE_AMOUNT_MISMATCH',
+  /** No card-payment attempt exists for the supplied clientTransactionId, or it belongs to another tenant */
+  PAYPHONE_SESSION_NOT_FOUND: 'PAYPHONE_SESSION_NOT_FOUND',
+  /** Payment has already been verified — no further payment attempt is accepted for it */
+  PAYMENT_ALREADY_VERIFIED: 'PAYMENT_ALREADY_VERIFIED',
 
   // --- Tier pricing ---
   /** No tier_prices row found for the requested id, or none published for a tier/interval as of the requested date */

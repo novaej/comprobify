@@ -58,6 +58,8 @@ Después de solicitar un plan pago — ya sea mediante [`POST /v1/subscriptions`
 }
 ```
 
+> Este endpoint es para pagos por **transferencia SPI**. También puedes pagar con tarjeta desde la aplicación web de Comprobify, que no requiere comprobante ni revisión.
+
 `proofs` lista únicamente el/los archivo(s) subido(s) **en esta solicitud** — llama a [Listar Comprobantes de Pago](list-payment-proofs.md) para ver el conjunto completo subido hasta el momento (este pago puede tener otros de un intento anterior). Los bytes crudos del archivo nunca se devuelven en la respuesta, solo los metadatos; usa [Descargar Comprobante de Pago](download-payment-proof.md) con un `proofId` de esta respuesta para volver a obtenerlos. `status` pasa a `REPORTED`. Tu proveedor revisa los archivos y verifica o rechaza el pago; **en cuanto lo verifica, la suscripción se activa y el plan/cuota se aplican**. La factura del proveedor se emite después y no retiene tu servicio. Una vez que un pago está `VERIFIED`, ya no se aceptan más subidas (ni eliminaciones) para él — todo lo relativo a su comprobante queda fijo en ese punto.
 
 ## Qué sucede después

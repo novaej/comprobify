@@ -785,6 +785,94 @@
       "name": "Payments",
       "item": [
         {
+          "name": "Create Payphone Session (Pay by Card)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.session?.clientTransactionId) {",
+                  "  pm.collectionVariables.set('client_transaction_id', r.session.clientTransactionId);",
+                  "  console.log('clientTransactionId:', r.session.clientTransactionId);",
+                  "  console.log('amount (cents):', r.session.amount, '= withoutTax', r.session.amountWithoutTax, '+ withTax', r.session.amountWithTax, '+ tax', r.session.tax);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/payments/{{payment_id}}/payphone-session",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "{{payment_id}}",
+                "payphone-session"
+              ]
+            },
+            "description": "Mints a card-payment session for one of your own payments (any purpose: INITIAL, TIER_CHANGE, RENEWAL). The response's `session` object is passed straight into Payphone's Cajita de Pagos browser widget.\n\nUnlike Submit Payment Proof there is nothing to upload and no review to wait on - the payment verifies itself and your plan is active in seconds.\n\nAll amounts come back as integer cents and always satisfy amount = amountWithoutTax + amountWithTax + tax + service + tip, which Payphone enforces.\n\nReturns 503 PAYMENT_GATEWAY_NOT_CONFIGURED when card payments aren't enabled in this environment - use Submit Payment Proof instead. 409 PAYMENT_ALREADY_VERIFIED if the payment is already settled.\n\nNOTE: comprobify-web only. These endpoints back the Comprobify web app card checkout; the Payphone widget renders only on the domain registered in Payphone console, so a third-party integrator cannot complete this flow on their own domain and should use Submit Payment Proof (SPI transfer) instead. Deliberately absent from the public collection and docs site for that reason."
+          }
+        },
+        {
+          "name": "Confirm Payphone Charge",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "console.log('outcome:', r.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 987654,\n  \"clientTransactionId\": \"{{client_transaction_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/payments/payphone/confirm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "payphone",
+                "confirm"
+              ]
+            },
+            "description": "Captures the charge. `id` is Payphone's own transaction id, echoed back on the return redirect alongside your clientTransactionId - send both.\n\nCRITICAL: Payphone auto-reverses any charge not confirmed within 5 MINUTES of payment. Your return page must call this immediately on load, never behind a button.\n\nOutcomes in `status`:\n  APPROVED  - captured and applied; the plan is already active\n  CANCELLED - declined or cancelled; nothing charged, retry with a fresh session\n  DUPLICATE - this payment was already paid by another attempt; needs a refund\n  ERROR     - the confirmed amount didn't match the session's; nothing applied\n\nSafe to call twice with the same body: returns the stored outcome without contacting Payphone again.\n\n502 PAYPHONE_CONFIRM_FAILED means Payphone was unreachable - the charge is UNRESOLVED, not declined, and reconciles automatically within a few minutes.\n\nNOTE: comprobify-web only. These endpoints back the Comprobify web app card checkout; the Payphone widget renders only on the domain registered in Payphone console, so a third-party integrator cannot complete this flow on their own domain and should use Submit Payment Proof (SPI transfer) instead. Deliberately absent from the public collection and docs site for that reason."
+          }
+        },
+        {
           "name": "List Payment Proofs",
           "request": {
             "method": "GET",
@@ -3843,6 +3931,39 @@
               ]
             },
             "description": "Re-publishes to RabbitMQ any pending_effects row (all 8 effect types — SRI send/authorize, notifications, webhook fan-out, transactional emails) whose dispatch was never confirmed or has gone stale (ADR-019/ADR-022) — never runs a handler itself, only ensures a message exists for workers/worker.js to eventually pick up. Subscription activation/tier-change/renewal reconciliation is separate — see the subscriptions job.\n\nRuns a single SELECT ... FOR UPDATE SKIP LOCKED sweep against pending_effects (not schema-scoped, so no more public/sandbox split): SRI_AUTHORIZE rows use their own two-threshold timing (a delay before the first check, then a stale window for re-checks); every other effect type uses one stale-dispatch window.\n\nDesigned to be called by an external scheduler every 5 minutes (matches the actual droplet cron and effectStaleMinutes' default) — this is the actual recovery mechanism for a temporarily unreachable broker or a publish that timed out.\n\nResponse is { republished: <count from this run> }."
+          }
+        },
+        {
+          "name": "Run Payphone Reconciliation Jobs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "console.log('outcomes resolved:', r.payphoneOutcomesResolved, '| charges applied:', r.payphoneChargesApplied);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/jobs/payphone-reconciliation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "jobs",
+                "payphone-reconciliation"
+              ]
+            },
+            "description": "Two idempotent sweeps over card-payment attempts (ADR-028). Run every 5 minutes.\n\n1. **Unresolved outcomes** — attempts still PENDING past Payphone 5-minute auto-reversal window, because the payer browser never reached the return page and confirm therefore never fired. Confirms them purely to learn and record which way the charge went. Needs reachable Payphone credentials; without them the sweep correctly leaves rows PENDING rather than marking them terminal.\n2. **Captured but unapplied** — attempts APPROVED with applied_at IS NULL. The vendor outcome commits before access is granted, so a crash in between leaves money captured and the tenant not credited. This sweep finishes the job, and needs no vendor call.\n\nIdempotent: an already-settled payment only gets its bookkeeping stamp, never a second application (which would double-extend a period or double-flip a tier).\n\nSee docs/guides/payphone-payments.md and the Payphone section of postman/TESTING.md for how to force each sweep."
           }
         },
         {

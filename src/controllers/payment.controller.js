@@ -1,4 +1,5 @@
 const subscriptionService = require('../services/subscription.service');
+const payphonePaymentService = require('../services/payphone-payment.service');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 
@@ -43,4 +44,22 @@ const deleteProof = async (req, res) => {
   res.json({ ok: true });
 };
 
-module.exports = { submitProof, listProofs, downloadProof, deleteProof };
+// Mints the config comprobify-web feeds into Payphone's browser widget.
+const createPayphoneSession = async (req, res) => {
+  const session = await payphonePaymentService.createSession(req.params.id, req.tenant.id);
+  res.json({ ok: true, session });
+};
+
+// Called by the return page Payphone redirects to after the payer completes the
+// widget. Must run within 5 minutes of payment or Payphone auto-reverses the
+// charge — see docs/guides/payphone-payments.md.
+const confirmPayphone = async (req, res) => {
+  const result = await payphonePaymentService.confirmTransaction({
+    payphoneId:          req.body.id,
+    clientTransactionId: req.body.clientTransactionId,
+    tenantId:            req.tenant.id,
+  });
+  res.json({ ok: true, ...result });
+};
+
+module.exports = { submitProof, listProofs, downloadProof, deleteProof, createPayphoneSession, confirmPayphone };

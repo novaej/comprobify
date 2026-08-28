@@ -30,7 +30,7 @@ El correo del tenant debe estar ACTIVE (verificado) — la misma validación que
 
 ## Qué sucede después
 
-El mismo flujo manual de comprobante/revisión que el resto del sistema de suscripciones: sube el comprobante de la transferencia SPI mediante [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md) y el proveedor lo revisa. **El plan y la cuota se aplican en cuanto el pago se verifica** — no hay que esperar a que la factura del proveedor sea autorizada por el SRI; emitirla es una obligación del proveedor que corre por su cuenta y ya no retiene tu servicio. Consulta periódicamente [`GET /v1/subscriptions/me`](get-my-subscriptions.md) para conocer el estado.
+Puedes pagar de dos formas. **Con tarjeta**, desde la aplicación web de Comprobify — sin comprobante que subir ni revisión que esperar, tu plan queda activo en segundos. O **por transferencia SPI**, que puedes gestionar por API: el mismo flujo manual de comprobante/revisión que el resto del sistema de suscripciones: sube el comprobante de la transferencia SPI mediante [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md) y el proveedor lo revisa. **El plan y la cuota se aplican en cuanto el pago se verifica** — no hay que esperar a que la factura del proveedor sea autorizada por el SRI; emitirla es una obligación del proveedor que corre por su cuenta y ya no retiene tu servicio. Consulta periódicamente [`GET /v1/subscriptions/me`](get-my-subscriptions.md) para conocer el estado.
 
 La concesión del plan/cuota en sí no depende del estado sandbox del tenant — puede aplicarse mientras sigue en sandbox. Solo importa para la aplicación de la cuota de comprobantes de producción, así que concederla anticipadamente no tiene efecto hasta que el tenant se promueva.
 

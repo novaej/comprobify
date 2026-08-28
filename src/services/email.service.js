@@ -5,6 +5,7 @@ const emailFactory = require('./email');
 const invoiceAuthorizedTemplate = require('./email/templates/invoice-authorized');
 const verifyEmailTemplate = require('./email/templates/verify-email');
 const paymentProofSubmittedTemplate = require('./email/templates/payment-proof-submitted');
+const paymentVerifiedOperatorTemplate = require('./email/templates/payment-verified-operator');
 const config = require('../config');
 
 // When APP_ENV is 'staging', every email carries a visible notice so a
@@ -129,6 +130,35 @@ async function sendPaymentProofSubmitted(payment, subscription, tenant, referenc
 }
 
 /**
+ * Operator-facing: a CARD payment settled itself and now owes an invoice.
+ * Same no-op-when-unconfigured contract as sendPaymentProofSubmitted — this is
+ * an operational convenience, not something tenant-facing behaviour depends on.
+ *
+ * @returns {Promise<{ sent: boolean, reason?: string }>}
+ */
+async function sendPaymentVerifiedOperator(payment, subscription, tenant) {
+  if (!config.adminNotificationEmail) {
+    return { sent: false, reason: 'no_admin_email' };
+  }
+
+  const rendered = paymentVerifiedOperatorTemplate.render(payment, subscription, tenant);
+  const { subject } = rendered;
+  const { text, html } = applyStagingBanner(rendered, 'en');
+  const provider = emailFactory.getProvider();
+
+  await provider.send({
+    from: `Comprobify <${config.email.from}>`,
+    to: config.adminNotificationEmail,
+    subject,
+    text,
+    html,
+    attachments: [],
+  });
+
+  return { sent: true };
+}
+
+/**
  * Send an already-rendered notification email to a tenant (ADR-024 Phase C)
  * — the generic counterpart of the 4
  * type-specific send*() functions this replaced (sendPaymentReviewed,
@@ -164,5 +194,6 @@ module.exports = {
   sendInvoiceAuthorized,
   sendVerificationEmail,
   sendPaymentProofSubmitted,
+  sendPaymentVerifiedOperator,
   sendNotificationEmail,
 };

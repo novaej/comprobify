@@ -30,7 +30,7 @@ The tenant's email must be ACTIVE (verified) — same gate `POST /v1/tenants/pro
 
 ## What happens next
 
-Same manual proof/review pipeline as the rest of the subscription system: upload proof of the SPI transfer via [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md), and the provider reviews it. **The tier and quota land as soon as the payment is verified** — there is no wait on the provider's invoice being SRI-authorized; issuing it is the provider's obligation on their own clock and no longer holds up your service. Poll [`GET /v1/subscriptions/me`](get-my-subscriptions.md) for status.
+You can pay two ways. **By card**, from the Comprobify web app — no proof to upload, no review to wait on, your plan is active in seconds. Or **by SPI transfer**, which you can drive over the API: the same manual proof/review pipeline as the rest of the subscription system: upload proof of the SPI transfer via [`PATCH /v1/payments/:id/proof`](submit-payment-proof.md), and the provider reviews it. **The tier and quota land as soon as the payment is verified** — there is no wait on the provider's invoice being SRI-authorized; issuing it is the provider's obligation on their own clock and no longer holds up your service. Poll [`GET /v1/subscriptions/me`](get-my-subscriptions.md) for status.
 
 The tier/quota grant itself does not depend on the tenant's sandbox status — it can land while still in sandbox. It only matters for production document quota enforcement, so granting it early has no effect until the tenant promotes.
 

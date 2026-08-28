@@ -76,5 +76,6 @@ router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs))
 router.post('/jobs/subscriptions', asyncHandler(controller.runSubscriptionJobs));
 router.post('/jobs/quota', asyncHandler(controller.runQuotaJobs));
 router.post('/jobs/queue-reconciliation', asyncHandler(controller.runQueueReconciliationJob));
+router.post('/jobs/payphone-reconciliation', asyncHandler(controller.runPayphoneReconciliationJob));
 
 module.exports = router;

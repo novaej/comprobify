@@ -44,6 +44,10 @@ const EffectTypes = Object.freeze({
   VERIFICATION_EMAIL_SEND:       'VERIFICATION_EMAIL_SEND',
   WEBHOOK_FANOUT:                'WEBHOOK_FANOUT',
   PAYMENT_PROOF_SUBMITTED_EMAIL: 'PAYMENT_PROOF_SUBMITTED_EMAIL',
+  // Card payments only (ADR-028). An SPI payment already has the operator in
+  // the loop — they clicked "verify" — but a card payment verifies itself, so
+  // without this nothing would tell the operator an invoice is now owed.
+  PAYMENT_VERIFIED_OPERATOR_EMAIL: 'PAYMENT_VERIFIED_OPERATOR_EMAIL',
   NOTIFICATION_DISPATCH:         'NOTIFICATION_DISPATCH',
 });
 

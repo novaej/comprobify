@@ -140,6 +140,15 @@ const handlers = {
     await emailService.sendPaymentProofSubmitted(payment, subscription, tenant, payload.referenceNumber);
   },
 
+  // Card payments only (ADR-028). Its SPI sibling above fires when a tenant
+  // uploads proof; this one fires when a card payment has ALREADY settled
+  // itself, because no human was in the loop to notice.
+  [EffectTypes.PAYMENT_VERIFIED_OPERATOR_EMAIL]: async (payload) => {
+    const { payment, subscription } = await resolvePaymentAndSubscription(payload);
+    const tenant = await tenantModel.findById(payload.tenantId);
+    await emailService.sendPaymentVerifiedOperator(payment, subscription, tenant);
+  },
+
   // --- NOTIFICATION_DISPATCH (ADR-024) ---
   //
   // The one channel-neutral effect handling whatever async dispatch a

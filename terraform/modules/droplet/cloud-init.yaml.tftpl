@@ -60,6 +60,7 @@ write_files:
       0 6 * * * ${deploy_username} { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions; } >> /opt/comprobify/logs/cron-subscriptions.log 2>&1
       10 6 * * * ${deploy_username} { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota; } >> /opt/comprobify/logs/cron-quota.log 2>&1
       */5 * * * * ${deploy_username} { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation; } >> /opt/comprobify/logs/cron-queue-reconciliation.log 2>&1
+      */5 * * * * ${deploy_username} { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/payphone-reconciliation; } >> /opt/comprobify/logs/cron-payphone-reconciliation.log 2>&1
   # Rotated weekly / kept 4 weeks so the two 5-minute-cadence jobs can't grow
   # unbounded. `create` re-creates each file as deploy_username so the next cron
   # run (plain shell redirection, not a held-open fd) can write to it without root.

@@ -3,6 +3,7 @@ const notificationSchedulerService = require('../services/notification-scheduler
 const subscriptionService = require('../services/subscription.service');
 const tenantQuotaService = require('../services/tenant-quota.service');
 const queueReconciliationService = require('../services/queue-reconciliation.service');
+const payphonePaymentService = require('../services/payphone-payment.service');
 const agreementService = require('../services/agreement.service');
 const tenantAgreementService = require('../services/tenant-agreement.service');
 const notificationEmailTemplateService = require('../services/notification-email-template.service');
@@ -405,6 +406,27 @@ const runQuotaJobs = async (req, res) => {
  * how long a document can sit unprocessed if nothing ever queued a
  * message for it at all.
  */
+/**
+ * POST /api/admin/jobs/payphone-reconciliation
+ *
+ * Two idempotent sweeps over card-payment attempts (ADR-028):
+ *
+ * 1. Attempts still PENDING past Payphone's 5-minute auto-reversal window —
+ *    the payer's browser never reached the return page, so confirm never fired.
+ *    Confirms them purely to learn and record the final outcome.
+ * 2. Attempts APPROVED but never applied — the two-phase gap where the vendor
+ *    outcome committed but the process died before granting access. Money in,
+ *    tenant not credited; this is what finishes the job.
+ *
+ * Designed for an external scheduler on a 5-minute cadence, the same as queue
+ * reconciliation — it is the recovery path for real captured money, so it wants
+ * the tightest cadence of the jobs.
+ */
+const runPayphoneReconciliationJob = async (req, res) => {
+  const result = await payphonePaymentService.reconcileStaleTransactions();
+  res.json({ ok: true, ...result });
+};
+
 const runQueueReconciliationJob = async (req, res) => {
   const result = await queueReconciliationService.runAll();
   res.json({ ok: true, ...result });
@@ -420,7 +442,7 @@ const getDocumentRide = async (req, res) => {
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, runNotificationJobs,
-  runSubscriptionJobs, runQuotaJobs, runQueueReconciliationJob,
+  runSubscriptionJobs, runQuotaJobs, runQueueReconciliationJob, runPayphoneReconciliationJob,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments, listPendingInvoices, refundPayment,
   publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion, generateTenantAgreements,

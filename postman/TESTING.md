@@ -411,6 +411,41 @@ Response includes `bankTransfer` instructions showing where to send the SPI tran
 
 ---
 
+### Step 5c-alt — Tenant pays by card instead (Payphone)
+
+Card payment is an alternative to steps 5d–8 below, not an addition: there is nothing to upload and nothing for you to review. Skip to Step 9 afterwards — you still owe the factura.
+
+Requires `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` (test store on staging). Without them, **Create Payphone Session** returns `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and the SPI flow below is unaffected — worth running once on purpose to confirm card support really is optional.
+
+**`POST /v1/payments/{{payment_id}}/payphone-session`** *(Payments folder)*
+
+✓ Test script captures `client_transaction_id` and logs the cents breakdown. Verify `amount = amountWithoutTax + amountWithTax + tax`.
+
+In a real flow the `session` object goes straight into Payphone's browser widget, the payer enters a card, and Payphone redirects to comprobify-web's return page with `?id=…&clientTransactionId=…`. For a Postman-only walkthrough you need a real `id` from the test store.
+
+**`POST /v1/payments/payphone/confirm`** *(Payments folder)* — set `id` in the body to Payphone's transaction id.
+
+> **The 5-minute rule:** Payphone auto-reverses any charge not confirmed within 5 minutes of payment. If you sit on this step too long, expect the attempt to end up `EXPIRED` rather than `APPROVED`.
+
+Expect `status: "APPROVED"`, and then — with no further calls — the tenant is already active:
+
+```sql
+SELECT p.status AS payment, p.applied_from IS NOT NULL AS snapshot,
+       s.status AS subscription, s.tier, pt.status AS attempt, pt.applied_at
+FROM payphone_transactions pt
+JOIN payments p      ON p.id = pt.payment_id
+JOIN subscriptions s ON s.id = p.subscription_id
+WHERE pt.client_transaction_id = '<client_transaction_id>';
+```
+
+Re-send the identical confirm request: it returns the same stored outcome and makes **no** second call to Payphone.
+
+Two things happen automatically that you should verify: the payment appears in **List Pending Invoices** (Admin folder), and an email goes to `ADMIN_NOTIFICATION_EMAIL` telling you an invoice is owed. SPI payments deliberately don't send that email — you clicked "verify" yourself.
+
+For the failure modes (declined card, closed browser, the captured-but-unapplied gap, duplicate charges) and how to force each, see [docs/guides/payphone-payments.md](../docs/guides/payphone-payments.md) and section 5 of [docs/guides/testing-scheduled-jobs.md](../docs/guides/testing-scheduled-jobs.md).
+
+---
+
 ### Step 5d — Tenant submits proof of payment
 
 After making the bank transfer, the tenant uploads a receipt:

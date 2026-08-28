@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const PaymentMethods = require('../constants/payment-methods');
 
 const MUTABLE_EXTRA_COLUMNS = new Set([
   'reported_at',
@@ -11,7 +12,7 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'applied_from',
 ]);
 
-async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = 'SPI_TRANSFER', purpose = 'INITIAL', targetTier = null, targetBillingInterval = null }) {
+async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = PaymentMethods.SPI_TRANSFER, purpose = 'INITIAL', targetTier = null, targetBillingInterval = null }) {
   const { rows } = await db.query(
     `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier, target_billing_interval)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -157,6 +158,18 @@ async function findPendingInvoice() {
   return rows;
 }
 
+// Records how a payment is being paid. Separate from updateStatus because it's
+// orthogonal to the status lifecycle — minting a card session sets the method
+// while the payment stays PENDING, and a tenant who abandons the card flow and
+// transfers instead simply sets it back.
+async function updateMethod(id, method) {
+  const { rows } = await db.query(
+    'UPDATE payments SET method = $2 WHERE id = $1 RETURNING *',
+    [id, method]
+  );
+  return rows[0] || null;
+}
+
 async function updateStatus(id, status, extraFields = {}) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
@@ -190,5 +203,6 @@ module.exports = {
   findPendingRenewalBySubscriptionId,
   findOldestUninvoicedBySubscriptionId,
   findPendingInvoice,
+  updateMethod,
   updateStatus,
 };

@@ -690,6 +690,7 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 0 6 * * * cpfydeploy9x { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions; } >> /opt/comprobify/logs/cron-subscriptions.log 2>&1
 10 6 * * * cpfydeploy9x { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota; } >> /opt/comprobify/logs/cron-quota.log 2>&1
 */5 * * * * cpfydeploy9x { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation; } >> /opt/comprobify/logs/cron-queue-reconciliation.log 2>&1
+*/5 * * * * cpfydeploy9x { date -Is; cd /opt/comprobify && docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/payphone-reconciliation; } >> /opt/comprobify/logs/cron-payphone-reconciliation.log 2>&1
 ```
 
 **Why `docker compose exec` instead of installing Node on the droplet:** `scripts/run-admin-job.js` has zero npm dependencies — just Node's built-in `fetch` — so rather than installing Node system-wide on the bare host (one more thing to patch and keep current), the cron entries just run it *inside* the already-running `api` container, reusing the exact deployed script version. This also means it automatically picks up `ADMIN_SECRET` from that container's own `.env` — nothing extra to configure. The only env var this needs that the app itself doesn't is `API_BASE_URL` (distinct name from `APP_BASE_URL`, same value) — see the env var reference table above.

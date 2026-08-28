@@ -140,6 +140,18 @@ const config = {
   // required at startup (src/config/validate.js) — without these, a tenant
   // creating a subscription gets an empty bank-transfer block with no way
   // to actually pay.
+  // Optional — card payments via Payphone's Cajita de Pagos (ADR-028). Unset
+  // means POST /v1/payments/:id/payphone-session returns 503 and the manual SPI
+  // transfer path is completely unaffected, so a vendor outage or a
+  // misconfigured deploy can never take billing down with it. Same
+  // degrade-gracefully treatment as REDIS_URL/SENTRY_DSN, and deliberately not
+  // in src/config/validate.js for that reason.
+  payphone: {
+    token:            process.env.PAYPHONE_TOKEN        || '',
+    storeId:          process.env.PAYPHONE_STORE_ID     || '',
+    apiBaseUrl:       process.env.PAYPHONE_API_BASE_URL || 'https://paymentbox.payphonetodoesposible.com',
+    confirmTimeoutMs: parseInt(process.env.PAYPHONE_CONFIRM_TIMEOUT_MS, 10) || 10000,
+  },
   bankTransfer: {
     bankName:       process.env.BANK_TRANSFER_BANK_NAME       || '',
     accountType:    process.env.BANK_TRANSFER_ACCOUNT_TYPE    || '',
