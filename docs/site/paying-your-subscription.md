@@ -22,6 +22,8 @@ Detrás de escena el cobro se procesa con Payphone. Tras completar el formulario
 
 Si tu tarjeta es rechazada no se cobra nada y puedes reintentar de inmediato.
 
+Payphone no procesa cobros menores a **$1,00**. Es poco frecuente — solo ocurre en un cambio de plan prorrateado con muy poco tiempo restante del período — pero en ese caso la opción de tarjeta no estará disponible y deberás pagar por transferencia.
+
 ### Transferencia bancaria (SPI)
 
 La aplicación web te muestra los datos de la cuenta a la que transferir. Una vez hecha la transferencia, subes el comprobante (imagen o PDF) junto con el número de referencia de tu banco.

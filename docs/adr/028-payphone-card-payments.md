@@ -60,6 +60,18 @@ A tenant with two tabs open can complete the widget twice, producing two real ch
 
 A card payment verifies itself, so nothing would otherwise tell the operator an invoice is now owed. `PAYMENT_VERIFIED_OPERATOR_EMAIL` (the 9th `pending_effects` type) fires on the card path only. SPI payments deliberately do not send it: the operator clicked "verify" themselves and already knows. The payment appears in `GET /v1/admin/invoicing/pending` either way, with no card-specific code, because that queue is simply "verified and not yet invoiced".
 
+### Two rules only the vendor's validator could tell us
+
+Probing Payphone's `Prepare` endpoint with real `toAmountBreakdown()` output before any frontend existed confirmed the amount mapping, and surfaced a rule absent from their integration docs: **charges under $1.00 are rejected** (`errorCode 107`). That is reachable — `requestTierChange` applies a $0 proration for free, but $0.01–$0.99 opens a real payment row. `createSession` refuses those with `400 PAYPHONE_AMOUNT_BELOW_MINIMUM` so the frontend can fall back to transfer, rather than letting the tenant hit an untranslatable vendor error at submit.
+
+Separately, **"transaction not found" comes back as HTTP 404 with a structured body**. That is semantic, not routing — a status-first reading misreports a working host as a broken one.
+
+### Attempts are never reused
+
+Each `createSession` mints a fresh `clientTransactionId` and row. A `PENDING` row with no vendor id is ambiguous between "the payer closed the widget" (Payphone never saw the id) and "the payer paid and the redirect never arrived" (Payphone saw it and may be holding a charge), and nothing on our side distinguishes them. Reusing the id in the second case is a duplicate submission against a live transaction, against Payphone's own uniqueness requirement. A ceiling of 10 unresolved attempts per payment bounds the cost instead.
+
+The same ambiguity is why the transport-failure path must persist Payphone's transaction id while leaving the attempt `PENDING`: that id only arrives on the return redirect, and without it a captured-but-unacknowledged charge cannot be looked up again and is silently lost.
+
 ### Optional infrastructure
 
 `PAYPHONE_TOKEN`/`PAYPHONE_STORE_ID` follow the `REDIS_URL`/`SENTRY_DSN` pattern: empty-string defaults, deliberately absent from `src/config/validate.js`. Unset means the card endpoints return `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and SPI is untouched. An environment without Payphone credentials is a supported configuration, and a vendor outage or a misconfigured deploy can never take billing down with it.

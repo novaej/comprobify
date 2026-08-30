@@ -22,6 +22,8 @@ Behind the scenes the charge is processed by Payphone. After completing the paym
 
 If your card is declined nothing is charged and you can retry immediately.
 
+Payphone won't process charges under **$1.00**. This is rare — it only comes up on a prorated tier change with very little of the period left — but when it does, the card option won't be available and you'll need to pay by transfer.
+
 ### Bank transfer (SPI)
 
 The web app shows you the account details to transfer to. Once you've made the transfer, you upload proof of it (image or PDF) along with your bank's reference number.
