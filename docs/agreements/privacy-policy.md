@@ -19,7 +19,9 @@ Para los datos del propio Cliente (su cuenta, su correo, su certificado de firma
 | Datos contenidos en los comprobantes electrónicos, incluyendo RUC/cédula, nombre, dirección, correo electrónico, teléfono, y demás campos exigidos por la normativa del SRI según el tipo de comprobante | Del Cliente, por instrucción suya | Requisito legal del SRI para la emisión válida de comprobantes electrónicos |
 | Clave privada de firma (cifrada con AES-256-GCM) y certificado digital (.p12) | Del Cliente | Almacenados únicamente para prestar el servicio de firma electrónica (XAdES-BES) solicitado por el Cliente, requerido por el SRI |
 | Dirección IP y user-agent del Cliente | Del Cliente | Evidencia de aceptación al aceptar los Términos de Servicio, la Política de Privacidad o el DPA (ver sección de Registros) |
-| Comprobante de pago (transferencia bancaria) | Del Cliente | Verificación manual de pagos de suscripción |
+| Comprobante de pago por transferencia bancaria, o datos de la transacción cuando el pago se realiza con tarjeta (marca de la tarjeta, últimos dígitos, código de autorización e identificador de la transacción asignado por el procesador de pagos) | Del Cliente, o del procesador de pagos según el medio de pago utilizado | Verificación del pago de la suscripción, conciliación contable y atención de reclamos o reversos |
+
+Cuando el Cliente paga su suscripción con tarjeta, Comprobify **no recibe, no transmite y no almacena en ningún momento el número completo de la tarjeta ni su código de seguridad**. Dichos datos se ingresan directamente en el formulario del procesador de pagos y no transitan por los sistemas de Comprobify.
 
 Los datos contenidos en el comprobante incluyen, cuando el Cliente los utiliza, los denominados "Campos Adicionales" (a nivel de comprobante) y "Detalles Adicionales" (a nivel de cada ítem), previstos por el esquema del SRI como campos de texto libre — su contenido es determinado libremente por el Cliente y puede incluir información adicional a la exigida por la normativa del SRI.
 
@@ -31,9 +33,9 @@ Cuando el Cliente utiliza el Servicio exclusivamente a través de la API, no rec
 
 Respecto de los datos del propio Cliente, el tratamiento se realiza para la ejecución de los Términos de Servicio entre Comprobify y el Cliente, que constituyen el contrato de servicio bajo el cual se presta el Servicio. Respecto de los datos del comprador, el tratamiento se realiza por instrucción directa del Cliente en su calidad de Responsable del Tratamiento, con la finalidad exclusiva de generar y transmitir comprobantes electrónicos válidos ante el SRI.
 
-## 4. Con quién compartimos datos (subencargados)
+## 4. Con quién compartimos datos
 
-Los datos se almacenan y procesan utilizando los siguientes proveedores, cada uno actuando como subencargado del tratamiento respecto de los datos que procesa por cuenta de Comprobify, conforme a sus propios términos de servicio y compromisos de confidencialidad y seguridad:
+**Subencargados del tratamiento.** Los siguientes proveedores tratan datos personales por cuenta de Comprobify y conforme a sus instrucciones, según sus propios términos de servicio y compromisos de confidencialidad y seguridad:
 
 - **DigitalOcean** — hosting de la API (todos los Clientes).
 - **DigitalOcean Managed Postgres** — base de datos PostgreSQL, utilizada tanto por la API como por la interfaz web del Servicio (comprobify-web) cuando el Cliente la utiliza.
@@ -42,7 +44,11 @@ Los datos se almacenan y procesan utilizando los siguientes proveedores, cada un
 - **Sentry** — monitoreo de errores (configurado para minimizar el tratamiento de datos personales) (todos los Clientes).
 - **Betterstack** — plataforma de registro (logging) para monitoreo operativo y diagnóstico de errores; puede incluir la dirección IP de cada solicitud a la API, conforme a lo descrito en la sección 6 (todos los Clientes).
 - **CloudAMQP** — enrutamiento de mensajes para el procesamiento asíncrono de comprobantes electrónicos; los mensajes contienen únicamente identificadores del comprobante, sin datos del comprador (todos los Clientes).
+
+**Terceros que actúan como responsables independientes.** Los siguientes destinatarios no tratan datos por cuenta de Comprobify: determinan sus propios fines y medios en cumplimiento de obligaciones legales y regulatorias propias.
+
 - **SRI (Servicio de Rentas Internas)** — autoridad tributaria ecuatoriana receptora obligatoria por mandato legal; la transmisión de comprobantes electrónicos es exigida por la normativa tributaria aplicable (todos los Clientes).
+- **Payphone** — procesamiento de pagos con tarjeta de crédito o débito para el pago de la suscripción del Cliente, cuando el Cliente elige este medio de pago. Los datos de la tarjeta se ingresan directamente en el formulario de Payphone y no son recibidos ni almacenados por Comprobify. Comprobify recibe de Payphone únicamente el resultado de la transacción y los datos indicados en la sección 2. Payphone trata dichos datos como responsable independiente, conforme a su propia política de privacidad y a la normativa aplicable a los medios de pago (solo Clientes que pagan con tarjeta).
 
 Los subencargados marcados como aplicables únicamente a la interfaz web solo tratan datos del Cliente si este utiliza comprobify-web; un Cliente que utiliza el Servicio exclusivamente a través de la API no está sujeto a dichos subencargados.
 
@@ -86,6 +92,8 @@ Los comprobantes electrónicos y su historial de autorización, firma y transmis
 **El catálogo de compradores y el catálogo de productos o servicios (cuando aplican) no están sujetos a esta limitación.** A diferencia de los datos ya incorporados en un comprobante autorizado, una entrada de estos catálogos no constituye por sí misma un documento tributario — el Cliente puede eliminarla directamente desde la interfaz web en cualquier momento, sin las restricciones aplicables a los datos de comprobantes ya autorizados.
 
 Para los datos de la cuenta del Cliente (correo electrónico, metadatos de registro, historial de pagos) — y, cuando el Cliente utiliza comprobify-web, los datos de los usuarios individuales invitados a esa interfaz — que no formen parte de un comprobante electrónico autorizado por el SRI, Comprobify atenderá solicitudes de supresión una vez terminada la relación con Comprobify, siempre que no existan obligaciones legales que requieran su conservación.
+
+Los datos de las transacciones de pago con tarjeta forman parte del historial de pagos del Cliente y se conservan conforme a lo indicado en el párrafo anterior y a los plazos exigidos por la normativa tributaria y contable aplicable a los pagos recibidos por Comprobify. **De la respuesta que devuelve el procesador de pagos, Comprobify conserva únicamente los datos indicados en la sección 2 — importe, estado de la transacción, código de autorización y marca y últimos dígitos de la tarjeta —; los datos de identificación del titular de la tarjeta que el procesador pueda devolver no se almacenan.**
 
 Actualmente el sistema no implementa un mecanismo de eliminación definitiva de comprobantes electrónicos ni de su historial de auditoría y cumplimiento normativo; únicamente admite la desactivación lógica de recursos como emisores.
 
