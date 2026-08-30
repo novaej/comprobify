@@ -186,6 +186,42 @@ Detecting a reversal is manual and always will be — no payment rail notifies u
 
 ---
 
+## Setting it up: one Payphone application per environment
+
+**You need a separate Payphone application for staging and for production — this is forced, not a preference.** A `WEB`-type application has a single **Web Domain** and a single **Response URL**, and *"only the registered domain can access our Payphone payment buttons."* Staging and production are different frontend domains, so one application cannot serve both.
+
+Create each at [appdeveloper.payphonetodoesposible.com](https://appdeveloper.payphonetodoesposible.com/) → **+ Agregar**, type **WEB** (not `API` — that's for payment links and API Sale):
+
+| Field | Staging | Production |
+|---|---|---|
+| Web Domain | your staging frontend domain | your production frontend domain |
+| Response URL | `https://<staging-frontend>/pagos/payphone/retorno` | `https://<prod-frontend>/pagos/payphone/retorno` |
+| Environment mode | test | production |
+
+Token and StoreID are then on that application's **Credenciales** tab, and go into that environment's `.env` as `PAYPHONE_TOKEN`/`PAYPHONE_STORE_ID`. Nothing in the code couples Payphone to `APP_ENV` — two applications simply means two sets of env vars.
+
+The **environment mode is selected inside an application's own configuration**, separately from having two applications. Worth confirming by eye when you set this up: Payphone's docs don't state whether flipping that mode also changes the Token/StoreID. If it does, staging's credentials aren't stable across a mode flip.
+
+> **The failure mode to guard against is procedural, not technical.** Nothing in the code can tell a test token from a live one — if production credentials are ever pasted into staging's `.env`, staging will create **real charges**. The deployment checklist in `../deployment.md` carries this; treat it as a real item, not boilerplate.
+
+### Getting access at all
+
+The Payphone Developer platform is not standalone: a Developer is a **user role inside a Payphone Business account**, and opening one requires an **active RUC** — their support docs state a cédula is not sufficient. So the RUC gate applies to the **test** environment too, not only production; you cannot create even a sandbox application without it.
+
+(In Ecuador a *persona natural* can hold a RUC, and their wording rules out a cédula rather than a personal RUC — so test access may be obtainable before the company exists. Worth confirming on their signup rather than assuming either way.)
+
+Full production card processing additionally requires KYC against the registered legal entity — the blocker NEXT_STEPS.md #3 documents for card processors generally, and the same one gating production launch.
+
+**Until any of that exists, leave `PAYPHONE_TOKEN` unset in every environment.** That is a fully supported state, not a half-configuration: the card endpoints return `503`, SPI is untouched, and the reconciliation job is a no-op with no attempts to sweep.
+
+That said, three assumptions in this integration are unverified until a real application exists, and all three are cheap to settle in test mode but expensive to discover in production — a failed confirm means Payphone auto-reverses at 5 minutes, so a customer pays and gets nothing:
+
+1. Which host answers `confirm` (see below).
+2. Whether the widget and the confirm call share one token (see below).
+3. **Whether Payphone accepts our amount-field mapping.** They enforce `amount = amountWithoutTax + amountWithTax + tax + service + tip`; our tests prove the arithmetic, but only their validator can confirm they accept `amountWithoutTax: 0` with the whole base in `amountWithTax`.
+
+Get a test application before production for those three reasons, not for decline testing — test mode approves everything.
+
 ## Testing
 
 Card payments are **optional infrastructure**: with `PAYPHONE_TOKEN` unset, `POST /v1/payments/:id/payphone-session` returns `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and the entire SPI flow is unaffected. That is deliberate — a vendor outage or a misconfigured deploy can never take billing down with it, and it means an environment without Payphone credentials is a supported configuration rather than a broken one.

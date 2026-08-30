@@ -12,7 +12,7 @@ GET /v1/tenants/events
 
 ## When to call this
 
-This is the one place that shows the full sequence of changes to your subscription over time — e.g. that it started as a monthly GROWTH subscription and later changed to yearly STARTER. [`GET /v1/subscriptions/me`](get-my-subscriptions.md) and [`GET /v1/tenants/me`](tenant-me.md) only show *current* state; this endpoint shows how you got there.
+This is the one place that shows the full sequence of changes to your subscription over time — e.g. that it started as a monthly GROWTH subscription and later changed to yearly STARTER. [Your subscription & billing](../paying-your-subscription.md) and [`GET /v1/tenants/me`](tenant-me.md) only show *current* state; this endpoint shows how you got there.
 
 ## Response
 
@@ -98,10 +98,10 @@ This is the one place that shows the full sequence of changes to your subscripti
 | `PAYMENT_REFUNDED` | A verified payment was reversed (returned transfer, duplicate charge) and its effect undone — `detail` carries `restoredTier`, the tier the account went back to |
 | `INVOICE_LINKED` | A self-billed invoice was linked to a subscription or payment. Bookkeeping only: it does not change your subscription's state, which already applied when the payment was verified |
 | `SUBSCRIPTION_ACTIVATED` | Subscription reached `ACTIVE` (first billing period opened), when its payment was verified |
-| `TIER_CHANGE_REQUESTED` | [Change Tier](change-tier.md) created a payment (same-interval upgrade, or any billing-interval change) |
+| `TIER_CHANGE_REQUESTED` | [Your subscription & billing](../paying-your-subscription.md) created a payment (same-interval upgrade, or any billing-interval change) |
 | `TIER_CHANGE_SCHEDULED` | A tier/interval change was scheduled to apply at `current_period_end` — either a free same-interval downgrade (immediately, at request time) or a paid billing-interval change (once its payment is verified) |
 | `TIER_CHANGED` | A tier and/or billing-interval change actually took effect |
-| `SUBSCRIPTION_CANCELLATION_SCHEDULED` | [`DELETE /v1/subscriptions`](cancel-subscription.md) scheduled an end-of-period cancellation |
+| `SUBSCRIPTION_CANCELLATION_SCHEDULED` | [Your subscription & billing](../paying-your-subscription.md) scheduled an end-of-period cancellation |
 | `SUBSCRIPTION_CANCELLED` | Subscription reached `CANCELLED` (scheduled cancellation applied, or admin override) |
 | `RENEWAL_DUE` | A renewal payment was opened ahead of `current_period_end` |
 | `SUBSCRIPTION_RENEWED` | A renewal payment was verified, extending the billing period |

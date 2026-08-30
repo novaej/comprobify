@@ -14,6 +14,7 @@
 - [guides/code-flow.md](guides/code-flow.md) — Full request lifecycle walkthrough with architectural reasoning
 - [guides/coding-guidelines.md](guides/coding-guidelines.md) — Patterns, conventions, and how to add new features
 - [guides/testing-scheduled-jobs.md](guides/testing-scheduled-jobs.md) — SQL recipes to force each scheduled job's scenarios locally (cert expiry, webhook retries, subscription downgrades/renewals/expiry, quota rollover, Payphone reconciliation)
+- [guides/billing-operations.md](guides/billing-operations.md) — The operator's side of billing end to end: reviewing transfers, the invoicing queue, refunds, suspensions, renewals
 - [guides/payphone-payments.md](guides/payphone-payments.md) — Card payments end to end: the flow, every failure mode, and what to do about each
 - [guides/repeated-attempt-detection.md](guides/repeated-attempt-detection.md) — Where repeated-attempt alerts surface and how to respond
 - [guides/documentation-checklist.md](guides/documentation-checklist.md) — What documentation to update for each type of change
@@ -44,6 +45,7 @@ docs/
 │   ├── documentation-checklist.md  What docs to update for each change type
 │   ├── updating-api-documentation.md  Workflow for the public docs site
 │   ├── repeated-attempt-detection.md  Where attempt alerts surface, and how to respond
+│   ├── billing-operations.md  The operator's side of billing, end to end
 │   ├── payphone-payments.md  Card payments end to end, and every failure mode
 │   └── testing-scheduled-jobs.md  SQL recipes to force each cron job's scenarios locally
 └── adr/
@@ -62,6 +64,9 @@ Traces a request from `app.js` through every layer down to the database and back
 
 ### `guides/coding-guidelines.md`
 Defines the conventions for adding new features: how to structure a service, how to add a new document type, SQL injection prevention rules, error handling patterns, and test structure. Includes code examples for each pattern. Reference this when building anything new.
+
+### `guides/billing-operations.md`
+Everything between a tenant deciding to pay and you having issued them a factura: how money arrives (card vs transfer), reviewing an SPI proof and the rejection-code vocabulary, the invoicing queue and linking, renewals/grace/`PAST_DUE`, refunds and why rolling back by hand is wrong, suspending with a tenant-visible reason code, and the SQL for "they say they paid and nothing happened". The operator-facing counterpart to the tenant's billing page on the docs site.
 
 ### `guides/payphone-payments.md`
 The full card-payment flow — session, widget, Payphone's five-minute auto-reversal window, confirm, activation — and then the part CLAUDE.md and the ADR don't cover: what every failure mode looks like in the data, which ones self-heal, and which need you. Includes the SQL diagnostic path for "I paid but nothing happened", and the one case that always needs manual work (a duplicate charge). Read this before touching anything card-related, and when a tenant reports a payment problem.

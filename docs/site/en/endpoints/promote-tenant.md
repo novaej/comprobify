@@ -38,9 +38,9 @@ All fields are optional. An empty body `{}` is valid.
 | `tier` | string | No | `STARTER`, `GROWTH`, or `BUSINESS` — see [Get Tiers](get-tiers.md). Omit to stay on FREE in production; promotion never waits on payment either way. Ignored if the tenant already has a subscription in progress (see below). |
 | `billingInterval` | string | No | `MONTHLY` (default) or `YEARLY` (2 months free). Ignored if `tier` is omitted or if it's ignored per the above. |
 
-Requesting a `tier` here starts the subscription/payment pipeline (same as the admin-driven path) — see [Submit Payment Proof](submit-payment-proof.md) for what happens next. The tier/quota upgrade itself lands as soon as the payment is verified; it does not happen as part of this call.
+Requesting a `tier` here starts the subscription/payment pipeline (same as the admin-driven path) — see [Your subscription & billing](../paying-your-subscription.md) for what happens next. The tier/quota upgrade itself lands as soon as the payment is verified; it does not happen as part of this call.
 
-If the tenant already started a subscription before promoting — via [`POST /v1/subscriptions`](create-subscription.md), which works while still in sandbox — and it's still in progress by the time this call happens (any status other than `CANCELLED`/`EXPIRED`: `PENDING_PAYMENT` or `ACTIVE`), there's nothing left to select: `tier`/`billingInterval` are ignored entirely, and the response surfaces that existing subscription instead of starting a new one. This is a hard block, not just a courtesy — it prevents a second subscription/payment from being opened while one is already awaiting proof or review.
+If the tenant already started a subscription before promoting — via [`POST /v1/subscriptions`](../paying-your-subscription.md), which works while still in sandbox — and it's still in progress by the time this call happens (any status other than `CANCELLED`/`EXPIRED`: `PENDING_PAYMENT` or `ACTIVE`), there's nothing left to select: `tier`/`billingInterval` are ignored entirely, and the response surfaces that existing subscription instead of starting a new one. This is a hard block, not just a courtesy — it prevents a second subscription/payment from being opened while one is already awaiting proof or review.
 
 ## Response
 
@@ -61,7 +61,7 @@ If the tenant already started a subscription before promoting — via [`POST /v1
 
 `apiKeys` contains one entry per sandbox key that was active at the time of promotion. **Store all tokens immediately — they are shown only once.** Distribute each token to the integration that previously used the sandbox key with the same label.
 
-`subscription`, `payment`, and `bankTransfer` are only present if `tier` was supplied and a new subscription was started. If the tenant already had a subscription in progress going into this call (any status other than `CANCELLED`/`EXPIRED`), only `subscription` is present (no `payment`/`bankTransfer` — nothing new was created). Use `bankTransfer` to show the tenant where to send the SPI transfer, then submit proof of it — see [Submit Payment Proof](submit-payment-proof.md).
+`subscription`, `payment`, and `bankTransfer` are only present if `tier` was supplied and a new subscription was started. If the tenant already had a subscription in progress going into this call (any status other than `CANCELLED`/`EXPIRED`), only `subscription` is present (no `payment`/`bankTransfer` — nothing new was created). Use `bankTransfer` to show the tenant where to send the SPI transfer, then submit proof of it — see [Your subscription & billing](../paying-your-subscription.md).
 
 Sandbox keys are revoked automatically during promotion. If you had no sandbox keys, `apiKeys` will be an empty array — mint production keys via [`POST /v1/keys`](api-keys.md#mint-a-key).
 

@@ -8,6 +8,7 @@ function esSidebar() {
   return [
     { text: 'Resumen', link: '/' },
     { text: 'Primeros Pasos', link: '/getting-started' },
+    { text: 'Tu suscripción y cómo pagarla', link: '/paying-your-subscription' },
     {
       text: 'Endpoints',
       collapsed: false,
@@ -37,26 +38,6 @@ function esSidebar() {
           collapsed: false,
           items: [
             { text: 'Consultar planes', link: '/endpoints/get-tiers' },
-          ],
-        },
-        {
-          text: 'Pagos',
-          collapsed: false,
-          items: [
-            { text: 'Enviar comprobante de pago', link: '/endpoints/submit-payment-proof' },
-            { text: 'Listar comprobantes de pago', link: '/endpoints/list-payment-proofs' },
-            { text: 'Descargar comprobante de pago', link: '/endpoints/download-payment-proof' },
-            { text: 'Eliminar comprobante de pago', link: '/endpoints/delete-payment-proof' },
-          ],
-        },
-        {
-          text: 'Suscripciones',
-          collapsed: false,
-          items: [
-            { text: 'Crear suscripción', link: '/endpoints/create-subscription' },
-            { text: 'Consultar mis suscripciones', link: '/endpoints/get-my-subscriptions' },
-            { text: 'Cambiar de plan (mejorar/degradar)', link: '/endpoints/change-tier' },
-            { text: 'Cancelar suscripción', link: '/endpoints/cancel-subscription' },
           ],
         },
         {
@@ -163,6 +144,7 @@ function enSidebar() {
   return [
     { text: 'Overview', link: '/en/' },
     { text: 'Getting Started', link: '/en/getting-started' },
+    { text: 'Your subscription & billing', link: '/en/paying-your-subscription' },
     {
       text: 'Endpoints',
       collapsed: false,
@@ -192,26 +174,6 @@ function enSidebar() {
           collapsed: false,
           items: [
             { text: 'Get Tiers', link: '/en/endpoints/get-tiers' },
-          ],
-        },
-        {
-          text: 'Payments',
-          collapsed: false,
-          items: [
-            { text: 'Submit Payment Proof', link: '/en/endpoints/submit-payment-proof' },
-            { text: 'List Payment Proofs', link: '/en/endpoints/list-payment-proofs' },
-            { text: 'Download Payment Proof', link: '/en/endpoints/download-payment-proof' },
-            { text: 'Delete Payment Proof', link: '/en/endpoints/delete-payment-proof' },
-          ],
-        },
-        {
-          text: 'Subscriptions',
-          collapsed: false,
-          items: [
-            { text: 'Create Subscription', link: '/en/endpoints/create-subscription' },
-            { text: 'Get My Subscriptions', link: '/en/endpoints/get-my-subscriptions' },
-            { text: 'Change Tier (Upgrade/Downgrade)', link: '/en/endpoints/change-tier' },
-            { text: 'Cancel Subscription', link: '/en/endpoints/cancel-subscription' },
           ],
         },
         {
