@@ -266,8 +266,9 @@ Payphone agreement is being signed now anyway, it is a natural moment to check t
       Privacy Policy §8 retention language added now that the behaviour matches.
 - [ ] **Publish both revised documents in one window**, then have the frontend prompt for
       re-acceptance — before any tenant attempts promotion.
-- [ ] **Optional, worth it:** put R3's controller/processor characterisation to outside counsel.
-      It is a genuine LOPDP question, it is cheap to ask, and it also settles SRI's framing.
+- [ ] **Send the counsel brief** — `2026-08-30-counsel-brief-processor-characterisation.md`,
+      written 2026-08-30. R3's edit is already applied and committed (45dd984); this asks only
+      whether the characterisation was right, and settles SRI's framing at the same time.
 - [x] ~~Per-item `detallesAdicionales` sentence~~ — already applied in PR #180; the sweep note
       was stale, not the documents.
 - [ ] Confirm PCI scope with Payphone — an embedded widget where the PAN never reaches our
