@@ -66,6 +66,16 @@ async function updateStatus(id, status, extraFields = {}, client = null) {
   return rows[0] || null;
 }
 
+// Live attempts for one payment — anything not yet resolved either way.
+async function countPendingByPaymentId(paymentId) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*)::int AS count FROM payphone_transactions
+     WHERE payment_id = $1 AND status = 'PENDING'`,
+    [paymentId]
+  );
+  return rows[0].count;
+}
+
 // Sweep 1: confirm never fired. Worth asking Payphone how the charge ended.
 async function findStalePending(minutes) {
   const { rows } = await db.query(
@@ -93,6 +103,7 @@ module.exports = {
   findByClientTransactionId,
   claimByClientTransactionId,
   updateStatus,
+  countPendingByPaymentId,
   findStalePending,
   findApprovedUnapplied,
 };

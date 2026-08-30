@@ -30,6 +30,12 @@ const STALE_PENDING_MINUTES = 10;
 // prorated upgrade with little time left in the period.
 const MIN_CHARGE_CENTS = 100;
 
+// A frontend that re-mints on every widget open shouldn't grow this unboundedly.
+// Mirrors MAX_ACTIVE_PROOFS_PER_PAYMENT. Attempts are never reused: we can't
+// tell whether Payphone already saw a clientTransactionId, so each session gets
+// a fresh one.
+const MAX_PENDING_ATTEMPTS_PER_PAYMENT = 10;
+
 // Payphone caps reference at 100 chars.
 const MAX_REFERENCE_CHARS = 100;
 
@@ -98,6 +104,14 @@ async function createSession(paymentId, tenantId) {
       `Card payments require a total of at least $${(MIN_CHARGE_CENTS / 100).toFixed(2)}. Pay this one by bank transfer instead.`,
       400,
       ErrorCodes.PAYPHONE_AMOUNT_BELOW_MINIMUM
+    );
+  }
+
+  const livePending = await payphoneTransactionModel.countPendingByPaymentId(payment.id);
+  if (livePending >= MAX_PENDING_ATTEMPTS_PER_PAYMENT) {
+    throw new ConflictError(
+      `This payment already has ${livePending} unresolved card attempts. Wait for them to settle, or pay by bank transfer.`,
+      ErrorCodes.PAYPHONE_TOO_MANY_ATTEMPTS
     );
   }
 

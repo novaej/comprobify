@@ -54,6 +54,14 @@ Steps 1–4 are the tenant's; steps 5–6 are ours. Step 6 is the part that stil
 
 ---
 
+### One attempt row per widget open, never reused
+
+Each `createSession` mints a fresh `clientTransactionId` and a new row. Attempts are **deliberately not reused**, because a `PENDING` row with no vendor id is ambiguous: either the payer closed the widget without paying (Payphone never saw the id, safe to reuse) or they paid and the redirect never arrived (Payphone *did* see it and may be holding a charge). We cannot tell those apart, and reusing the id in the second case is a duplicate submission against a live transaction — Payphone requires it to be unique per transaction.
+
+The cost is small: abandoned attempts are expired by a plain `UPDATE`, no vendor call. A ceiling of 10 unresolved attempts per payment (`409 PAYPHONE_TOO_MANY_ATTEMPTS`) stops a frontend loop growing them without bound.
+
+Frontends should mint one session per checkout and hold it for the widget's 10-minute life, rather than re-minting on every modal open.
+
 ### Telling environments apart in Payphone's console
 
 `APP_ENV` is `staging` both locally and on the droplet, so it cannot separate them. The `reference` we send carries `os.hostname()` outside production instead — the same discriminator `logger.service.js` uses:

@@ -55,6 +55,7 @@ describe('payphonePaymentService', () => {
     payphoneTransactionModel.create.mockResolvedValue(attempt());
     payphoneTransactionModel.updateStatus.mockImplementation(async (id, status) => attempt({ status }));
     paymentModel.updateMethod.mockResolvedValue(payment());
+    payphoneTransactionModel.countPendingByPaymentId.mockResolvedValue(0);
     pendingEffectService.enqueue.mockResolvedValue({ id: 'e1' });
     pendingEffectService.dispatch.mockResolvedValue();
   });
@@ -164,6 +165,26 @@ describe('payphonePaymentService', () => {
         expect(session.reference.length).toBe(100);
         require('os').hostname.mockRestore();
       });
+    });
+
+    // Attempts are deliberately never reused — we can't tell whether Payphone
+    // already saw a given clientTransactionId — so a runaway frontend loop needs
+    // a ceiling instead. Same reasoning as MAX_ACTIVE_PROOFS_PER_PAYMENT.
+    test('refuses once too many unresolved attempts are already open', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
+      payphoneTransactionModel.countPendingByPaymentId.mockResolvedValue(10);
+
+      await expect(payphonePaymentService.createSession(PAY, TENANT))
+        .rejects.toMatchObject({ statusCode: 409, code: 'PAYPHONE_TOO_MANY_ATTEMPTS' });
+      expect(payphoneTransactionModel.create).not.toHaveBeenCalled();
+    });
+
+    test('still mints while under the ceiling', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
+      payphoneTransactionModel.countPendingByPaymentId.mockResolvedValue(9);
+
+      await expect(payphonePaymentService.createSession(PAY, TENANT)).resolves.toBeTruthy();
+      expect(payphoneTransactionModel.create).toHaveBeenCalled();
     });
 
     test('mints an opaque clientTransactionId, not the payment id', async () => {
