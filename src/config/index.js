@@ -195,6 +195,14 @@ const config = {
   priceChangeMinNoticeDays: process.env.PRICE_CHANGE_MIN_NOTICE_DAYS !== undefined
     ? parseInt(process.env.PRICE_CHANGE_MIN_NOTICE_DAYS, 10)
     : 30,
+
+  agreements: {
+    // Defaults to enabled: an existing deployment must never silently lose its
+    // acceptance gate. Set AGREEMENTS_ENABLED=false to launch without legal
+    // documents; admin publishing keeps working either way, so content can be
+    // prepared before the flag is flipped back on.
+    enabled: process.env.AGREEMENTS_ENABLED !== 'false',
+  },
 };
 
 module.exports = config;

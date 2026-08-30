@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const config = require('../config');
 const tenantModel = require('../models/tenant.model');
 const subscriptionModel = require('../models/subscription.model');
 const issuerModel = require('../models/issuer.model');
@@ -59,13 +60,18 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
   }
   if (!tenant.sandbox) throw new ConflictError('Tenant is already in production');
 
-  const allAccepted = await tenantAgreementService.hasAllAccepted(tenantId);
-  if (!allAccepted) {
-    throw new AppError(
-      'All legal documents must be accepted before promoting to production. Review GET /v1/tenants/agreements.',
-      403,
-      ErrorCodes.AGREEMENT_ACCEPTANCE_REQUIRED
-    );
+  // Redundant with the cascade in agreement.service.js (hasAllAccepted() is
+  // already true when nothing is published), but a legal gate should say so
+  // explicitly rather than depend on another module's emergent behaviour.
+  if (config.agreements.enabled) {
+    const allAccepted = await tenantAgreementService.hasAllAccepted(tenantId);
+    if (!allAccepted) {
+      throw new AppError(
+        'All legal documents must be accepted before promoting to production. Review GET /v1/tenants/agreements.',
+        403,
+        ErrorCodes.AGREEMENT_ACCEPTANCE_REQUIRED
+      );
+    }
   }
 
   const seqMap = {};

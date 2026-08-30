@@ -22,7 +22,8 @@ GET /v1/tenants/agreements
   "agreements": {
     "needsAcceptance": false,
     "outdated": [],
-    "hasPublishedAgreements": true
+    "hasPublishedAgreements": true,
+    "agreementsEnabled": true
   }
 }
 ```
@@ -43,7 +44,8 @@ GET /v1/tenants/agreements
         "acceptUrl": "/v1/tenants/agreements"
       }
     ],
-    "hasPublishedAgreements": true
+    "hasPublishedAgreements": true,
+    "agreementsEnabled": true
   }
 }
 ```
@@ -56,7 +58,8 @@ GET /v1/tenants/agreements
   "agreements": {
     "needsAcceptance": false,
     "outdated": [],
-    "hasPublishedAgreements": false
+    "hasPublishedAgreements": false,
+    "agreementsEnabled": true
   }
 }
 ```
@@ -72,8 +75,14 @@ Each entry in `outdated` names the specific document type that changed. Use the 
 | `outdated[].status` | `PENDING` (generated, not accepted), or `NOT_GENERATED` (template published but instance not yet created) |
 | `outdated[].url` | URL to the tenant's personalized document instance (`GET /v1/tenants/agreements/:type`) |
 | `hasPublishedAgreements` | `false` only when no agreement template has ever been published (a fresh/pre-launch environment) — distinguishes that case from `needsAcceptance: false` meaning "everything's accepted." A `false` value means `outdated` is empty because there's nothing to show yet, not because the tenant is caught up. |
+| `agreementsEnabled` | `false` when the operator has switched legal documents off entirely for this deployment. `hasPublishedAgreements` is then also `false`, no instances are generated, and `POST /v1/tenants/promote` does **not** require acceptance. Use it to hide the legal-documents section in your UI: it tells "switched off" apart from "not published yet". |
 
 **Calling this endpoint automatically generates any missing `PENDING` instances** for new template versions — no separate backfill call needed after the admin publishes an update.
+
+
+::: tip Legal documents disabled
+If `agreementsEnabled` is `false`, this deployment runs without Terms, Privacy Policy or DPA. The public agreement endpoints respond as if nothing were published, and promoting to production does not require acceptance. Nothing is deleted: if the operator switches them back on, whatever was already published and accepted is restored.
+:::
 
 ### Errors
 

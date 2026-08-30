@@ -123,7 +123,7 @@
                 "agreements"
               ]
             },
-            "description": "Public. Returns current version of each document type. Captures agreement_version for use in Register and Accept Agreements."
+            "description": "Public. Returns current version of each document type. Captures agreement_version for use in Register and Accept Agreements.\n\nReturns an empty list when the deployment runs with AGREEMENTS_ENABLED=false, and GET /v1/agreements/:type then returns 404 AGREEMENT_NOT_FOUND. That is a deliberate configuration, not an outage."
           }
         },
         {
@@ -689,7 +689,7 @@
                 "agreements"
               ]
             },
-            "description": "Check if any document was republished since the tenant last accepted. Use outdated[].url to show updated content."
+            "description": "Check if any document was republished since the tenant last accepted. Use outdated[].url to show updated content.\n\nagreementsEnabled: false means the operator switched legal documents off for this deployment — hasPublishedAgreements is then false too, nothing is generated, and promotion is not gated on acceptance. Hide the legal-documents UI on that signal rather than rendering links that 404."
           }
         },
         {
@@ -734,7 +734,7 @@
               "mode": "raw",
               "raw": "{\"termsVersion\":\"{{agreement_version}}\"}"
             },
-            "description": "Record re-acceptance of all currently published documents. Use when agreements returns needsAcceptance: true."
+            "description": "Record re-acceptance of all currently published documents. Use when agreements returns needsAcceptance: true.\n\nNo-op when AGREEMENTS_ENABLED=false: there is nothing published to accept, and the termsVersion check is skipped."
           }
         },
         {
