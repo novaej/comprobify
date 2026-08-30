@@ -1,8 +1,6 @@
 const db = require('../config/database');
 
-// One row per card-payment ATTEMPT against a payments row — see
-// db/migrations/091. Plain db.query() (not issuer-scoped, no RLS), same
-// precedent as payment.model.js/payment-proof.model.js.
+// One row per card-payment attempt (migration 091). Not issuer-scoped, no RLS.
 
 const MUTABLE_COLUMNS = new Set([
   'payphone_transaction_id',
@@ -33,11 +31,8 @@ async function findByClientTransactionId(clientTransactionId) {
   return rows[0] || null;
 }
 
-// Claims the attempt row for the duration of the caller's transaction. The
-// caller owns BEGIN/COMMIT — mirrors pending-effect.model.js's
-// claimForProcessing(client, id). Holding this lock across the Payphone call is
-// what makes a double-submitted return page safe: the second request blocks,
-// then sees a terminal row and never issues a second confirm.
+// Caller owns BEGIN/COMMIT. Holding this across the vendor call is what makes
+// a double-submitted return page safe.
 async function claimByClientTransactionId(client, clientTransactionId) {
   const { rows } = await client.query(
     'SELECT * FROM payphone_transactions WHERE client_transaction_id = $1 FOR UPDATE',
@@ -46,8 +41,7 @@ async function claimByClientTransactionId(client, clientTransactionId) {
   return rows[0] || null;
 }
 
-// Takes an optional client so it can run inside the confirm transaction (the
-// vendor outcome) or on the pool afterwards (stamping applied_at).
+// Optional client: inside the confirm transaction, or on the pool afterwards.
 async function updateStatus(id, status, extraFields = {}, client = null) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_COLUMNS.has(col)) {
@@ -72,10 +66,7 @@ async function updateStatus(id, status, extraFields = {}, client = null) {
   return rows[0] || null;
 }
 
-// Reconciliation sweep 1: the payer's browser never reached the return page, so
-// confirm was never called (or its transport failed). Payphone auto-reverses at
-// 5 minutes, so anything older than that is worth a confirm purely to learn its
-// final state.
+// Sweep 1: confirm never fired. Worth asking Payphone how the charge ended.
 async function findStalePending(minutes) {
   const { rows } = await db.query(
     `SELECT * FROM payphone_transactions
@@ -87,8 +78,7 @@ async function findStalePending(minutes) {
   return rows;
 }
 
-// Reconciliation sweep 2: the charge was captured and committed, but the
-// process died before applyVerifiedPayment ran. Money in, tenant not credited.
+// Sweep 2: captured but never applied — money in, tenant not credited.
 async function findApprovedUnapplied() {
   const { rows } = await db.query(
     `SELECT * FROM payphone_transactions

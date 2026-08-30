@@ -79,11 +79,8 @@ router.get('/:id/proofs/:proofId', readLimiter, idAndProofIdParams, validateRequ
 router.patch('/:id/proof', writeLimiter, requireNotSuspended, handleProofUpload, submitProofFields, validateRequest, asyncHandler(controller.submitProof));
 router.delete('/:id/proofs/:proofId', writeLimiter, requireNotSuspended, requireNotPastDue, idAndProofIdParams, validateRequest, asyncHandler(controller.deleteProof));
 
-// Card payments (ADR-028). Like PATCH /:id/proof above, neither is gated by
-// requireNotPastDue — paying is the self-service recovery path out of PAST_DUE.
-//
-// The literal '/payphone/confirm' MUST be declared before the '/:id/...' routes:
-// ':id' is UUID-validated, so 'payphone' would 400 rather than fall through.
+// Card payments (ADR-028), also exempt from requireNotPastDue. '/payphone/confirm'
+// must precede the '/:id/...' routes or UUID validation rejects it.
 router.post('/payphone/confirm', writeLimiter, requireNotSuspended, confirmPayphoneFields, validateRequest, asyncHandler(controller.confirmPayphone));
 router.post('/:id/payphone-session', writeLimiter, requireNotSuspended, idParam, validateRequest, asyncHandler(controller.createPayphoneSession));
 

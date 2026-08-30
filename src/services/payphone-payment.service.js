@@ -25,23 +25,15 @@ const STATUS_APPROVED = 3;
 // auto-reverses at 5 minutes, so by 10 the outcome is settled either way.
 const STALE_PENDING_MINUTES = 10;
 
-// Payphone refuses anything under $1.00 outright — "El monto a cobrar debe ser
-// mayor o igual a 1,00" (errorCode 107), verified against their live test store.
-// requestTierChange already applies a $0 proration for free, but $0.01–$0.99 is
-// a real payment row: a STARTER->GROWTH upgrade with a few hours left in the
-// period prorates to roughly $0.29. SPI can collect that; a card cannot, and
-// without this guard the tenant would render the widget, submit, and get a raw
-// Spanish vendor error with no route forward.
+// Payphone rejects charges under $1.00 (errorCode 107). Reachable via a
+// prorated upgrade with little time left in the period.
 const MIN_CHARGE_CENTS = 100;
 
 // ---------------------------------------------------------------------------
 // Session creation
 
-// Payphone wants integer cents and enforces
-//   amount = amountWithoutTax + amountWithTax + tax + service + tip
-// Our columns are DECIMAL(14,2). Rounding total and IVA independently can break
-// that identity by a cent, so amountWithTax is DERIVED from the other two
-// rather than rounded on its own.
+// Payphone enforces amount = amountWithoutTax + amountWithTax + tax + service
+// + tip, so amountWithTax is derived — rounding both halves can break it a cent.
 function toAmountBreakdown(payment) {
   const amount = Math.round(Number(payment.total_amount) * 100);
   const tax = Math.round(Number(payment.iva_amount) * 100);
@@ -70,8 +62,7 @@ async function createSession(paymentId, tenantId) {
   const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
   if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
 
-  // Mirrors submitPaymentProof's guard — once a payment is settled, no further
-  // attempt of any method is accepted for it.
+  // Once settled, no further attempt of any method is accepted.
   if (payment.status === 'VERIFIED') {
     throw new ConflictError(
       'Payment has already been verified and can no longer accept a card payment',
@@ -87,8 +78,8 @@ async function createSession(paymentId, tenantId) {
 
   const breakdown = toAmountBreakdown(payment);
 
-  // Caught here rather than at the widget, so the frontend can fall back to
-  // bank transfer instead of surfacing a vendor error the tenant can't act on.
+  // Caught here so the frontend can offer bank transfer instead of a vendor
+  // error the tenant can't act on.
   if (breakdown.amount < MIN_CHARGE_CENTS) {
     throw new AppError(
       `Card payments require a total of at least $${(MIN_CHARGE_CENTS / 100).toFixed(2)}. Pay this one by bank transfer instead.`,
@@ -97,9 +88,7 @@ async function createSession(paymentId, tenantId) {
     );
   }
 
-  // Short and opaque, not the payment UUID: retries get distinct ids, and
-  // nothing about our id scheme leaks to the vendor. 16 chars, well under
-  // Cajita's 50-char cap.
+  // Not the payment UUID: retries get distinct ids. 16 chars, under the 50 cap.
   const clientTransactionId = crypto.randomBytes(8).toString('hex');
 
   const attempt = await payphoneTransactionModel.create({
@@ -151,9 +140,8 @@ async function confirmTransaction({ payphoneId, clientTransactionId, tenantId })
   return { status: outcome.status, clientTransactionId };
 }
 
-// Phase one: claim the attempt, ask Payphone, persist the answer, commit.
-// Deliberately its own transaction so the lock is released before the
-// (slower, multi-table) apply work runs.
+// Phase one: claim, ask Payphone, persist, commit. Its own transaction so the
+// lock releases before the slower apply work.
 async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
   const client = await db.getClient();
   try {
@@ -172,8 +160,7 @@ async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
       throw new NotFoundError('Card payment attempt', ErrorCodes.PAYPHONE_SESSION_NOT_FOUND);
     }
 
-    // Already resolved — a replayed return page. Return the stored outcome and
-    // make no second Payphone call.
+    // Replayed return page: return the stored outcome, no second vendor call.
     if (attempt.status !== 'PENDING') {
       await client.query('COMMIT');
       return { status: attempt.status, attempt };
@@ -181,8 +168,7 @@ async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
 
     const result = await payphoneService.confirm({ id: payphoneId, clientTxId: clientTransactionId });
 
-    // Transport failure: the charge's real state is unknown. Leave the row
-    // PENDING for reconciliation — marking it terminal here would strand money.
+    // State unknown: leave PENDING. Marking it terminal would strand money.
     if (!result.ok && result.error) {
       await client.query('COMMIT');
       logger.warn('payphone confirm transport failure', {
@@ -207,9 +193,8 @@ async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
     };
 
     if (body.statusCode !== STATUS_APPROVED) {
-      // Declined or cancelled. Not a rejection of the payment — the tenant can
-      // simply request a fresh session and try again, so payments.status stays
-      // PENDING and no notification fires.
+      // Not a rejection: the tenant can request a fresh session, so the payment
+      // stays PENDING and no notification fires.
       const updated = await payphoneTransactionModel.updateStatus(attempt.id, 'CANCELLED', common, client);
       await client.query('COMMIT');
       return { status: 'CANCELLED', attempt: updated };
@@ -229,8 +214,7 @@ async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
       return { status: 'ERROR', attempt: updated };
     }
 
-    // Someone already paid this. Two tabs, two sessions, two real charges —
-    // apply once, flag the other for a manual refund.
+    // Two tabs, two real charges: apply once, flag the other for refund.
     if (payment.status === 'VERIFIED') {
       const updated = await payphoneTransactionModel.updateStatus(attempt.id, 'DUPLICATE', common, client);
       await client.query('COMMIT');
@@ -249,32 +233,22 @@ async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
   }
 }
 
-// Phase two: turn a captured charge into access. Mirrors reviewPayment's
-// VERIFIED tail exactly (subscription.service.js) — same order, same events,
-// same notification.
-//
-// TWO-PHASE GAP: the vendor outcome is already committed by the time this runs,
-// so a crash here leaves money captured and the payment still PENDING.
-// applied_at is what records that this half finished; reconcileStale() re-runs
-// anything APPROVED with applied_at IS NULL. Threading the confirm transaction's
-// client all the way through applyVerifiedPayment would close the gap properly,
-// but it reaches tenantModel/tenantQuotaService/tenantEventModel/
-// notificationService/pricingService, none of which take a client.
+// Phase two: mirrors reviewPayment's VERIFIED tail. The vendor outcome is
+// already committed, so a crash here leaves money captured and the payment
+// PENDING — applied_at marks this half done, and reconciliation re-runs it.
 async function applyApprovedTransaction(attempt) {
   const payment = await paymentModel.findById(attempt.payment_id);
   if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
 
-  // Idempotence for the reconciliation path: if the payment already settled,
-  // only the bookkeeping stamp is missing.
+  // Idempotent: an already-settled payment only needs the stamp.
   if (payment.status === 'VERIFIED') {
     return payphoneTransactionModel.updateStatus(attempt.id, attempt.status, { applied_at: new Date() });
   }
 
   const updatedPayment = await paymentModel.updateStatus(payment.id, 'VERIFIED', { verified_at: new Date() });
 
-  // Re-fetched deliberately, and BEFORE anything mutates it: applyVerifiedPayment
-  // snapshots this row into payments.applied_from, which is what refundPayment
-  // reverses. A post-mutation subscription here would corrupt every later refund.
+  // Must be pre-mutation: applyVerifiedPayment snapshots it into applied_from,
+  // which refundPayment reverses.
   const subscription = await subscriptionModel.findById(payment.subscription_id);
   if (!subscription) throw new NotFoundError('Subscription', ErrorCodes.SUBSCRIPTION_NOT_FOUND);
 
@@ -285,8 +259,7 @@ async function applyApprovedTransaction(attempt) {
 
   const stamped = await payphoneTransactionModel.updateStatus(attempt.id, attempt.status, { applied_at: new Date() });
 
-  // Nobody clicked "verify" for a card payment, so without this the operator
-  // has no signal that an invoice is now owed.
+  // Nobody clicked "verify" here, so nothing else tells the operator.
   const effect = await pendingEffectService.enqueue(
     EffectTypes.PAYMENT_VERIFIED_OPERATOR_EMAIL,
     subscription.tenant_id,
@@ -297,9 +270,7 @@ async function applyApprovedTransaction(attempt) {
   return stamped;
 }
 
-// A duplicate charge is real money that needs refunding by hand in the Payphone
-// dashboard (reversal detection/automation is deliberately out of scope — see
-// ADR-027), so it is raised on every channel the operator watches.
+// Real money needing a manual refund, so raise it everywhere the operator looks.
 async function reportDuplicateCharge(payment, attempt) {
   logger.error('duplicate Payphone charge captured', {
     paymentId: payment.id,
@@ -325,9 +296,7 @@ async function reconcileStaleTransactions() {
   let resolved = 0;
   let applied = 0;
 
-  // Sweep 1: outcomes we never learned. The payer closed the browser before the
-  // return page loaded, so confirm never fired — Payphone will have auto-
-  // reversed at 5 minutes, but we still need to record which way it went.
+  // Sweep 1: the payer never reached the return page, so confirm never fired.
   const stale = await payphoneTransactionModel.findStalePending(STALE_PENDING_MINUTES);
   for (const attempt of stale) {
     const result = await payphoneService.confirm({
@@ -347,8 +316,7 @@ async function reconcileStaleTransactions() {
     resolved++;
   }
 
-  // Sweep 2: charges captured but never applied — the two-phase gap above, plus
-  // anything sweep 1 just discovered was actually approved.
+  // Sweep 2: captured but never applied — the two-phase gap.
   const unapplied = await payphoneTransactionModel.findApprovedUnapplied();
   for (const attempt of unapplied) {
     try {
