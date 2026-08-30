@@ -638,6 +638,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             APP_ENV=${{ vars.APP_ENV }}
             APP_BASE_URL=${{ vars.APP_BASE_URL }}
             API_BASE_URL=${{ vars.APP_BASE_URL }}
+            PUBLIC_DOMAIN=${{ vars.PUBLIC_DOMAIN }}
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=${{ secrets.DB_PORT }}
             DB_NAME=${{ secrets.DB_NAME }}
