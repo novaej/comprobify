@@ -97,7 +97,20 @@ Concrete consequences today:
   Getting any of these wrong is quiet: the numbers look plausible and are simply off.
 
 **What:**
-1. **`OPERATOR_TENANT_ID` config** (and likely `OPERATOR_ISSUER_ID` alongside it, which a future auto-issued-invoice feature would need anyway — see ADR-028 on why auto-issue was cut). Optional/empty-default like every other operator field, so an environment without one behaves exactly as today.
+1. **Model it in two places that must agree**, because the failure mode is expensive and quiet: if the wrong tenant is ever marked as the operator, a real paying customer silently stops being billed, drops out of MRR, and gets uncapped quota — a revenue leak nothing surfaces.
+
+   - **`tenants.kind`** — `VARCHAR(20) NOT NULL DEFAULT 'CUSTOMER'`, CHECK-constrained to `CUSTOMER` / `OPERATOR` / `INTERNAL` / `DEMO`. This is the queryable fact every report and predicate hangs off, and it extends to a sales-demo or internal QA tenant later without inventing a second mechanism.
+   - **A partial unique index** makes a second operator structurally impossible rather than merely discouraged:
+     ```sql
+     CREATE UNIQUE INDEX one_operator_tenant ON tenants(kind) WHERE kind = 'OPERATOR';
+     ```
+   - **`OPERATOR_TENANT_ID` config** as an independent cross-check. The index prevents *two* operators; it cannot prevent the *wrong* one. Requiring the DB row and the environment variable to name the same tenant means a mistaken `UPDATE` alone never takes effect — someone would have to make the same mistake twice, in two different systems.
+
+   **Fail toward billing, never toward exempting.** If `OPERATOR_TENANT_ID` is unset, behave exactly as today (no operator concept at all). If it is set but disagrees with the `kind = 'OPERATOR'` row, refuse to apply any exemption and raise it loudly — treat everyone as a `CUSTOMER`. The worst outcome of that choice is the operator consuming their own quota; the worst outcome of the opposite is silently not charging a real customer.
+
+   Add `OPERATOR_ISSUER_ID` alongside it if a future auto-issued-invoice feature lands (see ADR-028 on why auto-issue was cut).
+
+   Setting `kind` should be admin-only — either a migration/manual `UPDATE` done once per environment, or a narrow admin endpoint. It is not something a normal tenant flow should ever touch.
 2. **Quota exemption** — skip `consumeOne` when `issuer.tenant_id === config.operator.tenantId`. A narrow, explicit carve-out at the one call site, not a general "exempt" flag on `tenants` that could be set by mistake. Note what this actually means: the operator becomes **uncapped**, not "subscription invoices are free" — their other invoicing stops counting too. That is the right outcome (the operator should not be rate-limited by their own product's tiers) but the documents should still be *counted* for usage reporting even while not being *capped*.
 3. **Keep it out of the subscription lifecycle** — the operator should never hold a `subscriptions` row, and the renewal/expiry queries should skip it defensively rather than rely on nobody ever creating one.
 4. **Exclude from price-change announcements**, and from any future revenue/tenant reporting.
