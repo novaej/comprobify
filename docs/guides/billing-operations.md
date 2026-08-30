@@ -151,6 +151,22 @@ ORDER BY p.created_at DESC;
 | `VERIFIED`, `invoiced_at` NULL | Fine for them — but you owe the factura. |
 | `REFUNDED` | Rolled back; `applied_from` shows what it restored. |
 
+## A note on your own tenant
+
+You need a tenant row and an issuer of your own to self-bill from, so the operator *is* a tenant in this system — and nothing distinguishes that row from a customer's.
+
+**Don't give it a subscription and don't invoice yourself.** A subscription would open `RENEWAL` payments, email you renewal reminders about yourself, and eventually mark your own account `PAST_DUE` for not paying you. And a factura needs an emisor and a receptor who are different taxable persons — issuing one to your own RUC for your own service isn't a sale. (Whether Ecuadorian rules want anything recorded for own-use of your own service is an accountant's question, not this guide's.)
+
+**Do raise its quota.** Every production document consumes the issuing tenant's quota with no operator exemption, so you burn your own allowance issuing subscription invoices to customers — one per paying tenant per month. On FREE (5/month) that fails almost immediately with a `402 QUOTA_EXCEEDED` that reads like a bug. Set it once:
+
+```
+PATCH /v1/admin/tenants/:id/tier   { "tier": "BUSINESS" }
+```
+
+That's an admin override: it sets the tier and quota cap without creating a subscription. BUSINESS is 4,000 documents/month. The tenant also has to be promoted (`sandbox = false`) to issue production documents at all.
+
+The wider gap — a real `OPERATOR_TENANT_ID` so the operator can be excluded from quota, renewals and revenue reporting (while still getting certificate-expiry alerts, which matter most for them) — is NEXT_STEPS.md #5.
+
 ## Related
 
 - [payphone-payments.md](payphone-payments.md) — the card path in depth
