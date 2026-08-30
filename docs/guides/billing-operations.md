@@ -127,7 +127,77 @@ PATCH /v1/admin/tenants/:id/status
 
 Reactivating (`"status": "ACTIVE"`) needs no reason code and clears the column; the historical event survives.
 
-## 7. When a tenant says they paid and nothing happened
+## 7. Verifying one payment end to end
+
+A payment touches ten tables. Four carry the state that has to agree — `payments`, `subscriptions`, `tenants`, `tenant_quotas` — and the rest are evidence: `payment_proofs` (SPI), `payphone_transactions` (card), `tenant_events`, `notifications`, `pending_effects`, and `documents` for the factura.
+
+Listing them isn't the useful part. **"Correct" means these invariants hold:**
+
+| # | Invariant | Why it breaks |
+|---|---|---|
+| 1 | `VERIFIED` ⟹ `verified_at` set | — |
+| 2 | Applied ⟹ `period_start` stamped | Exception: a *deferred* `TIER_CHANGE` sets `pending_tier` instead and stays unstamped until it lands |
+| 3 | `subscriptions.tier` == `tenants.subscription_tier` | A hand-rolled tier edit writes only the tenant. The next renewal is then priced off a tier nobody paid for |
+| 4 | `tenant_quotas.document_quota` matches that tier | `updateTier` and `setCap` are separate calls; miss one and the tier changes while the cap doesn't |
+| 5 | Card ⟹ an `APPROVED` attempt with `applied_at` | `applied_at` null means captured but never credited |
+| 6 | `invoiced_at IS NULL` ⟹ factura still owed | — |
+
+One payment, whole chain:
+
+```sql
+SELECT p.id AS payment_id, p.purpose, p.method, p.status AS payment_status,
+       p.total_amount, p.verified_at, p.invoiced_at,
+       (p.applied_from IS NOT NULL) AS has_rollback_snapshot,
+       (p.period_start IS NOT NULL) AS applied,
+       s.status AS sub_status, s.tier AS sub_tier, s.billing_interval, s.pending_tier,
+       s.current_period_start, s.current_period_end,
+       t.subscription_tier AS tenant_tier, t.status AS tenant_status,
+       q.document_quota AS quota_cap,
+       pt.status AS card_attempt, pt.applied_at AS card_applied_at,
+       (SELECT count(*) FROM payment_proofs pp WHERE pp.payment_id = p.id AND pp.active) AS active_proofs,
+       (SELECT count(*) FROM notifications n
+          WHERE n.tenant_id = s.tenant_id AND (n.metadata->>'paymentId') = p.id::text) AS notifications,
+       (SELECT count(*) FROM pending_effects pe
+          WHERE pe.tenant_id = s.tenant_id AND pe.status = 'FAILED') AS failed_effects
+FROM payments p
+JOIN subscriptions s ON s.id = p.subscription_id
+JOIN tenants t       ON t.id = s.tenant_id
+LEFT JOIN tenant_quotas q ON q.tenant_id = t.id AND q.is_current
+LEFT JOIN payphone_transactions pt ON pt.payment_id = p.id AND pt.status <> 'CANCELLED'
+WHERE p.id = '<PAYMENT_ID>';
+```
+
+`has_rollback_snapshot = false` on a `VERIFIED` payment means it predates migration 090 — `PATCH /v1/admin/payments/:id/refund` will refuse it and the rollback has to be done by hand.
+
+### Auditing every payment at once
+
+More useful than checking one at a time. This returns a `problem` column, null when a payment is consistent:
+
+```sql
+SELECT p.id AS payment_id, s.tenant_id, p.purpose, p.status,
+  CASE
+    WHEN p.status = 'VERIFIED' AND p.verified_at IS NULL           THEN 'VERIFIED without verified_at'
+    WHEN p.status = 'VERIFIED' AND p.period_start IS NULL
+         AND s.pending_tier IS NULL                                THEN 'verified but never applied'
+    WHEN p.status = 'VERIFIED' AND s.tier <> t.subscription_tier   THEN 'subscription.tier disagrees with tenant tier'
+    WHEN p.status = 'VERIFIED' AND q.document_quota IS DISTINCT FROM
+         CASE t.subscription_tier WHEN 'FREE' THEN 5 WHEN 'STARTER' THEN 200
+              WHEN 'GROWTH' THEN 1000 WHEN 'BUSINESS' THEN 4000 END THEN 'quota cap does not match tier'
+    WHEN p.method = 'PAYPHONE_CARD' AND p.status = 'VERIFIED'
+         AND NOT EXISTS (SELECT 1 FROM payphone_transactions x
+                         WHERE x.payment_id = p.id AND x.status = 'APPROVED'
+                           AND x.applied_at IS NOT NULL)           THEN 'card payment with no applied attempt'
+  END AS problem
+FROM payments p
+JOIN subscriptions s ON s.id = p.subscription_id
+JOIN tenants t       ON t.id = s.tenant_id
+LEFT JOIN tenant_quotas q ON q.tenant_id = t.id AND q.is_current
+WHERE p.status = 'VERIFIED';
+```
+
+The tier quotas are inlined rather than joined, since they live in `src/constants/subscription-tiers.js` and not in the database — update them here if the tier definitions change.
+
+## 8. When a tenant says they paid and nothing happened
 
 Card payments have their own diagnostic path in [payphone-payments.md](payphone-payments.md). For a transfer:
 
