@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const os = require('os');
 const Sentry = require('@sentry/node');
 const db = require('../config/database');
 const payphoneTransactionModel = require('../models/payphone-transaction.model');
@@ -28,6 +29,18 @@ const STALE_PENDING_MINUTES = 10;
 // Payphone rejects charges under $1.00 (errorCode 107). Reachable via a
 // prorated upgrade with little time left in the period.
 const MIN_CHARGE_CENTS = 100;
+
+// Payphone caps reference at 100 chars.
+const MAX_REFERENCE_CHARS = 100;
+
+// APP_ENV is 'staging' both locally and on the droplet, so the hostname is what
+// actually separates them in Payphone's console — same reason logger.service.js
+// stamps it. Never appended in production: this shows on the payer's receipt.
+function buildReference(payment) {
+  const base = `Comprobify ${payment.purpose}`;
+  if (config.appEnv === 'production') return base;
+  return `${base} · ${os.hostname()}`.slice(0, MAX_REFERENCE_CHARS);
+}
 
 // ---------------------------------------------------------------------------
 // Session creation
@@ -106,7 +119,7 @@ async function createSession(paymentId, tenantId) {
     token:   config.payphone.token,
     storeId: config.payphone.storeId,
     currency: 'USD',
-    reference: `Comprobify ${payment.purpose}`,
+    reference: buildReference(payment),
     ...breakdown,
   };
 }

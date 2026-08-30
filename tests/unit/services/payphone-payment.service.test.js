@@ -129,6 +129,43 @@ describe('payphonePaymentService', () => {
       expect(session.amount).toBe(100);
     });
 
+    // APP_ENV is 'staging' both locally and on the droplet, so the hostname is
+    // what actually tells the two apart in Payphone's console.
+    describe('reference', () => {
+      const origEnv = config.appEnv;
+      afterEach(() => { config.appEnv = origEnv; });
+
+      test('carries the hostname outside production, to identify which machine paid', async () => {
+        config.appEnv = 'staging';
+        paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
+
+        const session = await payphonePaymentService.createSession(PAY, TENANT);
+
+        expect(session.reference).toBe(`Comprobify INITIAL · ${require('os').hostname()}`);
+      });
+
+      // It shows on the payer's receipt, so a real customer must never see it.
+      test('omits the hostname in production', async () => {
+        config.appEnv = 'production';
+        paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
+
+        const session = await payphonePaymentService.createSession(PAY, TENANT);
+
+        expect(session.reference).toBe('Comprobify INITIAL');
+      });
+
+      test("stays within Payphone's 100-char cap", async () => {
+        config.appEnv = 'staging';
+        jest.spyOn(require('os'), 'hostname').mockReturnValue('x'.repeat(200));
+        paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
+
+        const session = await payphonePaymentService.createSession(PAY, TENANT);
+
+        expect(session.reference.length).toBe(100);
+        require('os').hostname.mockRestore();
+      });
+    });
+
     test('mints an opaque clientTransactionId, not the payment id', async () => {
       paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
 

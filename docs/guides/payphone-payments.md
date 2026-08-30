@@ -54,6 +54,18 @@ Steps 1–4 are the tenant's; steps 5–6 are ours. Step 6 is the part that stil
 
 ---
 
+### Telling environments apart in Payphone's console
+
+`APP_ENV` is `staging` both locally and on the droplet, so it cannot separate them. The `reference` we send carries `os.hostname()` outside production instead — the same discriminator `logger.service.js` uses:
+
+| Where | `reference` on the transaction |
+|---|---|
+| Local dev | `Comprobify INITIAL · Jonathans-MacBook-Pro.local` |
+| Staging droplet | `Comprobify INITIAL · comprobify-api-staging` |
+| Production | `Comprobify INITIAL` |
+
+Production is deliberately bare: `reference` appears on the payer's receipt, and a real customer should never see infrastructure hostnames. Payphone caps it at 100 characters, so it's truncated defensively.
+
 ## Attempt states
 
 Every card attempt is a row in `payphone_transactions` — **one row per attempt, not per payment**, so a retried card leaves the declined attempt behind as audit trail.
