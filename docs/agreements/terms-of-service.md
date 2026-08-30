@@ -32,7 +32,7 @@ Los comprobantes electrónicos emitidos a través del Servicio y sus metadatos d
 
 El Servicio se ofrece bajo planes de suscripción con diferentes límites de uso y funcionalidades, según lo publicado en la documentación oficial.
 
-El pago se realiza mediante transferencia bancaria manual. La activación del servicio ocurre una vez verificado el pago por Comprobify y autorizado por el SRI el comprobante electrónico que respalda dicho pago; este proceso puede tomar tiempo adicional después de verificado el pago.
+El pago puede realizarse mediante transferencia bancaria o mediante tarjeta de crédito o débito a través del procesador de pagos habilitado por Comprobify. La activación del Servicio ocurre una vez verificado el pago: tratándose de pago con tarjeta, la verificación es automática e inmediata tras la aprobación de la transacción; tratándose de transferencia bancaria, ocurre una vez que Comprobify verifica el comprobante de pago remitido por el Cliente. La emisión de la factura correspondiente por parte de Comprobify es posterior e independiente de la activación del Servicio.
 
 Los cambios de plan y renovaciones siguen el mismo mecanismo.
 

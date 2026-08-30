@@ -32,6 +32,9 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('Startup failed:', err.message);
+  // pg-pool throws an AggregateError with an empty .message when the DB is
+  // unreachable, so log the whole error or a dead database prints nothing.
+  console.error('Startup failed:', err.message || `(${err.name || 'Error'} with no message)`);
+  console.error(err);
   process.exit(1);
 });

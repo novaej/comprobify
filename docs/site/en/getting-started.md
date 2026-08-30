@@ -320,22 +320,21 @@ Yearly pricing is 2 months free vs. paying monthly — **choosing yearly only ch
 
 The document quota is shared across all branches and document types, and counts **production documents only** — sandbox/test documents never consume it. When you reach it, `POST /v1/documents` returns `402 QUOTA_EXCEEDED`. See "Upgrading to a paid plan" below.
 
-> **Current limitation:** the quota doesn't yet reset automatically at the start of each month — there is no monthly reset job today, so in practice it currently behaves as a one-time cumulative cap rather than a recurring monthly allowance. This is independent of [subscription renewals](#upgrading-to-a-paid-plan) (which keep your *billing* current) and is tracked separately for a future release.
+> **Monthly allowance.** Your quota resets at the start of each billing month, independently of how often you *pay* — a yearly subscriber still gets the published quota every month, not once a year. Only production documents count against it.
 
 ### Upgrading to a paid plan
 
-1. **Request a tier.** Two ways to do this:
-   - [`POST /v1/subscriptions`](endpoints/create-subscription.md) with `{ "tier": "STARTER" }` (or `GROWTH`/`BUSINESS`, optionally `"billingInterval": "YEARLY"`) — works even while still in sandbox, so you can start paying before you ever promote.
-   - Or call [`POST /v1/tenants/promote`](endpoints/promote-tenant.md) with the same body, to request a tier in the same call as promoting. Promotion to production happens immediately either way — you're never blocked waiting on payment.
+**Billing is handled in the Comprobify web app, not over the API.** You pick a tier there and pay by card (active within seconds) or by bank transfer (your provider reviews the proof, then it activates). There are no endpoints to integrate for any of it.
 
-   Either way, the response includes `payment` and `bankTransfer` (bank name, account number, account holder) for the SPI transfer amount. If you already started a subscription via `POST /v1/subscriptions` and it's already `ACTIVE` by the time you promote, `promote`'s `tier`/`billingInterval` fields are ignored — it just surfaces that existing subscription instead.
-2. **Send the transfer.** If your bank lets you add a description or reference to the transfer, put this `payment.id` there (e.g. "Comprobify payment 18") — we don't generate any other order number, so this is the fastest way for your provider to match the transfer to your payment. It's optional (not every bank supports it), but worth doing when available.
-3. **Upload proof of it**: [`PATCH /v1/payments/:id/proof`](endpoints/submit-payment-proof.md) (multipart — a screenshot or PDF of the receipt, plus a required `referenceNumber` field for your bank's own transfer reference), using the `payment.id` from step 1.
-4. **Wait for review.** Your provider checks the proof against the bank and verifies or rejects it — you'll get an email either way (and a [notification](endpoints/notifications.md), fanned out to your webhooks if you have any registered), no need to poll. Once verified, they self-bill and authorize the invoice for that period; `subscriptionTier`/`documentQuota` (via [`GET /v1/tenants/me`](endpoints/tenant-me.md)) update automatically the moment that lands. [`GET /v1/subscriptions/me`](endpoints/get-my-subscriptions.md) shows the full in-between history any time.
-5. **If it's rejected**, the email explains why in plain language, and `GET /v1/subscriptions/me` shows the same reason as a stable `rejection_reason_code` (e.g. `TRANSFER_NOT_FOUND`) for your own UI to map to a message. Fix whatever it flagged and repeat steps 2–3 for the *same* `payment.id` — rejection isn't a dead end.
-6. Until verified and authorized, you're on FREE limits in production — nothing is blocked, you just don't have the higher quota yet.
+See [Your subscription & billing](paying-your-subscription.md) for the full walkthrough: the two payment methods, renewals and the grace period, changing tier, cancelling, and the 30-day price-change notice.
 
-**Renewing.** Your subscription isn't a one-time payment — `current_period_end` is a real recurring billing date. About 7 days before it, you'll get an email (and notification) that a new `RENEWAL` payment is open, with the same bank transfer instructions as before; repeat steps 2–3 above using that payment's id. If you don't renew, your plan keeps working as-is until about 7 days *past* `current_period_end`, at which point you're automatically moved back to FREE (with an email explaining why) — you can always start a fresh subscription afterward via step 1.
+What you *can* do over the API is track the outcome:
+
+- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — your current tier, quota and account status. `subscriptionTier`/`documentQuota` update the moment a payment is verified.
+- [Notifications](endpoints/notifications.md) — `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_EXPIRED` and more, fanned out to your [webhooks](endpoints/webhooks.md) if you've registered any. No polling needed.
+- [Get Tiers](endpoints/get-tiers.md) — the public plan catalogue, for your own pricing page.
+
+Until a payment is verified you're on FREE limits in production — nothing is blocked, you just don't have the higher quota yet.
 
 Attempting to create a branch beyond the tier limit returns `402 BRANCH_LIMIT_REACHED` / `ISSUE_POINT_LIMIT_REACHED`. Attempting to enable a document type your plan doesn't include (e.g. credit notes on Free/Starter) returns `402 DOCUMENT_TYPE_NOT_IN_TIER` — see [Issuer Document Types](endpoints/document-types.md).
 

@@ -386,7 +386,7 @@ describe('SubscriptionService', () => {
         expect(result).toEqual({ subscription: { id: '00000000-0000-0000-0000-000000000010', tier: 'STARTER' }, payment: null, amount: 0 });
       });
 
-      test('same-interval upgrade is priced at the FULL sticker price, not prorated', async () => {
+      test('same-interval upgrade charges the difference, not the full sticker price', async () => {
         const now = Date.now();
         tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
         subscriptionModel.findActiveByTenantId.mockResolvedValue({
@@ -401,12 +401,14 @@ describe('SubscriptionService', () => {
         const [createArgs] = paymentModel.create.mock.calls[0];
         expect(createArgs.targetTier).toBe('GROWTH');
         expect(createArgs.targetBillingInterval).toBe('MONTHLY');
-        expect(createArgs.totalAmount).toBe(90); // full monthly-GROWTH price, not the ~50%-remaining prorated amount
+        // GROWTH $90 - STARTER $20 already paid = $70. Not prorated by the
+        // ~50% remaining (sandbox has no real period), but not $90 either.
+        expect(createArgs.totalAmount).toBe(70);
         expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
         expect(result).toEqual({ subscription: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000010' }), payment: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000050' }), bankTransfer: config.bankTransfer });
       });
 
-      test('interval-changing upgrade is priced at the full new-interval price, same as production', async () => {
+      test('interval-changing upgrade also credits the previously paid tier', async () => {
         tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
         subscriptionModel.findActiveByTenantId.mockResolvedValue({
           id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', pending_tier: null, billing_interval: 'MONTHLY',
@@ -418,7 +420,7 @@ describe('SubscriptionService', () => {
         const [createArgs] = paymentModel.create.mock.calls[0];
         expect(createArgs.targetTier).toBe('GROWTH');
         expect(createArgs.targetBillingInterval).toBe('YEARLY');
-        expect(createArgs.totalAmount).toBe(900); // full yearly-GROWTH price
+        expect(createArgs.totalAmount).toBe(880); // yearly GROWTH $900 - monthly STARTER $20
       });
     });
   });
@@ -554,7 +556,7 @@ describe('SubscriptionService', () => {
 
         await subscriptionService.applyVerifiedPayment(payment, subscription);
 
-        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH');
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', null);
         expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
         expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'GROWTH');
         // The upgrade takes over the remainder of the SAME cycle — period unchanged.
@@ -564,10 +566,12 @@ describe('SubscriptionService', () => {
         });
         expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'TIER_CHANGED', {
           subscriptionId: SUB, fromTier: 'STARTER', toTier: 'GROWTH', paymentId: PAY,
+          fromBillingInterval: 'MONTHLY', toBillingInterval: 'MONTHLY',
         });
       });
 
-      test('a payment with target_billing_interval set schedules the change for period-end instead of applying it now', async () => {
+      test('a production interval change is scheduled for period-end, not applied now', async () => {
+        tenantModel.findById.mockResolvedValue({ id: TENANT, status: 'ACTIVE', subscription_tier: 'STARTER', sandbox: false });
         const payment = { id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' };
 
         await subscriptionService.applyVerifiedPayment(payment, subscription);
@@ -578,6 +582,30 @@ describe('SubscriptionService', () => {
         expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'TIER_CHANGE_SCHEDULED', expect.objectContaining({
           toTier: 'GROWTH', toBillingInterval: 'YEARLY', effectiveAt: subscription.current_period_end,
         }));
+      });
+
+      // The sandbox bug: targetInterval is never null (it falls back to the
+      // subscription's own), so every sandbox change carried
+      // target_billing_interval and got deferred to a period_end that
+      // promotion then discards — the tenant paid and the tier never flipped.
+      test('a sandbox change applies immediately instead of being scheduled', async () => {
+        tenantModel.findById.mockResolvedValue({ id: TENANT, status: 'ACTIVE', subscription_tier: 'STARTER', sandbox: true });
+        const payment = { id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'MONTHLY' };
+
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', 'MONTHLY');
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
+      });
+
+      test('a sandbox interval change carries the new interval through, not just the tier', async () => {
+        tenantModel.findById.mockResolvedValue({ id: TENANT, status: 'ACTIVE', subscription_tier: 'STARTER', sandbox: true });
+        const payment = { id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' };
+
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', 'YEARLY');
       });
 
       // period_start is what marks a TIER_CHANGE payment as still-unapplied
@@ -1120,7 +1148,7 @@ describe('SubscriptionService', () => {
 
       const result = await subscriptionService.reviewPayment('00000000-0000-0000-0000-000000000021', 'VERIFIED');
 
-      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', 'GROWTH');
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', 'GROWTH', null);
       expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
       expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000011', tier: 'GROWTH' });
     });

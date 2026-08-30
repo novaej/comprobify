@@ -322,17 +322,10 @@ async function requestTierChange(tenantId, tier, billingInterval) {
   return { subscription, payment, bankTransfer: config.bankTransfer, effectiveAt: subscription.current_period_end };
 }
 
-// Sandbox variant of requestTierChange's pricing/application logic. Every
-// sandbox tier/interval change applies immediately (see applyVerifiedPayment,
-// which is where a paid change actually lands once its self-billed invoice
-// authorizes) and is priced at the target plan's FULL sticker price — never
-// prorated. Proration only makes sense against a real, running billing
-// period; a sandbox current_period_end is thrown away entirely at promotion,
-// so crediting "remaining time" in it doesn't reflect anything the tenant
-// will actually owe once real billing starts. Downgrades still owe nothing
-// (that principle is about "you already paid for this," not period math),
-// but apply immediately rather than being scheduled for a period boundary
-// that's about to be discarded anyway.
+// Sandbox variant. Its current_period_end is discarded at promotion, so there
+// is nothing to prorate against or defer to: changes apply immediately once
+// the payment is verified, priced as the difference against the tier already
+// paid for. Downgrades owe nothing.
 async function requestSandboxTierChange(tenant, subscription, tier, targetInterval, isTierDowngrade) {
   if (isTierDowngrade) {
     const updated = await subscriptionModel.applyTierChange(subscription.id, tier, targetInterval);
@@ -350,9 +343,32 @@ async function requestSandboxTierChange(tenant, subscription, tier, targetInterv
     return { subscription: updated, payment: null, amount: 0 };
   }
 
-  // Sandbox changes always apply immediately (see comment above), so "now" is correct.
-  const fullPrice = await pricingService.getCurrentPrice(tier, targetInterval);
-  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
+  // Credit what the tenant already paid for their current tier against the new
+  // one — sandbox has no period to prorate against, but charging full sticker
+  // price on top of the previous payment double-charges the overlap.
+  const targetPrice = await pricingService.getCurrentPrice(tier, targetInterval);
+  const currentPrice = await pricingService.getCurrentPrice(subscription.tier, subscription.billing_interval);
+  const netPrice = Math.max(0, Math.round((targetPrice - currentPrice) * 100) / 100);
+
+  // Fully covered by the previous payment — apply free rather than opening a $0
+  // payment nobody can send proof of.
+  if (netPrice <= 0) {
+    const updated = await subscriptionModel.applyTierChange(subscription.id, tier, targetInterval);
+    await tenantModel.updateTier(tenant.id, tier);
+    await tenantQuotaService.setCap(tenant.id, tier);
+    await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: tier,
+      fromBillingInterval: subscription.billing_interval,
+      toBillingInterval: targetInterval,
+      totalAmount: 0,
+      note: 'sandbox — fully covered by the previous payment, applied immediately',
+    });
+    return { subscription: updated, payment: null, amount: 0 };
+  }
+
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(netPrice);
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
     amount: baseAmount,
@@ -621,7 +637,7 @@ async function applyVerifiedPayment(payment, subscription) {
     applied_from: snapshotState(subscription, tenant),
   });
 
-  if (payment.purpose === 'TIER_CHANGE') return applyTierChangePayment(payment, subscription);
+  if (payment.purpose === 'TIER_CHANGE') return applyTierChangePayment(payment, subscription, tenant);
   if (payment.purpose === 'RENEWAL') return applyRenewalPayment(payment, subscription);
   return applyInitialPayment(payment, subscription, tenant);
 }
@@ -681,17 +697,14 @@ async function applyInitialPayment(payment, subscription, tenant) {
   return updated;
 }
 
-async function applyTierChangePayment(payment, subscription) {
-  // A billing-interval change can't neatly prorate mid-cycle — now that it's
-  // paid in full for the new interval, defer it to current_period_end (same as
-  // a free downgrade) instead of applying it now. Tier-only changes keep
-  // applying immediately, taking over the remainder of the current cycle.
+async function applyTierChangePayment(payment, subscription, tenant) {
+  // An interval change can't prorate mid-cycle, so production defers it to
+  // current_period_end. Sandbox never defers: its period is discarded at
+  // promotion, so a scheduled change would land late or never.
   //
-  // period_start is deliberately left unstamped here: it's what marks a
-  // TIER_CHANGE payment as still-unapplied (see
-  // findPendingTierChangeBySubscriptionId), and applyScheduledTierChanges
-  // stamps it when the deferred change actually lands.
-  if (payment.target_billing_interval) {
+  // period_start stays unstamped on the deferred path — it marks the payment
+  // still-unapplied until applyScheduledTierChanges lands it.
+  if (payment.target_billing_interval && !tenant.sandbox) {
     const updated = await subscriptionModel.scheduleDowngrade(
       subscription.id,
       payment.target_tier,
@@ -711,7 +724,11 @@ async function applyTierChangePayment(payment, subscription) {
     return updated;
   }
 
-  const updated = await subscriptionModel.applyTierChange(subscription.id, payment.target_tier);
+  // Passing the interval is a COALESCE no-op when null (every production
+  // tier-only upgrade); it's what makes a sandbox interval change actually land.
+  const updated = await subscriptionModel.applyTierChange(
+    subscription.id, payment.target_tier, payment.target_billing_interval
+  );
 
   await tenantModel.updateTier(subscription.tenant_id, payment.target_tier);
   await tenantQuotaService.setCap(subscription.tenant_id, payment.target_tier);
@@ -728,6 +745,8 @@ async function applyTierChangePayment(payment, subscription) {
     subscriptionId: subscription.id,
     fromTier: subscription.tier,
     toTier: payment.target_tier,
+    fromBillingInterval: subscription.billing_interval,
+    toBillingInterval: payment.target_billing_interval || subscription.billing_interval,
     paymentId: payment.id,
   });
 

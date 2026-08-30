@@ -189,6 +189,25 @@ describe('PAYMENT_PROOF_SUBMITTED_EMAIL handler', () => {
   });
 });
 
+describe('PAYMENT_VERIFIED_OPERATOR_EMAIL handler', () => {
+  // Card payments only — an SPI payment has the operator in the loop already
+  // (they clicked "verify"), so only this path needs telling.
+  test('re-fetches payment + subscription + tenant and delegates', async () => {
+    const payment = { id: 'payment-2' };
+    const subscription = { id: 'sub-2' };
+    const tenant = { id: 'tenant-2' };
+    paymentModel.findById.mockResolvedValue(payment);
+    subscriptionModel.findById.mockResolvedValue(subscription);
+    tenantModel.findById.mockResolvedValue(tenant);
+
+    await getHandler('PAYMENT_VERIFIED_OPERATOR_EMAIL')({
+      paymentId: 'payment-2', subscriptionId: 'sub-2', tenantId: 'tenant-2',
+    });
+
+    expect(emailService.sendPaymentVerifiedOperator).toHaveBeenCalledWith(payment, subscription, tenant);
+  });
+});
+
 describe('NOTIFICATION_DISPATCH handler', () => {
   test('is a no-op when the notification no longer exists', async () => {
     notificationModel.findById.mockResolvedValue(null);

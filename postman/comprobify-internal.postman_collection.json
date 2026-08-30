@@ -785,6 +785,94 @@
       "name": "Payments",
       "item": [
         {
+          "name": "Create Payphone Session (Pay by Card)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.session?.clientTransactionId) {",
+                  "  pm.collectionVariables.set('client_transaction_id', r.session.clientTransactionId);",
+                  "  console.log('clientTransactionId:', r.session.clientTransactionId);",
+                  "  console.log('amount (cents):', r.session.amount, '= withoutTax', r.session.amountWithoutTax, '+ withTax', r.session.amountWithTax, '+ tax', r.session.tax);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/payments/{{payment_id}}/payphone-session",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "{{payment_id}}",
+                "payphone-session"
+              ]
+            },
+            "description": "Mints a card-payment session for one of your own payments (any purpose: INITIAL, TIER_CHANGE, RENEWAL). The response's `session` object is passed straight into Payphone's Cajita de Pagos browser widget.\n\nUnlike Submit Payment Proof there is nothing to upload and no review to wait on - the payment verifies itself and your plan is active in seconds.\n\nAll amounts come back as integer cents and always satisfy amount = amountWithoutTax + amountWithTax + tax + service + tip, which Payphone enforces.\n\nReturns 503 PAYMENT_GATEWAY_NOT_CONFIGURED when card payments aren't enabled in this environment - use Submit Payment Proof instead. 409 PAYMENT_ALREADY_VERIFIED if the payment is already settled.\n\nNOTE: comprobify-web only. These endpoints back the Comprobify web app card checkout; the Payphone widget renders only on the domain registered in Payphone console, so a third-party integrator cannot complete this flow on their own domain and should use Submit Payment Proof (SPI transfer) instead. Deliberately absent from the public collection and docs site for that reason."
+          }
+        },
+        {
+          "name": "Confirm Payphone Charge",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "console.log('outcome:', r.status);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 987654,\n  \"clientTransactionId\": \"{{client_transaction_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/payments/payphone/confirm",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "payments",
+                "payphone",
+                "confirm"
+              ]
+            },
+            "description": "Captures the charge. `id` is Payphone's own transaction id, echoed back on the return redirect alongside your clientTransactionId - send both.\n\nCRITICAL: Payphone auto-reverses any charge not confirmed within 5 MINUTES of payment. Your return page must call this immediately on load, never behind a button.\n\nOutcomes in `status`:\n  APPROVED  - captured and applied; the plan is already active\n  CANCELLED - declined or cancelled; nothing charged, retry with a fresh session\n  DUPLICATE - this payment was already paid by another attempt; needs a refund\n  ERROR     - the confirmed amount didn't match the session's; nothing applied\n\nSafe to call twice with the same body: returns the stored outcome without contacting Payphone again.\n\n502 PAYPHONE_CONFIRM_FAILED means Payphone was unreachable - the charge is UNRESOLVED, not declined, and reconciles automatically within a few minutes.\n\nNOTE: comprobify-web only. These endpoints back the Comprobify web app card checkout; the Payphone widget renders only on the domain registered in Payphone console, so a third-party integrator cannot complete this flow on their own domain and should use Submit Payment Proof (SPI transfer) instead. Deliberately absent from the public collection and docs site for that reason."
+          }
+        },
+        {
           "name": "List Payment Proofs",
           "request": {
             "method": "GET",
@@ -3846,6 +3934,39 @@
           }
         },
         {
+          "name": "Run Payphone Reconciliation Jobs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "console.log('outcomes resolved:', r.payphoneOutcomesResolved, '| charges applied:', r.payphoneChargesApplied);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/jobs/payphone-reconciliation",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "jobs",
+                "payphone-reconciliation"
+              ]
+            },
+            "description": "Two idempotent sweeps over card-payment attempts (ADR-028). Run every 5 minutes.\n\n1. **Unresolved outcomes** — attempts still PENDING past Payphone 5-minute auto-reversal window, because the payer browser never reached the return page and confirm therefore never fired. Confirms them purely to learn and record which way the charge went. Needs reachable Payphone credentials; without them the sweep correctly leaves rows PENDING rather than marking them terminal.\n2. **Captured but unapplied** — attempts APPROVED with applied_at IS NULL. The vendor outcome commits before access is granted, so a crash in between leaves money captured and the tenant not credited. This sweep finishes the job, and needs no vendor call.\n\nIdempotent: an already-settled payment only gets its bookkeeping stamp, never a second application (which would double-extend a period or double-flip a tier).\n\nSee docs/guides/payphone-payments.md and the Payphone section of postman/TESTING.md for how to force each sweep."
+          }
+        },
+        {
           "name": "Create Subscription",
           "request": {
             "method": "POST",
@@ -4011,7 +4132,7 @@
                 "refund"
               ]
             },
-            "description": "Records that a VERIFIED payment money came back — a reversed SPI transfer you found on the bank statement, a duplicate charge, a chargeback — and undoes its effect.\n\nDetection is manual: no payment rail notifies the API. This is only the \"I found out, undo it\" half.\n\n**Do not do this by hand via Update Tenant Tier.** That writes only `tenants.subscription_tier` and never `subscriptions.tier`, so the subscription keeps claiming the reversed tier and the next renewal is priced off it — the tenant gets billed for an upgrade they never paid for.\n\nRolling back is **not** \"downgrade to FREE\": it restores `payments.applied_from`, the snapshot taken just before the payment was applied. A reversed TIER_CHANGE returns to the previous PAID tier; a reversed RENEWAL rolls the period back without touching tier; only a reversed INITIAL ends at FREE (and cancels the subscription so the tenant can start fresh).\n\n`reason` is optional free text (max 200 chars) recorded on the PAYMENT_REFUNDED tenant event — unlike suspensionReasonCode, there is no fixed vocabulary for how money comes back.\n\nDeliberately does **not** suspend the tenant; whether this warrants SUSPENDED (fraud) or nothing (an honest duplicate) is your call via Update Tenant Status.\n\nFails 409 if the payment is not VERIFIED, or 400 PAYMENT_NOT_REFUNDABLE if it was applied before migration 090 introduced the rollback snapshot."
+            "description": "MOVES NO MONEY. This touches only our database — restores the tier/period, marks the payment REFUNDED, logs a PAYMENT_REFUNDED event. There is NO call to Payphone and none to your bank. Returning the money is always a separate manual step: your bank for an SPI reversal, or the Payphone Business dashboard for a card (same-day only, until 20:00 EC).\n\nDo the money side FIRST. Reversed, and a failed dashboard reversal leaves a tenant downgraded but still charged, with nothing flagging the mismatch.\n\nDetection is manual either way: no payment rail notifies the API.\n\n**Do not do this by hand via Update Tenant Tier.** That writes only `tenants.subscription_tier` and never `subscriptions.tier`, so the subscription keeps claiming the reversed tier and the next renewal is priced off it — the tenant gets billed for an upgrade they never paid for.\n\nRolling back is **not** \"downgrade to FREE\": it restores `payments.applied_from`, the snapshot taken just before the payment was applied. A reversed TIER_CHANGE returns to the previous PAID tier; a reversed RENEWAL rolls the period back without touching tier; only a reversed INITIAL ends at FREE (and cancels the subscription so the tenant can start fresh).\n\n`reason` is optional free text (max 200 chars) recorded on the PAYMENT_REFUNDED tenant event — unlike suspensionReasonCode, there is no fixed vocabulary for how money comes back.\n\nDeliberately does **not** suspend the tenant; whether this warrants SUSPENDED (fraud) or nothing (an honest duplicate) is your call via Update Tenant Status.\n\nFails 409 if the payment is not VERIFIED, or 400 PAYMENT_NOT_REFUNDABLE if it was applied before migration 090 introduced the rollback snapshot.\n\nDO NOT call this for a DUPLICATE card attempt. The tenant paid twice for one payment; refund the duplicate in Payphone dashboard and stop. The subscription is correctly paid by the other attempt and the duplicate never touched subscription state, so rolling back here would strip a tier they did pay for."
           }
         },
         {

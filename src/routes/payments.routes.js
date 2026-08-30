@@ -36,6 +36,17 @@ const idAndProofIdParams = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
   param('proofId').isUUID().withMessage('proofId must be a valid UUID'),
 ];
+// Payphone's return redirect echoes back its own transaction id plus the
+// clientTransactionId we minted. Both are required to confirm a charge.
+const confirmPayphoneFields = [
+  body('id').notEmpty().withMessage('id (Payphone transaction id) is required'),
+  body('clientTransactionId')
+    .trim()
+    .notEmpty()
+    .isLength({ max: 50 })
+    .withMessage('clientTransactionId is required and must be at most 50 characters'),
+];
+
 const submitProofFields = [
   ...idParam,
   body('referenceNumber')
@@ -67,5 +78,10 @@ router.get('/:id/proofs/:proofId', readLimiter, idAndProofIdParams, validateRequ
 // docs/adr/025-past-due-tenant-status.md.
 router.patch('/:id/proof', writeLimiter, requireNotSuspended, handleProofUpload, submitProofFields, validateRequest, asyncHandler(controller.submitProof));
 router.delete('/:id/proofs/:proofId', writeLimiter, requireNotSuspended, requireNotPastDue, idAndProofIdParams, validateRequest, asyncHandler(controller.deleteProof));
+
+// Card payments (ADR-028), also exempt from requireNotPastDue. '/payphone/confirm'
+// must precede the '/:id/...' routes or UUID validation rejects it.
+router.post('/payphone/confirm', writeLimiter, requireNotSuspended, confirmPayphoneFields, validateRequest, asyncHandler(controller.confirmPayphone));
+router.post('/:id/payphone-session', writeLimiter, requireNotSuspended, idParam, validateRequest, asyncHandler(controller.createPayphoneSession));
 
 module.exports = router;

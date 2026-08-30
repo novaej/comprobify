@@ -112,3 +112,4 @@ YYYY-MM-DD
 | [025](025-past-due-tenant-status.md) | PAST_DUE Tenant Status, Distinct from SUSPENDED | Accepted | 2026-07-27 |
 | [026](026-redis-shared-counter-store.md) | Redis for Shared Rate-Limiting and Repeated-Attempt Counters | Accepted | 2026-08-03 |
 | [027](027-decouple-activation-from-invoice.md) | Subscription Activation Decoupled from the Operator's Invoice | Accepted | 2026-08-23 |
+| [028](028-payphone-card-payments.md) | Card Payments via Payphone's Cajita de Pagos | Accepted | 2026-08-24 |

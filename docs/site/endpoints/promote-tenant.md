@@ -38,9 +38,9 @@ Todos los campos son opcionales. Un cuerpo vacío `{}` es válido.
 | `tier` | string | No | `STARTER`, `GROWTH`, o `BUSINESS` — ver [Get Tiers](get-tiers.md). Omítelo para permanecer en FREE en producción; la promoción nunca espera al pago de todos modos. Se ignora si el tenant ya tiene una suscripción en curso (ver abajo). |
 | `billingInterval` | string | No | `MONTHLY` (por defecto) o `YEARLY` (2 meses gratis). Se ignora si `tier` se omite o si se ignora por lo anterior. |
 
-Solicitar un `tier` aquí inicia el pipeline de suscripción/pago (igual que el flujo dirigido por el administrador) — ver [Submit Payment Proof](submit-payment-proof.md) para lo que sucede después. La mejora de plan/cuota en sí se aplica en cuanto el pago se verifica; no ocurre como parte de esta llamada.
+Solicitar un `tier` aquí inicia el pipeline de suscripción/pago (igual que el flujo dirigido por el administrador) — ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md) para lo que sucede después. La mejora de plan/cuota en sí se aplica en cuanto el pago se verifica; no ocurre como parte de esta llamada.
 
-Si el tenant ya inició una suscripción antes de promoverse — vía [`POST /v1/subscriptions`](create-subscription.md), lo cual funciona incluso en sandbox — y todavía está en curso al momento de esta llamada (cualquier estado distinto de `CANCELLED`/`EXPIRED`: `PENDING_PAYMENT` o `ACTIVE`), no queda nada por seleccionar: `tier`/`billingInterval` se ignoran por completo, y la respuesta muestra esa suscripción existente en lugar de iniciar una nueva. Este es un bloqueo estricto, no solo una cortesía — evita que se abra una segunda suscripción/pago mientras una ya está esperando comprobante o revisión.
+Si el tenant ya inició una suscripción antes de promoverse — vía [`POST /v1/subscriptions`](../paying-your-subscription.md), lo cual funciona incluso en sandbox — y todavía está en curso al momento de esta llamada (cualquier estado distinto de `CANCELLED`/`EXPIRED`: `PENDING_PAYMENT` o `ACTIVE`), no queda nada por seleccionar: `tier`/`billingInterval` se ignoran por completo, y la respuesta muestra esa suscripción existente en lugar de iniciar una nueva. Este es un bloqueo estricto, no solo una cortesía — evita que se abra una segunda suscripción/pago mientras una ya está esperando comprobante o revisión.
 
 ## Respuesta
 
@@ -61,7 +61,7 @@ Si el tenant ya inició una suscripción antes de promoverse — vía [`POST /v1
 
 `apiKeys` contiene una entrada por cada llave de sandbox que estaba activa al momento de la promoción. **Guarda todos los tokens de inmediato — se muestran solo una vez.** Distribuye cada token a la integración que antes usaba la llave de sandbox con la misma etiqueta.
 
-`subscription`, `payment`, y `bankTransfer` solo están presentes si se proporcionó `tier` y se inició una nueva suscripción. Si el tenant ya tenía una suscripción en curso al momento de esta llamada (cualquier estado distinto de `CANCELLED`/`EXPIRED`), solo está presente `subscription` (sin `payment`/`bankTransfer` — no se creó nada nuevo). Usa `bankTransfer` para mostrarle al tenant a dónde enviar la transferencia SPI, y luego envía el comprobante — ver [Submit Payment Proof](submit-payment-proof.md).
+`subscription`, `payment`, y `bankTransfer` solo están presentes si se proporcionó `tier` y se inició una nueva suscripción. Si el tenant ya tenía una suscripción en curso al momento de esta llamada (cualquier estado distinto de `CANCELLED`/`EXPIRED`), solo está presente `subscription` (sin `payment`/`bankTransfer` — no se creó nada nuevo). Usa `bankTransfer` para mostrarle al tenant a dónde enviar la transferencia SPI, y luego envía el comprobante — ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md).
 
 Las llaves de sandbox se revocan automáticamente durante la promoción. Si no tenías llaves de sandbox, `apiKeys` será un arreglo vacío — genera llaves de producción vía [`POST /v1/keys`](api-keys.md#mint-a-key).
 

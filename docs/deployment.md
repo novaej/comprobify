@@ -295,6 +295,17 @@ Both sweeps run independently against `public.documents` and `sandbox.documents`
 
 Idempotent. Runs every 5 minutes — the same cadence as the Notifications job, and the tightest of the four, since this is the recovery mechanism for a temporarily unreachable broker or a publish that timed out. This job only bounds how long a document can sit unprocessed if nothing ever queued a message for it in the first place (a stuck publish, or a `RECEIVED` document nobody polled); CloudAMQP is a managed service that rarely fails outright and the worker already processes anything actually queued near-instantly, so 5 minutes is about shrinking the worst case, not chasing a real ongoing failure rate. This was hourly under the original Render Cron Job setup and while queue reconciliation still ran externally against a per-invocation-priced scheduler; self-hosted cron on the droplet has no such cost, so at current (low) document volume there's no reason not to run it tighter.
 
+### `POST /v1/admin/jobs/payphone-reconciliation`
+
+Runs `payphonePaymentService.reconcileStaleTransactions()` — two idempotent sweeps over card-payment attempts (ADR-028, and see `guides/payphone-payments.md` for the operational detail):
+
+1. **Unresolved outcomes** — attempts still `PENDING` past Payphone's 5-minute auto-reversal window, because the payer's browser never reached the return page and confirm therefore never fired. Confirms them purely to learn and record which way the charge went.
+2. **Captured but unapplied** — attempts `APPROVED` with `applied_at IS NULL`. The vendor outcome commits before access is granted, so a crash in between leaves money captured and the tenant not credited; this sweep finishes the job.
+
+Idempotent — an already-settled payment only gets its bookkeeping stamp, never a second application. Runs every 5 minutes, the tightest cadence alongside queue reconciliation, because sweep 2 is the recovery path for real captured money.
+
+Does nothing at all when `PAYPHONE_TOKEN` is unset (no card attempts can exist), so it is harmless to schedule in an environment without card payments.
+
 ### Where the schedule actually lives now
 
 Defined in `terraform/modules/droplet/cloud-init.yaml.tftpl` as a `/etc/cron.d/comprobify-jobs` file, written to the droplet at first boot. Full mechanics — why it runs inside the `api` container instead of needing Node on the bare host, how it picks up `ADMIN_SECRET`, monitoring via per-job plain log files under `/opt/comprobify/logs/cron-<name>.log` (not `journalctl` — root SSH is fully disabled on this box, and reading the systemd journal needs root or the `systemd-journal` group) — are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
@@ -307,8 +318,9 @@ Reference table (schedule matches the Render Cron Job days except Queue Reconcil
 | Subscriptions | `0 6 * * *` (daily) | `node scripts/run-admin-job.js /v1/admin/jobs/subscriptions` |
 | Quota | `10 6 * * *` (daily, just after Subscriptions) | `node scripts/run-admin-job.js /v1/admin/jobs/quota` |
 | Queue reconciliation | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
+| Payphone reconciliation | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/payphone-reconciliation` |
 
-Production's schedule doesn't exist yet — it gets the same 4 entries on its own droplet once production is provisioned (see "Production status" above).
+Production's schedule doesn't exist yet — it gets the same 5 entries on its own droplet once production is provisioned (see "Production status" above).
 
 > The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
 
@@ -547,6 +559,10 @@ All variables are required unless marked optional.
 | `ATTEMPT_TRACKER_WINDOW_MS` | No | Repeated-attempt detection window in milliseconds (default `900000` = 15 minutes) |
 | `BETTERSTACK_SOURCE_TOKEN` | No | Backs `src/services/logger.service.js`'s Betterstack transport. Unset means structured logs still print locally as JSON (`Console` transport) but never ship anywhere. Source token from your Betterstack (Logs) project settings. |
 | `BETTERSTACK_INGESTING_HOST` | No | Only needed if your Betterstack source's setup page shows a specific regional ingesting host (e.g. `https://s123456.eu-central-1a.betterstackdata.com`) rather than `@logtail/node`'s shared default — without it, syncing 401s against a host that was never issued your token. |
+| `PAYPHONE_TOKEN` | No | **One Payphone application per environment** — a `WEB` application locks to a single Web Domain and Response URL, so staging and production cannot share one (see `guides/payphone-payments.md`). Payphone application token, used both to mint the browser widget's session config and to authorise the server-side confirm call that actually captures a charge. Unset disables card payments entirely: `POST /v1/payments/:id/payphone-session` returns `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and the manual SPI transfer flow is completely unaffected — a supported configuration, not a broken one. Set independently per environment (staging should use the Payphone test store). |
+| `PAYPHONE_STORE_ID` | No | Payphone store/branch identifier, from the Payphone developer console. Required alongside `PAYPHONE_TOKEN` — card payments stay disabled unless both are set. |
+| `PAYPHONE_API_BASE_URL` | No | Defaults to `https://paymentbox.payphonetodoesposible.com` (the Cajita de Pagos host). Configurable because Payphone documents a different host for its redirect-button product; verify which one your application answers on. |
+| `PAYPHONE_CONFIRM_TIMEOUT_MS` | No | Timeout for the confirm call (default `10000`). It is bounded deliberately: the call runs while a DB row is locked and a tenant's browser is waiting. |
 | `SENTRY_DSN` | No | Sentry project DSN — enables error monitoring (`@sentry/node`). Leave unset to disable; the client becomes a no-op and nothing is transmitted. Set independently per environment — staging and production should point at the same Sentry project but report distinct `environment` tags (derived from `APP_ENV`). |
 | `BANK_TRANSFER_BANK_NAME` | No | Returned in the subscription-creation response (`POST /v1/tenants/promote` with `tier`, or admin's Create Subscription) so a tenant knows where to send the SPI transfer. Display text only, not a secret. |
 | `BANK_TRANSFER_ACCOUNT_TYPE` | No | e.g. `AHORROS`, `CORRIENTE` |
@@ -662,6 +678,7 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [ ] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard for all 4 event types
 - [ ] Webhook endpoint (`/v1/mailgun/webhook`) reachable on the public HTTPS URL
 - [ ] Log aggregation configured — the API logs to stdout
+- [ ] `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` come from **this environment's own Payphone application** — staging in test mode, production in production mode. Nothing in the code can tell a test token from a live one, so pasting production credentials into staging means staging creates **real charges** — or deliberately left unset to keep card payments disabled
 - [ ] `SENTRY_DSN` set on staging and production so unexpected `5xx` errors are reported (left unset locally so development never sends events)
 
 ### Rotating secrets (e.g. after a suspected compromise)

@@ -146,13 +146,13 @@ Same trigger as `PAYMENT_VERIFIED`, for a rejected decision instead.
 
 **Severity:** `WARNING`
 
-**Metadata:** same shape as `PAYMENT_VERIFIED`, with `rejectionReasonCode` populated (one of `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — re-submit proof for the same `paymentId` via [Submit Payment Proof](submit-payment-proof.md).
+**Metadata:** same shape as `PAYMENT_VERIFIED`, with `rejectionReasonCode` populated (one of `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — re-submit proof for the same `paymentId` via [Your subscription & billing](../paying-your-subscription.md).
 
 ---
 
 ### `SUBSCRIPTION_RENEWAL_DUE`
 
-Created automatically by the provider's scheduled job about 7 days before your subscription's `current_period_end`. A new `RENEWAL` payment is already open by the time this fires — submit proof via [Submit Payment Proof](submit-payment-proof.md) using the `paymentId` in the metadata. A matching email includes the bank transfer instructions.
+Created automatically by the provider's scheduled job about 7 days before your subscription's `current_period_end`. A new `RENEWAL` payment is already open by the time this fires — submit proof via [Your subscription & billing](../paying-your-subscription.md) using the `paymentId` in the metadata. A matching email includes the bank transfer instructions.
 
 **Severity:** `WARNING`
 
@@ -174,7 +174,7 @@ Created automatically by the provider's scheduled job about 7 days before your s
 
 ### `SUBSCRIPTION_PAST_DUE_WARNING`
 
-Created automatically by the same scheduled job, later in the grace period than `SUBSCRIPTION_RENEWAL_DUE` (by default, 5 days after `current_period_end`, out of a 7-day total grace period) — a more urgent notice distinct from the renewal reminder, before the account actually becomes `PAST_DUE`. Submit proof for the already-open `RENEWAL` payment via [Submit Payment Proof](submit-payment-proof.md), or start a new subscription via [Create Subscription](create-subscription.md) — both routes stay reachable even after the account becomes `PAST_DUE` (see below).
+Created automatically by the same scheduled job, later in the grace period than `SUBSCRIPTION_RENEWAL_DUE` (by default, 5 days after `current_period_end`, out of a 7-day total grace period) — a more urgent notice distinct from the renewal reminder, before the account actually becomes `PAST_DUE`. Submit proof for the already-open `RENEWAL` payment via [Your subscription & billing](../paying-your-subscription.md), or start a new subscription via [Your subscription & billing](../paying-your-subscription.md) — both routes stay reachable even after the account becomes `PAST_DUE` (see below).
 
 **Severity:** `WARNING`
 
@@ -193,7 +193,7 @@ Created automatically by the same scheduled job, later in the grace period than 
 
 ### `SUBSCRIPTION_EXPIRED`
 
-Created automatically by the same scheduled job when a subscription runs about 7 days past `current_period_end` with no renewal ever verified. By the time this fires, the tenant has already been moved to the FREE tier **and** their account (`GET /v1/tenants/me`'s `status`) becomes `PAST_DUE` — distinct from `SUSPENDED`: an account that can recover itself by starting a new subscription via [Create Subscription](create-subscription.md) and paying for it, no need to contact support. A matching email explains what happened.
+Created automatically by the same scheduled job when a subscription runs about 7 days past `current_period_end` with no renewal ever verified. By the time this fires, the tenant has already been moved to the FREE tier **and** their account (`GET /v1/tenants/me`'s `status`) becomes `PAST_DUE` — distinct from `SUSPENDED`: an account that can recover itself by starting a new subscription via [Your subscription & billing](../paying-your-subscription.md) and paying for it, no need to contact support. A matching email explains what happened.
 
 **Severity:** `ERROR`
 

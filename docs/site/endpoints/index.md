@@ -28,23 +28,7 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 |---|---|---|
 | `GET` | `/v1/tiers` | Catálogo completo de planes de suscripción — cuota, precio mensual/anual, tarifa de excedente, tipos de comprobante, límites |
 
-## Pagos (autenticado)
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `PATCH` | `/v1/payments/:id/proof` | Sube el comprobante de una transferencia bancaria SPI para un pago de suscripción pendiente — hasta 5 archivos por solicitud, nunca se sobrescribe lo ya subido. Un pago `REJECTED` puede reenviarse; solo `VERIFIED` bloquea nuevas subidas. |
-| `GET` | `/v1/payments/:id/proofs` | Lista todos los archivos de comprobante activos subidos para un pago |
-| `GET` | `/v1/payments/:id/proofs/:proofId` | Descarga un archivo de comprobante específico |
-| `DELETE` | `/v1/payments/:id/proofs/:proofId` | Elimina (soft-delete) un archivo de comprobante de tu propia vista (tu proveedor aún puede verlo) |
-
-## Suscripciones (autenticado)
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/v1/subscriptions` | Inicia una suscripción paga para el tenant autenticado — funciona en sandbox o después de la promoción, requiere correo verificado |
-| `GET` | `/v1/subscriptions/me` | Historial completo de suscripción/pagos, del más reciente al más antiguo, con `rejection_reason_code` cuando aplica — las revisiones de pago y las renovaciones también disparan notificaciones, pero la activación en sí no, así que esta sigue siendo la forma en que un tenant consulta su estado |
-| `POST` | `/v1/subscriptions/change-tier` | Sube de plan (inmediato, pago prorrateado) o baja de plan (programado, sin pago) una suscripción `ACTIVE` existente — usa `DELETE` abajo para cancelar por completo |
-| `DELETE` | `/v1/subscriptions` | Programa una cancelación al final del período — baja el tenant a FREE sin reembolso cuando pasa `current_period_end` |
+> **¿Cómo pagas tu suscripción?** Desde la aplicación web — con tarjeta o transferencia bancaria. No hay endpoints que integrar para eso; ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md).
 
 ## Tenants (autenticado)
 

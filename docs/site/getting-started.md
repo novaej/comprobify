@@ -320,22 +320,21 @@ El precio anual equivale a 2 meses gratis frente a pagar mensualmente — **eleg
 
 La cuota de comprobantes se comparte entre todas las sucursales y tipos de comprobante, y cuenta **solo los comprobantes de producción** — los comprobantes de sandbox/prueba nunca la consumen. Cuando la alcanzas, `POST /v1/documents` devuelve `402 QUOTA_EXCEEDED`. Consulta "Mejorando a un plan pagado" abajo.
 
-> **Limitación actual:** la cuota todavía no se reinicia automáticamente al comienzo de cada mes — hoy no existe un job de reinicio mensual, así que en la práctica actualmente se comporta como un tope acumulativo de una sola vez en lugar de una asignación mensual recurrente. Esto es independiente de las [renovaciones de suscripción](#mejorando-a-un-plan-pagado) (que mantienen tu *facturación* al día) y se rastrea por separado para una futura versión.
+> **Cuota mensual.** Tu cuota se reinicia al comienzo de cada mes de facturación, independientemente de cada cuánto *pagues* — un suscriptor anual sigue recibiendo la cuota publicada cada mes, no una vez al año. Solo los comprobantes de producción la consumen.
 
 ### Mejorando a un plan pagado
 
-1. **Solicita un tier.** Dos formas de hacerlo:
-   - [`POST /v1/subscriptions`](endpoints/create-subscription.md) con `{ "tier": "STARTER" }` (o `GROWTH`/`BUSINESS`, opcionalmente `"billingInterval": "YEARLY"`) — funciona incluso mientras sigues en sandbox, así que puedes empezar a pagar antes de promoverte.
-   - O llama a [`POST /v1/tenants/promote`](endpoints/promote-tenant.md) con el mismo cuerpo, para solicitar un tier en la misma llamada que la promoción. La promoción a producción ocurre de inmediato de cualquier forma — nunca te quedas bloqueado esperando el pago.
+**La facturación se gestiona desde la aplicación web de Comprobify, no por API.** Ahí eliges un plan y pagas con tarjeta (activo en segundos) o por transferencia bancaria (tu proveedor revisa el comprobante y luego se activa). No hay endpoints que integrar para nada de esto.
 
-   De cualquier forma, la respuesta incluye `payment` y `bankTransfer` (nombre del banco, número de cuenta, titular de la cuenta) para el monto de la transferencia SPI. Si ya iniciaste una suscripción vía `POST /v1/subscriptions` y ya está `ACTIVE` para cuando te promuevas, los campos `tier`/`billingInterval` de `promote` se ignoran — simplemente muestra esa suscripción existente en su lugar.
-2. **Envía la transferencia.** Si tu banco te permite agregar una descripción o referencia a la transferencia, coloca ahí este `payment.id` (p. ej. "Comprobify payment 18") — no generamos ningún otro número de orden, así que esta es la forma más rápida para que tu proveedor relacione la transferencia con tu pago. Es opcional (no todos los bancos lo permiten), pero vale la pena hacerlo cuando esté disponible.
-3. **Sube el comprobante de la transferencia**: [`PATCH /v1/payments/:id/proof`](endpoints/submit-payment-proof.md) (multipart — una captura de pantalla o PDF del recibo, más un campo `referenceNumber` requerido con la referencia de transferencia propia de tu banco), usando el `payment.id` del paso 1.
-4. **Espera la revisión.** Tu proveedor verifica el comprobante contra el banco y lo aprueba o lo rechaza — recibirás un correo en cualquier caso (y una [notificación](endpoints/notifications.md), distribuida a tus webhooks si tienes alguno registrado), sin necesidad de sondear. Una vez verificado, ellos se autofacturan y autorizan el comprobante correspondiente a ese período; `subscriptionTier`/`documentQuota` (vía [`GET /v1/tenants/me`](endpoints/tenant-me.md)) se actualizan automáticamente en cuanto eso ocurre. [`GET /v1/subscriptions/me`](endpoints/get-my-subscriptions.md) muestra el historial completo intermedio en cualquier momento.
-5. **Si es rechazado**, el correo explica por qué en lenguaje sencillo, y `GET /v1/subscriptions/me` muestra la misma razón como un `rejection_reason_code` estable (p. ej. `TRANSFER_NOT_FOUND`) para que tu propia interfaz lo asocie con un mensaje. Corrige lo que se señaló y repite los pasos 2-3 para el mismo `payment.id` — un rechazo no es un callejón sin salida.
-6. Hasta que se verifique y autorice, estás en los límites de FREE en producción — nada se bloquea, simplemente todavía no tienes la cuota más alta.
+Consulta [Tu suscripción y cómo pagarla](paying-your-subscription.md) para el recorrido completo: los dos métodos de pago, renovaciones y período de gracia, cambios de plan, cancelación, y el aviso de 30 días por cambio de precio.
 
-**Renovando.** Tu suscripción no es un pago único — `current_period_end` es una fecha de facturación recurrente real. Unos 7 días antes de esa fecha, recibirás un correo (y una notificación) de que hay un nuevo pago `RENEWAL` abierto, con las mismas instrucciones de transferencia bancaria que antes; repite los pasos 2-3 de arriba usando el id de ese pago. Si no renuevas, tu plan sigue funcionando tal cual hasta unos 7 días *después* de `current_period_end`, momento en el que se te mueve automáticamente de vuelta a FREE (con un correo explicando por qué) — siempre puedes iniciar una nueva suscripción después mediante el paso 1.
+Lo que sí puedes hacer por API es seguir el resultado:
+
+- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — tu plan, cuota y estado de cuenta actuales. `subscriptionTier`/`documentQuota` se actualizan en el momento en que un pago se verifica.
+- [Notificaciones](endpoints/notifications.md) — `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_EXPIRED` y más, entregadas a tus [webhooks](endpoints/webhooks.md) si tienes alguno registrado. No hace falta consultar activamente.
+- [Consultar planes](endpoints/get-tiers.md) — el catálogo público de planes, para tu propia página de precios.
+
+Hasta que un pago se verifique estás en los límites FREE en producción — nada se bloquea, solo no tienes la cuota mayor todavía.
 
 Intentar crear una sucursal más allá del límite del tier devuelve `402 BRANCH_LIMIT_REACHED` / `ISSUE_POINT_LIMIT_REACHED`. Intentar habilitar un tipo de comprobante que tu plan no incluye (p. ej. notas de crédito en Free/Starter) devuelve `402 DOCUMENT_TYPE_NOT_IN_TIER` — consulta [Issuer Document Types](endpoints/document-types.md).
 

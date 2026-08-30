@@ -28,23 +28,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 |---|---|---|
 | `GET` | `/v1/tiers` | Full subscription tier catalog — quota, monthly/yearly price, overage rate, document types, limits |
 
-## Payments (authenticated)
-
-| Method | Path | Description |
-|---|---|---|
-| `PATCH` | `/v1/payments/:id/proof` | Upload proof of an SPI bank transfer for a pending subscription payment — up to 5 files per request, nothing already uploaded is ever overwritten. A `REJECTED` payment can be re-submitted; only `VERIFIED` blocks further uploads. |
-| `GET` | `/v1/payments/:id/proofs` | List every active proof file uploaded for a payment |
-| `GET` | `/v1/payments/:id/proofs/:proofId` | Download one specific proof file |
-| `DELETE` | `/v1/payments/:id/proofs/:proofId` | Soft-delete a proof file from your own view (your provider can still see it) |
-
-## Subscriptions (authenticated)
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/v1/subscriptions` | Start a paid subscription for the authenticated tenant — works while still in sandbox or after promotion, requires a verified email |
-| `GET` | `/v1/subscriptions/me` | Full subscription/payment history, newest first, with `rejection_reason_code` when applicable — payment reviews and renewals fire notifications too, but activation itself doesn't, so this is still how a tenant checks status |
-| `POST` | `/v1/subscriptions/change-tier` | Upgrade (immediate, prorated payment) or downgrade (scheduled, no payment) an existing `ACTIVE` subscription's tier — use `DELETE` below to cancel entirely |
-| `DELETE` | `/v1/subscriptions` | Schedule a cancellation at period end — drops the tenant to FREE with no refund when `current_period_end` passes |
+> **How do you pay your subscription?** From the web app — by card or bank transfer. There are no endpoints to integrate for that; see [Your subscription & billing](../paying-your-subscription.md).
 
 ## Tenants (authenticated)
 

@@ -221,7 +221,65 @@ Run the job again immediately after 4a-4c with no further SQL changes — expect
 
 ---
 
-## 5. Combined scenario: cancel a monthly plan, restart it next "month"
+## 5. Payphone reconciliation job
+
+**`POST /v1/admin/jobs/payphone-reconciliation`**
+
+Two sweeps over card-payment attempts (ADR-028). Neither finds anything against fresh data, and both need a `payphone_transactions` row to exist — mint one with `POST /v1/payments/:id/payphone-session` (needs `PAYPHONE_TOKEN`/`PAYPHONE_STORE_ID` set), or insert one directly:
+
+```sql
+INSERT INTO payphone_transactions (payment_id, client_transaction_id, amount_cents)
+VALUES ('<PAYMENT_ID>', 'deadbeefdeadbeef', 2000);
+```
+
+### 5a. Unresolved outcome — the payer closed the browser
+
+The return page never loaded, so confirm never fired.
+
+```sql
+UPDATE payphone_transactions
+SET status = 'PENDING', created_at = NOW() - INTERVAL '20 minutes'
+WHERE client_transaction_id = 'deadbeefdeadbeef';
+```
+
+Run the job. It calls Payphone's confirm purely to learn the outcome, so this step **requires reachable Payphone credentials** — with none, the sweep leaves the row `PENDING` and reports `payphoneOutcomesResolved: 0`, which is itself the correct behaviour to verify (an unreachable vendor must never mark an attempt terminal). Against the test store, expect the row to land on `EXPIRED` (Payphone auto-reverses at 5 minutes) or `APPROVED` if the charge really did go through.
+
+### 5b. Captured but never applied — the two-phase gap
+
+The most important one: money captured, process died before the tenant was credited.
+
+```sql
+UPDATE payphone_transactions
+SET status = 'APPROVED', applied_at = NULL, confirmed_at = NOW(),
+    payphone_transaction_id = 999, status_code = 3,
+    confirm_response = '{"statusCode":3}'::jsonb
+WHERE client_transaction_id = 'deadbeefdeadbeef';
+
+-- the payment must still be unsettled for this to be a real gap
+UPDATE payments SET status = 'PENDING', verified_at = NULL WHERE id = '<PAYMENT_ID>';
+```
+
+Run the job — expect `payphoneChargesApplied: 1`, and then:
+
+```sql
+SELECT p.status, p.applied_from IS NOT NULL AS snapshot, s.status AS sub_status, s.tier
+FROM payments p JOIN subscriptions s ON s.id = p.subscription_id
+WHERE p.id = '<PAYMENT_ID>';
+```
+
+`payments.status` should be `VERIFIED`, `applied_from` populated (the refund endpoint depends on it), and the subscription `ACTIVE`. No Payphone credentials are needed for this sweep — it never calls the vendor.
+
+### 5c. Idempotence — run it twice
+
+Immediately re-run the job after 5b. Expect `payphoneChargesApplied: 0` and, critically, `current_period_end` unchanged — an already-settled payment must only receive its `applied_at` stamp, never a second application (which would double-extend a period or double-flip a tier).
+
+### 5d. Nothing due — confirm it's a no-op
+
+With no `PENDING` rows older than 10 minutes and no `APPROVED`-unapplied rows, expect `{ payphoneOutcomesResolved: 0, payphoneChargesApplied: 0 }`.
+
+---
+
+## 6. Combined scenario: cancel a monthly plan, restart it next "month"
 
 1. Run **2c** above to simulate the lapse — tier drops to FREE, tenant flips to `PAST_DUE`.
 2. Confirm quota records keep being created regardless — run **3a** any time during the gap; the rollover happens on schedule with whatever cap currently applies (FREE, in this case), completely unaware a subscription ever existed.

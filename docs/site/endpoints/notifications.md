@@ -146,13 +146,13 @@ Mismo disparador que `PAYMENT_VERIFIED`, pero para una decisión de rechazo.
 
 **Severidad:** `WARNING`
 
-**Metadata:** misma estructura que `PAYMENT_VERIFIED`, con `rejectionReasonCode` poblado (uno de `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — reenvía el comprobante para el mismo `paymentId` vía [Submit Payment Proof](submit-payment-proof.md).
+**Metadata:** misma estructura que `PAYMENT_VERIFIED`, con `rejectionReasonCode` poblado (uno de `AMOUNT_MISMATCH`, `TRANSFER_NOT_FOUND`, `WRONG_ACCOUNT`, `ILLEGIBLE_PROOF`, `DUPLICATE_SUBMISSION`, `OTHER`) — reenvía el comprobante para el mismo `paymentId` vía [Tu suscripción y cómo pagarla](../paying-your-subscription.md).
 
 ---
 
 ### `SUBSCRIPTION_RENEWAL_DUE`
 
-Creada automáticamente por el job programado del proveedor unos 7 días antes del `current_period_end` de tu suscripción. Ya hay un nuevo pago `RENEWAL` abierto en el momento en que se dispara esto — envía el comprobante vía [Submit Payment Proof](submit-payment-proof.md) usando el `paymentId` de la metadata. Un correo equivalente incluye las instrucciones de transferencia bancaria.
+Creada automáticamente por el job programado del proveedor unos 7 días antes del `current_period_end` de tu suscripción. Ya hay un nuevo pago `RENEWAL` abierto en el momento en que se dispara esto — envía el comprobante vía [Tu suscripción y cómo pagarla](../paying-your-subscription.md) usando el `paymentId` de la metadata. Un correo equivalente incluye las instrucciones de transferencia bancaria.
 
 **Severidad:** `WARNING`
 
@@ -174,7 +174,7 @@ Creada automáticamente por el job programado del proveedor unos 7 días antes d
 
 ### `SUBSCRIPTION_PAST_DUE_WARNING`
 
-Creada automáticamente por el mismo job programado, más adelante en el período de gracia que `SUBSCRIPTION_RENEWAL_DUE` (por defecto, 5 días después de `current_period_end`, con 7 días de gracia en total) — un aviso más urgente y distinto del recordatorio de renovación, antes de que la cuenta pase efectivamente a estado `PAST_DUE`. Envía el comprobante del pago `RENEWAL` ya abierto vía [Submit Payment Proof](submit-payment-proof.md), o inicia una nueva suscripción vía [Create Subscription](create-subscription.md) — ambas rutas quedan disponibles incluso después de pasar a `PAST_DUE` (ver más abajo).
+Creada automáticamente por el mismo job programado, más adelante en el período de gracia que `SUBSCRIPTION_RENEWAL_DUE` (por defecto, 5 días después de `current_period_end`, con 7 días de gracia en total) — un aviso más urgente y distinto del recordatorio de renovación, antes de que la cuenta pase efectivamente a estado `PAST_DUE`. Envía el comprobante del pago `RENEWAL` ya abierto vía [Tu suscripción y cómo pagarla](../paying-your-subscription.md), o inicia una nueva suscripción vía [Tu suscripción y cómo pagarla](../paying-your-subscription.md) — ambas rutas quedan disponibles incluso después de pasar a `PAST_DUE` (ver más abajo).
 
 **Severidad:** `WARNING`
 
@@ -193,7 +193,7 @@ Creada automáticamente por el mismo job programado, más adelante en el períod
 
 ### `SUBSCRIPTION_EXPIRED`
 
-Creada automáticamente por el mismo job programado cuando una suscripción pasa unos 7 días de `current_period_end` sin que se verifique ninguna renovación. Para cuando esto se dispara, el tenant ya fue movido al plan FREE **y** su cuenta (`GET /v1/tenants/me`'s `status`) pasa a `PAST_DUE` — distinto de `SUSPENDED`: es una cuenta que puede recuperarse por sí misma iniciando una nueva suscripción vía [Create Subscription](create-subscription.md) y pagándola; no requiere contactar soporte. Un correo equivalente explica lo ocurrido.
+Creada automáticamente por el mismo job programado cuando una suscripción pasa unos 7 días de `current_period_end` sin que se verifique ninguna renovación. Para cuando esto se dispara, el tenant ya fue movido al plan FREE **y** su cuenta (`GET /v1/tenants/me`'s `status`) pasa a `PAST_DUE` — distinto de `SUSPENDED`: es una cuenta que puede recuperarse por sí misma iniciando una nueva suscripción vía [Tu suscripción y cómo pagarla](../paying-your-subscription.md) y pagándola; no requiere contactar soporte. Un correo equivalente explica lo ocurrido.
 
 **Severidad:** `ERROR`
 
