@@ -133,6 +133,8 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `SENTRY_DSN` | |
 | `BETTERSTACK_SOURCE_TOKEN` | |
 | `RABBITMQ_URL` | |
+| `PAYPHONE_TOKEN` | Card payments. Both this and `PAYPHONE_STORE_ID` unset means `POST /v1/payments/:id/payphone-session` returns `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and only SPI transfer works — a deliberate degradation, not a failure. Staging and production need **different** values: a Payphone application is bound to its registered domain. |
+| `PAYPHONE_STORE_ID` | Not sensitive on its own, but kept beside the token so the pair is configured together. |
 
 ### GitHub Environment: `staging` — Variables
 
@@ -155,6 +157,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `OPERATOR_RUC` | |
 | `OPERATOR_EMAIL` | |
 | `OPERATOR_ADDRESS` | |
+| `AGREEMENTS_ENABLED` | Leave **unset** to keep legal documents enabled (the default). Set to exactly `false` to run without Terms/Privacy/DPA — the public agreement endpoints then behave as if nothing were published and `POST /v1/tenants/promote` is not gated on acceptance. An unset variable renders empty, and `'' !== 'false'`, so this fails **closed** — unlike `IVA_RATE`, an empty value here is safe. |
 | `BETTERSTACK_INGESTING_HOST` | Only needed if the Betterstack source's setup page shows a specific regional ingesting host rather than the shared default — not sensitive, so a Variable rather than a Secret |
 
 Not set at all (code-level defaults are correct as-is): `PORT`, `DOCS_BASE_URL`, `VERIFICATION_TOKEN_TTL_HOURS`, `SRI_TEST_BASE_URL`, `SRI_PROD_BASE_URL`, `RATE_LIMIT_WINDOW_MS`, `RABBITMQ_SRI_EXCHANGE`, `QUEUE_RECONCILE_*`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE` (must stay genuinely absent, not empty — see `docs/terraform-digitalocean-setup.md`'s env var reference table). `REDIS_URL` is a separate case — not a GitHub Secret/Variable at all, but not genuinely unset either: it's hardcoded directly into the deploy workflow's heredoc (`redis://redis:6379`, deterministic across environments) — see `docs/terraform-digitalocean-setup.md`'s env var reference table.
@@ -190,6 +193,7 @@ Written to `/etc/cron.d/comprobify-jobs` by cloud-init at first boot. Each entry
 | Subscriptions | `0 6 * * *` | `docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/subscriptions` |
 | Quota | `10 6 * * *` | `docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/quota` |
 | Queue Reconciliation | `*/5 * * * *` | `docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
+| Payphone Reconciliation | `*/5 * * * *` | `docker compose exec -T api node scripts/run-admin-job.js /v1/admin/jobs/payphone-reconciliation` |
 
 Each entry writes to its own plain log file — `/opt/comprobify/logs/cron-<name>.log`, prefixed per-run with an ISO timestamp (`date -Is`) — not `logger`/syslog: root SSH is fully disabled on this box, and reading the systemd journal needs root or the `systemd-journal` group, neither of which the unprivileged deploy user has. Monitor with `tail -100 /opt/comprobify/logs/cron-notifications.log` (swap in `-subscriptions`/`-quota`/`-queue-reconciliation`; `tail -f` to follow live) on the droplet. Rotated weekly, 4 weeks kept, via `/etc/logrotate.d/comprobify-cron`. `scripts/run-admin-job.js` needs `API_BASE_URL` and `ADMIN_SECRET`; both are picked up from the `api` container's own `.env`, so nothing extra is configured for cron itself. Harmless no-op if a job fires before the first deploy or mid-redeploy (no `api` container to exec into yet).
 
@@ -338,10 +342,10 @@ curl -s https://api-staging.comprobify.com/v1/admin/tenants \
 ```
 
 - Confirm the deploy succeeded: `ssh cpfydeploy9x@<droplet-ip> "cd /opt/comprobify && docker compose logs api"` shows all pending migrations applied before the server starts accepting requests.
-- Confirm all four cron jobs are running via `tail -n 50 /opt/comprobify/logs/cron-*.log` on the droplet. A missing or erroring entry usually means `ADMIN_SECRET` has drifted out of sync between the container's `.env` and what's expected, or the `api` container is down.
+- Confirm all five cron jobs are running via `tail -n 50 /opt/comprobify/logs/cron-*.log` on the droplet. A missing or erroring entry usually means `ADMIN_SECRET` has drifted out of sync between the container's `.env` and what's expected, or the `api` container is down.
 - Confirm the worker container is running (`docker compose ps`) and its logs show it consuming `sri.send`, `sri.authorize`, and `app.effects`; CloudAMQP's management UI should show non-zero consumers on all three queues.
 - Confirm the Mailgun webhook is registered against the staging domain and pointed at `https://api-staging.comprobify.com/v1/mailgun/webhook`.
-- Confirm agreement HTML renders real, non-obfuscated email addresses: `curl -s https://api-staging.comprobify.com/v1/agreements/TERMS | grep -o '\[email.*protected\]'` should return nothing.
+- Confirm agreement HTML renders real, non-obfuscated email addresses: `curl -s https://api-staging.comprobify.com/v1/agreements/TERMS | grep -o '\[email.*protected\]'` should return nothing. **Skip this check when `AGREEMENTS_ENABLED=false`** — that endpoint correctly returns `404 AGREEMENT_NOT_FOUND` when legal documents are switched off, which is not a Cloudflare obfuscation problem.
 - Queue a test document through `POST /:key/send`, confirm it reaches 202/`PENDING_SEND`, and confirm the worker moves it to `RECEIVED`/`RETURNED` shortly after.
 
 ---

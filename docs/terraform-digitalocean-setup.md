@@ -645,6 +645,8 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             ADMIN_SECRET=${{ secrets.ADMIN_SECRET }}
             INTERNAL_SERVICE_SECRET=${{ secrets.INTERNAL_SERVICE_SECRET }}
             EMAIL_FROM=${{ vars.EMAIL_FROM }}
+            EMAIL_PROVIDER=${{ vars.EMAIL_PROVIDER }}
+            EMAIL_FROM_DOCUMENTS=${{ vars.EMAIL_FROM_DOCUMENTS }}
             MAILGUN_API_KEY=${{ secrets.MAILGUN_API_KEY }}
             MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN }}
             MAILGUN_WEBHOOK_SIGNING_KEY=${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
