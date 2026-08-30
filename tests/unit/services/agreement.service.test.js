@@ -10,11 +10,13 @@ const agreementService = require('../../../src/services/agreement.service');
 describe('AgreementService', () => {
   const originalOperator = { ...config.operator };
   const originalAdminNotificationEmail = config.adminNotificationEmail;
+  const originalAgreements = { ...config.agreements };
 
   afterEach(() => {
     jest.clearAllMocks();
     config.operator = { ...originalOperator };
     config.adminNotificationEmail = originalAdminNotificationEmail;
+    config.agreements = { ...originalAgreements };
   });
 
   describe('publish', () => {
@@ -334,6 +336,41 @@ describe('AgreementService', () => {
     test('exposes exactly TERMS, PRIVACY, DPA', () => {
       expect(agreementService.AGREEMENT_TYPES).toEqual(['TERMS', 'PRIVACY', 'DPA']);
       expect(Object.keys(agreementService.AGREEMENT_FILE_MAP).sort()).toEqual(['DPA', 'PRIVACY', 'TERMS']);
+    });
+  });
+  // AGREEMENTS_ENABLED=false is what lets the product launch without legal
+  // documents. These two reads are the choke point every tenant-facing consumer
+  // goes through, so gating them here is what makes the whole feature dormant.
+  describe('AGREEMENTS_ENABLED=false', () => {
+    beforeEach(() => { config.agreements = { enabled: false }; });
+
+    test('listCurrent returns nothing without hitting the database', async () => {
+      const result = await agreementService.listCurrent();
+
+      expect(result).toEqual([]);
+      expect(agreementModel.findAllCurrent).not.toHaveBeenCalled();
+    });
+
+    test('getCurrent throws AGREEMENT_NOT_FOUND without hitting the database', async () => {
+      await expect(agreementService.getCurrent('TERMS')).rejects.toMatchObject({
+        statusCode: 404,
+        code: 'AGREEMENT_NOT_FOUND',
+      });
+      expect(agreementModel.findCurrentByType).not.toHaveBeenCalled();
+    });
+
+    test('a published document is still hidden — the flag wins over the data', async () => {
+      agreementModel.findAllCurrent.mockResolvedValue([{ document_type: 'TERMS', version: '1' }]);
+
+      expect(await agreementService.listCurrent()).toEqual([]);
+    });
+
+    // Content can be prepared while the tenant-facing feature is off, so the
+    // flag can be flipped on later without a scramble.
+    test('admin lookups by id keep working', async () => {
+      agreementModel.findById.mockResolvedValue({ id: 'x', content_markdown: '# t' });
+
+      await expect(agreementService.getById('x')).resolves.toMatchObject({ id: 'x' });
     });
   });
 });

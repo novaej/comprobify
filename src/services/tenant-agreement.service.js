@@ -1,3 +1,4 @@
+const config = require('../config');
 const tenantAgreementModel = require('../models/tenant-agreement.model');
 const agreementService = require('./agreement.service');
 const issuerModel = require('../models/issuer.model');
@@ -81,7 +82,7 @@ async function getStatus(tenantId) {
   // published template has been accepted — hasPublishedAgreements is what
   // lets a caller tell "nothing to view yet" apart from "all caught up".
   if (templates.length === 0) {
-    return { needsAcceptance: false, outdated: [], hasPublishedAgreements: false };
+    return { needsAcceptance: false, outdated: [], hasPublishedAgreements: false, agreementsEnabled: config.agreements.enabled };
   }
 
   // Lazy generation: ensure the tenant has a row for every current template
@@ -112,7 +113,7 @@ async function getStatus(tenantId) {
     }
   }
 
-  return { needsAcceptance: outdated.length > 0, outdated, hasPublishedAgreements: true };
+  return { needsAcceptance: outdated.length > 0, outdated, hasPublishedAgreements: true, agreementsEnabled: config.agreements.enabled };
 }
 
 async function hasAllAccepted(tenantId) {

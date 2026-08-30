@@ -3179,7 +3179,7 @@
               "mode": "raw",
               "raw": "{\n  \"documentType\": \"TERMS\",\n  \"version\": \"2026-07-01\"\n}"
             },
-            "description": "documentType and version are required. If contentMarkdown is omitted (as here), content is read from docs/agreements/*.md on the server. Pass an optional contentMarkdown string in the body instead to publish edited content directly, without touching the filesystem or redeploying — see 'Publish Agreement (Edited Content)' below."
+            "description": "documentType and version are required. If contentMarkdown is omitted (as here), content is read from docs/agreements/*.md on the server. Pass an optional contentMarkdown string in the body instead to publish edited content directly, without touching the filesystem or redeploying — see 'Publish Agreement (Edited Content)' below.\n\nPublishing works even when the deployment runs with AGREEMENTS_ENABLED=false — that flag gates the tenant-facing reads, not the admin write path. So documents can be published and reviewed first, then the flag flipped on. Note that flipping it on makes hasAllAccepted() false for every tenant, which blocks POST /v1/tenants/promote with 403 AGREEMENT_ACCEPTANCE_REQUIRED until each one re-accepts."
           }
         },
         {

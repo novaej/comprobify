@@ -22,7 +22,8 @@ GET /v1/tenants/agreements
   "agreements": {
     "needsAcceptance": false,
     "outdated": [],
-    "hasPublishedAgreements": true
+    "hasPublishedAgreements": true,
+    "agreementsEnabled": true
   }
 }
 ```
@@ -43,7 +44,8 @@ GET /v1/tenants/agreements
         "acceptUrl": "/v1/tenants/agreements"
       }
     ],
-    "hasPublishedAgreements": true
+    "hasPublishedAgreements": true,
+    "agreementsEnabled": true
   }
 }
 ```
@@ -56,7 +58,8 @@ GET /v1/tenants/agreements
   "agreements": {
     "needsAcceptance": false,
     "outdated": [],
-    "hasPublishedAgreements": false
+    "hasPublishedAgreements": false,
+    "agreementsEnabled": true
   }
 }
 ```
@@ -72,8 +75,14 @@ Cada entrada en `outdated` indica el tipo específico de documento que cambió. 
 | `outdated[].status` | `PENDING` (generada, no aceptada), o `NOT_GENERATED` (plantilla publicada pero instancia aún no creada) |
 | `outdated[].url` | URL de la instancia personalizada del documento del tenant (`GET /v1/tenants/agreements/:type`) |
 | `hasPublishedAgreements` | `false` únicamente cuando nunca se ha publicado ninguna plantilla de acuerdo (entorno nuevo o previo al lanzamiento) — distingue ese caso de `needsAcceptance: false`, que también significa "todo aceptado". Un valor `false` indica que `outdated` está vacío porque no hay nada que mostrar todavía, no porque el tenant esté al día. |
+| `agreementsEnabled` | `false` cuando el operador ha desactivado por completo los documentos legales en este despliegue. En ese caso `hasPublishedAgreements` también es `false`, no se genera ninguna instancia y `POST /v1/tenants/promote` **no** exige aceptación. Úsalo para ocultar la sección de documentos legales en tu interfaz: distingue "desactivado" de "aún no publicado". |
 
 **Llamar a este endpoint genera automáticamente cualquier instancia `PENDING` faltante** para nuevas versiones de plantilla — no se necesita una llamada de backfill separada después de que el administrador publique una actualización.
+
+
+::: tip Documentos legales desactivados
+Si `agreementsEnabled` es `false`, este despliegue funciona sin Términos, Política de Privacidad ni DPA. Los endpoints públicos de acuerdos responden como si no hubiera nada publicado y la promoción a producción no requiere aceptación. Nada se elimina: si el operador vuelve a activarlos, se restaura lo ya publicado y aceptado.
+:::
 
 ### Errores
 

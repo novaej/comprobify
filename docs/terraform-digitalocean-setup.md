@@ -588,6 +588,8 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `RABBITMQ_SRI_EXCHANGE` | No | Default `sri.direct` is fine |
 | `QUEUE_RECONCILE_SEND_STALE_MINUTES` / `QUEUE_RECONCILE_AUTHORIZE_DELAY_MINUTES` / `QUEUE_RECONCILE_AUTHORIZE_STALE_MINUTES` / `QUEUE_RECONCILE_EFFECT_STALE_MINUTES` / `QUEUE_RECONCILE_BATCH_LIMIT` | No | Defaults (`5`, `5`, `5`, `5`, `100`) are reasonable |
 | `PENDING_EFFECTS_MAX_ATTEMPTS` | No | Default `5` is fine |
+| `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` | No — but the card-payment endpoints are dead without them | Both unset means `POST /v1/payments/:id/payphone-session` returns `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and only SPI bank transfer works; billing is otherwise unaffected, which is the intended degradation. Staging and production need **different** values — a Payphone application is bound to its registered domain, so the staging store's credentials will not authorise a production charge. |
+| `AGREEMENTS_ENABLED` | No | Unset (or any value other than the exact string `false`) keeps legal documents enabled. Unlike `IVA_RATE` below, an empty value from an unset GitHub Variable is **safe** here — `'' !== 'false'` evaluates to enabled, so the acceptance gate fails closed rather than open. Set it to `false` only to launch without Terms/Privacy/DPA. |
 | `IVA_RATE` | **No — must actually be omitted, not set to an empty value** | Default `0.15` is Ecuador's current correct rate, but this one reads via `!== undefined` instead of `||`, so a *present-but-empty* value (what an unset GitHub Variable renders as, if referenced in the heredoc at all) produces `parseFloat('')` = `NaN` and silently corrupts every tax/pricing calculation. Leaving the variable out of GitHub entirely — so it's genuinely absent from the environment, not empty — is the only safe way to get the correct default. Only add it if you need to override the actual rate. |
 
 If you already created a GitHub Secret/Variable for anything in the "No" rows while we were still figuring this out (`QUEUE_RECONCILE_EFFECT_STALE_MINUTES`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE`, `DOCS_BASE_URL`), it's safe to delete those now — they're unused by the trimmed `.env` heredoc below and won't be referenced by anything.
@@ -602,6 +604,8 @@ Split, for the "Yes" rows only:
 | `MAILGUN_API_KEY` | `BANK_TRANSFER_BANK_NAME` / `ACCOUNT_TYPE` / `ACCOUNT_NUMBER` / `ACCOUNT_HOLDER` / `IDENTIFICATION` — `deployment.md` already calls these "Display text only, not a secret" |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | `ADMIN_NOTIFICATION_EMAIL`, `OPERATOR_NAME`, `OPERATOR_RUC`, `OPERATOR_EMAIL`, `OPERATOR_ADDRESS` — an email address and public business-registry identity info, not credentials |
 | | `BETTERSTACK_INGESTING_HOST` — just a hostname, not sensitive on its own (unlike the source token above, which is) |
+| `PAYPHONE_TOKEN` (a bearer credential that can capture charges) | `AGREEMENTS_ENABLED` — a feature flag, not a secret. Leave it unset to keep legal documents enabled; set it to exactly `false` to run without them |
+| `PAYPHONE_STORE_ID` (not sensitive alone, but kept beside the token so the pair is configured together) | — |
 | `RABBITMQ_URL` (embeds credentials) | — |
 | `SENTRY_DSN` (not catastrophic if leaked, but conventionally kept private — a leaked DSN lets someone spam fake events into your project) | — |
 | `BETTERSTACK_SOURCE_TOKEN` (a real credential — lets someone write arbitrary events into your logs) | — |
@@ -660,6 +664,9 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             OPERATOR_ADDRESS=${{ vars.OPERATOR_ADDRESS }}
             RABBITMQ_URL=${{ secrets.RABBITMQ_URL }}
             REDIS_URL=redis://redis:6379
+            PAYPHONE_TOKEN=${{ secrets.PAYPHONE_TOKEN }}
+            PAYPHONE_STORE_ID=${{ secrets.PAYPHONE_STORE_ID }}
+            AGREEMENTS_ENABLED=${{ vars.AGREEMENTS_ENABLED }}
             EOF
             chmod 600 /opt/comprobify/.env
             cd /opt/comprobify

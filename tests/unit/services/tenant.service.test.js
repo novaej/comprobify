@@ -23,6 +23,8 @@ const sequentialService = require('../../../src/services/sequential.service');
 const subscriptionService = require('../../../src/services/subscription.service');
 const tenantService = require('../../../src/services/tenant.service');
 const { ALL_SCOPES } = require('../../../src/constants/api-key-scopes');
+const tenantAgreementService = require('../../../src/services/tenant-agreement.service');
+const config = require('../../../src/config');
 
 describe('TenantService', () => {
   afterEach(() => {
@@ -30,7 +32,13 @@ describe('TenantService', () => {
   });
 
   describe('promote', () => {
+    const originalAgreements = { ...config.agreements };
+    afterEach(() => { config.agreements = { ...originalAgreements }; });
+
     beforeEach(() => {
+      // clearAllMocks() does not reset resolved values, so restore the default
+      // explicitly or a test that sets false leaks into every later one.
+      tenantAgreementService.hasAllAccepted.mockResolvedValue(true);
       issuerModel.findAllByTenantId.mockResolvedValue([]);
       apiKeyModel.findActiveByTenantId.mockResolvedValue([]);
       tenantModel.promote.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: false });
@@ -50,6 +58,28 @@ describe('TenantService', () => {
         statusCode: 403,
         code: 'EMAIL_VERIFICATION_REQUIRED',
       });
+    });
+
+    test('is blocked when a legal document has not been accepted', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
+      tenantAgreementService.hasAllAccepted.mockResolvedValue(false);
+
+      await expect(tenantService.promote('00000000-0000-0000-0000-000000000001')).rejects.toMatchObject({
+        statusCode: 403,
+        code: 'AGREEMENT_ACCEPTANCE_REQUIRED',
+      });
+    });
+
+    // Launching without legal documents: the gate must not fire, and must not
+    // even be consulted, or an unpublished-agreements deployment blocks every
+    // promotion with no way to satisfy it.
+    test('is not gated on acceptance when AGREEMENTS_ENABLED=false', async () => {
+      config.agreements = { enabled: false };
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
+      tenantAgreementService.hasAllAccepted.mockResolvedValue(false);
+
+      await expect(tenantService.promote('00000000-0000-0000-0000-000000000001')).resolves.toBeDefined();
+      expect(tenantAgreementService.hasAllAccepted).not.toHaveBeenCalled();
     });
 
     test('rejects when the tenant is already in production', async () => {

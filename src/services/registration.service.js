@@ -135,7 +135,9 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   // Durably enqueued (see ADR-022) — registration still succeeds if
   // generation fails or is delayed; the admin can also backfill via
   // POST /v1/admin/tenants/:id/agreements.
-  {
+  // Skipped when agreements are disabled: the handler would generate nothing
+  // (listCurrent() is empty), so this would be one queued no-op per signup.
+  if (config.agreements.enabled) {
     const effect = await pendingEffectService.enqueue(EffectTypes.TENANT_AGREEMENT_GENERATE, tenant.id, { tenantId: tenant.id });
     pendingEffectService.dispatch(effect);
   }

@@ -113,6 +113,9 @@ async function listVersionsByType(documentType) {
 }
 
 async function getCurrent(documentType) {
+  if (!config.agreements.enabled) {
+    throw new NotFoundError('Legal document', ErrorCodes.AGREEMENT_NOT_FOUND);
+  }
   const doc = await agreementModel.findCurrentByType(documentType);
   if (!doc) throw new NotFoundError('Legal document', ErrorCodes.AGREEMENT_NOT_FOUND);
   return doc;
@@ -128,7 +131,14 @@ async function getById(id) {
   return doc;
 }
 
+// getCurrent() and listCurrent() are the only two reads every tenant-facing
+// consumer goes through, so gating them here is what makes AGREEMENTS_ENABLED
+// cascade: the public list empties, the public HTML 404s, getStatus() reports
+// nothing published, generateForTenant() creates nothing, validateTermsVersion()
+// no-ops, and promote() stops being gated. Admin publish/activate paths use
+// different functions and are deliberately left working.
 async function listCurrent() {
+  if (!config.agreements.enabled) return [];
   return agreementModel.findAllCurrent();
 }
 
