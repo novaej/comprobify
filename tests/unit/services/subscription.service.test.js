@@ -386,7 +386,7 @@ describe('SubscriptionService', () => {
         expect(result).toEqual({ subscription: { id: '00000000-0000-0000-0000-000000000010', tier: 'STARTER' }, payment: null, amount: 0 });
       });
 
-      test('same-interval upgrade is priced at the FULL sticker price, not prorated', async () => {
+      test('same-interval upgrade charges the difference, not the full sticker price', async () => {
         const now = Date.now();
         tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
         subscriptionModel.findActiveByTenantId.mockResolvedValue({
@@ -401,12 +401,14 @@ describe('SubscriptionService', () => {
         const [createArgs] = paymentModel.create.mock.calls[0];
         expect(createArgs.targetTier).toBe('GROWTH');
         expect(createArgs.targetBillingInterval).toBe('MONTHLY');
-        expect(createArgs.totalAmount).toBe(90); // full monthly-GROWTH price, not the ~50%-remaining prorated amount
+        // GROWTH $90 - STARTER $20 already paid = $70. Not prorated by the
+        // ~50% remaining (sandbox has no real period), but not $90 either.
+        expect(createArgs.totalAmount).toBe(70);
         expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
         expect(result).toEqual({ subscription: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000010' }), payment: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000050' }), bankTransfer: config.bankTransfer });
       });
 
-      test('interval-changing upgrade is priced at the full new-interval price, same as production', async () => {
+      test('interval-changing upgrade also credits the previously paid tier', async () => {
         tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
         subscriptionModel.findActiveByTenantId.mockResolvedValue({
           id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', pending_tier: null, billing_interval: 'MONTHLY',
@@ -418,7 +420,7 @@ describe('SubscriptionService', () => {
         const [createArgs] = paymentModel.create.mock.calls[0];
         expect(createArgs.targetTier).toBe('GROWTH');
         expect(createArgs.targetBillingInterval).toBe('YEARLY');
-        expect(createArgs.totalAmount).toBe(900); // full yearly-GROWTH price
+        expect(createArgs.totalAmount).toBe(880); // yearly GROWTH $900 - monthly STARTER $20
       });
     });
   });

@@ -350,9 +350,32 @@ async function requestSandboxTierChange(tenant, subscription, tier, targetInterv
     return { subscription: updated, payment: null, amount: 0 };
   }
 
-  // Sandbox changes always apply immediately (see comment above), so "now" is correct.
-  const fullPrice = await pricingService.getCurrentPrice(tier, targetInterval);
-  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
+  // Credit what the tenant already paid for their current tier against the new
+  // one — sandbox has no period to prorate against, but charging full sticker
+  // price on top of the previous payment double-charges the overlap.
+  const targetPrice = await pricingService.getCurrentPrice(tier, targetInterval);
+  const currentPrice = await pricingService.getCurrentPrice(subscription.tier, subscription.billing_interval);
+  const netPrice = Math.max(0, Math.round((targetPrice - currentPrice) * 100) / 100);
+
+  // Fully covered by the previous payment — apply free rather than opening a $0
+  // payment nobody can send proof of.
+  if (netPrice <= 0) {
+    const updated = await subscriptionModel.applyTierChange(subscription.id, tier, targetInterval);
+    await tenantModel.updateTier(tenant.id, tier);
+    await tenantQuotaService.setCap(tenant.id, tier);
+    await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: tier,
+      fromBillingInterval: subscription.billing_interval,
+      toBillingInterval: targetInterval,
+      totalAmount: 0,
+      note: 'sandbox — fully covered by the previous payment, applied immediately',
+    });
+    return { subscription: updated, payment: null, amount: 0 };
+  }
+
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(netPrice);
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
     amount: baseAmount,
