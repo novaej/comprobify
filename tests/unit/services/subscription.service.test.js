@@ -556,7 +556,7 @@ describe('SubscriptionService', () => {
 
         await subscriptionService.applyVerifiedPayment(payment, subscription);
 
-        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH');
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', null);
         expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
         expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'GROWTH');
         // The upgrade takes over the remainder of the SAME cycle — period unchanged.
@@ -566,10 +566,12 @@ describe('SubscriptionService', () => {
         });
         expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'TIER_CHANGED', {
           subscriptionId: SUB, fromTier: 'STARTER', toTier: 'GROWTH', paymentId: PAY,
+          fromBillingInterval: 'MONTHLY', toBillingInterval: 'MONTHLY',
         });
       });
 
-      test('a payment with target_billing_interval set schedules the change for period-end instead of applying it now', async () => {
+      test('a production interval change is scheduled for period-end, not applied now', async () => {
+        tenantModel.findById.mockResolvedValue({ id: TENANT, status: 'ACTIVE', subscription_tier: 'STARTER', sandbox: false });
         const payment = { id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' };
 
         await subscriptionService.applyVerifiedPayment(payment, subscription);
@@ -580,6 +582,30 @@ describe('SubscriptionService', () => {
         expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'TIER_CHANGE_SCHEDULED', expect.objectContaining({
           toTier: 'GROWTH', toBillingInterval: 'YEARLY', effectiveAt: subscription.current_period_end,
         }));
+      });
+
+      // The sandbox bug: targetInterval is never null (it falls back to the
+      // subscription's own), so every sandbox change carried
+      // target_billing_interval and got deferred to a period_end that
+      // promotion then discards — the tenant paid and the tier never flipped.
+      test('a sandbox change applies immediately instead of being scheduled', async () => {
+        tenantModel.findById.mockResolvedValue({ id: TENANT, status: 'ACTIVE', subscription_tier: 'STARTER', sandbox: true });
+        const payment = { id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'MONTHLY' };
+
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', 'MONTHLY');
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
+      });
+
+      test('a sandbox interval change carries the new interval through, not just the tier', async () => {
+        tenantModel.findById.mockResolvedValue({ id: TENANT, status: 'ACTIVE', subscription_tier: 'STARTER', sandbox: true });
+        const payment = { id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' };
+
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', 'YEARLY');
       });
 
       // period_start is what marks a TIER_CHANGE payment as still-unapplied
@@ -1122,7 +1148,7 @@ describe('SubscriptionService', () => {
 
       const result = await subscriptionService.reviewPayment('00000000-0000-0000-0000-000000000021', 'VERIFIED');
 
-      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', 'GROWTH');
+      expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', 'GROWTH', null);
       expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
       expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000011', tier: 'GROWTH' });
     });
