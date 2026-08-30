@@ -32,6 +32,13 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('Startup failed:', err.message);
+  // Log the whole error, not err.message. pg-pool throws an AggregateError when
+  // the database is unreachable, and AggregateError.message is EMPTY — the real
+  // causes are in err.errors[]. Printing only .message turned "Postgres isn't
+  // running" into a bare "Startup failed:" with nothing after it, which is the
+  // single most common startup failure and the least self-explanatory way to
+  // report it.
+  console.error('Startup failed:', err.message || `(${err.name || 'Error'} with no message)`);
+  console.error(err);
   process.exit(1);
 });
