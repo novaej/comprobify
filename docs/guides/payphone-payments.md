@@ -94,14 +94,14 @@ Every card attempt is a row in `payphone_transactions` — **one row per attempt
 ### The confirm call couldn't reach Payphone
 
 **Tenant sees:** `502 PAYPHONE_CONFIRM_FAILED` — "will be reconciled automatically shortly."
-**Data:** attempt stays `PENDING`. **Deliberately not marked terminal**: a transport failure means the charge's real state is *unknown*, and recording it as declined would strand real money.
-**Action:** none immediately. The reconciliation job asks Payphone again within ~5 minutes and records whichever way it went. If it turns out approved, the same job then applies it.
+**Data:** attempt stays `PENDING`, but **`payphone_transaction_id` is recorded**. Deliberately not marked terminal: the charge's real state is unknown, and recording it as declined would strand real money.
+**Action:** none. The reconciliation job retries the confirm with that id. If the original request actually reached Payphone and only the response was lost, the charge *was* captured — this retry is what finds it and credits the tenant. Without the id persisted there is nothing to look the charge up by, and it would be marked `EXPIRED` and lost.
 
 ### Payer closed the browser before the return page loaded
 
 **Tenant sees:** nothing. They paid and navigated away.
-**Data:** attempt stays `PENDING` indefinitely until reconciliation reaches it. Payphone has auto-reversed the charge at the 5-minute mark, so the tenant's money is back.
-**Action:** none — reconciliation marks it `EXPIRED`. If the tenant complains they were charged, the reversal may not have settled on their statement yet; the attempt row's `raw_confirm_response` is the record of what Payphone actually said.
+**Data:** attempt stays `PENDING` with **no `payphone_transaction_id`** — that id only ever arrives on the return redirect. Payphone auto-reversed the charge at the 5-minute mark, so the tenant's money is back.
+**Action:** none — reconciliation marks it `EXPIRED` directly. It makes no vendor call here: with no id there is nothing to ask about, and the 5-minute window has long passed. If the tenant complains they were charged, the reversal may not have settled on their statement yet; the attempt row's `raw_confirm_response` is the record of what Payphone actually said.
 
 ### The process died between capturing and applying
 

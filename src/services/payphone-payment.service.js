@@ -182,7 +182,12 @@ async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
     const result = await payphoneService.confirm({ id: payphoneId, clientTxId: clientTransactionId });
 
     // State unknown: leave PENDING. Marking it terminal would strand money.
+    // Persist Payphone's id though — without it a later sweep has nothing to
+    // look the charge up by, and a captured-but-unacknowledged charge is lost.
     if (!result.ok && result.error) {
+      await payphoneTransactionModel.updateStatus(attempt.id, 'PENDING', {
+        payphone_transaction_id: payphoneId,
+      }, client);
       await client.query('COMMIT');
       logger.warn('payphone confirm transport failure', {
         clientTransactionId, error: result.error,
@@ -309,9 +314,20 @@ async function reconcileStaleTransactions() {
   let resolved = 0;
   let applied = 0;
 
-  // Sweep 1: the payer never reached the return page, so confirm never fired.
+  // Sweep 1: attempts whose outcome we never learned.
   const stale = await payphoneTransactionModel.findStalePending(STALE_PENDING_MINUTES);
   for (const attempt of stale) {
+    // No vendor id means the return page never reached us, so there is nothing
+    // to look up — and Payphone auto-reversed at 5 minutes, well before this
+    // sweep. Mark it expired rather than making a call that can only fail.
+    if (!attempt.payphone_transaction_id) {
+      await payphoneTransactionModel.updateStatus(attempt.id, 'EXPIRED', { confirmed_at: new Date() });
+      resolved++;
+      continue;
+    }
+
+    // We do have an id: confirm was attempted and its transport failed, so the
+    // charge may have been captured. This retry is what recovers it.
     const result = await payphoneService.confirm({
       id: attempt.payphone_transaction_id, clientTxId: attempt.client_transaction_id,
     });

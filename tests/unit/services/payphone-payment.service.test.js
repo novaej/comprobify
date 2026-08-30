@@ -241,8 +241,24 @@ describe('payphonePaymentService', () => {
       await expect(payphonePaymentService.confirmTransaction(confirmArgs))
         .rejects.toMatchObject({ statusCode: 502, code: 'PAYPHONE_CONFIRM_FAILED' });
 
-      expect(payphoneTransactionModel.updateStatus).not.toHaveBeenCalled();
+      const [, status] = payphoneTransactionModel.updateStatus.mock.calls[0];
+      expect(status).toBe('PENDING');
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+    });
+
+    // Without the id persisted here, reconciliation has nothing to look the
+    // charge up by — and a charge Payphone captured but never acknowledged to
+    // us would be marked EXPIRED and lost.
+    test('a transport failure still records Payphone\'s id so it can be recovered later', async () => {
+      payphoneTransactionModel.claimByClientTransactionId.mockResolvedValue(attempt());
+      paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
+      payphoneService.confirm.mockResolvedValue({ ok: false, error: 'ECONNRESET' });
+
+      await expect(payphonePaymentService.confirmTransaction(confirmArgs)).rejects.toThrow();
+
+      expect(payphoneTransactionModel.updateStatus).toHaveBeenCalledWith(
+        ATTEMPT, 'PENDING', { payphone_transaction_id: 987 }, mockClient
+      );
     });
 
     test('a declined charge marks the attempt CANCELLED and leaves the payment PENDING', async () => {
@@ -322,8 +338,41 @@ describe('payphonePaymentService', () => {
   });
 
   describe('reconcileStaleTransactions', () => {
+    // No vendor id means the return page never reached us. Payphone auto-reversed
+    // at 5 minutes, so there is nothing to ask about and nothing to recover.
+    test('expires an attempt with no vendor id without calling Payphone at all', async () => {
+      payphoneTransactionModel.findStalePending.mockResolvedValue([attempt({ payphone_transaction_id: null })]);
+      payphoneTransactionModel.findApprovedUnapplied.mockResolvedValue([]);
+
+      const result = await payphonePaymentService.reconcileStaleTransactions();
+
+      expect(payphoneService.confirm).not.toHaveBeenCalled();
+      expect(payphoneTransactionModel.updateStatus).toHaveBeenCalledWith(
+        ATTEMPT, 'EXPIRED', { confirmed_at: expect.any(Date) }
+      );
+      expect(result.payphoneOutcomesResolved).toBe(1);
+    });
+
+    // The recovery this whole mechanism exists for: the charge was captured but
+    // our confirm's response was lost, so the tenant was never credited.
+    test('recovers a captured charge whose confirm response was lost in transit', async () => {
+      payphoneTransactionModel.findStalePending.mockResolvedValue([attempt({ payphone_transaction_id: 987 })]);
+      payphoneTransactionModel.findApprovedUnapplied.mockResolvedValue([]);
+      payphoneService.confirm.mockResolvedValue({
+        ok: true, statusCode: 200, body: { statusCode: 3, amount: 2000, transactionId: 987 },
+      });
+
+      const result = await payphonePaymentService.reconcileStaleTransactions();
+
+      expect(payphoneService.confirm).toHaveBeenCalledWith({ id: 987, clientTxId: CTX });
+      expect(payphoneTransactionModel.updateStatus).toHaveBeenCalledWith(
+        ATTEMPT, 'APPROVED', expect.any(Object)
+      );
+      expect(result.payphoneOutcomesResolved).toBe(1);
+    });
+
     test('resolves a stale PENDING attempt Payphone reports as never captured', async () => {
-      payphoneTransactionModel.findStalePending.mockResolvedValue([attempt()]);
+      payphoneTransactionModel.findStalePending.mockResolvedValue([attempt({ payphone_transaction_id: 987 })]);
       payphoneTransactionModel.findApprovedUnapplied.mockResolvedValue([]);
       payphoneService.confirm.mockResolvedValue({ ok: true, statusCode: 400, body: { statusCode: 2 } });
 
@@ -334,7 +383,7 @@ describe('payphonePaymentService', () => {
     });
 
     test('leaves a still-unreachable attempt PENDING for the next tick', async () => {
-      payphoneTransactionModel.findStalePending.mockResolvedValue([attempt()]);
+      payphoneTransactionModel.findStalePending.mockResolvedValue([attempt({ payphone_transaction_id: 987 })]);
       payphoneTransactionModel.findApprovedUnapplied.mockResolvedValue([]);
       payphoneService.confirm.mockResolvedValue({ ok: false, error: 'ETIMEDOUT' });
 
