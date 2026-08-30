@@ -165,7 +165,12 @@ PATCH /v1/admin/tenants/:id/tier   { "tier": "BUSINESS" }
 
 That's an admin override: it sets the tier and quota cap without creating a subscription. BUSINESS is 4,000 documents/month. The tenant also has to be promoted (`sandbox = false`) to issue production documents at all.
 
-The wider gap — a real `OPERATOR_TENANT_ID` so the operator can be excluded from quota, renewals and revenue reporting (while still getting certificate-expiry alerts, which matter most for them) — is NEXT_STEPS.md #5.
+**Your tenant is a real business, not just a bookkeeping vehicle.** The same issuer will emit subscription invoices to Comprobify customers *and* invoices for your other work to unrelated clients. Two things follow:
+
+- **Consider a dedicated issue point for subscription invoicing**, separate from your other work. `BUSINESS` allows unlimited branches and issue points, and `POST /v1/issuers` with `sourceIssuerId` copies your existing certificate — so it costs nothing beyond deciding. It keeps SRI sequential ranges cleanly separated for accounting, and makes "which of these invoices were subscriptions?" a filter on `issuer_id` rather than a join through `subscriptions.initial_invoice_document_id` / `payments.invoice_document_id`, which is the only way to tell them apart today. **Decide this before volume accumulates** — sequential ranges can't be retroactively split.
+- **When reports eventually exist, don't just "exclude the operator".** Your subscription is self-paid and must stay out of MRR; your documents are genuine usage and should stay *in* usage counts; and your own invoiced work is your business income, not Comprobify revenue. Three different answers, one tenant.
+
+The wider gap — a real `OPERATOR_TENANT_ID` so the operator can be handled correctly for quota, renewals and each kind of reporting (while still getting certificate-expiry alerts, which matter most for them) — is NEXT_STEPS.md #5.
 
 ## Related
 
