@@ -72,6 +72,16 @@ Each `createSession` mints a fresh `clientTransactionId` and row. A `PENDING` ro
 
 The same ambiguity is why the transport-failure path must persist Payphone's transaction id while leaving the attempt `PENDING`: that id only arrives on the return redirect, and without it a captured-but-unacknowledged charge cannot be looked up again and is silently lost.
 
+### Reversal stays manual, for both methods
+
+`PATCH /v1/admin/payments/:id/refund` rolls back our state and moves no money. Payphone does expose a reverse API and we now have working credentials, so automating the card side would be small — but it was deliberately left out.
+
+An SPI reversal cannot be automated at all (no rail notifies us, and the money moves through a bank we don't call), so automating card alone would produce two different procedures for the same operator decision. Payphone's reverse API is also same-day-only, until 20:00 EC, so it would cover the narrow "noticed today" case and leave every chargeback and late discovery on the manual path regardless.
+
+The cost is an ordering hazard the docs have to carry: money first, then our side. Reversed, a failed dashboard reversal leaves a tenant downgraded but still charged, and nothing detects the mismatch.
+
+Worth revisiting if duplicate charges become common — that is the one case where automation fits well, since it is caught immediately by the alert and is always same-day.
+
 ### Optional infrastructure
 
 `PAYPHONE_TOKEN`/`PAYPHONE_STORE_ID` follow the `REDIS_URL`/`SENTRY_DSN` pattern: empty-string defaults, deliberately absent from `src/config/validate.js`. Unset means the card endpoints return `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and SPI is untouched. An environment without Payphone credentials is a supported configuration, and a vendor outage or a misconfigured deploy can never take billing down with it.

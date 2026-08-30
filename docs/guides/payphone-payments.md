@@ -200,9 +200,12 @@ PATCH /v1/admin/subscriptions/:id/link-invoice   { "accessKey": "..." }
 
 Detecting a reversal is manual and always will be — no payment rail notifies us, and Payphone documents no notification for cardholder chargebacks (see ADR-027, where the same conclusion was reached for SPI). When you find one:
 
-1. Reverse or refund on **Payphone's** side (dashboard; same-day until 20:00 EC).
+**Our refund endpoint moves no money.** `PATCH /v1/admin/payments/:id/refund` touches only our database; there is no call to Payphone's reverse API, by design. Returning the money is always manual.
+
+1. Reverse or refund on **Payphone's** side (dashboard; same-day until 20:00 EC). Do this **first** — reversed, and a failed dashboard reversal leaves a tenant downgraded but still charged, with nothing flagging it.
 2. Roll our side back with `PATCH /v1/admin/payments/:id/refund`. It restores `payments.applied_from` — the snapshot taken just before the payment was applied — so a reversed `TIER_CHANGE` returns to the previous *paid* tier and a reversed `RENEWAL` rolls the period back. It is not "downgrade to FREE".
-3. Decide separately whether the tenant should be suspended (`PATCH /v1/admin/tenants/:id/status` with a `suspensionReasonCode`, `PAYMENT_REVERSED` being the obvious one). The refund endpoint deliberately never suspends anyone on its own.
+3. **Except for a `DUPLICATE` attempt** — refund it in the dashboard and stop. The subscription is correctly paid by the other attempt, and the duplicate never touched subscription state, so calling our refund endpoint would strip a tier the tenant did pay for.
+4. Decide separately whether the tenant should be suspended (`PATCH /v1/admin/tenants/:id/status` with a `suspensionReasonCode`, `PAYMENT_REVERSED` being the obvious one). The refund endpoint deliberately never suspends anyone on its own.
 
 ---
 

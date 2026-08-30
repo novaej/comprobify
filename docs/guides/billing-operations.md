@@ -89,9 +89,17 @@ Driven by `POST /v1/admin/jobs/subscriptions` (daily), which runs scheduled tier
 
 Nothing tells you a payment was reversed — an SPI reversal shows up only on your bank statement, and Payphone documents no notification for cardholder chargebacks. Detection is yours.
 
+> **`PATCH /v1/admin/payments/:id/refund` moves no money.** It touches only our
+> database — restores the tier/period, marks the payment `REFUNDED`, logs the
+> event. It makes **no call to Payphone and none to your bank.** Returning the
+> money is always a separate, manual step. This is deliberate: an SPI reversal
+> can't be automated at all, and Payphone's reverse API only works same-day, so
+> automating one method and not the other would give two different procedures
+> for the same situation.
+
 Once you know:
 
-1. **Reverse on the money side first** — your bank, or the Payphone Business dashboard (same-day only, until 20:00 EC).
+1. **Return the money first** — your bank, or the Payphone Business dashboard (same-day only, until 20:00 EC).
 2. **Then roll our side back:**
 
 ```
@@ -111,6 +119,20 @@ Doing this by hand via `PATCH /v1/admin/tenants/:id/tier` is actively wrong: tha
 Refusals: `409` if the payment isn't `VERIFIED`; `400 PAYMENT_NOT_REFUNDABLE` if it predates the snapshot column (migration 090) — adjust manually in that case rather than guessing.
 
 The endpoint deliberately **does not suspend** anyone. Whether a reversal is fraud or an honest duplicate is your call, made separately.
+
+### Why the order matters
+
+Money first, then our side. Reversed, and you have a tenant who is **downgraded but still charged** — nothing in the system flags that mismatch, because as far as it knows the refund succeeded. If the Payphone reversal then fails (past 20:00 EC, an API error, a transaction too old), you have to notice and undo the rollback yourself.
+
+If the money side can't be reversed — the usual case for anything found more than a day later, and for every chargeback — decide what you actually owe the tenant before touching our side at all. Rolling back a payment the customer never got returned takes their tier away *and* keeps their money.
+
+### The one case where you must NOT call this endpoint
+
+A **duplicate charge** (`payphone_transactions.status = 'DUPLICATE'`): the tenant paid twice for one payment. Refund the duplicate in Payphone's dashboard, and stop there. The subscription is correctly paid for by the other attempt, and the duplicate never touched subscription state — so there is nothing on our side to roll back. Calling refund here would strip a tier the tenant legitimately paid for.
+
+### What the refund does not update
+
+`payphone_transactions` is left alone: the attempt stays `APPROVED` with its `applied_at`. That is historically accurate — it *was* approved and applied — and `payments.status = 'REFUNDED'` carries the current truth. But there is no back-link, so reading only the attempt table suggests the charge still stands. Worth knowing if you ever reconcile against Payphone's own transaction list.
 
 ## 6. Suspending an account
 
