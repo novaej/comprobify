@@ -110,4 +110,57 @@ describe('payphoneService', () => {
       expect(global.fetch.mock.calls[0][1].signal).toBeDefined();
     });
   });
+
+  describe('sanitizeConfirmResponse', () => {
+    // Payphone returns payer identity fields we have no use for; retaining them
+    // indefinitely is what this filter exists to prevent.
+    test('drops the payer email, phone, cedula and free-form parameter', () => {
+      const out = payphoneService.sanitizeConfirmResponse({
+        statusCode: 3,
+        amount: 2000,
+        email: 'payer@example.com',
+        phoneNumber: '0991234567',
+        document: '1712345678',
+        optionalParameter: 'anything at all',
+        bin: '424242',
+      });
+
+      expect(out).toEqual({ statusCode: 3, amount: 2000 });
+    });
+
+    test('keeps the money, status and card-metadata fields we actually use', () => {
+      const body = {
+        transactionId: 99, statusCode: 3, transactionStatus: 'Approved',
+        authorizationCode: 'A1', amount: 2000, tax: 260, currency: 'USD',
+        cardBrand: 'Visa', lastDigits: '4242', message: 'ok', errorCode: 0,
+      };
+
+      expect(payphoneService.sanitizeConfirmResponse(body)).toEqual(body);
+    });
+
+    // An unknown field is dropped rather than kept: a new PII field on their
+    // side must not start being persisted silently.
+    test('drops fields it does not know about', () => {
+      const out = payphoneService.sanitizeConfirmResponse({ statusCode: 3, somethingNew: 'x' });
+
+      expect(out).toEqual({ statusCode: 3 });
+    });
+
+    test('passes through null and non-objects untouched', () => {
+      expect(payphoneService.sanitizeConfirmResponse(null)).toBeNull();
+      expect(payphoneService.sanitizeConfirmResponse(undefined)).toBeNull();
+    });
+
+    test('confirm applies it, so no consumer ever sees the payer fields', async () => {
+      global.fetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ statusCode: 3, amount: 2000, email: 'p@example.com' }),
+      });
+
+      const result = await payphoneService.confirm({ id: 1, clientTxId: 'a' });
+
+      expect(result.body).toEqual({ statusCode: 3, amount: 2000 });
+    });
+  });
 });

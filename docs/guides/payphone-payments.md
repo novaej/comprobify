@@ -109,7 +109,7 @@ Every card attempt is a row in `payphone_transactions` — **one row per attempt
 
 **Tenant sees:** nothing. They paid and navigated away.
 **Data:** attempt stays `PENDING` with **no `payphone_transaction_id`** — that id only ever arrives on the return redirect. Payphone auto-reversed the charge at the 5-minute mark, so the tenant's money is back.
-**Action:** none — reconciliation marks it `EXPIRED` directly. It makes no vendor call here: with no id there is nothing to ask about, and the 5-minute window has long passed. If the tenant complains they were charged, the reversal may not have settled on their statement yet; the attempt row's `raw_confirm_response` is the record of what Payphone actually said.
+**Action:** none — reconciliation marks it `EXPIRED` directly. It makes no vendor call here: with no id there is nothing to ask about, and the 5-minute window has long passed. If the tenant complains they were charged, the reversal may not have settled on their statement yet; the attempt row's `confirm_response` records the transaction outcome Payphone reported (filtered — see the note below).
 
 ### The process died between capturing and applying
 
@@ -148,7 +148,7 @@ Work down this path. Start from whatever the tenant can give you — the `client
 ```sql
 -- 1. Find the attempt.
 SELECT pt.id, pt.status, pt.confirmed_at, pt.applied_at, pt.amount_cents,
-       pt.payphone_transaction_id, pt.raw_confirm_response
+       pt.payphone_transaction_id, pt.confirm_response
 FROM payphone_transactions pt
 WHERE pt.client_transaction_id = '<clientTransactionId>';
 
@@ -174,7 +174,9 @@ Then read the result:
 | `APPROVED`, `applied_at` set | It worked. | Check `payments`/`subscriptions` — if the tier looks wrong, the problem is downstream of Payphone, not in it. |
 | `APPROVED`, `applied_at` NULL | Captured but not credited. | Run the reconciliation job; it self-heals. |
 | `DUPLICATE` | Second charge for an already-paid payment. | Refund it in the Payphone dashboard (above). |
-| `ERROR` | Amount mismatch — we refused to apply it. | Investigate before refunding; `raw_confirm_response` has what Payphone actually sent. |
+> **`confirm_response` is filtered, not raw.** `payphone.service.js` keeps an allow-list of the money, status and card-metadata fields (`PERSISTED_FIELDS`) and drops everything else — Payphone returns the payer's email, phone and cédula, which we have no use for and do not retain. If a dispute needs a field that isn't there, it is in Payphone's own dashboard; add it to the allow-list only if there is a standing reason to keep it.
+
+| `ERROR` | Amount mismatch — we refused to apply it. | Investigate before refunding; `confirm_response` has the amount and status Payphone reported. |
 
 ---
 

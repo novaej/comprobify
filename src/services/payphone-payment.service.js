@@ -220,7 +220,7 @@ async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
       authorization_code:      body.authorizationCode ?? null,
       card_brand:              body.cardBrand ?? null,
       card_last_digits:        body.lastDigits ?? null,
-      raw_confirm_response:    body,
+      confirm_response:    body,
       confirmed_at:            new Date(),
     };
 
@@ -353,7 +353,7 @@ async function reconcileStaleTransactions() {
       payphone_transaction_id: body.transactionId ?? attempt.payphone_transaction_id,
       status_code:             body.statusCode ?? null,
       authorization_code:      body.authorizationCode ?? null,
-      raw_confirm_response:    body,
+      confirm_response:    body,
       confirmed_at:            new Date(),
     });
     resolved++;

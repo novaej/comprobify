@@ -8,7 +8,7 @@ const MUTABLE_COLUMNS = new Set([
   'authorization_code',
   'card_brand',
   'card_last_digits',
-  'raw_confirm_response',
+  'confirm_response',
   'confirmed_at',
   'applied_at',
 ]);

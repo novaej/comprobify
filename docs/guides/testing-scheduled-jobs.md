@@ -252,7 +252,7 @@ The most important one: money captured, process died before the tenant was credi
 UPDATE payphone_transactions
 SET status = 'APPROVED', applied_at = NULL, confirmed_at = NOW(),
     payphone_transaction_id = 999, status_code = 3,
-    raw_confirm_response = '{"statusCode":3}'::jsonb
+    confirm_response = '{"statusCode":3}'::jsonb
 WHERE client_transaction_id = 'deadbeefdeadbeef';
 
 -- the payment must still be unsettled for this to be a real gap
