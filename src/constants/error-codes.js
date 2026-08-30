@@ -130,6 +130,8 @@ const ErrorCodes = Object.freeze({
   PAYPHONE_AMOUNT_MISMATCH: 'PAYPHONE_AMOUNT_MISMATCH',
   /** No card-payment attempt exists for the supplied clientTransactionId, or it belongs to another tenant */
   PAYPHONE_SESSION_NOT_FOUND: 'PAYPHONE_SESSION_NOT_FOUND',
+  /** Payment total is below Payphone's minimum charge — pay by bank transfer instead */
+  PAYPHONE_AMOUNT_BELOW_MINIMUM: 'PAYPHONE_AMOUNT_BELOW_MINIMUM',
   /** Payment has already been verified — no further payment attempt is accepted for it */
   PAYMENT_ALREADY_VERIFIED: 'PAYMENT_ALREADY_VERIFIED',
 

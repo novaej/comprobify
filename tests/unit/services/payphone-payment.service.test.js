@@ -105,6 +105,30 @@ describe('payphonePaymentService', () => {
         .rejects.toMatchObject({ statusCode: 409, code: 'PAYMENT_ALREADY_VERIFIED' });
     });
 
+    // Payphone rejects anything under $1.00 (errorCode 107), verified against
+    // their live test store. Reachable in practice: a prorated upgrade with a
+    // few hours left in the period. Caught here so the frontend can offer bank
+    // transfer, rather than at the widget as an untranslatable vendor error.
+    test.each([['0.99'], ['0.03'], ['0.01']])(
+      'refuses a card session for a $%s total, below Payphone\'s minimum',
+      async (total_amount) => {
+        paymentModel.findByIdAndTenantId.mockResolvedValue(payment({ total_amount, iva_amount: '0.00' }));
+
+        await expect(payphonePaymentService.createSession(PAY, TENANT))
+          .rejects.toMatchObject({ statusCode: 400, code: 'PAYPHONE_AMOUNT_BELOW_MINIMUM' });
+        expect(payphoneTransactionModel.create).not.toHaveBeenCalled();
+        expect(paymentModel.updateMethod).not.toHaveBeenCalled();
+      }
+    );
+
+    test('accepts exactly $1.00, the documented minimum', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(payment({ total_amount: '1.00', iva_amount: '0.13' }));
+
+      const session = await payphonePaymentService.createSession(PAY, TENANT);
+
+      expect(session.amount).toBe(100);
+    });
+
     test('mints an opaque clientTransactionId, not the payment id', async () => {
       paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
 

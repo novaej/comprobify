@@ -222,9 +222,10 @@ That said, three assumptions in this integration are unverified until a real app
 
 1. ~~Which host answers `confirm`~~ — **settled.** Both `paymentbox.payphonetodoesposible.com/api/confirm` (our default) and the redirect button's `pay.payphonetodoesposible.com/api/button/V2/Confirm` answer, and both authenticate the same application token. No `PAYPHONE_API_BASE_URL` override is needed.
 2. Whether the **widget** accepts that same token. Confirm does (see above); the browser side is only provable by rendering it.
-3. **Whether Payphone accepts our amount-field mapping.** They enforce `amount = amountWithoutTax + amountWithTax + tax + service + tip`; our tests prove the arithmetic, but only their validator can confirm they accept `amountWithoutTax: 0` with the whole base in `amountWithTax`. Validated when the widget submits, so it needs a real render — a rejection there is visible and harmless, nothing charges.
+3. ~~Whether Payphone accepts our amount-field mapping~~ — **settled.** `amountWithoutTax: 0` with the whole base in `amountWithTax` is accepted; verified by pushing our real `toAmountBreakdown()` output at their `Prepare` endpoint across STARTER monthly, GROWTH monthly and BUSINESS yearly. That probe also surfaced a rule their docs don't mention: **Payphone refuses any charge under $1.00** (`errorCode 107`, *"El monto a cobrar debe ser mayor o igual a 1,00"*). `createSession` now returns `400 PAYPHONE_AMOUNT_BELOW_MINIMUM` for those so the frontend can fall back to bank transfer — reachable in practice via a prorated upgrade with a few hours left in the period, which lands around $0.29.
 
-Get a test application before production for the remaining two, not for decline testing — test mode approves everything.
+
+Get a test application before production for the one remaining item, not for decline testing — test mode approves everything.
 
 > **Payphone answers "transaction not found" with HTTP 404 and a structured body** (`errorCode: 20`). That is semantic, not routing — verified against the live test store. `payphone.service.js` returns `{ ok: false, body }` with no `error` field for that case, so `confirmTransaction` treats it as a terminal outcome rather than a transport failure, which is correct: the charge genuinely does not exist. A probe that reads the HTTP status before checking for a Payphone error body will misreport a working host as a broken one.
 

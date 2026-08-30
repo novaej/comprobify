@@ -25,6 +25,15 @@ const STATUS_APPROVED = 3;
 // auto-reverses at 5 minutes, so by 10 the outcome is settled either way.
 const STALE_PENDING_MINUTES = 10;
 
+// Payphone refuses anything under $1.00 outright — "El monto a cobrar debe ser
+// mayor o igual a 1,00" (errorCode 107), verified against their live test store.
+// requestTierChange already applies a $0 proration for free, but $0.01–$0.99 is
+// a real payment row: a STARTER->GROWTH upgrade with a few hours left in the
+// period prorates to roughly $0.29. SPI can collect that; a card cannot, and
+// without this guard the tenant would render the widget, submit, and get a raw
+// Spanish vendor error with no route forward.
+const MIN_CHARGE_CENTS = 100;
+
 // ---------------------------------------------------------------------------
 // Session creation
 
@@ -77,6 +86,16 @@ async function createSession(paymentId, tenantId) {
   }
 
   const breakdown = toAmountBreakdown(payment);
+
+  // Caught here rather than at the widget, so the frontend can fall back to
+  // bank transfer instead of surfacing a vendor error the tenant can't act on.
+  if (breakdown.amount < MIN_CHARGE_CENTS) {
+    throw new AppError(
+      `Card payments require a total of at least $${(MIN_CHARGE_CENTS / 100).toFixed(2)}. Pay this one by bank transfer instead.`,
+      400,
+      ErrorCodes.PAYPHONE_AMOUNT_BELOW_MINIMUM
+    );
+  }
 
   // Short and opaque, not the payment UUID: retries get distinct ids, and
   // nothing about our id scheme leaks to the vendor. 16 chars, well under
