@@ -754,6 +754,8 @@ Two workflows, gated by path so neither triggers the other.
 
 **This replacement happens automatically inside `apply` — `terraform destroy` is never needed for it.** `destroy` is a distinct, explicit command with no recreate step (that's what "Destroy staging once you're done testing" below is for). A ForceNew attribute change just makes the plan mark that one resource `-/+ must be replaced`; `apply` performs the destroy-then-create for it as a single atomic step, same run, no separate command.
 
+**A full `terraform destroy` is also available from this same workflow, not just locally** — manual `workflow_dispatch` with its `action` input set to `destroy` (`gh workflow run terraform.yml -f action=destroy`, or via the Actions UI dropdown). `push`-triggered runs never see this — a push event carries no `workflow_dispatch` inputs at all, so `action` can only ever be `destroy` on a manual run, regardless of what the input's default is. The default is `apply`, so an unqualified manual run (no `-f action=...`, or clicking "Run workflow" without touching the dropdown) still does exactly what it always did — `plan` then `apply` — before this input existed. `destroy` runs its own `plan -destroy` first as a visible preview, then `destroy -auto-approve`, and declares the same `staging-infra` Environment as `plan`/`apply` — a required-reviewer rule on that Environment gates `destroy` too, not a weaker path for the more dangerous operation. Prefer the local command below when you want to watch the output interactively; use the workflow when you want the run in GitHub's audit log.
+
 Full file lives in the repo. Three more design points worth calling out, all easy to get wrong:
 
 **`DO_TOKEN`/`CLOUDFLARE_TOKEN` live in the `staging-infra` GitHub Environment (Settings → Environments → `staging-infra` → Environment secrets), unprefixed — same convention `deploy-staging.yml` already uses for `DB_HOST`/`ADMIN_SECRET`/etc: one secret name, a different value per Environment, not a name per environment.** The `comprobify-terraform-staging` and `comprobify-terraform-production` credentials (see the Prerequisites table above) are deliberately separate tokens, never shared, so a leaked staging credential can be revoked without touching production — `staging-infra` holds the staging value, and the not-yet-created `production-infra` Environment will hold the production value under the exact same secret names once that job pair exists.
@@ -767,10 +769,18 @@ on:
   push:
     branches: [main]
     paths: ['terraform/**']
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'plan (dry-run only), apply (default - plan then apply), or destroy'
+        required: false
+        default: apply
+        type: choice
+        options: [plan, apply, destroy]
 
 jobs:
   plan:
+    if: github.event.inputs.action != 'destroy'
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
@@ -791,6 +801,7 @@ jobs:
 
   apply:
     needs: plan
+    if: github.event_name == 'push' || github.event.inputs.action == 'apply'
     environment: staging-infra
     runs-on: ubuntu-latest
     steps:
@@ -808,9 +819,35 @@ jobs:
           TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+
+  destroy:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    environment: staging-infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.7.5
+      - run: terraform -chdir=terraform/environments/staging init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+      - run: terraform -chdir=terraform/environments/staging plan -destroy
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+      - run: terraform -chdir=terraform/environments/staging destroy -auto-approve
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 ```
 
-Note both `init` steps also need the Spaces credentials, not just `plan`/`apply` — `init` is what actually connects to the remote state backend.
+Note every `init` step also needs the Spaces credentials, not just `plan`/`apply`/`destroy` — `init` is what actually connects to the remote state backend. `destroy` has no `needs: plan` — `plan`'s own `if` excludes `action == 'destroy'`, so it's skipped on a destroy run, and a job whose `needs` target was skipped is itself skipped by default; `destroy` instead runs its own `plan -destroy` as a visible preview step immediately before the real `destroy -auto-approve`.
 
 Production's equivalent pair doesn't exist yet — add it once `terraform/environments/production` does, pointed at that directory, with both jobs declaring `environment: production-infra` and reading the same `DO_TOKEN`/`CLOUDFLARE_TOKEN` names from that Environment (its own distinct values — see above) plus the same shared `TERRAFORM_SPACES_*` repository secrets. Add a required reviewer to `production-infra` for a deliberate, auditable approval gate before anything touches production infrastructure — separate from whatever Environment `deploy-production.yml` ends up using for app secrets.
 
@@ -829,7 +866,9 @@ The `production` equivalent triggers on push to the `production` branch, matchin
 cd terraform/environments/staging
 terraform destroy
 ```
-Billing stops immediately, prorated to the hour actually used. `terraform destroy` also tears down the reserved IP and its assignment along with everything else Terraform manages for this environment (they're state-tracked resources like any other) — a `destroy` really means "nothing left," not just "droplet gone." The Cloudflare DNS record goes with it too (it's Terraform-managed) — no dangling record pointing at a dead IP.
+Or, without local credentials, trigger the same thing through CI and get it in GitHub's audit log: `gh workflow run terraform.yml -f action=destroy` (see "Infra workflow" above for exactly what that runs and how it's gated).
+
+Billing stops immediately, prorated to the hour actually used. `terraform destroy` also tears down the reserved IP and its assignment along with everything else Terraform manages for this environment (they're state-tracked resources like any other) — a `destroy` really means "nothing left," not just "droplet gone." The Cloudflare DNS record goes with it too (it's Terraform-managed) — no dangling record pointing at a dead IP. **The staging database is untouched either way** — it isn't a Terraform-managed resource in this repo (see the Prerequisites/scope notes above), so neither the local command nor the CI job can reach it.
 
 **Recreate it:**
 ```bash

@@ -34,15 +34,32 @@ name: Terraform
 # Add a near-identical plan/apply pair pointed at it (environment: production-infra) once
 # it's provisioned, reading the same DO_TOKEN/CLOUDFLARE_TOKEN names from that Environment
 # and the same shared TERRAFORM_SPACES_* repository secrets.
+#
+# `destroy` is manual-only, gated by the `action` workflow_dispatch input - a `push` event
+# never has `github.event.inputs`, so `action` is only ever meaningfully set on a manual
+# run, and `destroy` can never fire from a push no matter what the input default is. Default
+# is `apply` so an unqualified `workflow_dispatch` (no -f action=..., or the UI's "Run
+# workflow" button clicked without touching the dropdown) reproduces the exact plan+apply
+# behavior this workflow always had, before `action` existed. `destroy` reuses the same
+# `staging-infra` Environment as plan/apply - a required-reviewer rule added there gates
+# this too, same audited approval path, not a weaker one for the more dangerous operation.
 
 on:
   push:
     branches: [main]
     paths: ['terraform/**']
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'plan (dry-run only), apply (default - plan then apply), or destroy'
+        required: false
+        default: apply
+        type: choice
+        options: [plan, apply, destroy]
 
 jobs:
   plan:
+    if: github.event.inputs.action != 'destroy'
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
@@ -63,6 +80,10 @@ jobs:
 
   apply:
     needs: plan
+    # push never has inputs.action, so this stays true (unchanged behavior) for every
+    # push-triggered run; a manual run only applies when the input is explicitly 'apply'
+    # (the default) - 'plan'-only and 'destroy' both skip this job.
+    if: github.event_name == 'push' || github.event.inputs.action == 'apply'
     environment: staging-infra
     runs-on: ubuntu-latest
     steps:
@@ -75,6 +96,38 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
       - run: terraform -chdir=terraform/environments/staging apply -auto-approve
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+
+  # Manual-only (workflow_dispatch + action=destroy) - see the file-header comment for why
+  # a push can never reach this job. No `needs: plan` on purpose: `plan` above is skipped
+  # entirely for a destroy run (its own `if` excludes action=destroy), and a job whose
+  # `needs` target was skipped is itself skipped by default - this job runs its own
+  # `plan -destroy` as a visible preview step instead, immediately before the real destroy,
+  # so the log always shows what's about to be removed.
+  destroy:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    environment: staging-infra
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.7.5
+      - run: terraform -chdir=terraform/environments/staging init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+      - run: terraform -chdir=terraform/environments/staging plan -destroy
+        env:
+          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+      - run: terraform -chdir=terraform/environments/staging destroy -auto-approve
         env:
           TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
           TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
