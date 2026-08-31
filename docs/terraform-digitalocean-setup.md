@@ -754,7 +754,9 @@ Two workflows, gated by path so neither triggers the other.
 
 **This replacement happens automatically inside `apply` — `terraform destroy` is never needed for it.** `destroy` is a distinct, explicit command with no recreate step (that's what "Destroy staging once you're done testing" below is for). A ForceNew attribute change just makes the plan mark that one resource `-/+ must be replaced`; `apply` performs the destroy-then-create for it as a single atomic step, same run, no separate command.
 
-**A full `terraform destroy` is also available from this same workflow, not just locally** — manual `workflow_dispatch` with its `action` input set to `destroy` (`gh workflow run terraform.yml -f action=destroy`, or via the Actions UI dropdown). `push`-triggered runs never see this — a push event carries no `workflow_dispatch` inputs at all, so `action` can only ever be `destroy` on a manual run, regardless of what the input's default is. The default is `apply`, so an unqualified manual run (no `-f action=...`, or clicking "Run workflow" without touching the dropdown) still does exactly what it always did — `plan` then `apply` — before this input existed. `destroy` runs its own `plan -destroy` first as a visible preview, then `destroy -auto-approve`, and declares the same `staging-infra` Environment as `plan`/`apply` — a required-reviewer rule on that Environment gates `destroy` too, not a weaker path for the more dangerous operation. Prefer the local command below when you want to watch the output interactively; use the workflow when you want the run in GitHub's audit log.
+**A full `terraform destroy` is also available from this same workflow, not just locally** — manual `workflow_dispatch` with its `action` input set to `destroy` (`gh workflow run terraform.yml -f action=destroy`, or via the Actions UI dropdown). `push`-triggered runs never see this — a push event carries no `workflow_dispatch` inputs at all, so `action` can only ever be `destroy` on a manual run, regardless of what the input's default is. The default is `apply`, so an unqualified manual run (no `-f action=...`, or clicking "Run workflow" without touching the dropdown) still does exactly what it always did — `plan` then `apply` — before this input existed.
+
+**`destroy` reuses the existing `plan`/`apply` jobs rather than adding a third one — deliberately, for the approval gate this gives.** Each job's `run:` step branches on `action`: `plan` runs `terraform plan -destroy` instead of a plain `plan` when `action == 'destroy'`; `apply` runs `terraform destroy -auto-approve` instead of `apply -auto-approve`. Since `apply` already declares `needs: plan` and both declare `environment: staging-infra`, a required-reviewer rule on that Environment gates a destroy run *twice*: once before `plan` starts (nothing to see yet), and again before `apply` starts — by which point `plan`'s `-destroy` output is sitting in that job's log for the reviewer to actually read before approving the real destroy. An earlier version of this workflow gave `destroy` its own single job running both steps back to back; that only gates once, before either step runs, so approval happens blind and there's no point to reconsider after seeing what's actually about to go. Prefer the local command below when you want to watch the output interactively; use the workflow when you want the run — and both approvals — in GitHub's audit log.
 
 Full file lives in the repo. Three more design points worth calling out, all easy to get wrong:
 
@@ -780,7 +782,6 @@ on:
 
 jobs:
   plan:
-    if: github.event.inputs.action != 'destroy'
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
@@ -792,7 +793,12 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-      - run: terraform -chdir=terraform/environments/staging plan
+      - run: |
+          if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
+            terraform -chdir=terraform/environments/staging plan -destroy
+          else
+            terraform -chdir=terraform/environments/staging plan
+          fi
         env:
           TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
           TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
@@ -801,7 +807,7 @@ jobs:
 
   apply:
     needs: plan
-    if: github.event_name == 'push' || github.event.inputs.action == 'apply'
+    if: github.event_name == 'push' || github.event.inputs.action != 'plan'
     environment: staging-infra
     runs-on: ubuntu-latest
     steps:
@@ -813,33 +819,12 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-      - run: terraform -chdir=terraform/environments/staging apply -auto-approve
-        env:
-          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-
-  destroy:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
-    environment: staging-infra
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: 1.7.5
-      - run: terraform -chdir=terraform/environments/staging init
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-      - run: terraform -chdir=terraform/environments/staging plan -destroy
-        env:
-          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-      - run: terraform -chdir=terraform/environments/staging destroy -auto-approve
+      - run: |
+          if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
+            terraform -chdir=terraform/environments/staging destroy -auto-approve
+          else
+            terraform -chdir=terraform/environments/staging apply -auto-approve
+          fi
         env:
           TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
           TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
@@ -847,7 +832,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 ```
 
-Note every `init` step also needs the Spaces credentials, not just `plan`/`apply`/`destroy` — `init` is what actually connects to the remote state backend. `destroy` has no `needs: plan` — `plan`'s own `if` excludes `action == 'destroy'`, so it's skipped on a destroy run, and a job whose `needs` target was skipped is itself skipped by default; `destroy` instead runs its own `plan -destroy` as a visible preview step immediately before the real `destroy -auto-approve`.
+Note every `init` step also needs the Spaces credentials, not just `plan`/`apply` — `init` is what actually connects to the remote state backend. `plan` always runs regardless of `action` (there's no dry-run-only skip on it); `apply` skips only when a manual run explicitly chose `plan` (dry-run) — both the `apply` default and `destroy` fall through to `apply`'s `if`, and its `run:` step picks the actual command.
 
 Production's equivalent pair doesn't exist yet — add it once `terraform/environments/production` does, pointed at that directory, with both jobs declaring `environment: production-infra` and reading the same `DO_TOKEN`/`CLOUDFLARE_TOKEN` names from that Environment (its own distinct values — see above) plus the same shared `TERRAFORM_SPACES_*` repository secrets. Add a required reviewer to `production-infra` for a deliberate, auditable approval gate before anything touches production infrastructure — separate from whatever Environment `deploy-production.yml` ends up using for app secrets.
 
