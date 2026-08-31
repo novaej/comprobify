@@ -28,14 +28,19 @@ const DECISIONS = ['VERIFIED', 'REJECTED'];
 // resubmission can't grow the file list unboundedly.
 const MAX_ACTIVE_PROOFS_PER_PAYMENT = 10;
 
-// Splits an IVA-inclusive all-in total into base imponible + IVA so each
-// payment row carries a full audit trail of the tax breakdown at creation time.
-// Rounding: IVA is rounded to 2dp; base = total − IVA (avoids off-by-one).
-function breakdownAmount(totalAmount) {
-  if (totalAmount <= 0) return { baseAmount: 0, ivaAmount: 0, totalAmount: 0 };
-  const ivaAmount = Math.round(totalAmount * IVA_RATE / (1 + IVA_RATE) * 100) / 100;
-  const baseAmount = Math.round((totalAmount - ivaAmount) * 100) / 100;
-  return { baseAmount, ivaAmount, totalAmount };
+// Adds IVA on top of a tax-EXCLUSIVE base imponible so each payment row
+// carries a full audit trail of the tax breakdown at creation time. Every
+// caller passes a price resolved via pricingService (tier_prices.price_usd,
+// or a difference/sum of such prices) — tier_prices.price_usd is the
+// advertised, ex-IVA sticker price (matches how every competitor in the EC
+// market publishes prices: "+ IVA" at checkout, never baked in). Rounding:
+// IVA is rounded to 2dp; total = base + IVA.
+function breakdownAmount(baseAmount) {
+  if (baseAmount <= 0) return { baseAmount: 0, ivaAmount: 0, totalAmount: 0 };
+  const base = Math.round(baseAmount * 100) / 100;
+  const ivaAmount = Math.round(base * IVA_RATE * 100) / 100;
+  const totalAmount = Math.round((base + ivaAmount) * 100) / 100;
+  return { baseAmount: base, ivaAmount, totalAmount };
 }
 
 // How far ahead of current_period_end a renewal payment is opened and the
@@ -66,6 +71,22 @@ async function queueEffect(effectType, tenantId, payload) {
   pendingEffectService.dispatch(effect);
 }
 
+// Some tiers restrict which billing intervals they're sold under (SOLO is
+// yearly-only — see subscription-tiers.js). Shared by createSubscription and
+// requestTierChange so a tenant can't reach a disallowed combination through
+// either entry point (or the admin route, which calls createSubscription
+// directly).
+function assertBillingIntervalAllowed(tier, billingInterval) {
+  const allowed = TIERS[tier]?.billingIntervals || BILLING_INTERVALS;
+  if (!allowed.includes(billingInterval)) {
+    throw new AppError(
+      `'${tier}' is only available on ${allowed.join('/')} billing, not ${billingInterval}`,
+      400,
+      ErrorCodes.BILLING_INTERVAL_NOT_AVAILABLE_FOR_TIER
+    );
+  }
+}
+
 async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
   if (!PAID_TIERS.includes(tier)) {
     throw new AppError(
@@ -81,6 +102,7 @@ async function createSubscription(tenantId, tier, billingInterval = 'MONTHLY') {
       ErrorCodes.INVALID_BILLING_INTERVAL
     );
   }
+  assertBillingIntervalAllowed(tier, billingInterval);
 
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
@@ -181,6 +203,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
   // every tier-only caller behave exactly as before.
   const targetInterval = billingInterval || subscription.billing_interval;
   const intervalChanged = targetInterval !== subscription.billing_interval;
+  assertBillingIntervalAllowed(tier, targetInterval);
 
   if (tier === subscription.tier && !intervalChanged) {
     throw new AppError(

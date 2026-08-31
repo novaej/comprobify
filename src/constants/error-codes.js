@@ -84,6 +84,8 @@ const ErrorCodes = Object.freeze({
   ISSUE_POINT_LIMIT_REACHED: 'ISSUE_POINT_LIMIT_REACHED',
   /** Document type is not included in the tenant's current subscription tier */
   DOCUMENT_TYPE_NOT_IN_TIER: 'DOCUMENT_TYPE_NOT_IN_TIER',
+  /** Requested billingInterval is not offered for this tier (e.g. SOLO is yearly-only) */
+  BILLING_INTERVAL_NOT_AVAILABLE_FOR_TIER: 'BILLING_INTERVAL_NOT_AVAILABLE_FOR_TIER',
   /** Supplied subscription tier is not recognised */
   INVALID_TIER: 'INVALID_TIER',
   /** Supplied billingInterval is not recognised */
