@@ -36,8 +36,43 @@ const TIERS = {
     maxWebhookEndpoints:     1,
     writeRateLimit:          10,
     readRateLimit:           60,
+    billingIntervals:        ['MONTHLY', 'YEARLY'],
     allowedDocumentTypes:    ['01'],
     overagePerDocumentUsd:   null,
+  },
+  // SOLO/LITE sit below STARTER to close the entry-price gap against local
+  // competitors (Facturex/Azur/Siigo/TuFacturero all publish sub-$40/yr
+  // plans — see docs/pricing analysis). Their $/doc is deliberately WORSE
+  // than STARTER's, not better — overagePerDocumentUsd/documentQuota ladder
+  // downward exactly like STARTER->GROWTH->BUSINESS ladders upward, so the
+  // per-unit price only ever improves as a tenant grows, never regresses.
+  // Branch/issue-point/webhook caps stay at the FREE ceiling — multi-branch
+  // and webhooks remain a STARTER+ upsell, not a volume-tier feature.
+  SOLO: {
+    documentQuota:           15,
+    maxBranches:             1,
+    maxIssuePointsPerBranch: 1,
+    maxWebhookEndpoints:     1,
+    writeRateLimit:          15,
+    readRateLimit:           90,
+    // Yearly-only — a ~$3.50/mo recurring charge carries payment-processing
+    // and support overhead disproportionate to its size; the $35/yr annual
+    // commitment is the only way to buy SOLO. See requestTierChange/
+    // createSubscription's billingIntervals check.
+    billingIntervals:        ['YEARLY'],
+    allowedDocumentTypes:    ['01'],
+    overagePerDocumentUsd:   0.40,
+  },
+  LITE: {
+    documentQuota:           50,
+    maxBranches:             1,
+    maxIssuePointsPerBranch: 1,
+    maxWebhookEndpoints:     1,
+    writeRateLimit:          30,
+    readRateLimit:           150,
+    billingIntervals:        ['MONTHLY', 'YEARLY'],
+    allowedDocumentTypes:    ['01'],
+    overagePerDocumentUsd:   0.35,
   },
   STARTER: {
     documentQuota:           200,
@@ -46,6 +81,7 @@ const TIERS = {
     maxWebhookEndpoints:     2,
     writeRateLimit:          60,
     readRateLimit:           300,
+    billingIntervals:        ['MONTHLY', 'YEARLY'],
     allowedDocumentTypes:    ['01'],
     overagePerDocumentUsd:   0.30,
   },
@@ -56,6 +92,7 @@ const TIERS = {
     maxWebhookEndpoints:     5,
     writeRateLimit:          120,
     readRateLimit:           600,
+    billingIntervals:        ['MONTHLY', 'YEARLY'],
     allowedDocumentTypes:    ['01', '04'],
     overagePerDocumentUsd:   0.15,
   },
@@ -66,8 +103,28 @@ const TIERS = {
     maxWebhookEndpoints:     10,
     writeRateLimit:          300,
     readRateLimit:           1500,
+    billingIntervals:        ['MONTHLY', 'YEARLY'],
     allowedDocumentTypes:    ['01', '04'],
     overagePerDocumentUsd:   0.08,
+  },
+  // documentQuota is a large sentinel, not literal unlimited — tenant_quotas
+  // .document_quota is NOT NULL (migration 073) and incrementIfWithinCap's
+  // gate is `document_count < document_quota`, so true NULL-as-unlimited
+  // would need a schema + query change. No real tenant reaches six figures
+  // of documents a month without a bespoke conversation anyway; if that ever
+  // stops being true, revisit with a nullable column instead of a bigger
+  // sentinel. overagePerDocumentUsd is null because the sentinel is never
+  // meant to be hit, not because overage is free.
+  ENTERPRISE: {
+    documentQuota:           100000,
+    maxBranches:             null,
+    maxIssuePointsPerBranch: null,
+    maxWebhookEndpoints:     20,
+    writeRateLimit:          600,
+    readRateLimit:           3000,
+    billingIntervals:        ['MONTHLY', 'YEARLY'],
+    allowedDocumentTypes:    ['01', '04'],
+    overagePerDocumentUsd:   null,
   },
 };
 
@@ -76,9 +133,12 @@ const TIERS = {
 // débito, 03 liquidación, 06 guía de remisión). Not live — copy individual entries
 // into the tiers above as each type ships.
 //
-// FREE:     allowedDocumentTypes: ['01'],
-// STARTER:  allowedDocumentTypes: ['01'],
-// GROWTH:   allowedDocumentTypes: ['01', '04', '07'],
-// BUSINESS: allowedDocumentTypes: ['01', '03', '04', '05', '06', '07'],
+// FREE:       allowedDocumentTypes: ['01'],
+// SOLO:       allowedDocumentTypes: ['01'],
+// LITE:       allowedDocumentTypes: ['01'],
+// STARTER:    allowedDocumentTypes: ['01'],
+// GROWTH:     allowedDocumentTypes: ['01', '04', '07'],
+// BUSINESS:   allowedDocumentTypes: ['01', '03', '04', '05', '06', '07'],
+// ENTERPRISE: allowedDocumentTypes: ['01', '03', '04', '05', '06', '07'],
 
 module.exports = { TIERS, IVA_RATE };

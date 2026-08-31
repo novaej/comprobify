@@ -29,6 +29,7 @@ const subscriptionService = require('../../../src/services/subscription.service'
 // resolution (the 30-day protection) override getPriceAsOf per-call instead.
 const PRICES = {
   FREE:     { MONTHLY: 0,   YEARLY: 0 },
+  SOLO:     { MONTHLY: null, YEARLY: 35 }, // SOLO is yearly-only — no MONTHLY tier_prices row exists
   STARTER:  { MONTHLY: 20,  YEARLY: 200 },
   GROWTH:   { MONTHLY: 90,  YEARLY: 900 },
   BUSINESS: { MONTHLY: 230, YEARLY: 2300 },
@@ -79,16 +80,16 @@ describe('SubscriptionService', () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
       subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
       subscriptionModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' });
-      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20 });
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 20, iva_rate: 0.15, iva_amount: 3, total_amount: 23 });
 
       const result = await subscriptionService.createSubscription(1, 'STARTER');
 
       expect(subscriptionModel.create).toHaveBeenCalledWith({ tenantId: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billingInterval: 'MONTHLY' });
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 17.39, ivaRate: 0.15, ivaAmount: 2.61, totalAmount: 20 });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 20, ivaRate: 0.15, ivaAmount: 3, totalAmount: 23 });
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_CREATED', { subscriptionId: '00000000-0000-0000-0000-000000000010', tier: 'STARTER', billingInterval: 'MONTHLY' });
       expect(result).toEqual({
         subscription: { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER' },
-        payment: { id: '00000000-0000-0000-0000-000000000020', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20 },
+        payment: { id: '00000000-0000-0000-0000-000000000020', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 20, iva_rate: 0.15, iva_amount: 3, total_amount: 23 },
         bankTransfer: config.bankTransfer,
       });
     });
@@ -97,12 +98,32 @@ describe('SubscriptionService', () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
       subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
       subscriptionModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'YEARLY' });
-      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 173.91, iva_rate: 0.15, iva_amount: 26.09, total_amount: 200 });
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 200, iva_rate: 0.15, iva_amount: 30, total_amount: 230 });
 
       await subscriptionService.createSubscription(1, 'STARTER', 'YEARLY');
 
       expect(subscriptionModel.create).toHaveBeenCalledWith({ tenantId: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billingInterval: 'YEARLY' });
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 173.91, ivaRate: 0.15, ivaAmount: 26.09, totalAmount: 200 });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 200, ivaRate: 0.15, ivaAmount: 30, totalAmount: 230 });
+    });
+
+    test('rejects SOLO on MONTHLY billing — SOLO is yearly-only', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
+      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
+
+      await expect(subscriptionService.createSubscription(1, 'SOLO', 'MONTHLY'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'BILLING_INTERVAL_NOT_AVAILABLE_FOR_TIER' });
+      expect(subscriptionModel.create).not.toHaveBeenCalled();
+    });
+
+    test('accepts SOLO on YEARLY billing', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
+      subscriptionModel.findActiveOrPendingByTenantId.mockResolvedValue(null);
+      subscriptionModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'SOLO', billing_interval: 'YEARLY' });
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 35, iva_rate: 0.15, iva_amount: 5.25, total_amount: 40.25 });
+
+      await subscriptionService.createSubscription(1, 'SOLO', 'YEARLY');
+
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 35, ivaRate: 0.15, ivaAmount: 5.25, totalAmount: 40.25 });
     });
   });
 
@@ -177,9 +198,37 @@ describe('SubscriptionService', () => {
         .rejects.toMatchObject({ statusCode: 409, code: 'NO_ACTIVE_SUBSCRIPTION' });
     });
 
+    test('rejects a move to SOLO when billingInterval is omitted and the current subscription is MONTHLY', async () => {
+      // billingInterval omitted -> targetInterval defaults to the current
+      // subscription's interval (MONTHLY here), which SOLO doesn't offer.
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'STARTER', pending_tier: null, billing_interval: 'MONTHLY' });
+
+      await expect(subscriptionService.requestTierChange(1, 'SOLO'))
+        .rejects.toMatchObject({ statusCode: 400, code: 'BILLING_INTERVAL_NOT_AVAILABLE_FOR_TIER' });
+      expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+      expect(paymentModel.create).not.toHaveBeenCalled();
+    });
+
+    test('accepts a move to SOLO when billingInterval is explicitly YEARLY', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', tier: 'STARTER', pending_tier: null, billing_interval: 'MONTHLY',
+        current_period_start: new Date(), current_period_end: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+      });
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000060', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', target_tier: 'SOLO', target_billing_interval: 'YEARLY' });
+
+      await subscriptionService.requestTierChange(1, 'SOLO', 'YEARLY');
+
+      // Any billing-interval change is deferred/full-price (not prorated),
+      // per requestTierChange's own design — this just confirms it isn't
+      // rejected at the billingIntervals gate.
+      expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ targetTier: 'SOLO', targetBillingInterval: 'YEARLY' }));
+    });
+
     test('rejects when the requested tier matches the current tier', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
-      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', billing_interval: 'MONTHLY' });
 
       await expect(subscriptionService.requestTierChange(1, 'GROWTH'))
         .rejects.toMatchObject({ statusCode: 400, code: 'TIER_CHANGE_NO_OP' });
@@ -187,7 +236,7 @@ describe('SubscriptionService', () => {
 
     test('rejects when a downgrade is already scheduled', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
-      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', pending_tier: 'STARTER' });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', pending_tier: 'STARTER', billing_interval: 'MONTHLY' });
 
       await expect(subscriptionService.requestTierChange(1, 'BUSINESS'))
         .rejects.toMatchObject({ statusCode: 409, code: 'TIER_CHANGE_ALREADY_PENDING' });
@@ -195,7 +244,7 @@ describe('SubscriptionService', () => {
 
     test('rejects when an upgrade payment is already in flight', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
-      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', pending_tier: null });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', pending_tier: null, billing_interval: 'MONTHLY' });
       paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000030', target_tier: 'BUSINESS' });
 
       await expect(subscriptionService.requestTierChange(1, 'BUSINESS'))
@@ -206,7 +255,7 @@ describe('SubscriptionService', () => {
       const periodEnd = new Date('2026-07-01T00:00:00Z');
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
       subscriptionModel.findActiveByTenantId.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', pending_tier: null, current_period_end: periodEnd,
+        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', pending_tier: null, billing_interval: 'MONTHLY', current_period_end: periodEnd,
       });
       subscriptionModel.scheduleDowngrade.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH', pending_tier: 'STARTER' });
 
@@ -236,13 +285,14 @@ describe('SubscriptionService', () => {
 
       const result = await subscriptionService.requestTierChange(1, 'GROWTH');
 
-      // GROWTH (90) - STARTER (20) = 70 gross, ~50% of the period remains -> ~35
-      // gross, split at the current 15% IVA rate into a ~30.43 base + ~4.57 IVA.
+      // GROWTH (90) - STARTER (20) = 70 price difference (already ex-IVA),
+      // ~50% of the period remains -> ~35 base, with 15% IVA (~5.25) added
+      // on top by breakdownAmount.
       const [createArgs] = paymentModel.create.mock.calls[0];
       expect(createArgs.subscriptionId).toBe('00000000-0000-0000-0000-000000000010');
       expect(createArgs.purpose).toBe('TIER_CHANGE');
       expect(createArgs.targetTier).toBe('GROWTH');
-      expect(createArgs.amount).toBeCloseTo(30, 0);
+      expect(createArgs.amount).toBeCloseTo(35, 0);
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGE_REQUESTED', expect.objectContaining({
         subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'STARTER', toTier: 'GROWTH',
       }));
@@ -309,9 +359,9 @@ describe('SubscriptionService', () => {
       expect(createArgs.purpose).toBe('TIER_CHANGE');
       expect(createArgs.targetTier).toBe('GROWTH');
       expect(createArgs.targetBillingInterval).toBe('YEARLY');
-      // Full yearly-GROWTH sticker price (900), not prorated against the
-      // remaining monthly period.
-      expect(createArgs.totalAmount).toBe(900);
+      // Full yearly-GROWTH sticker price (900 base + 15% IVA = 1035), not
+      // prorated against the remaining monthly period.
+      expect(createArgs.totalAmount).toBe(1035);
       // Priced as of current_period_end (when the new cadence's period
       // actually starts), not "now" — the 30-day protection applies here too.
       expect(pricingService.getPriceAsOf).toHaveBeenCalledWith('GROWTH', 'YEARLY', periodEnd);
@@ -343,7 +393,7 @@ describe('SubscriptionService', () => {
       expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
       const [createArgs] = paymentModel.create.mock.calls[0];
       expect(createArgs.targetBillingInterval).toBe('YEARLY');
-      expect(createArgs.totalAmount).toBe(900); // full yearly-GROWTH price, not prorated
+      expect(createArgs.totalAmount).toBe(1035); // full yearly-GROWTH price (900 base + IVA), not prorated
     });
 
     test('tier downgrade + interval change: deferred and paid (unlike a plain same-interval downgrade)', async () => {
@@ -361,7 +411,7 @@ describe('SubscriptionService', () => {
       const [createArgs] = paymentModel.create.mock.calls[0];
       expect(createArgs.targetTier).toBe('STARTER');
       expect(createArgs.targetBillingInterval).toBe('YEARLY');
-      expect(createArgs.totalAmount).toBe(200); // full yearly-STARTER price
+      expect(createArgs.totalAmount).toBe(230); // full yearly-STARTER price (200 base + IVA)
       expect(result.subscription).toEqual(expect.objectContaining({ id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' }));
     });
 
@@ -401,9 +451,10 @@ describe('SubscriptionService', () => {
         const [createArgs] = paymentModel.create.mock.calls[0];
         expect(createArgs.targetTier).toBe('GROWTH');
         expect(createArgs.targetBillingInterval).toBe('MONTHLY');
-        // GROWTH $90 - STARTER $20 already paid = $70. Not prorated by the
-        // ~50% remaining (sandbox has no real period), but not $90 either.
-        expect(createArgs.totalAmount).toBe(70);
+        // GROWTH $90 - STARTER $20 already paid = $70 base, +15% IVA = $80.50.
+        // Not prorated by the ~50% remaining (sandbox has no real period),
+        // but not $90(+IVA) either.
+        expect(createArgs.totalAmount).toBe(80.5);
         expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
         expect(result).toEqual({ subscription: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000010' }), payment: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000050' }), bankTransfer: config.bankTransfer });
       });
@@ -420,7 +471,7 @@ describe('SubscriptionService', () => {
         const [createArgs] = paymentModel.create.mock.calls[0];
         expect(createArgs.targetTier).toBe('GROWTH');
         expect(createArgs.targetBillingInterval).toBe('YEARLY');
-        expect(createArgs.totalAmount).toBe(880); // yearly GROWTH $900 - monthly STARTER $20
+        expect(createArgs.totalAmount).toBe(1012); // yearly GROWTH $900 - monthly STARTER $20 = $880 base, +15% IVA
       });
     });
   });
@@ -753,11 +804,11 @@ describe('SubscriptionService', () => {
       subscriptionModel.findDueForRenewalReminder.mockResolvedValue([
         { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
       ]);
-      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20, purpose: 'RENEWAL' });
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 20, iva_rate: 0.15, iva_amount: 3, total_amount: 23, purpose: 'RENEWAL' });
 
       const result = await subscriptionService.processDueRenewals();
 
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 17.39, ivaRate: 0.15, ivaAmount: 2.61, totalAmount: 20, purpose: 'RENEWAL' });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 20, ivaRate: 0.15, ivaAmount: 3, totalAmount: 23, purpose: 'RENEWAL' });
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'RENEWAL_DUE', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000040', tier: 'STARTER', currentPeriodEnd: periodEnd,
       });
@@ -767,7 +818,7 @@ describe('SubscriptionService', () => {
       // it with the full row objects, once.
       expect(notificationService.createSubscriptionRenewalDue).toHaveBeenCalledWith(
         { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd },
-        { id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 17.39, iva_rate: 0.15, iva_amount: 2.61, total_amount: 20, purpose: 'RENEWAL' },
+        { id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 20, iva_rate: 0.15, iva_amount: 3, total_amount: 23, purpose: 'RENEWAL' },
       );
       // Priced as of current_period_end (when the renewal period actually
       // starts), not "now" — this is the 30-day price-change protection.
@@ -783,7 +834,7 @@ describe('SubscriptionService', () => {
 
       await subscriptionService.processDueRenewals();
 
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 782.61, ivaRate: 0.15, ivaAmount: 117.39, totalAmount: 900, purpose: 'RENEWAL' });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 900, ivaRate: 0.15, ivaAmount: 135, totalAmount: 1035, purpose: 'RENEWAL' });
     });
 
     test('a renewal due before a published price change\'s effective_at is still billed at the old price', async () => {
@@ -804,8 +855,9 @@ describe('SubscriptionService', () => {
 
       await subscriptionService.processDueRenewals();
 
-      // periodEnd is before the new price's effective_at -> still $20, not $25.
-      expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ totalAmount: 20 }));
+      // periodEnd is before the new price's effective_at -> still priced off
+      // the $20 base (+IVA = $23 total), not the new $25 base.
+      expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ totalAmount: 23 }));
     });
 
     test('downgrades an expired subscription to FREE, marks the tenant PAST_DUE, logs SUBSCRIPTION_EXPIRED + STATUS_CHANGED, and notifies the tenant', async () => {
