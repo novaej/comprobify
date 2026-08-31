@@ -37,12 +37,21 @@ name: Terraform
 #
 # `destroy` is manual-only, gated by the `action` workflow_dispatch input - a `push` event
 # never has `github.event.inputs`, so `action` is only ever meaningfully set on a manual
-# run, and `destroy` can never fire from a push no matter what the input default is. Default
+# run, and destroy can never fire from a push no matter what the input default is. Default
 # is `apply` so an unqualified `workflow_dispatch` (no -f action=..., or the UI's "Run
 # workflow" button clicked without touching the dropdown) reproduces the exact plan+apply
-# behavior this workflow always had, before `action` existed. `destroy` reuses the same
-# `staging-infra` Environment as plan/apply - a required-reviewer rule added there gates
-# this too, same audited approval path, not a weaker one for the more dangerous operation.
+# behavior this workflow always had, before `action` existed.
+#
+# destroy reuses the SAME plan/apply jobs (branching their terraform command on `action`)
+# rather than adding a third job, deliberately - `apply` already declares `needs: plan`, so
+# with a required-reviewer rule on staging-infra this gives two separate approval gates for
+# a destroy run: one before `plan` starts (nothing to see yet), and a second one AFTER
+# `plan`'s `-destroy` output is sitting in the logs for you to actually read, before `apply`
+# commits to the real `destroy -auto-approve`. A single combined job (an earlier version of
+# this file had one) can only gate once, before either step - you'd approve blind and both
+# the preview and the real destroy would run back-to-back with no chance to reconsider after
+# seeing what's about to go. Two jobs, same names as every other run, is worth the extra
+# indirection in the `run:` steps below for that alone.
 
 on:
   push:
@@ -59,7 +68,6 @@ on:
 
 jobs:
   plan:
-    if: github.event.inputs.action != 'destroy'
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
@@ -71,7 +79,14 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-      - run: terraform -chdir=terraform/environments/staging plan
+      # Destroy's preview: `plan -destroy` instead of a plain `plan` when action=destroy.
+      # A push event has no inputs.action, so it always takes the plain-plan branch.
+      - run: |
+          if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
+            terraform -chdir=terraform/environments/staging plan -destroy
+          else
+            terraform -chdir=terraform/environments/staging plan
+          fi
         env:
           TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
           TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
@@ -81,9 +96,10 @@ jobs:
   apply:
     needs: plan
     # push never has inputs.action, so this stays true (unchanged behavior) for every
-    # push-triggered run; a manual run only applies when the input is explicitly 'apply'
-    # (the default) - 'plan'-only and 'destroy' both skip this job.
-    if: github.event_name == 'push' || github.event.inputs.action == 'apply'
+    # push-triggered run; a manual run skips this job only for a 'plan'-only dry run -
+    # both the 'apply' default and 'destroy' proceed here, and which one actually happens
+    # is decided inside the step below.
+    if: github.event_name == 'push' || github.event.inputs.action != 'plan'
     environment: staging-infra
     runs-on: ubuntu-latest
     steps:
@@ -95,39 +111,15 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-      - run: terraform -chdir=terraform/environments/staging apply -auto-approve
-        env:
-          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-
-  # Manual-only (workflow_dispatch + action=destroy) - see the file-header comment for why
-  # a push can never reach this job. No `needs: plan` on purpose: `plan` above is skipped
-  # entirely for a destroy run (its own `if` excludes action=destroy), and a job whose
-  # `needs` target was skipped is itself skipped by default - this job runs its own
-  # `plan -destroy` as a visible preview step instead, immediately before the real destroy,
-  # so the log always shows what's about to be removed.
-  destroy:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
-    environment: staging-infra
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: 1.7.5
-      - run: terraform -chdir=terraform/environments/staging init
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-      - run: terraform -chdir=terraform/environments/staging plan -destroy
-        env:
-          TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
-          TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
-      - run: terraform -chdir=terraform/environments/staging destroy -auto-approve
+      # By the time this runs, plan's own log (this same run, job above) already shows
+      # exactly what -destroy found - a required reviewer approving THIS job's gate has
+      # had the chance to read it first.
+      - run: |
+          if [ "${{ github.event.inputs.action }}" = "destroy" ]; then
+            terraform -chdir=terraform/environments/staging destroy -auto-approve
+          else
+            terraform -chdir=terraform/environments/staging apply -auto-approve
+          fi
         env:
           TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
           TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
