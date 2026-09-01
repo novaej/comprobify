@@ -281,7 +281,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     if (proratedTotal <= 0) {
       const updated = await subscriptionModel.applyTierChange(subscription.id, tier);
       await tenantModel.updateTier(tenant.id, tier);
-      await tenantQuotaService.setCap(tenant.id, tier);
+      await tenantQuotaService.setCap(tenant.id, tier, billingInterval);
       await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
         subscriptionId: subscription.id,
         fromTier: subscription.tier,
@@ -353,7 +353,7 @@ async function requestSandboxTierChange(tenant, subscription, tier, targetInterv
   if (isTierDowngrade) {
     const updated = await subscriptionModel.applyTierChange(subscription.id, tier, targetInterval);
     await tenantModel.updateTier(tenant.id, tier);
-    await tenantQuotaService.setCap(tenant.id, tier);
+    await tenantQuotaService.setCap(tenant.id, tier, targetInterval);
     await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
       subscriptionId: subscription.id,
       fromTier: subscription.tier,
@@ -378,7 +378,7 @@ async function requestSandboxTierChange(tenant, subscription, tier, targetInterv
   if (netPrice <= 0) {
     const updated = await subscriptionModel.applyTierChange(subscription.id, tier, targetInterval);
     await tenantModel.updateTier(tenant.id, tier);
-    await tenantQuotaService.setCap(tenant.id, tier);
+    await tenantQuotaService.setCap(tenant.id, tier, targetInterval);
     await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
       subscriptionId: subscription.id,
       fromTier: subscription.tier,
@@ -686,7 +686,7 @@ async function applyInitialPayment(payment, subscription, tenant) {
   });
 
   await tenantModel.updateTier(subscription.tenant_id, subscription.tier);
-  await tenantQuotaService.setCap(subscription.tenant_id, subscription.tier);
+  await tenantQuotaService.setCap(subscription.tenant_id, subscription.tier, subscription.billing_interval);
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
     subscriptionId: subscription.id,
     tier: subscription.tier,
@@ -753,8 +753,13 @@ async function applyTierChangePayment(payment, subscription, tenant) {
     subscription.id, payment.target_tier, payment.target_billing_interval
   );
 
+  // COALESCE-equivalent to what subscriptionModel.applyTierChange just wrote:
+  // target_billing_interval is only set for the sandbox interval-switch path
+  // that lands here immediately (production interval switches always defer
+  // to applyScheduledTierChanges instead — see the early-return above).
+  const effectiveInterval = payment.target_billing_interval || subscription.billing_interval;
   await tenantModel.updateTier(subscription.tenant_id, payment.target_tier);
-  await tenantQuotaService.setCap(subscription.tenant_id, payment.target_tier);
+  await tenantQuotaService.setCap(subscription.tenant_id, payment.target_tier, effectiveInterval);
 
   // The upgrade takes over the remainder of the same billing cycle — the
   // subscription's period dates don't change, only the tier does — so stamp
@@ -957,7 +962,7 @@ async function refundPayment(paymentId, reason = null) {
     });
 
   await tenantModel.updateTier(subscription.tenant_id, snapshot.tenantTier);
-  await tenantQuotaService.setCap(subscription.tenant_id, snapshot.tenantTier);
+  await tenantQuotaService.setCap(subscription.tenant_id, snapshot.tenantTier, snapshot.billingInterval);
 
   const refundedPayment = await paymentModel.updateStatus(paymentId, 'REFUNDED');
 
@@ -990,7 +995,7 @@ async function applyScheduledTierChanges() {
       await subscriptionModel.applyTierChange(subscription.id, 'FREE');
       await subscriptionModel.updateStatus(subscription.id, 'CANCELLED', { canceled_at: new Date() });
       await tenantModel.updateTier(subscription.tenant_id, 'FREE');
-      await tenantQuotaService.setCap(subscription.tenant_id, 'FREE');
+      await tenantQuotaService.setCap(subscription.tenant_id, 'FREE', 'MONTHLY');
       await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_CANCELLED', {
         subscriptionId: subscription.id,
         fromTier: subscription.tier,
@@ -1009,7 +1014,7 @@ async function applyScheduledTierChanges() {
         current_period_end: periodEnd,
       });
       await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier);
-      await tenantQuotaService.setCap(subscription.tenant_id, subscription.pending_tier);
+      await tenantQuotaService.setCap(subscription.tenant_id, subscription.pending_tier, newInterval);
 
       // If this pending change was funded by a paid TIER_CHANGE payment (an
       // interval switch — free tier-only downgrades have no such payment),
@@ -1100,7 +1105,7 @@ async function createRenewalReminder(subscription) {
 
 async function expireSubscription(subscription) {
   await tenantModel.updateTier(subscription.tenant_id, 'FREE');
-  await tenantQuotaService.setCap(subscription.tenant_id, 'FREE');
+  await tenantQuotaService.setCap(subscription.tenant_id, 'FREE', 'MONTHLY');
   const updated = await subscriptionModel.updateStatus(subscription.id, 'EXPIRED');
 
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_EXPIRED', {

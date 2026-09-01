@@ -107,16 +107,17 @@ const TIERS = {
     allowedDocumentTypes:    ['01', '04'],
     overagePerDocumentUsd:   0.08,
   },
-  // documentQuota is a large sentinel, not literal unlimited — tenant_quotas
-  // .document_quota is NOT NULL (migration 073) and incrementIfWithinCap's
-  // gate is `document_count < document_quota`, so true NULL-as-unlimited
-  // would need a schema + query change. No real tenant reaches six figures
-  // of documents a month without a bespoke conversation anyway; if that ever
-  // stops being true, revisit with a nullable column instead of a bigger
-  // sentinel. overagePerDocumentUsd is null because the sentinel is never
-  // meant to be hit, not because overage is free.
+  // documentQuota: null means genuinely unlimited — the same convention
+  // maxBranches/maxIssuePointsPerBranch already use above, not the large
+  // sentinel this used to be. tenant_quotas.document_quota is nullable as of
+  // migration 094 (it was NOT NULL under the old 100000-sentinel design),
+  // and both tenantQuotaModel.incrementIfWithinCap's gate and
+  // tenantQuotaService.capForTier() treat a null cap as "never block, keep
+  // counting document_count for visibility/reporting only".
+  // overagePerDocumentUsd is null because there's no cap to ever overage
+  // past, not because overage is free.
   ENTERPRISE: {
-    documentQuota:           100000,
+    documentQuota:           null,
     maxBranches:             null,
     maxIssuePointsPerBranch: null,
     maxWebhookEndpoints:     20,

@@ -3,18 +3,48 @@ const { addMonths } = require('../utils/add-months');
 const { TIERS } = require('../constants/subscription-tiers');
 const QuotaExceededError = require('../errors/quota-exceeded-error');
 
-const QUOTA_PERIOD_MONTHS = 1;
+const MONTHLY_PERIOD_MONTHS = 1;
+// A YEARLY subscriber pays once for the whole year — their quota period
+// pools the full year's worth up front (documentQuota × 12) instead of
+// resetting every 30 days, so it's consumable unevenly across the year
+// (e.g. 0 documents in January, 480 in December). See ADR-029 and
+// CLAUDE.md's "Document quota enforcement"/"Yearly billing" entries.
+const YEARLY_POOL_MONTHS = 12;
 
-function capForTier(tier) {
-  return TIERS[tier]?.documentQuota ?? TIERS.FREE.documentQuota;
+// FREE never pools annually even though FREE.billingIntervals nominally
+// lists YEARLY (createSubscription rejects FREE outright — PAID_TIERS
+// excludes it — so a live YEARLY+FREE subscription can't actually exist,
+// but call sites that downgrade TO free pass whatever billingInterval the
+// subscription still has lying around). Guarding here, once, means every
+// caller can pass through its billingInterval unconditionally without its
+// own FREE special-case.
+function periodMonthsForTier(tier, billingInterval) {
+  if (tier === 'FREE') return MONTHLY_PERIOD_MONTHS;
+  return billingInterval === 'YEARLY' ? YEARLY_POOL_MONTHS : MONTHLY_PERIOD_MONTHS;
+}
+
+// Resolves a tier's cap for a given billing interval. Deliberately
+// `TIERS[tier] || TIERS.FREE`, not `TIERS[tier]?.documentQuota ?? ...` — the
+// latter would fall back to FREE's cap whenever a real tier's documentQuota
+// is legitimately null (ENTERPRISE, "unlimited"), since `??` treats null and
+// undefined the same way. The fallback here is only for an unrecognized
+// tier string, never for a real tier's null cap.
+function capForTier(tier, billingInterval = 'MONTHLY') {
+  const t = TIERS[tier] || TIERS.FREE;
+  if (t.documentQuota === null) return null; // ENTERPRISE — unlimited, no multiplier applies
+  return t.documentQuota * periodMonthsForTier(tier, billingInterval);
 }
 
 // Seeds a tenant's first quota period, anchored to now — there is no prior
 // period to anchor to, same exception already established for
 // subscription.service.js's applyVerifiedPayment/resetPeriodOnPromotion.
+// Both call sites (registration, admin tenant creation) create a tenant with
+// no billing_interval context yet, so this always seeds a MONTHLY-length
+// period — a later YEARLY subscription pools its quota via setCap() once one
+// actually starts.
 async function initializeForTenant(tenantId, documentQuota, client = null) {
   const periodStart = new Date();
-  const periodEnd = addMonths(periodStart, QUOTA_PERIOD_MONTHS);
+  const periodEnd = addMonths(periodStart, MONTHLY_PERIOD_MONTHS);
   return tenantQuotaModel.create({ tenantId, periodStart, periodEnd, documentQuota }, client);
 }
 
@@ -26,10 +56,35 @@ async function consumeOne(client, tenantId) {
   if (!ok) throw new QuotaExceededError();
 }
 
-// Updates the CURRENT period's cap immediately — used whenever a tenant's
-// tier changes. Does not touch document_count or start a new period.
-async function setCap(tenantId, tier) {
-  return tenantQuotaModel.updateCap(tenantId, capForTier(tier));
+// Updates the CURRENT period's cap AND billing_interval, resizing period_end
+// to match (see tenantQuotaModel.updateCapAndInterval) — used at every tier
+// and/or billing-interval change. Never touches document_count or opens a
+// new period: already-consumed documents this cycle still count against
+// whatever the new cap is. Passing the same billingInterval the period
+// already had is a safe no-op (period_end recomputes to the same value);
+// passing a changed one (a tenant just went YEARLY, or just came off it) is
+// what actually resizes the pool immediately rather than waiting for the
+// next monthly reconciliation sweep to notice.
+//
+// period_end is recomputed here in JS via addMonths(), anchored to the
+// period's own (unmoved) period_start — never as raw SQL date arithmetic,
+// which would silently reintroduce the month-end overflow bug addMonths()
+// exists to prevent (CLAUDE.md Common Mistake #26). Requires a read before
+// the write since there's no current row's period_start otherwise; low
+// contention is fine here — tier changes for one tenant aren't concurrent.
+async function setCap(tenantId, tier, billingInterval = 'MONTHLY') {
+  const current = await tenantQuotaModel.findCurrentByTenantId(tenantId);
+  if (!current) return null;
+  const cap = capForTier(tier, billingInterval);
+  const months = periodMonthsForTier(tier, billingInterval);
+  const periodEnd = addMonths(new Date(current.period_start), months);
+  // Store the INTERVAL THAT WAS ACTUALLY APPLIED, not the raw input — for
+  // FREE, periodMonthsForTier() always resolves to 1 regardless of what's
+  // passed in (see its FREE guard above), so persisting a raw 'YEARLY' here
+  // would leave tenant_quotas.billing_interval claiming a pool that was
+  // never actually granted.
+  const effectiveInterval = months === YEARLY_POOL_MONTHS ? 'YEARLY' : 'MONTHLY';
+  return tenantQuotaModel.updateCapAndInterval(tenantId, cap, effectiveInterval, periodEnd);
 }
 
 async function getCurrentForTenant(tenantId) {
@@ -45,12 +100,20 @@ async function getCurrentForTenants(tenantIds) {
 // period_end has passed. Anchored to the OLD period_end, never "now" (mirrors
 // subscription.service.js's addBillingPeriod() philosophy — CLAUDE.md Common
 // Mistake #26), so a late-running job never drifts the cycle forward.
+// row.billing_interval comes straight off tenant_quotas itself (kept current
+// by every setCap() call — see above), not re-derived from subscriptions, so
+// a period that's still mid-year correctly rolls into another 12-month pool
+// rather than snapping back to monthly just because this job happened to run.
 async function resetDuePeriods() {
   const due = await tenantQuotaModel.findDueForReset();
   for (const row of due) {
+    const billingInterval = row.billing_interval || 'MONTHLY';
+    const months = periodMonthsForTier(row.subscription_tier, billingInterval);
     const newPeriodStart = row.period_end;
-    const newPeriodEnd = addMonths(newPeriodStart, QUOTA_PERIOD_MONTHS);
-    await tenantQuotaModel.rollover(row.tenant_id, newPeriodStart, newPeriodEnd, capForTier(row.subscription_tier));
+    const newPeriodEnd = addMonths(newPeriodStart, months);
+    await tenantQuotaModel.rollover(
+      row.tenant_id, newPeriodStart, newPeriodEnd, capForTier(row.subscription_tier, billingInterval), billingInterval
+    );
   }
   return { quotaPeriodsReset: due.length };
 }

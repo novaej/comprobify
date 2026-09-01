@@ -81,6 +81,23 @@ describe('AdminService', () => {
       expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 1000, mockClient);
     });
 
+    // Regression guard: `TIERS[tier]?.documentQuota ?? TIERS.FREE.documentQuota`
+    // would silently collapse ENTERPRISE's legitimate null (unlimited) cap
+    // down to FREE's 5, since `??` treats null and undefined identically.
+    test('creates an ENTERPRISE tenant with a null (unlimited) quota, not FREE\'s', async () => {
+      tenantModel.findByEmail.mockResolvedValue(null);
+      tenantModel.create.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000003', email: 'd@e.com', subscription_tier: 'ENTERPRISE', status: 'ACTIVE',
+        created_at: new Date('2026-01-01'),
+      });
+      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: null, document_count: 0 });
+
+      const result = await adminService.createTenant({ email: 'd@e.com', subscriptionTier: 'ENTERPRISE' });
+
+      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', null, mockClient);
+      expect(result.documentQuota).toBeNull();
+    });
+
     // NOTE: unlike updateTenantTier, createTenant does not validate the supplied
     // subscriptionTier against TIERS — an unrecognized value is passed straight
     // through to tenantModel.create, only the *quota* falls back to FREE's.

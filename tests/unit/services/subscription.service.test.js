@@ -319,7 +319,7 @@ describe('SubscriptionService', () => {
       expect(paymentModel.create).not.toHaveBeenCalled();
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'GROWTH');
       expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'GROWTH', 'MONTHLY');
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGED', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'STARTER', toTier: 'GROWTH', totalAmount: 0,
       });
@@ -428,7 +428,7 @@ describe('SubscriptionService', () => {
         expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
         expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'STARTER', 'MONTHLY');
         expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-        expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
+        expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER', 'MONTHLY');
         expect(paymentModel.create).not.toHaveBeenCalled();
         expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGED', expect.objectContaining({
           subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'GROWTH', toTier: 'STARTER', totalAmount: 0,
@@ -533,7 +533,7 @@ describe('SubscriptionService', () => {
         expect(months).toBe(1);
 
         expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'STARTER');
-        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'STARTER');
+        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'STARTER', 'MONTHLY');
         expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'SUBSCRIPTION_ACTIVATED', {
           subscriptionId: SUB, tier: 'STARTER', paymentId: PAY,
         });
@@ -609,7 +609,7 @@ describe('SubscriptionService', () => {
 
         expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', null);
         expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
-        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'GROWTH');
+        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'GROWTH', 'MONTHLY');
         // The upgrade takes over the remainder of the SAME cycle — period unchanged.
         expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'VERIFIED', {
           period_start: subscription.current_period_start,
@@ -728,9 +728,12 @@ describe('SubscriptionService', () => {
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'STARTER', null);
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', 'GROWTH', null);
       expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER', 'MONTHLY');
       expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 'GROWTH');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 'GROWTH');
+      // Subscription 11 is YEARLY (pending_billing_interval null -> falls back
+      // to the subscription's own billing_interval) — the pooled annual cap
+      // must carry over, not silently collapse to a flat monthly one.
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 'GROWTH', 'YEARLY');
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGED', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'GROWTH', toTier: 'STARTER', fromBillingInterval: 'MONTHLY', toBillingInterval: 'MONTHLY',
       });
@@ -870,7 +873,7 @@ describe('SubscriptionService', () => {
       const result = await subscriptionService.processDueRenewals();
 
       expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'FREE');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'FREE');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'FREE', 'MONTHLY');
       expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'EXPIRED');
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_EXPIRED', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', previousTier: 'GROWTH',
@@ -1482,7 +1485,7 @@ describe('SubscriptionService', () => {
       });
       // Never FREE — that was the bug this endpoint exists to avoid.
       expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'STARTER');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'STARTER');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'STARTER', 'MONTHLY');
       expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'REFUNDED');
       expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'PAYMENT_REFUNDED', expect.objectContaining({
         paymentId: PAY, purpose: 'TIER_CHANGE', reason: 'Chargeback 8891', restoredTier: 'STARTER',
@@ -1528,7 +1531,7 @@ describe('SubscriptionService', () => {
         canceled_at: expect.any(Date), current_period_start: null, current_period_end: null,
       });
       expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'FREE');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'FREE');
+      expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'FREE', 'MONTHLY');
     });
 
     // Suspension is a separate operator judgement — an honest duplicate charge
