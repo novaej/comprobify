@@ -57,7 +57,7 @@ const { NOTIFICATION_CATALOG, isMandatory, supportsChannel } = require('../const
 const pendingEffectService = require('./pending-effect.service');
 const { EffectTypes } = require('../constants/effect-types');
 
-const PAYMENT_PURPOSE_LABELS = { INITIAL: 'subscription', TIER_CHANGE: 'tier change', RENEWAL: 'renewal' };
+const PAYMENT_PURPOSE_LABELS = { INITIAL: 'subscription', TIER_CHANGE: 'tier change', RENEWAL: 'renewal', SEAT_CHANGE: 'extra seats' };
 const REJECTION_REASON_LABELS = {
   AMOUNT_MISMATCH: 'the transferred amount did not match what was requested',
   TRANSFER_NOT_FOUND: 'no matching transfer was found in the account',
@@ -239,6 +239,10 @@ async function createPaymentReviewed(payment, subscription, decision) {
   // target_tier, so this correctly falls back to the subscription's own.
   const tier = payment.target_tier || subscription.tier;
   const billingInterval = payment.target_billing_interval || subscription.billing_interval;
+  // A SEAT_CHANGE payment has no target_tier — it isn't buying a plan, so
+  // naming "the GROWTH plan" would be misleading. Name the seat count instead.
+  const isSeatChange = payment.purpose === 'SEAT_CHANGE';
+  const seatsLabel = `${payment.seats_charged} seat${payment.seats_charged === 1 ? '' : 's'}`;
 
   const notification = await notificationModel.create({
     tenantId: subscription.tenant_id,
@@ -246,8 +250,12 @@ async function createPaymentReviewed(payment, subscription, decision) {
     severity: decision === 'VERIFIED' ? NotificationSeverity.INFO : NotificationSeverity.WARNING,
     title: decision === 'VERIFIED' ? 'Payment verified' : 'Payment rejected',
     message: decision === 'VERIFIED'
-      ? `Your ${purposeLabel} payment for the ${tier} plan was verified.`
-      : `Your ${purposeLabel} payment for the ${tier} plan was rejected: ${REJECTION_REASON_LABELS[payment.rejection_reason_code] || REJECTION_REASON_LABELS.OTHER}.`,
+      ? isSeatChange
+        ? `Your ${purposeLabel} payment (${seatsLabel}) was verified.`
+        : `Your ${purposeLabel} payment for the ${tier} plan was verified.`
+      : isSeatChange
+        ? `Your ${purposeLabel} payment (${seatsLabel}) was rejected: ${REJECTION_REASON_LABELS[payment.rejection_reason_code] || REJECTION_REASON_LABELS.OTHER}.`
+        : `Your ${purposeLabel} payment for the ${tier} plan was rejected: ${REJECTION_REASON_LABELS[payment.rejection_reason_code] || REJECTION_REASON_LABELS.OTHER}.`,
     metadata: {
       paymentId: payment.id,
       subscriptionId: subscription.id,
@@ -256,6 +264,8 @@ async function createPaymentReviewed(payment, subscription, decision) {
       purpose: payment.purpose,
       amount: payment.total_amount,
       rejectionReasonCode: payment.rejection_reason_code || null,
+      seatsCharged: payment.seats_charged,
+      targetExtraSeats: payment.target_extra_seats,
     },
   });
 
@@ -393,6 +403,42 @@ async function createPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd) {
       previousPriceUsd,
       newPriceUsd: newPrice,
       effectiveAt: tierPrice.effective_at,
+    },
+  });
+
+  await dispatchNotification(notification);
+  return notification;
+}
+
+/**
+ * Structural clone of createPriceChangeAnnounced for the extra-seat add-on
+ * (ADR-032) — same NotificationTypes.PRICE_CHANGE_ANNOUNCED type (reused
+ * rather than adding a 6th email-capable type), same mandatory/unconditional
+ * dispatch. Distinguished from a tier-price notification purely by its
+ * metadata: seatPriceId instead of tierPriceId, and no `tier` key — that
+ * absence is what notification-email-template.service.js's value builder
+ * branches on to render "Extra user seats" instead of a tier name.
+ *
+ * @param {object} tenant - DB row from tenants table
+ * @param {object} seatPrice - DB row from seat_prices (PUBLISHED, effective_at in the future)
+ * @param {number} previousPriceUsd - the price in effect right now, for the "from -> to" message
+ */
+async function createSeatPriceChangeAnnounced(tenant, seatPrice, previousPriceUsd) {
+  const effectiveDate = moment(seatPrice.effective_at).format('DD/MM/YYYY');
+  const newPrice = parseFloat(seatPrice.price_usd);
+
+  const notification = await notificationModel.create({
+    tenantId: tenant.id,
+    type: NotificationTypes.PRICE_CHANGE_ANNOUNCED,
+    severity: NotificationSeverity.INFO,
+    title: 'Upcoming price change',
+    message: `The ${seatPrice.billing_interval.toLowerCase()} price for extra user seats is changing from $${previousPriceUsd} to $${newPrice} on ${effectiveDate}. Any renewal due before that date is still billed at the current price.`,
+    metadata: {
+      seatPriceId: seatPrice.id,
+      billingInterval: seatPrice.billing_interval,
+      previousPriceUsd,
+      newPriceUsd: newPrice,
+      effectiveAt: seatPrice.effective_at,
     },
   });
 
@@ -543,6 +589,7 @@ module.exports = {
   createSubscriptionPastDueWarning,
   createSubscriptionExpired,
   createPriceChangeAnnounced,
+  createSeatPriceChangeAnnounced,
   runCertChecksForTenant,
   listForTenant,
   markRead,

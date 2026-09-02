@@ -159,5 +159,43 @@ describe('NotificationEmailTemplateService', () => {
       expect(result.subject).toBe('STARTER past due');
       expect(result.text).toBe('Pay by 08/07/2026');
     });
+
+    test('PRICE_CHANGE_ANNOUNCED for a real tier substitutes the tier name', async () => {
+      notificationEmailTemplateModel.findCurrent.mockResolvedValue({
+        subject_template: 'Price change: {{tier}}',
+        html_template: '{{tier}} — ${{currentPrice}} -> ${{newPrice}}',
+        text_template: '{{tier}} — ${{currentPrice}} -> ${{newPrice}}',
+      });
+      const tierPriceNotification = {
+        tenant_id: 'tenant-1', type: 'PRICE_CHANGE_ANNOUNCED',
+        metadata: { tierPriceId: 'tp-1', tier: 'GROWTH', billingInterval: 'MONTHLY', previousPriceUsd: 90, newPriceUsd: 100, effectiveAt: new Date('2026-10-01') },
+      };
+
+      const result = await notificationEmailTemplateService.render('PRICE_CHANGE_ANNOUNCED', 'en', tierPriceNotification);
+
+      expect(result.subject).toBe('Price change: GROWTH');
+    });
+
+    // Regression test: a seat-price notification's metadata has no `tier`
+    // key at all (only seatPriceId) — without the buildValues branch, {{tier}}
+    // would render literally in the email instead of being substituted.
+    test('PRICE_CHANGE_ANNOUNCED for the seat add-on substitutes an item label, not a literal {{tier}}', async () => {
+      notificationEmailTemplateModel.findCurrent.mockResolvedValue({
+        subject_template: 'Price change: {{tier}}',
+        html_template: '{{tier}} — ${{currentPrice}} -> ${{newPrice}}',
+        text_template: '{{tier}} — ${{currentPrice}} -> ${{newPrice}}',
+      });
+      const seatPriceNotification = {
+        tenant_id: 'tenant-1', type: 'PRICE_CHANGE_ANNOUNCED',
+        metadata: { seatPriceId: 'sp-1', billingInterval: 'MONTHLY', previousPriceUsd: 5, newPriceUsd: 6, effectiveAt: new Date('2026-10-01') },
+      };
+
+      const resultEn = await notificationEmailTemplateService.render('PRICE_CHANGE_ANNOUNCED', 'en', seatPriceNotification);
+      expect(resultEn.subject).toBe('Price change: Extra user seats');
+      expect(resultEn.subject).not.toContain('{{tier}}');
+
+      const resultEs = await notificationEmailTemplateService.render('PRICE_CHANGE_ANNOUNCED', 'es', seatPriceNotification);
+      expect(resultEs.subject).toBe('Price change: Usuarios adicionales');
+    });
   });
 });

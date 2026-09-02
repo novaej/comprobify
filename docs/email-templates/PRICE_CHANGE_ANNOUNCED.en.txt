@@ -1,13 +1,13 @@
-SUBJECT: Upcoming price change for your {{tier}} plan
+SUBJECT: Upcoming price change: {{tier}}
 ---HTML---
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <p>Hello,</p>
-  <p>We're writing to let you know the price for the {{tier}} plan is changing, effective {{effectiveDate}}.</p>
+  <p>We're writing to let you know the price for {{tier}} is changing, effective {{effectiveDate}}.</p>
   <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
-    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Plan</td><td style="padding: 6px 12px;">{{tier}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Item</td><td style="padding: 6px 12px;">{{tier}}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Billing interval</td><td style="padding: 6px 12px;">{{billingInterval}}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Current price</td><td style="padding: 6px 12px;">${{currentPrice}}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">New price</td><td style="padding: 6px 12px;">${{newPrice}}</td></tr>
@@ -21,9 +21,9 @@ SUBJECT: Upcoming price change for your {{tier}} plan
 ---TEXT---
 Hello,
 
-We're writing to let you know the price for the {{tier}} plan is changing, effective {{effectiveDate}}.
+We're writing to let you know the price for {{tier}} is changing, effective {{effectiveDate}}.
 
-  Plan:         {{tier}}
+  Item:          {{tier}}
   Billing interval: {{billingInterval}}
   Current price: ${{currentPrice}}
   New price:     ${{newPrice}}
