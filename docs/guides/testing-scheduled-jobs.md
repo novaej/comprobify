@@ -143,7 +143,7 @@ SELECT event_type, detail FROM tenant_events WHERE tenant_id = <TENANT_ID> ORDER
 ```
 `applyVerifiedPayment()` also re-runs the price-change reactivation catch-up (`pricingService.notifyPendingPriceChangesForTenant`) at this point, same as every other place a tenant transitions to `ACTIVE` — if a price change published while the tenant was `PAST_DUE`, expect a `PRICE_CHANGE_ANNOUNCED` notification to appear here too if one hadn't already been sent.
 
-### 2d. Yearly plan — confirm it's unaffected mid-year
+### 2d. Yearly plan — subscriptions job still doesn't touch quota, even for YEARLY
 ```sql
 UPDATE subscriptions
 SET billing_interval = 'YEARLY',
@@ -151,7 +151,7 @@ SET billing_interval = 'YEARLY',
     current_period_end   = NOW() + INTERVAL '6 months'
 WHERE id = <SUB_ID> AND status = 'ACTIVE';
 ```
-Run the subscriptions job — nothing should change on this subscription (well outside both the 7-day reminder and grace windows). This is the counterpart to the quota job scenario below: billing and quota run on genuinely independent clocks.
+Run the subscriptions job — nothing should change on this subscription (well outside both the 7-day reminder and grace windows), and nothing should change on `tenant_quotas` either. **This still holds after ADR-029** — `tenantQuotaService.resetDuePeriods()` (the quota job, section 3 below) never joins `subscriptions`, so the two jobs remain genuinely independent crons. What ADR-029 changed is the *cap itself*, not this independence: see 3b below — a `YEARLY` subscription's quota pool is now sized ×12, but that happens via `setCap()` at the moment the interval was set (subscription creation, a tier/interval change, promotion), not via anything either scheduled job does on its own heartbeat.
 
 ---
 
@@ -164,16 +164,24 @@ WHERE tenant_id = <TENANT_ID> AND is_current = true;
 ```
 After running:
 ```sql
-SELECT tenant_id, period_start, period_end, document_quota, document_count, is_current
+SELECT tenant_id, period_start, period_end, document_quota, document_count, billing_interval, is_current
 FROM tenant_quotas WHERE tenant_id = <TENANT_ID> ORDER BY period_start DESC;
 ```
-Expect: the old row is now `is_current = false`; a new row exists with `document_count = 0`, `period_start` equal to the *old* `period_end` (anchored, not "now"), and `document_quota` matching the tenant's current `subscription_tier`.
+Expect: the old row is now `is_current = false`; a new row exists with `document_count = 0`, `period_start` equal to the *old* `period_end` (anchored, not "now"), `billing_interval` carried forward unchanged from the old row, and `document_quota` matching the tenant's current `subscription_tier` **and** that `billing_interval` — the tier's monthly figure as-is for `MONTHLY`, × 12 for `YEARLY` (except ENTERPRISE, always `NULL` regardless of interval — see ADR-029). The new row's `period_end` is likewise `period_start` + 1 month for `MONTHLY` or + 12 months for `YEARLY`, not always +1 month.
 
-### 3b. Independent of billing_interval
-Run this regardless of whether the tenant's subscription is `MONTHLY` or `YEARLY` (see scenario 2d) — the quota job doesn't look at `subscriptions` at all. This is the core guarantee: a YEARLY subscriber still gets their document quota refreshed every month, not once a year.
+### 3b. YEARLY pools the quota for the whole year — it does NOT refresh monthly (ADR-029)
+This reverses what this guide used to say here. Before ADR-029, `tenant_quotas` ran on a flat monthly clock regardless of billing interval, so a YEARLY subscriber got the same per-month cap as a MONTHLY one, refreshed every 30 days. Now, a `YEARLY` row's cap is the tier's monthly figure × 12, granted as one pool for a real 12-month period — consumable unevenly (e.g. heavy in December, nothing in January) rather than capped and reset every month. To see it:
+```sql
+UPDATE subscriptions SET billing_interval = 'YEARLY' WHERE id = <SUB_ID> AND status = 'ACTIVE';
+-- Then apply the interval to the tenant's quota the same way a real tier/interval change would
+-- (this is what setCap() does under the hood — see 3c):
+UPDATE tenant_quotas SET billing_interval = 'YEARLY', document_quota = document_quota * 12
+WHERE tenant_id = <TENANT_ID> AND is_current = true;
+```
+The quota job still doesn't join `subscriptions` (see 2d) — `tenant_quotas.billing_interval` is the sole source of truth `resetDuePeriods()` reads, kept in sync by whichever service call last touched this tenant's cap.
 
-### 3c. Cap updates don't wait for this job
-Any tier change (upgrade, downgrade, expiry-to-FREE, admin override via `PATCH /v1/admin/tenants/:id/tier`) calls `tenantQuotaService.setCap()` synchronously as part of that action — the current period's `document_quota` updates immediately, without needing the quota job to run at all. The quota job only ever handles the *period boundary* (rolling `document_count` back to 0 on a new cycle), never the cap value by itself.
+### 3c. Cap AND interval updates don't wait for this job
+Any tier and/or billing-interval change (upgrade, downgrade, an interval switch landing, expiry-to-FREE, admin override via `PATCH /v1/admin/tenants/:id/tier`) calls `tenantQuotaService.setCap(tenantId, tier, billingInterval)` synchronously as part of that action — the current period's `document_quota`, `billing_interval`, **and** `period_end` all update immediately (see ADR-029), without needing the quota job to run at all; `period_start` and `document_count` are never touched, so already-consumed documents this cycle still count against the resized cap. The quota job only ever handles the *period boundary* once it's actually due (rolling `document_count` back to 0 on a new cycle) — it doesn't independently decide the cap.
 
 ---
 

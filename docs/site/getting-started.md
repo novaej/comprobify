@@ -309,18 +309,27 @@ Distribuye cada token a la integración que anteriormente usaba la llave de sand
 
 ## Tiers de suscripción
 
-| Plan | Precio/mes | Precio/año | Cuota de comprobantes **(por mes)** | Tipos de comprobante | Sucursales máx. | Puntos de emisión máx. por sucursal | Endpoints de webhook máx. | Límite de escritura |
+Los precios listados son la tarifa **sin IVA** (el "precio de etiqueta") — el IVA (15% actualmente) se añade al momento de pagar, nunca está incluido en la cifra publicada. Entre paréntesis se muestra el total con IVA incluido, que es lo que efectivamente transfieres.
+
+| Plan | Precio/mes (+ IVA) | Precio/año (+ IVA) | Cuota de comprobantes **(cifra mensual base)** | Tipos de comprobante | Sucursales máx. | Puntos de emisión máx. por sucursal | Endpoints de webhook máx. | Límite de escritura |
 |---|---|---|---|---|---|---|---|---|
 | Free | $0 | $0 | 5 | Factura (`01`) | 1 | 1 | 1 | 10 req/min |
-| Starter | $19 | $190 | 200 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
-| Growth | $79 | $790 | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
-| Business | $199 | $1,990 | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Ilimitado | Ilimitado | 10 | 300 req/min |
+| Solo | — (solo anual) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 15 req/min |
+| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 30 req/min |
+| Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
+| Growth | $90 (+IVA $103.50) | $900 (+IVA $1,035) | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
+| Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Ilimitado | Ilimitado | 10 | 300 req/min |
+| Enterprise | $450 (+IVA $517.50) | $4,500 (+IVA $5,175) | **Ilimitado** | Factura, Nota de Crédito (`01`, `04`) | Ilimitado | Ilimitado | 20 | 600 req/min |
 
-El precio anual equivale a 2 meses gratis frente a pagar mensualmente — **elegir el pago anual solo cambia con qué frecuencia pagas, no con qué frecuencia se reinicia tu cuota de comprobantes.** La columna de cuota es una cifra mensual en cada tier, ya sea que te facturen mensual o anualmente. Consulta [Get Tiers](endpoints/get-tiers.md) para ver este mismo catálogo como una respuesta pública de la API.
+**Solo es solo anual** (facturación mensual no disponible en ese plan) — un compromiso anual de bajo costo pensado para el escalón de entrada, por debajo de Starter. **Enterprise no tiene cuota de comprobantes**: es genuinamente ilimitado (no un número grande), y tampoco tiene tarifa de excedente, porque no hay tope que exceder.
+
+> **Nota:** estos precios reflejan el catálogo publicado en este momento y pueden cambiar — todo cambio de precio requiere al menos 30 días de aviso previo a los tenants activos (ver [Tu suscripción y cómo pagarla](paying-your-subscription.md)), así que un precio nunca cambia de un día para otro. Consulta siempre la aplicación web de Comprobify para el catálogo vigente en tiempo real; esta tabla es una referencia y puede quedar desactualizada entre ediciones de esta página.
+
+**El pago anual no solo cambia con qué frecuencia pagas — también cambia cómo se consume tu cuota.** En un plan **mensual**, la cuota de la tabla es tu tope y se reinicia cada mes. En un plan **anual**, esa misma cifra se multiplica por 12 y se otorga de una sola vez para todo el año — puedes consumirla de forma despareja (por ejemplo, 0 comprobantes en enero y 480 en diciembre en un plan con cuota de 40/mes) en lugar de perder lo que no usaste cada mes.
 
 La cuota de comprobantes se comparte entre todas las sucursales y tipos de comprobante, y cuenta **solo los comprobantes de producción** — los comprobantes de sandbox/prueba nunca la consumen. Cuando la alcanzas, `POST /v1/documents` devuelve `402 QUOTA_EXCEEDED`. Consulta "Mejorando a un plan pagado" abajo.
 
-> **Cuota mensual.** Tu cuota se reinicia al comienzo de cada mes de facturación, independientemente de cada cuánto *pagues* — un suscriptor anual sigue recibiendo la cuota publicada cada mes, no una vez al año. Solo los comprobantes de producción la consumen.
+> **Cuota mensual o anual, según cómo pagues.** En facturación mensual, tu cuota se reinicia al comienzo de cada mes. En facturación anual, tu cuota es un cupo único para los 12 meses (cifra mensual × 12), consumible de forma pareja o despareja durante todo el año — no se reinicia cada mes. El plan **Enterprise** no tiene cuota: es ilimitado. Solo los comprobantes de producción cuentan contra la cuota.
 
 ### Mejorando a un plan pagado
 
@@ -332,7 +341,7 @@ Lo que sí puedes hacer por API es seguir el resultado:
 
 - [`GET /v1/tenants/me`](endpoints/tenant-me.md) — tu plan, cuota y estado de cuenta actuales. `subscriptionTier`/`documentQuota` se actualizan en el momento en que un pago se verifica.
 - [Notificaciones](endpoints/notifications.md) — `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_EXPIRED` y más, entregadas a tus [webhooks](endpoints/webhooks.md) si tienes alguno registrado. No hace falta consultar activamente.
-- [Consultar planes](endpoints/get-tiers.md) — el catálogo público de planes, para tu propia página de precios.
+- La aplicación web de Comprobify — el catálogo de planes y precios vigentes se consulta ahí, no hay un endpoint público equivalente pensado para integradores externos.
 
 Hasta que un pago se verifique estás en los límites FREE en producción — nada se bloquea, solo no tienes la cuota mayor todavía.
 

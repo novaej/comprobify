@@ -309,18 +309,27 @@ Distribute each token to the integration that previously used the sandbox key wi
 
 ## Subscription tiers
 
-| Tier | Price/mo | Price/yr | Document quota **(per month)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
+Listed prices are the **tax-exclusive** rate (the "sticker price") — IVA (currently 15%) is added at checkout, never baked into the published figure. The parenthetical is the IVA-inclusive total, which is what you actually transfer.
+
+| Tier | Price/mo (+ IVA) | Price/yr (+ IVA) | Document quota **(monthly base figure)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
 |---|---|---|---|---|---|---|---|---|
 | Free | $0 | $0 | 5 | Factura (`01`) | 1 | 1 | 1 | 10 req/min |
-| Starter | $19 | $190 | 200 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
-| Growth | $79 | $790 | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
-| Business | $199 | $1,990 | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 300 req/min |
+| Solo | — (yearly only) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 15 req/min |
+| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 30 req/min |
+| Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
+| Growth | $90 (+IVA $103.50) | $900 (+IVA $1,035) | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
+| Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 300 req/min |
+| Enterprise | $450 (+IVA $517.50) | $4,500 (+IVA $5,175) | **Unlimited** | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 20 | 600 req/min |
 
-Yearly pricing is 2 months free vs. paying monthly — **choosing yearly only changes how often you pay, not how often your document quota resets.** The quota column is a per-month figure on every tier, whether you're billed monthly or yearly. See [Get Tiers](endpoints/get-tiers.md) for this same catalog as a public API response.
+**Solo is yearly-only** (no monthly billing on that plan) — a low-cost annual commitment below Starter, meant as the entry rung. **Enterprise has no document quota at all**: it's genuinely unlimited (not a large number), and has no overage rate either, since there's no cap to ever overage past.
+
+> **Note:** these prices reflect the currently published catalog and can change — any price change requires at least 30 days' notice to active tenants (see [Your subscription & billing](paying-your-subscription.md)), so a price never changes overnight. Always check the Comprobify web app for the live catalog; this table is a reference and can fall out of date between edits to this page.
+
+**Yearly billing changes more than just how often you pay — it changes how your quota is consumed too.** On a **monthly** plan, the table's quota figure is your cap and resets every month. On a **yearly** plan, that same figure is multiplied by 12 and granted up front for the whole year — you can consume it unevenly (e.g. 0 documents in January, 480 in December on a plan with a 40/month quota) instead of losing whatever you didn't use each month.
 
 The document quota is shared across all branches and document types, and counts **production documents only** — sandbox/test documents never consume it. When you reach it, `POST /v1/documents` returns `402 QUOTA_EXCEEDED`. See "Upgrading to a paid plan" below.
 
-> **Monthly allowance.** Your quota resets at the start of each billing month, independently of how often you *pay* — a yearly subscriber still gets the published quota every month, not once a year. Only production documents count against it.
+> **Monthly or yearly, depending on how you pay.** On monthly billing, your quota resets at the start of each billing month. On yearly billing, your quota is a single pool for the full 12 months (monthly figure × 12), consumable evenly or unevenly across the whole year — it does not reset every month. The **Enterprise** tier has no quota at all: it's unlimited. Only production documents count against it.
 
 ### Upgrading to a paid plan
 
@@ -332,7 +341,7 @@ What you *can* do over the API is track the outcome:
 
 - [`GET /v1/tenants/me`](endpoints/tenant-me.md) — your current tier, quota and account status. `subscriptionTier`/`documentQuota` update the moment a payment is verified.
 - [Notifications](endpoints/notifications.md) — `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_EXPIRED` and more, fanned out to your [webhooks](endpoints/webhooks.md) if you've registered any. No polling needed.
-- [Get Tiers](endpoints/get-tiers.md) — the public plan catalogue, for your own pricing page.
+- The Comprobify web app — current plans and pricing are checked there; there's no equivalent public endpoint intended for external integrators.
 
 Until a payment is verified you're on FREE limits in production — nothing is blocked, you just don't have the higher quota yet.
 

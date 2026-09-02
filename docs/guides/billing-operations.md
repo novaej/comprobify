@@ -160,7 +160,7 @@ Listing them isn't the useful part. **"Correct" means these invariants hold:**
 | 1 | `VERIFIED` ⟹ `verified_at` set | — |
 | 2 | Applied ⟹ `period_start` stamped | Exception: a *deferred* `TIER_CHANGE` sets `pending_tier` instead and stays unstamped until it lands |
 | 3 | `subscriptions.tier` == `tenants.subscription_tier` | A hand-rolled tier edit writes only the tenant. The next renewal is then priced off a tier nobody paid for |
-| 4 | `tenant_quotas.document_quota` matches that tier | `updateTier` and `setCap` are separate calls; miss one and the tier changes while the cap doesn't |
+| 4 | `tenant_quotas.document_quota` matches that tier *and* `billing_interval` | `updateTier` and `setCap` are separate calls; miss one and the tier changes while the cap doesn't. Since ADR-029, the expected cap also depends on `tenant_quotas.billing_interval`: a YEARLY period's cap is the tier's monthly figure × 12, not the flat monthly one — and ENTERPRISE's cap is always `NULL` (genuinely unlimited), regardless of interval |
 | 5 | Card ⟹ an `APPROVED` attempt with `applied_at` | `applied_at` null means captured but never credited |
 | 6 | `invoiced_at IS NULL` ⟹ factura still owed | — |
 
@@ -203,8 +203,12 @@ SELECT p.id AS payment_id, s.tenant_id, p.purpose, p.status,
          AND s.pending_tier IS NULL                                THEN 'verified but never applied'
     WHEN p.status = 'VERIFIED' AND s.tier <> t.subscription_tier   THEN 'subscription.tier disagrees with tenant tier'
     WHEN p.status = 'VERIFIED' AND q.document_quota IS DISTINCT FROM
-         CASE t.subscription_tier WHEN 'FREE' THEN 5 WHEN 'STARTER' THEN 200
-              WHEN 'GROWTH' THEN 1000 WHEN 'BUSINESS' THEN 4000 END THEN 'quota cap does not match tier'
+         CASE WHEN t.subscription_tier = 'ENTERPRISE' THEN NULL ELSE
+           (CASE t.subscription_tier
+              WHEN 'FREE' THEN 5 WHEN 'SOLO' THEN 15 WHEN 'LITE' THEN 50
+              WHEN 'STARTER' THEN 200 WHEN 'GROWTH' THEN 1000 WHEN 'BUSINESS' THEN 4000 END)
+           * (CASE WHEN s.billing_interval = 'YEARLY' AND t.subscription_tier <> 'FREE' THEN 12 ELSE 1 END)
+         END                                              THEN 'quota cap does not match tier/interval'
     WHEN p.method = 'PAYPHONE_CARD' AND p.status = 'VERIFIED'
          AND NOT EXISTS (SELECT 1 FROM payphone_transactions x
                          WHERE x.payment_id = p.id AND x.status = 'APPROVED'
@@ -217,7 +221,7 @@ LEFT JOIN tenant_quotas q ON q.tenant_id = t.id AND q.is_current
 WHERE p.status = 'VERIFIED';
 ```
 
-The tier quotas are inlined rather than joined, since they live in `src/constants/subscription-tiers.js` and not in the database — update them here if the tier definitions change.
+The tier quotas are inlined rather than joined, since they live in `src/constants/subscription-tiers.js` and not in the database — update them here if the tier definitions change (including the `× 12` YEARLY multiplier and ENTERPRISE's `NULL` case, both from `tenantQuotaService.capForTier()`/`periodMonthsForTier()`, if that logic ever changes).
 
 ## 8. When a tenant says they paid and nothing happened
 
@@ -252,10 +256,10 @@ You need a tenant row and an issuer of your own to self-bill from, so the operat
 **Do raise its quota.** Every production document consumes the issuing tenant's quota with no operator exemption, so you burn your own allowance issuing subscription invoices to customers — one per paying tenant per month. On FREE (5/month) that fails almost immediately with a `402 QUOTA_EXCEEDED` that reads like a bug. Set it once:
 
 ```
-PATCH /v1/admin/tenants/:id/tier   { "tier": "BUSINESS" }
+PATCH /v1/admin/tenants/:id/tier   { "tier": "ENTERPRISE" }
 ```
 
-That's an admin override: it sets the tier and quota cap without creating a subscription. BUSINESS is 4,000 documents/month. The tenant also has to be promoted (`sandbox = false`) to issue production documents at all.
+That's an admin override: it sets the tier and quota cap without creating a subscription. ENTERPRISE has a genuinely unlimited quota (`document_quota` becomes `NULL`, not a large number — see ADR-029), which is the right fit for the operator's own housekeeping tenant since there's no real cap that makes sense here; BUSINESS (4,000/month) still works too if you'd rather keep a visible ceiling. The tenant also has to be promoted (`sandbox = false`) to issue production documents at all.
 
 **Your tenant is a real business, not just a bookkeeping vehicle.** The same issuer will emit subscription invoices to Comprobify customers *and* invoices for your other work to unrelated clients. Two things follow:
 

@@ -8,9 +8,9 @@ Not to be confused with issuing documents. Your subscription is what you pay Com
 
 ## Choosing a plan
 
-Available plans, with their monthly document quota, prices and limits, are in [Get Tiers](endpoints/get-tiers.md) — the one billing endpoint that is public, intended for pricing pages.
+Available plans, with their monthly base document quota, prices and limits, are viewed and chosen from the Comprobify web app — there's no public endpoint intended for external integrators to read the plan catalog.
 
-Billing is **monthly** or **yearly**. Yearly costs the equivalent of 10 months (two months free). Your document quota always resets **every month**, even if you pay once a year.
+Billing is **monthly** or **yearly**. Yearly costs the equivalent of 10 months (two months free). **How your quota is consumed depends on which you choose:** on monthly billing, your quota resets every month; on yearly billing, you get a full 12 months' worth of quota (monthly figure × 12) up front for the whole year, consumable evenly or unevenly — it does not reset month to month. The Enterprise tier has no quota at all — it's unlimited either way.
 
 ## Two ways to pay
 
