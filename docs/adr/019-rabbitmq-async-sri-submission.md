@@ -1,7 +1,9 @@
 # ADR-019: RabbitMQ-Backed Async SRI Submission
 
 ## Status
-Accepted
+Accepted — **dispatch-tracking mechanism superseded by [ADR-022](022-effects-outbox.md)** (2026-07-22).
+
+Everything below about *why* SRI submission is async (Postgres as the only source of truth, RabbitMQ as a confirmed-dispatch signal only, the broker-confirmed publish, the reconciliation job's "never call SRI itself" rule, the `PENDING_SEND` document status) is still exactly how the system works. What changed is *how a pending dispatch is tracked*: the two bespoke columns this ADR added directly to `documents` (`send_dispatch_attempted_at`/`authorize_dispatch_attempted_at`) were dropped by migration 075 and replaced by the generic `pending_effects` outbox table ADR-022 introduces for every async side effect in the codebase, SRI send/authorize included. `workers/sri-worker.js` (named below) was also renamed to `workers/worker.js` as part of that same change, once its role broadened past SRI-only. Read this ADR for the architecture and ADR-022 for why the tracking mechanism generalized.
 
 ## Date
 2026-07-13
