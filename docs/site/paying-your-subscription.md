@@ -62,18 +62,29 @@ Desde la aplicación web puedes subir o bajar de plan, y cambiar entre facturaci
 
 Solo puede haber un cambio pendiente a la vez. El historial completo de cambios de plan a lo largo del tiempo está en [Historial de eventos del tenant](endpoints/tenant-events.md).
 
+## Usuarios adicionales
+
+Cada plan incluye un número determinado de usuarios del panel. Si necesitas más, puedes comprar usuarios adicionales desde la aplicación web a un precio fijo por usuario (el mismo sin importar tu plan) — visible ahí junto al resto del catálogo.
+
+| Cambio | Cuándo aplica | Qué pagas |
+|---|---|---|
+| **Agregar un usuario** | De inmediato, al pagarse | Prorrateado por el tiempo que queda del período actual |
+| **Quitar un usuario** | Al final del período actual | Nada — el período actual ya está pagado al número superior |
+
+Una vez que tienes usuarios adicionales, su costo se incluye en tu renovación de plan habitual — **un solo pago, no dos** — así que no hay nada extra que rastrear por separado. Cambiar tu intervalo de facturación (mensual ↔ anual) también reprecia los usuarios adicionales activos al nuevo intervalo, como parte de ese mismo cambio.
+
 ## Cancelar
 
 Puedes programar una cancelación desde la aplicación web. Tu plan sigue funcionando normalmente hasta el final del período que ya pagaste; al llegar esa fecha, la cuenta baja a FREE. No hay reembolso por el tiempo restante.
 
 ## Protección de precios
 
-Si Comprobify cambia el precio de tu plan, recibes un aviso con **al menos 30 días de anticipación** (notificación `PRICE_CHANGE_ANNOUNCED` y correo — este aviso no se puede desactivar). Cualquier renovación que venza antes de la fecha efectiva del nuevo precio se cobra al precio anterior, automáticamente.
+Si Comprobify cambia el precio de tu plan — o el precio del complemento de usuarios adicionales —, recibes un aviso con **al menos 30 días de anticipación** (notificación `PRICE_CHANGE_ANNOUNCED` y correo — este aviso no se puede desactivar). Cualquier renovación que venza antes de la fecha efectiva del nuevo precio se cobra al precio anterior, automáticamente.
 
 ## Cómo enterarte de todo esto por API
 
 Aunque el pago se hace desde la aplicación web, sí puedes recibir los eventos de facturación programáticamente:
 
 - [Notificaciones](endpoints/notifications.md) — `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_PAST_DUE_WARNING`, `SUBSCRIPTION_EXPIRED`, `PRICE_CHANGE_ANNOUNCED`, consultables o entregadas por [webhook](endpoints/webhooks.md).
-- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — tu plan, cuota y estado de cuenta actuales.
+- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — tu plan, cuota, usuarios adicionales y estado de cuenta actuales.
 - [Historial de eventos del tenant](endpoints/tenant-events.md) — la secuencia completa de lo que ha pasado con tu cuenta.

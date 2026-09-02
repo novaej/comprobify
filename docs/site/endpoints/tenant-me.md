@@ -23,6 +23,8 @@ GET /v1/tenants/me
     "suspensionReasonCode": null,
     "documentCount": 128,
     "documentQuota": 1000,
+    "extraSeats": 2,
+    "pendingExtraSeats": null,
     "sandbox": false,
     "agreementAcceptedAt": "2026-06-28T12:00:00.000Z",
     "agreementVersion": "2026-06-28"
@@ -39,6 +41,8 @@ GET /v1/tenants/me
 | `suspensionReasonCode` | Por qué la cuenta está suspendida: `PAYMENT_REVERSED`, `FRAUD_SUSPECTED`, `TERMS_VIOLATION`, `VOLUNTARY_CLOSURE`, `UNPAID_BALANCE` u `OTHER`. `null` salvo que `status` sea `SUSPENDED`. Es un código estable pensado para que tu interfaz muestre su propio mensaje localizado — `VOLUNTARY_CLOSURE` corresponde a un cierre de cuenta solicitado por ti, no a una sanción. |
 | `documentCount` | Comprobantes emitidos en el periodo de facturación actual. |
 | `documentQuota` | Límite de comprobantes para el `subscriptionTier` actual. |
+| `extraSeats` | Usuarios adicionales del panel comprados por encima del número incluido en el plan (0 si no hay ninguno, o si no existe una suscripción activa). Comprobify factura esto pero no lo aplica — ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md#usuarios-adicionales). |
+| `pendingExtraSeats` | Un número de usuarios programado para entrar en vigencia al final del periodo de facturación actual (una reducción en curso), o `null` si no hay nada programado. |
 | `sandbox` | `true` si el tenant está en el entorno de pruebas del SRI, `false` si fue promovido a producción. |
 | `agreementAcceptedAt` | Timestamp del evento de aceptación de acuerdos más reciente, o `null` para tenants creados por un administrador. Compáralo con `GET /v1/tenants/agreements` para detectar desactualizaciones. |
 | `agreementVersion` | La versión del documento TERMS que el tenant aceptó por última vez, o `null` para tenants creados por un administrador. |

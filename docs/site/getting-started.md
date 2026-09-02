@@ -335,11 +335,11 @@ La cuota de comprobantes se comparte entre todas las sucursales y tipos de compr
 
 **La facturación se gestiona desde la aplicación web de Comprobify, no por API.** Ahí eliges un plan y pagas con tarjeta (activo en segundos) o por transferencia bancaria (tu proveedor revisa el comprobante y luego se activa). No hay endpoints que integrar para nada de esto.
 
-Consulta [Tu suscripción y cómo pagarla](paying-your-subscription.md) para el recorrido completo: los dos métodos de pago, renovaciones y período de gracia, cambios de plan, cancelación, y el aviso de 30 días por cambio de precio.
+Consulta [Tu suscripción y cómo pagarla](paying-your-subscription.md) para el recorrido completo: los dos métodos de pago, renovaciones y período de gracia, cambios de plan, cancelación, [usuarios adicionales](paying-your-subscription.md#usuarios-adicionales), y el aviso de 30 días por cambio de precio.
 
 Lo que sí puedes hacer por API es seguir el resultado:
 
-- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — tu plan, cuota y estado de cuenta actuales. `subscriptionTier`/`documentQuota` se actualizan en el momento en que un pago se verifica.
+- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — tu plan, cuota, usuarios adicionales y estado de cuenta actuales. `subscriptionTier`/`documentQuota` se actualizan en el momento en que un pago se verifica.
 - [Notificaciones](endpoints/notifications.md) — `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_EXPIRED` y más, entregadas a tus [webhooks](endpoints/webhooks.md) si tienes alguno registrado. No hace falta consultar activamente.
 - La aplicación web de Comprobify — el catálogo de planes y precios vigentes se consulta ahí, no hay un endpoint público equivalente pensado para integradores externos.
 

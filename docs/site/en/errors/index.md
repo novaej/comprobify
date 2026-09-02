@@ -126,6 +126,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `ISSUER_HAS_DOCUMENTS` | Issuer has issued documents (in either environment) and cannot be removed |
 | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` is not greater than the counter's current value |
 | `TIER_CHANGE_NO_OP` | Requested tier and billing interval on Change Tier both match the subscription's current values |
+| `SEAT_CHANGE_NO_OP` | Requested `extraSeats` on Change Seats matches the subscription's current count |
 | `INVALID_BILLING_INTERVAL` | `billingInterval` on Create Subscription or Change Tier is not `MONTHLY` or `YEARLY` |
 | `BAD_REQUEST` | Other malformed request (fallback — read `detail`) |
 
@@ -179,8 +180,9 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 |---|---|
 | `ALREADY_VERIFIED` | Attempting to resend verification to an already-verified account |
 | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | Tenant already has a subscription in progress (promotion with `tier`, or Admin's Create Subscription) |
-| `NO_ACTIVE_SUBSCRIPTION` | Cancel or Change Tier requested but the tenant has no `ACTIVE` subscription |
-| `TIER_CHANGE_ALREADY_PENDING` | A tier/billing-interval change is already scheduled, or its payment is already in flight, for this subscription |
+| `NO_ACTIVE_SUBSCRIPTION` | Cancel, Change Tier, or Change Seats requested but the tenant has no `ACTIVE` subscription |
+| `TIER_CHANGE_ALREADY_PENDING` | A tier/billing-interval change is already scheduled, or its payment is already in flight, for this subscription — also returned by Change Seats when a billing-interval change is pending |
+| `SEAT_CHANGE_ALREADY_PENDING` | A seat change is already scheduled, or its payment is already in flight, for this subscription |
 | `CANCELLATION_ALREADY_PENDING` | A cancellation (`DELETE /v1/subscriptions`) is already scheduled for this subscription |
 | `CONFLICT` | Idempotency key reused with a different payload, payment already decided, or other conflict |
 

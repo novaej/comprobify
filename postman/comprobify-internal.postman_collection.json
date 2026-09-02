@@ -94,6 +94,12 @@
       "type": "string"
     },
     {
+      "key": "seat_price_id",
+      "value": "",
+      "description": "Seat price row id — copy from Create Seat Price (Draft) or List Seat Prices response. Used by Update/Publish/Get Seat Price.",
+      "type": "string"
+    },
+    {
       "key": "verification_token",
       "value": "",
       "description": "Email verification token — copy from the verification email link (?token=...)",
@@ -1120,6 +1126,43 @@
               }
             },
             "description": "Tenant-authenticated (your own API key). Changes the tier and/or billing interval on your existing ACTIVE subscription — requires having already promoted with a paid tier (see Promote to Production / Admin > Create Subscription). `billingInterval` is optional; omit it to keep your current interval (tier-only change). No payment gateway exists, so this rides the same manual proof/review pipeline as the initial subscription rather than charging anything automatically.\n\n**Same-interval upgrade** (target tier's price higher, interval unchanged): takes effect immediately once paid. The response includes a prorated `payment` (the price difference scaled by the remaining time in your current billing period) and `bankTransfer` instructions — upload proof via the same Submit Payment Proof endpoint used for your initial subscription. If the prorated amount rounds to $0 (almost no time left in the period), it's applied immediately with no payment step at all.\n\n**Same-interval downgrade** (target tier's price lower, interval unchanged): scheduled, not immediate, and needs no payment — you already paid for the current period at the higher tier. Your tier/quota stay exactly as they are until `current_period_end`, at which point it's applied automatically by the provider's scheduled job.\n\n**Any billing-interval change** (tier same, up, or down): always deferred to `current_period_end` and billed at the new tier+interval's full price — never prorated across mismatched cadences. E.g. monthly GROWTH -> yearly STARTER pays the full yearly-STARTER price and only takes effect once your current monthly period ends.\n\nTo cancel entirely and return to FREE, use Cancel Subscription (DELETE /v1/subscriptions) instead.\n\nFails with 409 `NO_ACTIVE_SUBSCRIPTION` if you have no ACTIVE subscription, 400 `TIER_CHANGE_NO_OP` if both `tier` and the resolved interval match your current subscription, 400 `INVALID_BILLING_INTERVAL` if `billingInterval` isn't MONTHLY/YEARLY, or 409 `TIER_CHANGE_ALREADY_PENDING` if a change is already in flight (only one at a time).\n\nPoll `GET /v1/subscriptions/me` to see status, `GET /v1/tenants/me` once it lands, or `GET /v1/tenants/events` for the full history of tier/interval changes.\n\n**In sandbox**, all of the above collapses into two simpler rules: a downgrade applies immediately for free, and everything else (an upgrade, or any interval change) is billed at the target plan's full price (never prorated) and applies immediately once its invoice authorizes (never scheduled to a period boundary) — a sandbox billing period is discarded entirely at promotion, so there's nothing meaningful to prorate against or defer to."
+          }
+        },
+        {
+          "name": "Change Seats (Buy/Remove Extra Users)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{api_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/subscriptions/seats",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "subscriptions",
+                "seats"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"extraSeats\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Tenant-authenticated (your own API key). Sets the ABSOLUTE target count of extra dashboard-user seats on your existing ACTIVE subscription (not a delta) — seats above what your tier already includes (TIERS[tier].maxUsers), billed at a flat per-seat price regardless of tier.\n\n**Increase**: takes effect immediately once paid, prorated by the time left in your current billing period — same shape as a same-interval tier upgrade. The response includes a prorated `payment` and `bankTransfer` instructions; upload proof via the same Submit Payment Proof endpoint. If the prorated amount rounds to $0, it's applied immediately with no payment step.\n\n**Decrease**: scheduled, not immediate, and needs no payment — the current period is already paid for at the higher count. Your seat count stays as-is until `current_period_end`, applied automatically by the provider's scheduled job.\n\nUnlike tier changes there's no separate billing-interval branch — seats always follow your subscription's own interval; switching monthly/yearly via Change Tier reprices any active seats at the new interval as part of that same payment.\n\nOnce you have extra seats, their cost is folded into your regular renewal payment — one combined payment, not a second billing cycle.\n\nFails with 409 `NO_ACTIVE_SUBSCRIPTION`, 400 `SEAT_CHANGE_NO_OP` if `extraSeats` matches your current count, 409 `CANCELLATION_ALREADY_PENDING` if you've scheduled a cancellation, 409 `SEAT_CHANGE_ALREADY_PENDING` if a seat change is already scheduled or in flight, or 409 `TIER_CHANGE_ALREADY_PENDING` if a billing-interval change is pending or in flight (it already priced next period's seats at the old count).\n\nPoll `GET /v1/subscriptions/me` or `GET /v1/tenants/me` (`extraSeats`/`pendingExtraSeats`) to see status.\n\n**In sandbox**: a decrease applies immediately for free; an increase is priced as the net difference against what you already paid, and applies immediately once verified (no period to defer to)."
           }
         },
         {
@@ -3851,6 +3894,219 @@
               ]
             },
             "description": "Fetches one specific price row by id."
+          }
+        },
+        {
+          "name": "Create Seat Price (Draft)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "if (r.price?.id) { pm.collectionVariables.set('seat_price_id', r.price.id); console.log('Created DRAFT seat price', r.price.id, r.price.billingInterval, '$' + r.price.priceUsd); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/seat-prices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "seat-prices"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"billingInterval\": \"MONTHLY\",\n  \"priceUsd\": 5\n}"
+            },
+            "description": "Creates a DRAFT seat_prices row (ADR-032) — not visible to tenants yet, no notice clock running. Flat price, no `tier` field: the extra-seat add-on's price is the same across every tier. Edit it with 'Update Seat Price (Draft)' before confirming with 'Publish Seat Price'."
+          }
+        },
+        {
+          "name": "Update Seat Price (Draft)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.price) console.log('Updated DRAFT seat price', r.price.id, 'to $' + r.price.priceUsd);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/seat-prices/{{seat_price_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "seat-prices",
+                "{{seat_price_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priceUsd\": 6\n}"
+            },
+            "description": "Only works while the price is still DRAFT (400 PRICE_NOT_DRAFT once published)."
+          }
+        },
+        {
+          "name": "Publish Seat Price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.price) console.log('Published seat price', r.price.id, '— effective', r.price.effectiveAt, '— every ACTIVE tenant is now being notified.');"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/seat-prices/{{seat_price_id}}/publish",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "seat-prices",
+                "{{seat_price_id}}",
+                "publish"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "description": "Confirms the DRAFT seat price: starts the same 30-day notice clock as a tier price and notifies every currently-ACTIVE tenant (reuses the PRICE_CHANGE_ANNOUNCED notification type, distinguished by metadata.seatPriceId). Irreversible — a published price is immutable."
+          }
+        },
+        {
+          "name": "List Seat Prices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.prices?.length) console.log(r.prices.length, 'seat price row(s) — most recent id', r.prices[0].id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/seat-prices",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "seat-prices"
+              ]
+            },
+            "description": "Full seat-price history, newest first. No tier filter — the price isn't tiered."
+          }
+        },
+        {
+          "name": "Get Seat Price",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const r = pm.response.json();",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "if (r.price) console.log('Fetched seat price', r.price.id, r.price.billingInterval, r.price.status, '$' + r.price.priceUsd);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Admin-Secret",
+                "value": "{{admin_secret}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/admin/seat-prices/{{seat_price_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "admin",
+                "seat-prices",
+                "{{seat_price_id}}"
+              ]
+            },
+            "description": "Fetches one specific seat price row by id."
           }
         },
         {

@@ -23,6 +23,8 @@ GET /v1/tenants/me
     "suspensionReasonCode": null,
     "documentCount": 128,
     "documentQuota": 1000,
+    "extraSeats": 2,
+    "pendingExtraSeats": null,
     "sandbox": false,
     "agreementAcceptedAt": "2026-06-28T12:00:00.000Z",
     "agreementVersion": "2026-06-28"
@@ -39,6 +41,8 @@ GET /v1/tenants/me
 | `suspensionReasonCode` | Why the account is suspended: `PAYMENT_REVERSED`, `FRAUD_SUSPECTED`, `TERMS_VIOLATION`, `VOLUNTARY_CLOSURE`, `UNPAID_BALANCE`, or `OTHER`. `null` unless `status` is `SUSPENDED`. A stable code meant for your UI to map to its own localized copy — `VOLUNTARY_CLOSURE` is an account closure you requested, not a sanction. |
 | `documentCount` | Documents issued in the current billing period. |
 | `documentQuota` | Document limit for the current `subscriptionTier`. |
+| `extraSeats` | Extra dashboard user seats purchased on top of the plan's included count (0 if none, or if there's no active subscription). Comprobify bills for this but does not enforce it — see [Your subscription & billing](../paying-your-subscription.md#extra-user-seats). |
+| `pendingExtraSeats` | A scheduled seat count taking effect at the end of the current billing period (a decrease in progress), or `null` if nothing is scheduled. |
 | `sandbox` | `true` if the tenant is in the SRI test environment, `false` if promoted to production. |
 | `agreementAcceptedAt` | Timestamp of the most recent agreement acceptance event, or `null` for admin-created tenants. Compare against `GET /v1/tenants/agreements` to detect drift. |
 | `agreementVersion` | The TERMS document version the tenant last accepted, or `null` for admin-created tenants. |

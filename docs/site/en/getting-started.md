@@ -335,11 +335,11 @@ The document quota is shared across all branches and document types, and counts 
 
 **Billing is handled in the Comprobify web app, not over the API.** You pick a tier there and pay by card (active within seconds) or by bank transfer (your provider reviews the proof, then it activates). There are no endpoints to integrate for any of it.
 
-See [Your subscription & billing](paying-your-subscription.md) for the full walkthrough: the two payment methods, renewals and the grace period, changing tier, cancelling, and the 30-day price-change notice.
+See [Your subscription & billing](paying-your-subscription.md) for the full walkthrough: the two payment methods, renewals and the grace period, changing tier, cancelling, [extra user seats](paying-your-subscription.md#extra-user-seats), and the 30-day price-change notice.
 
 What you *can* do over the API is track the outcome:
 
-- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — your current tier, quota and account status. `subscriptionTier`/`documentQuota` update the moment a payment is verified.
+- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — your current tier, quota, extra seats, and account status. `subscriptionTier`/`documentQuota` update the moment a payment is verified.
 - [Notifications](endpoints/notifications.md) — `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_EXPIRED` and more, fanned out to your [webhooks](endpoints/webhooks.md) if you've registered any. No polling needed.
 - The Comprobify web app — current plans and pricing are checked there; there's no equivalent public endpoint intended for external integrators.
 
