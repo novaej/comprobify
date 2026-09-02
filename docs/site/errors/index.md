@@ -144,6 +144,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `BRANCH_LIMIT_REACHED` | El tenant alcanzó el número máximo de sucursales para su plan |
 | `ISSUE_POINT_LIMIT_REACHED` | La sucursal alcanzó el número máximo de puntos de emisión para este plan |
 | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | El tenant alcanzó el número máximo de endpoints de webhook para su plan |
+| `API_KEY_LIMIT_REACHED` | El tenant alcanzó el número máximo de llaves API activas para su plan |
 | `DOCUMENT_TYPE_NOT_IN_TIER` | El tipo de comprobante no está incluido en el plan actual del tenant — mejora de plan para habilitarlo |
 
 ### 403 Forbidden

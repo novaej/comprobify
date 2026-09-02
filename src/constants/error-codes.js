@@ -76,6 +76,8 @@ const ErrorCodes = Object.freeze({
   INSUFFICIENT_SCOPE: 'INSUFFICIENT_SCOPE',
   /** Cannot mint a key with scopes broader than the requesting key's own scopes */
   SCOPE_ESCALATION_FORBIDDEN: 'SCOPE_ESCALATION_FORBIDDEN',
+  /** Tenant has reached the maximum number of active API keys for their plan */
+  API_KEY_LIMIT_REACHED: 'API_KEY_LIMIT_REACHED',
 
   // --- Tenant / plan limits ---
   /** Tenant has reached the maximum number of branches for their plan */

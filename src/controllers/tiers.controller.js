@@ -1,4 +1,5 @@
 const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
+const { TIER_LIMIT_SCOPE } = require('../constants/tier-limit-scope');
 const pricingService = require('../services/pricing.service');
 
 const list = async (req, res) => {
@@ -29,6 +30,8 @@ const list = async (req, res) => {
       maxBranches:             tier.maxBranches,
       maxIssuePointsPerBranch: tier.maxIssuePointsPerBranch,
       maxWebhookEndpoints:     tier.maxWebhookEndpoints,
+      maxApiKeys:              tier.maxApiKeys,
+      maxUsers:                tier.maxUsers,
       writeRateLimit:          tier.writeRateLimit,
       readRateLimit:           tier.readRateLimit,
       billingIntervals,
@@ -50,7 +53,7 @@ const list = async (req, res) => {
       overagePerDocumentUsd:   tier.overagePerDocumentUsd,
     };
   }));
-  res.json({ ok: true, ivaRate: IVA_RATE, tiers });
+  res.json({ ok: true, ivaRate: IVA_RATE, limitScopes: TIER_LIMIT_SCOPE, tiers });
 };
 
 module.exports = { list };

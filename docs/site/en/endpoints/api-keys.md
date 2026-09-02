@@ -112,6 +112,8 @@ Creates a new tenant-scoped key. The plaintext token is shown **once** in the re
 
 **Privilege containment:** every entry in `scopes` must already be held by the key making this request — you cannot mint a key broader than yourself, even if you hold `keys:manage`. A full-access key can mint any combination (including another full-access key); a key with only `["keys:manage", "documents:read"]` can mint a key with `["documents:read"]` but not one with `["documents:write"]`.
 
+**Plan limit:** each tier caps how many active keys a tenant can have at once (see [Subscription tiers](../getting-started.md#subscription-tiers)). Revoke an unused key via `DELETE /v1/keys/:id` to free up a slot, or upgrade your plan.
+
 ### Response
 
 **201 Created**
@@ -135,6 +137,7 @@ The plaintext token (`apiKey`) is shown once; `scopes` echoes back what was actu
 | `403` | `FORBIDDEN` | Tenant email not verified, OR attempting to mint a production key before any issuer has been promoted |
 | `403` | `INSUFFICIENT_SCOPE` | The key making this request doesn't have the `keys:manage` scope |
 | `403` | `SCOPE_ESCALATION_FORBIDDEN` | `scopes` includes an entry the requesting key doesn't itself hold — see Privilege containment above |
+| `402` | `API_KEY_LIMIT_REACHED` | Tenant already has the maximum number of active keys their plan allows — see [Subscription tiers](../getting-started.md#subscription-tiers) |
 
 ---
 

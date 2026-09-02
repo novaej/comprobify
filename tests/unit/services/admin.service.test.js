@@ -570,6 +570,30 @@ describe('AdminService', () => {
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
     });
 
+    test('rejects when the tenant has reached their tier API key limit', async () => {
+      tenantModel.findById.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE',
+      });
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(2); // FREE allows 2
+
+      await expect(adminService.createApiKey(1, 'label', 'sandbox'))
+        .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+    });
+
+    test('revoke-and-replace succeeds when the post-revoke count is within the tier limit', async () => {
+      tenantModel.findById.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE',
+      });
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(0);
+      apiKeyModel.create.mockResolvedValue({});
+
+      await adminService.createApiKey(1, 'label', 'sandbox', true);
+
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
+      expect(apiKeyModel.create).toHaveBeenCalled();
+    });
+
     test('mints a token whose SHA-256 hash matches what was persisted', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
       apiKeyModel.create.mockResolvedValue({});

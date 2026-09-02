@@ -103,10 +103,19 @@ async function revokeAllByTenantIdAndEnvironment(tenantId, environment) {
   );
 }
 
+async function countActiveByTenantId(tenantId) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*) AS count FROM api_keys WHERE tenant_id = $1 AND active = true`,
+    [tenantId]
+  );
+  return parseInt(rows[0].count, 10);
+}
+
 module.exports = {
   findByKeyHash,
   create,
   findActiveByTenantId,
+  countActiveByTenantId,
   findByIdAndTenantId,
   revoke,
   revokeAllByTenantIdAndEnvironment,

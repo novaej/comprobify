@@ -316,6 +316,17 @@ async function createApiKey(tenantId, label, environment, revokeExistingInEnv = 
   if (revokeExistingInEnv) {
     await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, resolvedEnvironment);
   }
+  const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
+  if (tierConfig.maxApiKeys !== null) {
+    const currentCount = await apiKeyModel.countActiveByTenantId(tenantId);
+    if (currentCount >= tierConfig.maxApiKeys) {
+      throw new AppError(
+        `Tenant has reached the API key limit for the ${tenant.subscription_tier} plan (${tierConfig.maxApiKeys}).`,
+        402,
+        ErrorCodes.API_KEY_LIMIT_REACHED
+      );
+    }
+  }
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId,
