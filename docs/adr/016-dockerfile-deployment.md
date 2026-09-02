@@ -1,5 +1,7 @@
 # ADR-016: Dockerfile for Production Deployment
 
+> **Update:** staging has since moved off Render entirely, to a self-hosted DigitalOcean droplet running this same Dockerfile-built image via `docker-compose` — see `docs/terraform-digitalocean-setup.md`. The decision itself (a custom image so `libxml2-utils`/`xmllint` is available, rather than relying on a platform's buildpack) is unaffected and still exactly how the image is built; only the *mechanism* described below ("Render auto-detects and uses it in place of the Node.js buildpack") is Render-specific and no longer how deployment actually works.
+
 ## Status
 Accepted
 

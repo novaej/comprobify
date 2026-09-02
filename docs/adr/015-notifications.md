@@ -1,7 +1,9 @@
 # ADR-015: Notification and Webhook System
 
-**Status:** Accepted  
+**Status:** Accepted — **two decisions below superseded by later ADRs.**
 **Date:** 2026-05-31 (revised from 2026-05-28)
+
+> **Superseded (2026-07-22 / 2026-07-26):** Decision §2's "fire-and-forget" dispatch (`.catch(err => console.warn(...))`, no durable record if the process crashes mid-flight) was replaced by [ADR-022](022-effects-outbox.md)'s durable `pending_effects` outbox — webhook fan-out (`WEBHOOK_FANOUT`) and notification email dispatch (`NOTIFICATION_DISPATCH`) are both durably enqueued now, not just an unawaited promise. Decision §9's flat per-`(tenant, type)` preference (`enabled`/`disabled`, no channel concept) was replaced by [ADR-024](024-unified-notification-service.md)'s per-channel preferences (`(tenant_id, type, channel)`, `IN_APP`/`EMAIL` independently toggleable) — ADR-024 also made in-app **creation** unconditional for every type (§2's "notification created as a side effect" is still accurate; what's gone is any preference gate on whether it's created at all, which never fully existed here anyway since ADR-015 pre-dates a real preference gate on `DOCUMENT_AUTHORIZED`). Everything else below — dual webhook/polling delivery, `DOCUMENT_AUTHORIZED` aggregation, cert-expiry thresholds, HMAC webhook signing, `sinceId` polling, per-user read state living in the consumer — is unchanged and still current.
 
 ---
 
@@ -62,7 +64,7 @@ POST /v1/admin/jobs/notifications
 
 This endpoint is called by **cron-job.org** (one job per environment — staging and production) on a 5-minute interval via an authenticated HTTP POST.
 
-> **Update:** both environments have since moved to a Render Cron Job — see `docs/deployment.md`'s "Scheduled jobs" section for the current setup. Kept here as the original decision record.
+> **Update:** both environments moved to a Render Cron Job for a time, then, following the broader move off Render entirely, to a self-hosted droplet cron — see `docs/terraform-digitalocean-setup.md` and `docs/deployment.md`'s "Scheduled jobs" section for the current setup. Kept here as the original decision record.
 
 It:
 

@@ -8,9 +8,9 @@ No confundir con la emisión de comprobantes. Tu suscripción es lo que pagas a 
 
 ## Elegir un plan
 
-Los planes disponibles, con su cuota mensual de comprobantes, precios y límites, están en [Consultar planes](endpoints/get-tiers.md) — el único endpoint de facturación que es público, pensado para páginas de precios.
+Los planes disponibles, con su cuota mensual base de comprobantes, precios y límites, se consultan y eligen desde la aplicación web de Comprobify — no hay un endpoint público pensado para que integradores externos lean el catálogo de planes.
 
-La facturación puede ser **mensual** o **anual**. El plan anual equivale a 10 meses (dos meses gratis). La cuota de comprobantes siempre se renueva **cada mes**, aunque pagues una vez al año.
+La facturación puede ser **mensual** o **anual**. El plan anual equivale a 10 meses (dos meses gratis). **La forma en que se consume tu cuota depende de esto:** en facturación mensual, la cuota se renueva cada mes; en facturación anual, recibes de una sola vez el equivalente a 12 meses de cuota (cifra mensual × 12) para todo el año, consumible de forma pareja o despareja — no se reinicia mes a mes. El plan Enterprise no tiene cuota: es ilimitado en cualquier modalidad de pago.
 
 ## Dos formas de pagar
 

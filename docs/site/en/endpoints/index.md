@@ -22,13 +22,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 | `GET` | `/v1/agreements` | List current published version of each document type (TERMS, PRIVACY, DPA) — read `version` from here and pass it as `termsVersion` when accepting via `POST /v1/tenants/agreements` |
 | `GET` | `/v1/agreements/:type` | Fetch the current document rendered as HTML — embed in a modal or page in your registration UI |
 
-## Tiers (public)
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/v1/tiers` | Full subscription tier catalog — quota, monthly/yearly price, overage rate, document types, limits |
-
-> **How do you pay your subscription?** From the web app — by card or bank transfer. There are no endpoints to integrate for that; see [Your subscription & billing](../paying-your-subscription.md).
+> **How do you pay your subscription?** From the web app — by card or bank transfer, including checking current plans and pricing. There are no public endpoints to integrate for any of that; see [Your subscription & billing](../paying-your-subscription.md).
 
 ## Tenants (authenticated)
 

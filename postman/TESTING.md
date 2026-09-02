@@ -76,11 +76,11 @@ Optionally fetch **`GET /v1/agreements/TERMS`** to preview the rendered HTML tha
 
 ---
 
-### Step 2 — Check tiers (optional)
+### Step 2 — Check tiers (optional, internal collection)
 
-**`GET /v1/tiers`** *(Tiers folder)*
+**`GET /v1/tiers`** *(Tiers folder, `comprobify-internal.postman_collection.json`)*
 
-Review available plans and pricing before registering.
+Review available plans and pricing before registering. This request lives only in the internal collection now — it's meant for Comprobify's own pricing-page tooling, not for a tenant/integrator to call directly, so it isn't in the developer/tenant collection.
 
 ---
 
@@ -580,7 +580,7 @@ Confirms the price: sets `effectiveAt = now + noticeDays` (omit `noticeDays` to 
 
 **`GET /v1/admin/prices`** *("List Tier Prices")* — full history, newest first (optional `?tier=` filter). **`GET /v1/admin/prices/{{tier_price_id}}`** *("Get Tier Price")* — one row.
 
-`GET /v1/tiers` *(Tiers folder)* reflects the change immediately as `upcomingPriceMonthlyUsd`/`monthlyPriceEffectiveAt` (or the yearly equivalents) until `effectiveAt` passes, at which point it becomes the plain `priceMonthlyUsd`/`priceYearlyUsd`.
+`GET /v1/tiers` *(Tiers folder, internal collection)* reflects the change immediately as `upcomingPriceMonthlyUsd`/`monthlyPriceEffectiveAt` (or the yearly equivalents) until `effectiveAt` passes, at which point it becomes the plain `priceMonthlyUsd`/`priceYearlyUsd`.
 
 ---
 

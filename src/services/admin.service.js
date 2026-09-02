@@ -64,7 +64,11 @@ async function createTenant(fields) {
   if (!TIERS[tier]) {
     throw new AppError(`Unknown subscription tier: '${tier}'. Valid tiers: ${Object.keys(TIERS).join(', ')}`, 400, ErrorCodes.INVALID_TIER);
   }
-  const documentQuota = TIERS[tier]?.documentQuota ?? TIERS.FREE.documentQuota;
+  // TIERS[tier] || TIERS.FREE, not `?.documentQuota ?? ...` — the latter
+  // would collapse ENTERPRISE's legitimate null (unlimited) cap back down
+  // to FREE's, since `??` treats null and undefined identically. See
+  // tenant-quota.service.js's capForTier() for the same guard.
+  const documentQuota = (TIERS[tier] || TIERS.FREE).documentQuota;
 
   const client = await db.getClient();
   let row, quotaRow;

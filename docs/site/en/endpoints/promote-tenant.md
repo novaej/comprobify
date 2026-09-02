@@ -35,7 +35,7 @@ All fields are optional. An empty body `{}` is valid.
 | `initialSequentials[].issuerId` | string (UUID) | Yes (per entry) | Issuer UUID (from `GET /v1/issuers`) |
 | `initialSequentials[].documentType` | string | Yes (per entry) | Document type code, e.g. `"01"` |
 | `initialSequentials[].sequential` | integer | Yes (per entry) | Next sequential number to issue (≥ 1) |
-| `tier` | string | No | `STARTER`, `GROWTH`, or `BUSINESS` — see [Get Tiers](get-tiers.md). Omit to stay on FREE in production; promotion never waits on payment either way. Ignored if the tenant already has a subscription in progress (see below). |
+| `tier` | string | No | Any paid tier (see current plans and pricing in the Comprobify web app). Omit to stay on FREE in production; promotion never waits on payment either way. Ignored if the tenant already has a subscription in progress (see below). |
 | `billingInterval` | string | No | `MONTHLY` (default) or `YEARLY` (2 months free). Ignored if `tier` is omitted or if it's ignored per the above. |
 
 Requesting a `tier` here starts the subscription/payment pipeline (same as the admin-driven path) — see [Your subscription & billing](../paying-your-subscription.md) for what happens next. The tier/quota upgrade itself lands as soon as the payment is verified; it does not happen as part of this call.
