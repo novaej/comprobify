@@ -22,13 +22,7 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 | `GET` | `/v1/agreements` | Lista la versión publicada actual de cada tipo de documento (TERMS, PRIVACY, DPA) — lee `version` de aquí y pásalo como `termsVersion` al aceptar vía `POST /v1/tenants/agreements` |
 | `GET` | `/v1/agreements/:type` | Obtiene el documento actual renderizado como HTML — insértalo en un modal o página de tu UI de registro |
 
-## Planes (público)
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/v1/tiers` | Catálogo completo de planes de suscripción — cuota, precio mensual/anual, tarifa de excedente, tipos de comprobante, límites |
-
-> **¿Cómo pagas tu suscripción?** Desde la aplicación web — con tarjeta o transferencia bancaria. No hay endpoints que integrar para eso; ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md).
+> **¿Cómo pagas tu suscripción?** Desde la aplicación web — con tarjeta o transferencia bancaria, incluyendo consultar los planes y precios vigentes. No hay endpoints públicos que integrar para nada de esto; ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md).
 
 ## Tenants (autenticado)
 

@@ -184,29 +184,6 @@
       ]
     },
     {
-      "name": "Tiers",
-      "item": [
-        {
-          "name": "Get Tiers",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/tiers",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tiers"
-              ]
-            },
-            "description": "Public, no authentication required. Returns the full tier catalog (FREE/STARTER/GROWTH/BUSINESS) \u2014 quota, monthly and yearly price, overage rate, document types, branch/webhook limits, and rate limits \u2014 for a pricing page to render without hardcoding the same numbers a second time."
-          }
-        }
-      ]
-    },
-    {
       "name": "Registration",
       "description": "Public registration and email verification endpoints. No authentication required.",
       "item": [

@@ -35,7 +35,7 @@ Todos los campos son opcionales. Un cuerpo vacío `{}` es válido.
 | `initialSequentials[].issuerId` | string (UUID) | Sí (por entrada) | UUID del emisor (de `GET /v1/issuers`) |
 | `initialSequentials[].documentType` | string | Sí (por entrada) | Código de tipo de comprobante, por ejemplo `"01"` |
 | `initialSequentials[].sequential` | integer | Sí (por entrada) | Siguiente número secuencial a emitir (≥ 1) |
-| `tier` | string | No | `STARTER`, `GROWTH`, o `BUSINESS` — ver [Get Tiers](get-tiers.md). Omítelo para permanecer en FREE en producción; la promoción nunca espera al pago de todos modos. Se ignora si el tenant ya tiene una suscripción en curso (ver abajo). |
+| `tier` | string | No | Cualquier plan de pago (ver los planes y precios vigentes en la aplicación web de Comprobify). Omítelo para permanecer en FREE en producción; la promoción nunca espera al pago de todos modos. Se ignora si el tenant ya tiene una suscripción en curso (ver abajo). |
 | `billingInterval` | string | No | `MONTHLY` (por defecto) o `YEARLY` (2 meses gratis). Se ignora si `tier` se omite o si se ignora por lo anterior. |
 
 Solicitar un `tier` aquí inicia el pipeline de suscripción/pago (igual que el flujo dirigido por el administrador) — ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md) para lo que sucede después. La mejora de plan/cuota en sí se aplica en cuanto el pago se verifica; no ocurre como parte de esta llamada.

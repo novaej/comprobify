@@ -34,13 +34,6 @@ function esSidebar() {
           ],
         },
         {
-          text: 'Planes',
-          collapsed: false,
-          items: [
-            { text: 'Consultar planes', link: '/endpoints/get-tiers' },
-          ],
-        },
-        {
           text: 'Tenants',
           collapsed: false,
           items: [
@@ -167,13 +160,6 @@ function enSidebar() {
             { text: 'Agreements (Public)', link: '/en/endpoints/agreements' },
             { text: 'Agreement Acceptance', link: '/en/endpoints/agreement-acceptance' },
             { text: 'Tenant Agreements', link: '/en/endpoints/tenant-agreements' },
-          ],
-        },
-        {
-          text: 'Tiers',
-          collapsed: false,
-          items: [
-            { text: 'Get Tiers', link: '/en/endpoints/get-tiers' },
           ],
         },
         {
