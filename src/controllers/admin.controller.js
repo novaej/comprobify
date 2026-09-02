@@ -402,13 +402,20 @@ const runNotificationJobs = async (req, res) => {
  * for the minute-level frequency the notification job uses).
  */
 const runSubscriptionJobs = async (req, res) => {
-  // Order matters: a downgrade applied here also rolls its period forward, and
+  // Order matters, seats -> tiers -> renewals (CLAUDE.md Common Mistake #50,
+  // sibling of #27): applyScheduledTierChanges rolls current_period_end
+  // forward, and applyScheduledSeatChanges' due-query is keyed on
+  // current_period_end <= NOW() — running tiers first would make a due seat
+  // decrease invisible for a whole extra period. Then tiers before renewals:
+  // a downgrade applied here also rolls its period forward, and
   // processDueRenewals' warning/expiry checks read that same
-  // current_period_end in this tick. Reversing these would flag every
-  // subscription downgrading today as freshly expired.
+  // current_period_end in this tick. Reversing either pair would flag every
+  // subscription changing today as freshly expired (or silently skip a due
+  // seat decrease for a full cycle).
+  const seatChanges = await subscriptionService.applyScheduledSeatChanges();
   const tierChanges = await subscriptionService.applyScheduledTierChanges();
   const renewals = await subscriptionService.processDueRenewals();
-  res.json({ ok: true, ...tierChanges, ...renewals });
+  res.json({ ok: true, ...seatChanges, ...tierChanges, ...renewals });
 };
 
 /**

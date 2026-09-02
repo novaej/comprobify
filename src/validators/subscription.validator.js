@@ -25,4 +25,15 @@ const createSubscription = [
     .withMessage('billingInterval must be one of: MONTHLY, YEARLY'),
 ];
 
-module.exports = { changeTier, createSubscription };
+// extraSeats is the ABSOLUTE target count, not a delta — mirrors `tier`
+// above. .toInt() matters: without it, requestSeatChange's no-op check
+// (extraSeats === subscription.extra_seats) would compare a string to a
+// number and never match.
+const changeSeats = [
+  body('extraSeats')
+    .isInt({ min: 0, max: 100 })
+    .withMessage('extraSeats must be an integer between 0 and 100')
+    .toInt(),
+];
+
+module.exports = { changeTier, createSubscription, changeSeats };

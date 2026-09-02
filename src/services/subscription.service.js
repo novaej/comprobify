@@ -62,6 +62,16 @@ function addBillingPeriod(fromDate, billingInterval) {
   return addMonths(fromDate, billingInterval === 'YEARLY' ? 12 : 1);
 }
 
+// The seat count that will be in effect once a deferred period actually
+// starts. A scheduled seat decrease (see requestSeatChange/
+// applyScheduledSeatChanges) lands exactly at current_period_end — the same
+// instant a renewal or a deferred interval-change payment is priced for — so
+// anything pricing that next period must use this, not the raw extra_seats
+// column, or it overcharges for seats that are about to go away.
+function effectiveSeatsAtPeriodEnd(subscription) {
+  return subscription.pending_extra_seats ?? subscription.extra_seats ?? 0;
+}
+
 // Durable-enqueue + best-effort-dispatch (ADR-022) — replaces the old
 // fireAndForget()/unawaited-promise pattern. Awaited by callers so the
 // enqueue (durable insert) lands before the caller returns; dispatch (the
@@ -232,6 +242,18 @@ async function requestTierChange(tenantId, tier, billingInterval) {
       ErrorCodes.TIER_CHANGE_ALREADY_PENDING
     );
   }
+  // A seat increase already awaiting verification would leave the wrong seat
+  // count baked into whatever this tier/interval change bills next — block
+  // until it resolves. A pending free seat DECREASE doesn't conflict: flat
+  // seat pricing means it can't disagree with a same-interval tier change,
+  // and the interval-change branch below already reprices seats itself.
+  const pendingSeatPayment = await paymentModel.findPendingSeatChangeBySubscriptionId(subscription.id);
+  if (pendingSeatPayment) {
+    throw new ConflictError(
+      `A seat change to ${pendingSeatPayment.target_extra_seats} is already in progress for this subscription`,
+      ErrorCodes.SEAT_CHANGE_ALREADY_PENDING
+    );
+  }
 
   const targetMonthlyPrice = await pricingService.getCurrentPrice(tier, 'MONTHLY');
   const currentMonthlyPrice = await pricingService.getCurrentPrice(subscription.tier, 'MONTHLY');
@@ -319,7 +341,15 @@ async function requestTierChange(tenantId, tier, billingInterval) {
   // fully-paid period. Resolved as of current_period_end (when the new
   // cadence's period actually starts), not "now" — this is what makes a
   // pending price change's 30-day protection apply here too.
-  const fullPrice = await pricingService.getPriceAsOf(tier, targetInterval, subscription.current_period_end);
+  //
+  // Any already-active extra seats carry forward into the new cadence too —
+  // effectiveSeatsAtPeriodEnd (not raw extra_seats) since a seat decrease
+  // could also be pending for this same current_period_end.
+  const seats = effectiveSeatsAtPeriodEnd(subscription);
+  const seatPrice = seats > 0
+    ? await pricingService.getSeatPriceAsOf(targetInterval, subscription.current_period_end)
+    : 0;
+  const fullPrice = await pricingService.getPriceAsOf(tier, targetInterval, subscription.current_period_end) + seats * seatPrice;
   const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
@@ -330,6 +360,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     purpose: 'TIER_CHANGE',
     targetTier: tier,
     targetBillingInterval: targetInterval,
+    seatsCharged: seats,
   });
 
   await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
@@ -416,6 +447,194 @@ async function requestSandboxTierChange(tenant, subscription, tier, targetInterv
   return { subscription, payment, bankTransfer: config.bankTransfer };
 }
 
+// Tenant-initiated change to the extra-seats add-on quantity (ADR-032).
+// extraSeats is the ABSOLUTE target count, not a delta — mirrors
+// requestTierChange's `tier` argument. Only two branches (unlike
+// requestTierChange's three): seats always follow the subscription's own
+// billing_interval, so there is no separate interval-change branch — a
+// billing-interval switch is requested via requestTierChange instead, and
+// that path already reprices any already-active seats at the new interval
+// (see its billing-interval-change branch below).
+//
+// Increase: prorated against the remaining value of the current period,
+// exactly like a same-interval tier upgrade, and takes effect immediately
+// once verified. Decrease: free, scheduled at current_period_end — the
+// current period is already paid for at the higher count.
+async function requestSeatChange(tenantId, extraSeats) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  const subscription = await subscriptionModel.findActiveByTenantId(tenant.id);
+  if (!subscription) {
+    throw new AppError(
+      'Tenant has no ACTIVE subscription to change — use createSubscription/promote first',
+      409,
+      ErrorCodes.NO_ACTIVE_SUBSCRIPTION
+    );
+  }
+
+  if (extraSeats === subscription.extra_seats) {
+    throw new AppError(
+      `Subscription already has ${extraSeats} extra seat(s)`,
+      400,
+      ErrorCodes.SEAT_CHANGE_NO_OP
+    );
+  }
+
+  if (subscription.pending_tier === 'FREE') {
+    throw new ConflictError(
+      'A cancellation is already scheduled for this subscription',
+      ErrorCodes.CANCELLATION_ALREADY_PENDING
+    );
+  }
+  if (subscription.pending_extra_seats !== null) {
+    throw new ConflictError(
+      `A seat change to ${subscription.pending_extra_seats} is already scheduled for this subscription`,
+      ErrorCodes.SEAT_CHANGE_ALREADY_PENDING
+    );
+  }
+  const pendingSeatPayment = await paymentModel.findPendingSeatChangeBySubscriptionId(subscription.id);
+  if (pendingSeatPayment) {
+    throw new ConflictError(
+      `A seat change to ${pendingSeatPayment.target_extra_seats} is already in progress for this subscription`,
+      ErrorCodes.SEAT_CHANGE_ALREADY_PENDING
+    );
+  }
+  // A billing-interval change already reprices next period's seats at the new
+  // interval (see requestTierChange) — letting the count move underneath it
+  // here would leave that payment charging for the wrong seat count.
+  if (subscription.pending_billing_interval) {
+    throw new ConflictError(
+      `A billing-interval change to ${subscription.pending_billing_interval} is already scheduled for this subscription`,
+      ErrorCodes.TIER_CHANGE_ALREADY_PENDING
+    );
+  }
+  const pendingIntervalPayment = await paymentModel.findPendingTierChangeBySubscriptionId(subscription.id);
+  if (pendingIntervalPayment && pendingIntervalPayment.target_billing_interval) {
+    throw new ConflictError(
+      `A billing-interval change to ${pendingIntervalPayment.target_billing_interval} is already in progress for this subscription`,
+      ErrorCodes.TIER_CHANGE_ALREADY_PENDING
+    );
+  }
+
+  if (tenant.sandbox) {
+    return requestSandboxSeatChange(tenant, subscription, extraSeats);
+  }
+
+  // Decrease: free, scheduled at period end — no payment, ever.
+  if (extraSeats < subscription.extra_seats) {
+    const updated = await subscriptionModel.scheduleSeatDecrease(subscription.id, extraSeats);
+    await tenantEventModel.create(tenant.id, 'SEAT_CHANGE_SCHEDULED', {
+      subscriptionId: subscription.id,
+      fromExtraSeats: subscription.extra_seats,
+      toExtraSeats: extraSeats,
+      effectiveAt: subscription.current_period_end,
+    });
+    return { subscription: updated, effectiveAt: subscription.current_period_end };
+  }
+
+  // Increase: immediate, prorated against the remaining value of the current
+  // period — same formula as a same-interval tier upgrade.
+  const periodStart = new Date(subscription.current_period_start).getTime();
+  const periodEnd = new Date(subscription.current_period_end).getTime();
+  const totalMs = periodEnd - periodStart;
+  const remainingMs = Math.min(Math.max(periodEnd - Date.now(), 0), totalMs);
+  const remainingFraction = totalMs > 0 ? remainingMs / totalMs : 0;
+  const seatDelta = extraSeats - subscription.extra_seats;
+  // Takes effect immediately, so the seat price resolves as of now.
+  const seatPrice = await pricingService.getCurrentSeatPrice(subscription.billing_interval);
+  const proratedTotal = Math.round(seatDelta * seatPrice * remainingFraction * 100) / 100;
+
+  // With ~no time left in the current period, the prorated amount can round
+  // to $0 — same escape hatch as a same-interval tier upgrade.
+  if (proratedTotal <= 0) {
+    const updated = await subscriptionModel.applySeatChange(subscription.id, extraSeats);
+    await tenantEventModel.create(tenant.id, 'SEAT_COUNT_CHANGED', {
+      subscriptionId: subscription.id,
+      fromExtraSeats: subscription.extra_seats,
+      toExtraSeats: extraSeats,
+      totalAmount: 0,
+    });
+    return { subscription: updated, payment: null, amount: 0 };
+  }
+
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
+  const payment = await paymentModel.create({
+    subscriptionId: subscription.id,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
+    purpose: 'SEAT_CHANGE',
+    targetExtraSeats: extraSeats,
+    seatsCharged: seatDelta,
+  });
+
+  await tenantEventModel.create(tenant.id, 'SEAT_CHANGE_REQUESTED', {
+    subscriptionId: subscription.id,
+    fromExtraSeats: subscription.extra_seats,
+    toExtraSeats: extraSeats,
+    totalAmount,
+  });
+
+  return { subscription, payment, bankTransfer: config.bankTransfer };
+}
+
+// Sandbox variant, mirroring requestSandboxTierChange: no period to prorate
+// against, so a decrease applies immediately free and an increase is priced
+// as the net difference against what's already been paid for.
+async function requestSandboxSeatChange(tenant, subscription, extraSeats) {
+  if (extraSeats < subscription.extra_seats) {
+    const updated = await subscriptionModel.applySeatChange(subscription.id, extraSeats);
+    await tenantEventModel.create(tenant.id, 'SEAT_COUNT_CHANGED', {
+      subscriptionId: subscription.id,
+      fromExtraSeats: subscription.extra_seats,
+      toExtraSeats: extraSeats,
+      totalAmount: 0,
+      note: 'sandbox — applied immediately, no charge',
+    });
+    return { subscription: updated, payment: null, amount: 0 };
+  }
+
+  const seatDelta = extraSeats - subscription.extra_seats;
+  const seatPrice = await pricingService.getCurrentSeatPrice(subscription.billing_interval);
+  const netPrice = Math.max(0, Math.round(seatDelta * seatPrice * 100) / 100);
+
+  if (netPrice <= 0) {
+    const updated = await subscriptionModel.applySeatChange(subscription.id, extraSeats);
+    await tenantEventModel.create(tenant.id, 'SEAT_COUNT_CHANGED', {
+      subscriptionId: subscription.id,
+      fromExtraSeats: subscription.extra_seats,
+      toExtraSeats: extraSeats,
+      totalAmount: 0,
+      note: 'sandbox — fully covered by the previous payment, applied immediately',
+    });
+    return { subscription: updated, payment: null, amount: 0 };
+  }
+
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(netPrice);
+  const payment = await paymentModel.create({
+    subscriptionId: subscription.id,
+    amount: baseAmount,
+    ivaRate: IVA_RATE,
+    ivaAmount,
+    totalAmount,
+    purpose: 'SEAT_CHANGE',
+    targetExtraSeats: extraSeats,
+    seatsCharged: seatDelta,
+  });
+
+  await tenantEventModel.create(tenant.id, 'SEAT_CHANGE_REQUESTED', {
+    subscriptionId: subscription.id,
+    fromExtraSeats: subscription.extra_seats,
+    toExtraSeats: extraSeats,
+    totalAmount,
+    note: 'sandbox — full price, applies immediately once verified',
+  });
+
+  return { subscription, payment, bankTransfer: config.bankTransfer };
+}
+
 // Schedules an end-of-period cancellation by setting pending_tier = 'FREE'.
 // No refund is issued — the current period runs to completion at the existing
 // tier, then applyScheduledTierChanges() drops the tenant to FREE and closes
@@ -458,6 +677,17 @@ async function scheduleCancellation(tenantId) {
     throw new ConflictError(
       `A plan change to '${pendingPayment.target_tier}'${pendingPayment.target_billing_interval ? ` (${pendingPayment.target_billing_interval})` : ''} is already in progress — wait for it to complete before cancelling`,
       ErrorCodes.TIER_CHANGE_ALREADY_PENDING
+    );
+  }
+  // Cancellation zeroes extra_seats at period end (see
+  // applyScheduledTierChanges) — an in-flight seat increase would just get
+  // paid for and immediately discarded, wasting the tenant's money. Force it
+  // to resolve (verify or get rejected) before scheduling a cancellation.
+  const pendingSeatPayment = await paymentModel.findPendingSeatChangeBySubscriptionId(subscription.id);
+  if (pendingSeatPayment) {
+    throw new ConflictError(
+      `A seat change to ${pendingSeatPayment.target_extra_seats} is already in progress — wait for it to complete before cancelling`,
+      ErrorCodes.SEAT_CHANGE_ALREADY_PENDING
     );
   }
 
@@ -640,6 +870,7 @@ function snapshotState(subscription, tenant) {
     periodEnd: subscription.current_period_end,
     subscriptionStatus: subscription.status,
     tenantTier: tenant.subscription_tier,
+    extraSeats: subscription.extra_seats,
   };
 }
 
@@ -660,6 +891,7 @@ async function applyVerifiedPayment(payment, subscription) {
     applied_from: snapshotState(subscription, tenant),
   });
 
+  if (payment.purpose === 'SEAT_CHANGE') return applySeatChangePayment(payment, subscription);
   if (payment.purpose === 'TIER_CHANGE') return applyTierChangePayment(payment, subscription, tenant);
   if (payment.purpose === 'RENEWAL') return applyRenewalPayment(payment, subscription);
   return applyInitialPayment(payment, subscription, tenant);
@@ -781,6 +1013,32 @@ async function applyTierChangePayment(payment, subscription, tenant) {
   return updated;
 }
 
+// A seat DECREASE never opens a payment (see requestSeatChange) — this is
+// always the immediate flavor, unlike applyTierChangePayment, which has both
+// an immediate and a deferred case. Deliberately does not call
+// tenantModel.updateTier/tenantQuotaService.setCap — seats affect neither
+// tier nor quota (Common Mistake #38 does not apply here).
+async function applySeatChangePayment(payment, subscription) {
+  const updated = await subscriptionModel.applySeatChange(subscription.id, payment.target_extra_seats);
+
+  // The increase takes over the remainder of the same billing cycle — the
+  // subscription's period dates don't change — so stamp those same dates
+  // onto the payment for per-cycle history, same as applyTierChangePayment.
+  await paymentModel.updateStatus(payment.id, payment.status, {
+    period_start: subscription.current_period_start,
+    period_end: subscription.current_period_end,
+  });
+
+  await tenantEventModel.create(subscription.tenant_id, 'SEAT_COUNT_CHANGED', {
+    subscriptionId: subscription.id,
+    fromExtraSeats: subscription.extra_seats,
+    toExtraSeats: payment.target_extra_seats,
+    paymentId: payment.id,
+  });
+
+  return updated;
+}
+
 // Extends the existing period instead of opening a first one. Anchored to the
 // OLD current_period_end (never "now") so an early or late operator review
 // can't drift the billing date — back-to-back periods, no gap, no overlap.
@@ -882,6 +1140,11 @@ async function listPendingInvoices() {
         ivaAmount: row.iva_amount,
         totalAmount: row.total_amount,
         verifiedAt: row.verified_at,
+        // A SEAT_CHANGE payment has no target_tier at all, so without these
+        // the operator sees only the tenant's current tier with no
+        // indication the invoice is actually for extra seats.
+        seatsCharged: row.seats_charged,
+        targetExtraSeats: row.target_extra_seats,
       },
       subscription: {
         id: row.subscription_id,
@@ -944,6 +1207,16 @@ async function refundPayment(paymentId, reason = null) {
   // what undoes a deferred billing-interval change this payment had scheduled.
   await subscriptionModel.applyTierChange(subscription.id, snapshot.tier, snapshot.billingInterval);
 
+  // Only a SEAT_CHANGE payment's refund touches extra_seats — applySeatChange
+  // also clears pending_extra_seats, and calling it unconditionally here would
+  // wipe out an unrelated, legitimately-scheduled seat decrease when refunding
+  // e.g. a RENEWAL. snapshot.extraSeats is absent on a pre-migration-095
+  // applied_from, hence the fallback to the subscription's current value (a
+  // no-op restore) rather than writing `undefined`.
+  if (payment.purpose === 'SEAT_CHANGE') {
+    await subscriptionModel.applySeatChange(subscription.id, snapshot.extraSeats ?? subscription.extra_seats);
+  }
+
   // An INITIAL payment's snapshot status is a pre-activation one
   // (PENDING_PAYMENT). Restoring it verbatim would leave the tenant with a
   // subscription that looks payable but whose only payment is REFUNDED, and
@@ -972,6 +1245,7 @@ async function refundPayment(paymentId, reason = null) {
     purpose: payment.purpose,
     reason,
     restoredTier: snapshot.tenantTier,
+    ...(payment.purpose === 'SEAT_CHANGE' ? { restoredExtraSeats: snapshot.extraSeats ?? subscription.extra_seats } : {}),
   });
 
   return { payment: refundedPayment, subscription: updated };
@@ -996,9 +1270,14 @@ async function applyScheduledTierChanges() {
       await subscriptionModel.updateStatus(subscription.id, 'CANCELLED', { canceled_at: new Date() });
       await tenantModel.updateTier(subscription.tenant_id, 'FREE');
       await tenantQuotaService.setCap(subscription.tenant_id, 'FREE', 'MONTHLY');
+      // A cancelled subscription must not keep advertising a paid seat
+      // entitlement nobody is paying for any more.
+      const extraSeatsCleared = subscription.extra_seats > 0;
+      if (extraSeatsCleared) await subscriptionModel.applySeatChange(subscription.id, 0);
       await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_CANCELLED', {
         subscriptionId: subscription.id,
         fromTier: subscription.tier,
+        ...(extraSeatsCleared ? { extraSeatsCleared: subscription.extra_seats } : {}),
       });
     } else {
       // pending_billing_interval is only set for a paid interval switch (see
@@ -1043,14 +1322,42 @@ async function applyScheduledTierChanges() {
   return { applied: due.length };
 }
 
+// Applies every scheduled seat decrease (requestSeatChange) whose
+// current_period_end has passed. Called by the same admin job as
+// applyScheduledTierChanges and processDueRenewals (POST
+// /v1/admin/jobs/subscriptions) — MUST run before applyScheduledTierChanges,
+// not after: that job rolls current_period_end forward, and this one's due
+// query is keyed on current_period_end <= NOW(), so running tiers first would
+// make a due seat decrease invisible for a whole extra period. See CLAUDE.md
+// Common Mistake #50.
+//
+// Unlike applyScheduledTierChanges, this never rolls the period forward — a
+// seat decrease owes nothing and doesn't touch the renewal cycle at all.
+async function applyScheduledSeatChanges() {
+  const due = await subscriptionModel.findDuePendingSeatDecreases();
+
+  for (const subscription of due) {
+    await subscriptionModel.applySeatChange(subscription.id, subscription.pending_extra_seats);
+    await tenantEventModel.create(subscription.tenant_id, 'SEAT_COUNT_CHANGED', {
+      subscriptionId: subscription.id,
+      fromExtraSeats: subscription.extra_seats,
+      toExtraSeats: subscription.pending_extra_seats,
+    });
+  }
+
+  return { seatChangesApplied: due.length };
+}
+
 // Opens a renewal payment + notifies the tenant ahead of current_period_end,
 // warns them partway through the grace period that they're about to go
 // PAST_DUE, and downgrades to FREE (+ marks the tenant PAST_DUE) any
 // subscription that ran past its grace period with no verified renewal.
-// Called by the same admin job as applyScheduledTierChanges
-// (POST /v1/admin/jobs/subscriptions) — that one must run first in the same
-// tick so a just-rolled-forward downgrade isn't mistaken for an expired
-// renewal by either the warning or expiry query below.
+// Called by the same admin job as applyScheduledSeatChanges/
+// applyScheduledTierChanges (POST /v1/admin/jobs/subscriptions) — both of
+// those must run first in the same tick: seats before tiers (see
+// applyScheduledSeatChanges), and tiers before this one, so a just-rolled-
+// forward downgrade isn't mistaken for an expired renewal by either the
+// warning or expiry query below.
 async function processDueRenewals() {
   const dueForReminder = await subscriptionModel.findDueForRenewalReminder(RENEWAL_REMINDER_DAYS);
   for (const subscription of dueForReminder) {
@@ -1082,7 +1389,14 @@ async function createRenewalReminder(subscription) {
   // protection: a renewal due before a new price's effective_at still bills
   // the old price automatically.
   const renewalPrice = await pricingService.getPriceAsOf(subscription.tier, subscription.billing_interval, subscription.current_period_end);
-  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(renewalPrice);
+  // Any already-active extra seats renew in the same payment as the plan —
+  // effectiveSeatsAtPeriodEnd, not raw extra_seats, since a decrease could be
+  // scheduled to land at this exact current_period_end.
+  const seats = effectiveSeatsAtPeriodEnd(subscription);
+  const seatPrice = seats > 0
+    ? await pricingService.getSeatPriceAsOf(subscription.billing_interval, subscription.current_period_end)
+    : 0;
+  const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(renewalPrice + seats * seatPrice);
 
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
@@ -1091,6 +1405,7 @@ async function createRenewalReminder(subscription) {
     ivaAmount,
     totalAmount,
     purpose: 'RENEWAL',
+    seatsCharged: seats,
   });
 
   await tenantEventModel.create(subscription.tenant_id, 'RENEWAL_DUE', {
@@ -1098,6 +1413,7 @@ async function createRenewalReminder(subscription) {
     paymentId: payment.id,
     tier: subscription.tier,
     currentPeriodEnd: subscription.current_period_end,
+    ...(seats > 0 ? { extraSeats: seats, seatPrice } : {}),
   });
 
   await notificationService.createSubscriptionRenewalDue(subscription, payment);
@@ -1106,11 +1422,16 @@ async function createRenewalReminder(subscription) {
 async function expireSubscription(subscription) {
   await tenantModel.updateTier(subscription.tenant_id, 'FREE');
   await tenantQuotaService.setCap(subscription.tenant_id, 'FREE', 'MONTHLY');
+  // An expired subscription must not keep advertising a paid seat
+  // entitlement nobody is paying for any more.
+  const extraSeatsCleared = subscription.extra_seats > 0;
+  if (extraSeatsCleared) await subscriptionModel.applySeatChange(subscription.id, 0);
   const updated = await subscriptionModel.updateStatus(subscription.id, 'EXPIRED');
 
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_EXPIRED', {
     subscriptionId: subscription.id,
     previousTier: subscription.tier,
+    ...(extraSeatsCleared ? { extraSeatsCleared: subscription.extra_seats } : {}),
   });
 
   // PAST_DUE is a distinct, self-resolving billing status from SUSPENDED
@@ -1188,6 +1509,7 @@ module.exports = {
   createSubscription,
   createSubscriptionForTenant,
   requestTierChange,
+  requestSeatChange,
   scheduleCancellation,
   submitPaymentProof,
   getPaymentProofFile,
@@ -1201,6 +1523,7 @@ module.exports = {
   listPendingInvoices,
   refundPayment,
   applyScheduledTierChanges,
+  applyScheduledSeatChanges,
   processDueRenewals,
   cancelSubscription,
   listByTenant,

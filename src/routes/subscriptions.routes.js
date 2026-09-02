@@ -23,6 +23,7 @@ router.get('/me', readLimiter, asyncHandler(controller.getMyStatus));
 // docs/adr/025-past-due-tenant-status.md.
 router.post('/', writeLimiter, requireNotSuspended, v.createSubscription, validateRequest, asyncHandler(controller.createSubscription));
 router.post('/change-tier', writeLimiter, requireNotSuspended, requireNotPastDue, v.changeTier, validateRequest, asyncHandler(controller.changeTier));
+router.post('/seats', writeLimiter, requireNotSuspended, requireNotPastDue, v.changeSeats, validateRequest, asyncHandler(controller.changeSeats));
 router.delete('/', writeLimiter, requireNotSuspended, requireNotPastDue, asyncHandler(controller.cancelSubscription));
 
 module.exports = router;

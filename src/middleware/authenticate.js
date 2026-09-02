@@ -58,6 +58,10 @@ const authenticate = async (req, _res, next) => {
     sandbox: row.tenant_sandbox,
     agreementAcceptedAt: row.tenant_agreement_accepted_at,
     agreementVersion: row.tenant_agreement_version,
+    // Extra-seats add-on entitlement (ADR-032) — null (no ACTIVE subscription,
+    // e.g. still on FREE) reads as 0 extra seats, not "unknown".
+    extraSeats: row.tenant_extra_seats ?? 0,
+    pendingExtraSeats: row.tenant_pending_extra_seats ?? null,
   };
 
   next();

@@ -19,9 +19,14 @@ const changeTier = async (req, res) => {
   res.status(201).json({ ok: true, ...result });
 };
 
+const changeSeats = async (req, res) => {
+  const result = await subscriptionService.requestSeatChange(req.tenant.id, req.body.extraSeats);
+  res.status(201).json({ ok: true, ...result });
+};
+
 const cancelSubscription = async (req, res) => {
   const result = await subscriptionService.scheduleCancellation(req.tenant.id);
   res.json({ ok: true, ...result });
 };
 
-module.exports = { getMyStatus, createSubscription, changeTier, cancelSubscription };
+module.exports = { getMyStatus, createSubscription, changeTier, changeSeats, cancelSubscription };

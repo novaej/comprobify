@@ -35,12 +35,21 @@ const PRICES = {
   BUSINESS: { MONTHLY: 230, YEARLY: 2300 },
 };
 
+// The extra-seat add-on's flat price (same figures across every tier).
+// Every test below that doesn't care about seats never triggers a call to
+// these — requestSeatChange/createRenewalReminder/etc. all short-circuit to
+// `seats > 0` before ever calling getCurrentSeatPrice/getSeatPriceAsOf.
+const SEAT_PRICES = { MONTHLY: 5, YEARLY: 50 };
+
 describe('SubscriptionService', () => {
   beforeEach(() => {
     pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-x', effect_type: 'X' });
     pendingEffectService.dispatch.mockResolvedValue();
     pricingService.getCurrentPrice.mockImplementation(async (tier, interval) => PRICES[tier][interval]);
     pricingService.getPriceAsOf.mockImplementation(async (tier, interval) => PRICES[tier][interval]);
+    pricingService.getCurrentSeatPrice.mockImplementation(async (interval) => SEAT_PRICES[interval]);
+    pricingService.getSeatPriceAsOf.mockImplementation(async (interval) => SEAT_PRICES[interval]);
+    paymentModel.findPendingSeatChangeBySubscriptionId.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -377,6 +386,22 @@ describe('SubscriptionService', () => {
       });
     });
 
+    test('interval-only change with active extra seats reprices them at the new interval too', async () => {
+      const periodEnd = new Date('2026-08-01T00:00:00Z');
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_end: periodEnd, extra_seats: 2, pending_extra_seats: null,
+      });
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000041' });
+
+      await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+
+      // Yearly GROWTH $900 + 2 seats * $50/yr = $1000 base, +15% IVA.
+      expect(pricingService.getSeatPriceAsOf).toHaveBeenCalledWith('YEARLY', periodEnd);
+      expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ amount: 1000, seatsCharged: 2 }));
+    });
+
     test('tier upgrade + interval change: deferred (not the immediate prorated path)', async () => {
       const now = Date.now();
       const periodStart = new Date(now - 15 * 24 * 60 * 60 * 1000);
@@ -472,6 +497,168 @@ describe('SubscriptionService', () => {
         expect(createArgs.targetTier).toBe('GROWTH');
         expect(createArgs.targetBillingInterval).toBe('YEARLY');
         expect(createArgs.totalAmount).toBe(1012); // yearly GROWTH $900 - monthly STARTER $20 = $880 base, +15% IVA
+      });
+    });
+  });
+
+  describe('requestSeatChange', () => {
+    const TENANT = '00000000-0000-0000-0000-000000000001';
+    const SUB = '00000000-0000-0000-0000-000000000010';
+
+    beforeEach(() => {
+      tenantModel.findById.mockResolvedValue({ id: TENANT });
+    });
+
+    test('rejects when the tenant has no ACTIVE subscription', async () => {
+      subscriptionModel.findActiveByTenantId.mockResolvedValue(null);
+
+      await expect(subscriptionService.requestSeatChange(1, 3))
+        .rejects.toMatchObject({ statusCode: 409, code: 'NO_ACTIVE_SUBSCRIPTION' });
+    });
+
+    test('rejects a no-op (requested count matches the current one)', async () => {
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: SUB, extra_seats: 2, pending_extra_seats: null });
+
+      await expect(subscriptionService.requestSeatChange(1, 2))
+        .rejects.toMatchObject({ statusCode: 400, code: 'SEAT_CHANGE_NO_OP' });
+    });
+
+    test('rejects when a cancellation is already scheduled', async () => {
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: SUB, extra_seats: 0, pending_tier: 'FREE', pending_extra_seats: null });
+
+      await expect(subscriptionService.requestSeatChange(1, 3))
+        .rejects.toMatchObject({ statusCode: 409, code: 'CANCELLATION_ALREADY_PENDING' });
+    });
+
+    test('rejects when a seat decrease is already scheduled', async () => {
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: SUB, extra_seats: 5, pending_tier: null, pending_extra_seats: 2 });
+
+      await expect(subscriptionService.requestSeatChange(1, 3))
+        .rejects.toMatchObject({ statusCode: 409, code: 'SEAT_CHANGE_ALREADY_PENDING' });
+    });
+
+    test('rejects when a seat-increase payment is already in flight', async () => {
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: SUB, extra_seats: 0, pending_tier: null, pending_extra_seats: null, pending_billing_interval: null });
+      paymentModel.findPendingSeatChangeBySubscriptionId.mockResolvedValue({ id: 'p1', target_extra_seats: 4 });
+
+      await expect(subscriptionService.requestSeatChange(1, 3))
+        .rejects.toMatchObject({ statusCode: 409, code: 'SEAT_CHANGE_ALREADY_PENDING' });
+    });
+
+    test('rejects when a billing-interval change is already scheduled', async () => {
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: SUB, extra_seats: 0, pending_tier: null, pending_extra_seats: null, pending_billing_interval: 'YEARLY' });
+
+      await expect(subscriptionService.requestSeatChange(1, 3))
+        .rejects.toMatchObject({ statusCode: 409, code: 'TIER_CHANGE_ALREADY_PENDING' });
+    });
+
+    test('rejects when an interval-changing TIER_CHANGE payment is already in flight', async () => {
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({ id: SUB, extra_seats: 0, pending_tier: null, pending_extra_seats: null, pending_billing_interval: null });
+      paymentModel.findPendingSeatChangeBySubscriptionId.mockResolvedValue(null);
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({ id: 'p2', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' });
+
+      await expect(subscriptionService.requestSeatChange(1, 3))
+        .rejects.toMatchObject({ statusCode: 409, code: 'TIER_CHANGE_ALREADY_PENDING' });
+    });
+
+    test('a same-interval TIER_CHANGE payment in flight does not block a seat change', async () => {
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: SUB, tenant_id: TENANT, extra_seats: 0, pending_tier: null, pending_extra_seats: null, pending_billing_interval: null,
+        current_period_start: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000),
+        current_period_end: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+        billing_interval: 'MONTHLY',
+      });
+      paymentModel.findPendingSeatChangeBySubscriptionId.mockResolvedValue(null);
+      paymentModel.findPendingTierChangeBySubscriptionId.mockResolvedValue({ id: 'p2', target_tier: 'GROWTH', target_billing_interval: null });
+      paymentModel.create.mockResolvedValue({ id: 'p3' });
+
+      await expect(subscriptionService.requestSeatChange(1, 2)).resolves.toBeDefined();
+    });
+
+    test('decrease: schedules pending_extra_seats, creates no payment, logs SEAT_CHANGE_SCHEDULED', async () => {
+      const periodEnd = new Date('2026-07-01T00:00:00Z');
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: SUB, tenant_id: TENANT, extra_seats: 5, pending_tier: null, pending_extra_seats: null, pending_billing_interval: null,
+        current_period_end: periodEnd,
+      });
+      subscriptionModel.scheduleSeatDecrease.mockResolvedValue({ id: SUB, extra_seats: 5, pending_extra_seats: 2 });
+
+      const result = await subscriptionService.requestSeatChange(1, 2);
+
+      expect(subscriptionModel.scheduleSeatDecrease).toHaveBeenCalledWith(SUB, 2);
+      expect(paymentModel.create).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'SEAT_CHANGE_SCHEDULED', {
+        subscriptionId: SUB, fromExtraSeats: 5, toExtraSeats: 2, effectiveAt: periodEnd,
+      });
+      expect(result).toEqual({ subscription: { id: SUB, extra_seats: 5, pending_extra_seats: 2 }, effectiveAt: periodEnd });
+    });
+
+    test('increase: prorates the seat price by remaining period time, creates a SEAT_CHANGE payment', async () => {
+      const now = Date.now();
+      const periodStart = new Date(now - 15 * 24 * 60 * 60 * 1000); // 15 days ago
+      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000);   // ~50% remaining, 30-day period
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: SUB, tenant_id: TENANT, extra_seats: 1, pending_tier: null, pending_extra_seats: null, pending_billing_interval: null,
+        billing_interval: 'MONTHLY', current_period_start: periodStart, current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: 'p3', subscription_id: SUB, purpose: 'SEAT_CHANGE', target_extra_seats: 3 });
+
+      await subscriptionService.requestSeatChange(1, 3);
+
+      // 2 extra seats * $5/mo = $10 base, ~50% of the period remains -> ~$5
+      // base, +15% IVA.
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.purpose).toBe('SEAT_CHANGE');
+      expect(createArgs.targetExtraSeats).toBe(3);
+      expect(createArgs.seatsCharged).toBe(2);
+      expect(createArgs.amount).toBeCloseTo(5, 0);
+    });
+
+    test('increase with ~no time left in the period applies immediately for free', async () => {
+      const now = Date.now();
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: SUB, tenant_id: TENANT, extra_seats: 1, pending_tier: null, pending_extra_seats: null, pending_billing_interval: null,
+        billing_interval: 'MONTHLY', current_period_start: new Date(now - 30 * 24 * 60 * 60 * 1000), current_period_end: new Date(now),
+      });
+      subscriptionModel.applySeatChange.mockResolvedValue({ id: SUB, extra_seats: 3 });
+
+      const result = await subscriptionService.requestSeatChange(1, 3);
+
+      expect(subscriptionModel.applySeatChange).toHaveBeenCalledWith(SUB, 3);
+      expect(paymentModel.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ subscription: { id: SUB, extra_seats: 3 }, payment: null, amount: 0 });
+    });
+
+    describe('sandbox', () => {
+      beforeEach(() => {
+        tenantModel.findById.mockResolvedValue({ id: TENANT, sandbox: true });
+      });
+
+      test('decrease applies immediately, no charge', async () => {
+        subscriptionModel.findActiveByTenantId.mockResolvedValue({
+          id: SUB, tenant_id: TENANT, extra_seats: 5, pending_tier: null, pending_extra_seats: null, pending_billing_interval: null, billing_interval: 'MONTHLY',
+        });
+        subscriptionModel.applySeatChange.mockResolvedValue({ id: SUB, extra_seats: 2 });
+
+        const result = await subscriptionService.requestSeatChange(1, 2);
+
+        expect(subscriptionModel.applySeatChange).toHaveBeenCalledWith(SUB, 2);
+        expect(paymentModel.create).not.toHaveBeenCalled();
+        expect(result.payment).toBeNull();
+      });
+
+      test('increase creates a SEAT_CHANGE payment priced as the net difference, applies once verified', async () => {
+        subscriptionModel.findActiveByTenantId.mockResolvedValue({
+          id: SUB, tenant_id: TENANT, extra_seats: 1, pending_tier: null, pending_extra_seats: null, pending_billing_interval: null, billing_interval: 'MONTHLY',
+        });
+        paymentModel.create.mockResolvedValue({ id: 'p4', purpose: 'SEAT_CHANGE', target_extra_seats: 3 });
+
+        await subscriptionService.requestSeatChange(1, 3);
+
+        const [createArgs] = paymentModel.create.mock.calls[0];
+        expect(createArgs.purpose).toBe('SEAT_CHANGE');
+        expect(createArgs.targetExtraSeats).toBe(3);
+        expect(createArgs.seatsCharged).toBe(2);
       });
     });
   });
@@ -672,6 +859,32 @@ describe('SubscriptionService', () => {
       });
     });
 
+    describe('SEAT_CHANGE', () => {
+      const subscription = {
+        id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'MONTHLY', status: 'ACTIVE', extra_seats: 1,
+        current_period_start: new Date('2026-03-01'), current_period_end: new Date('2026-04-01'),
+      };
+
+      test('applies immediately (there is no deferred case — decreases never open a payment), stamps the unchanged period, and does not touch tier or quota', async () => {
+        const payment = { id: PAY, purpose: 'SEAT_CHANGE', status: 'VERIFIED', target_extra_seats: 4 };
+        subscriptionModel.applySeatChange.mockResolvedValue({ id: SUB, extra_seats: 4 });
+
+        const result = await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        expect(subscriptionModel.applySeatChange).toHaveBeenCalledWith(SUB, 4);
+        expect(tenantModel.updateTier).not.toHaveBeenCalled();
+        expect(tenantQuotaService.setCap).not.toHaveBeenCalled();
+        expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'VERIFIED', {
+          period_start: subscription.current_period_start,
+          period_end: subscription.current_period_end,
+        });
+        expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'SEAT_COUNT_CHANGED', {
+          subscriptionId: SUB, fromExtraSeats: 1, toExtraSeats: 4, paymentId: PAY,
+        });
+        expect(result).toEqual({ id: SUB, extra_seats: 4 });
+      });
+    });
+
     describe('RENEWAL', () => {
       test('extends the period from the OLD current_period_end and logs SUBSCRIPTION_RENEWED', async () => {
         const payment = { id: PAY, purpose: 'RENEWAL', status: 'VERIFIED' };
@@ -790,6 +1003,56 @@ describe('SubscriptionService', () => {
       });
       expect(result).toEqual({ applied: 1 });
     });
+
+    test('a due cancellation (pending_tier FREE) with active extra seats zeroes them and logs extraSeatsCleared', async () => {
+      subscriptionModel.findDuePendingDowngrades.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', pending_tier: 'FREE', extra_seats: 3 },
+      ]);
+
+      await subscriptionService.applyScheduledTierChanges();
+
+      expect(subscriptionModel.applySeatChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 0);
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'CANCELLED', expect.any(Object));
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_CANCELLED', {
+        subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'GROWTH', extraSeatsCleared: 3,
+      });
+    });
+
+    test('a due cancellation with no active extra seats does not call applySeatChange', async () => {
+      subscriptionModel.findDuePendingDowngrades.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', pending_tier: 'FREE', extra_seats: 0 },
+      ]);
+
+      await subscriptionService.applyScheduledTierChanges();
+
+      expect(subscriptionModel.applySeatChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('applyScheduledSeatChanges', () => {
+    test('applies every due seat decrease, does not roll the period, and reports the count', async () => {
+      subscriptionModel.findDuePendingSeatDecreases.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', extra_seats: 5, pending_extra_seats: 2 },
+      ]);
+
+      const result = await subscriptionService.applyScheduledSeatChanges();
+
+      expect(subscriptionModel.applySeatChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 2);
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SEAT_COUNT_CHANGED', {
+        subscriptionId: '00000000-0000-0000-0000-000000000010', fromExtraSeats: 5, toExtraSeats: 2,
+      });
+      expect(result).toEqual({ seatChangesApplied: 1 });
+    });
+
+    test('reports zero when nothing is due', async () => {
+      subscriptionModel.findDuePendingSeatDecreases.mockResolvedValue([]);
+
+      const result = await subscriptionService.applyScheduledSeatChanges();
+
+      expect(result).toEqual({ seatChangesApplied: 0 });
+      expect(subscriptionModel.applySeatChange).not.toHaveBeenCalled();
+    });
   });
 
   describe('processDueRenewals', () => {
@@ -811,7 +1074,7 @@ describe('SubscriptionService', () => {
 
       const result = await subscriptionService.processDueRenewals();
 
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 20, ivaRate: 0.15, ivaAmount: 3, totalAmount: 23, purpose: 'RENEWAL' });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 20, ivaRate: 0.15, ivaAmount: 3, totalAmount: 23, purpose: 'RENEWAL', seatsCharged: 0 });
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'RENEWAL_DUE', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', paymentId: '00000000-0000-0000-0000-000000000040', tier: 'STARTER', currentPeriodEnd: periodEnd,
       });
@@ -829,6 +1092,33 @@ describe('SubscriptionService', () => {
       expect(result).toEqual({ remindersSent: 1, pastDueWarningsSent: 0, expired: 0 });
     });
 
+    test('with active extra seats, folds the seat cost into the same renewal payment', async () => {
+      const periodEnd = new Date('2026-07-06T00:00:00Z');
+      subscriptionModel.findDueForRenewalReminder.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd, extra_seats: 2, pending_extra_seats: null },
+      ]);
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000040' });
+
+      await subscriptionService.processDueRenewals();
+
+      // STARTER $20 + 2 seats * $5/mo = $30 base, +15% IVA.
+      expect(pricingService.getSeatPriceAsOf).toHaveBeenCalledWith('MONTHLY', periodEnd);
+      expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ amount: 30, seatsCharged: 2 }));
+    });
+
+    test('a scheduled seat decrease reprices the renewal at the POST-decrease count, not the current one', async () => {
+      const periodEnd = new Date('2026-07-06T00:00:00Z');
+      subscriptionModel.findDueForRenewalReminder.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_end: periodEnd, extra_seats: 5, pending_extra_seats: 1 },
+      ]);
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000040' });
+
+      await subscriptionService.processDueRenewals();
+
+      // STARTER $20 + 1 (pending, not 5) seat * $5/mo = $25 base, +15% IVA.
+      expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ amount: 25, seatsCharged: 1 }));
+    });
+
     test('prices the renewal from priceYearlyUsd when billing_interval is YEARLY', async () => {
       subscriptionModel.findDueForRenewalReminder.mockResolvedValue([
         { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', billing_interval: 'YEARLY', current_period_end: new Date() },
@@ -837,7 +1127,7 @@ describe('SubscriptionService', () => {
 
       await subscriptionService.processDueRenewals();
 
-      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 900, ivaRate: 0.15, ivaAmount: 135, totalAmount: 1035, purpose: 'RENEWAL' });
+      expect(paymentModel.create).toHaveBeenCalledWith({ subscriptionId: '00000000-0000-0000-0000-000000000010', amount: 900, ivaRate: 0.15, ivaAmount: 135, totalAmount: 1035, purpose: 'RENEWAL', seatsCharged: 0 });
     });
 
     test('a renewal due before a published price change\'s effective_at is still billed at the old price', async () => {
@@ -884,6 +1174,21 @@ describe('SubscriptionService', () => {
       });
       expect(notificationService.createSubscriptionExpired).toHaveBeenCalledWith({ id: '00000000-0000-0000-0000-000000000010', status: 'EXPIRED' });
       expect(result).toEqual({ remindersSent: 0, pastDueWarningsSent: 0, expired: 1 });
+    });
+
+    test('with active extra seats, expiry also zeroes them and logs extraSeatsCleared', async () => {
+      subscriptionModel.findExpiredPastGrace.mockResolvedValue([
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', extra_seats: 4 },
+      ]);
+      subscriptionModel.updateStatus.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'EXPIRED' });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE' });
+
+      await subscriptionService.processDueRenewals();
+
+      expect(subscriptionModel.applySeatChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 0);
+      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'SUBSCRIPTION_EXPIRED', {
+        subscriptionId: '00000000-0000-0000-0000-000000000010', previousTier: 'GROWTH', extraSeatsCleared: 4,
+      });
     });
 
     test('does not re-suspend or overwrite the reason when the tenant is already SUSPENDED', async () => {
@@ -1510,6 +1815,29 @@ describe('SubscriptionService', () => {
         current_period_end: '2026-04-01T00:00:00.000Z',
       });
       expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
+      // Must not touch extra_seats/pending_extra_seats at all — a RENEWAL
+      // refund has nothing to do with seats, and applySeatChange would clear
+      // any legitimately-scheduled pending decrease as a side effect.
+      expect(subscriptionModel.applySeatChange).not.toHaveBeenCalled();
+    });
+
+    test('a reversed SEAT_CHANGE restores the previous extra_seats count', async () => {
+      paymentModel.findById.mockResolvedValue({
+        id: PAY, status: 'VERIFIED', purpose: 'SEAT_CHANGE', subscription_id: SUB,
+        applied_from: {
+          tier: 'GROWTH', billingInterval: 'MONTHLY',
+          periodStart: '2026-03-01T00:00:00.000Z', periodEnd: '2026-04-01T00:00:00.000Z',
+          subscriptionStatus: 'ACTIVE', tenantTier: 'GROWTH', extraSeats: 1,
+        },
+      });
+      subscriptionModel.applySeatChange.mockResolvedValue({ id: SUB, extra_seats: 1 });
+
+      await subscriptionService.refundPayment(PAY, 'duplicate charge');
+
+      expect(subscriptionModel.applySeatChange).toHaveBeenCalledWith(SUB, 1);
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'PAYMENT_REFUNDED', expect.objectContaining({
+        paymentId: PAY, purpose: 'SEAT_CHANGE', reason: 'duplicate charge', restoredExtraSeats: 1,
+      }));
     });
 
     // Restoring PENDING_PAYMENT verbatim would leave a subscription that looks
