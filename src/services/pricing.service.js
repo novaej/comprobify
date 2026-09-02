@@ -1,4 +1,5 @@
 const tierPriceModel = require('../models/tier-price.model');
+const seatPriceModel = require('../models/seat-price.model');
 const tenantModel = require('../models/tenant.model');
 const notificationService = require('./notification.service');
 const TenantStatus = require('../constants/tenant-status');
@@ -10,13 +11,17 @@ const ErrorCodes = require('../constants/error-codes');
 
 const BILLING_INTERVALS = ['MONTHLY', 'YEARLY'];
 
+function assertValidInterval(billingInterval) {
+  if (!BILLING_INTERVALS.includes(billingInterval)) {
+    throw new AppError(`Invalid billingInterval '${billingInterval}'. Valid values: ${BILLING_INTERVALS.join(', ')}`, 400, ErrorCodes.INVALID_BILLING_INTERVAL);
+  }
+}
+
 function assertValidTierAndInterval(tier, billingInterval) {
   if (!Object.keys(TIERS).includes(tier)) {
     throw new AppError(`Invalid tier '${tier}'. Valid tiers: ${Object.keys(TIERS).join(', ')}`, 400, ErrorCodes.INVALID_TIER);
   }
-  if (!BILLING_INTERVALS.includes(billingInterval)) {
-    throw new AppError(`Invalid billingInterval '${billingInterval}'. Valid values: ${BILLING_INTERVALS.join(', ')}`, 400, ErrorCodes.INVALID_BILLING_INTERVAL);
-  }
+  assertValidInterval(billingInterval);
 }
 
 // The historical resolver every real billing call site must use instead of
@@ -109,16 +114,26 @@ async function publishPrice(id, { noticeDays } = {}) {
 // effect for the email half — see notification.service.js's
 // dispatchNotification(), which every notification-creating call in the
 // codebase now funnels through.
+// Scans both tier_prices and seat_prices — two independently-priced things
+// sharing one notification type (PRICE_CHANGE_ANNOUNCED, distinguished by
+// metadata.tierPriceId vs. metadata.seatPriceId) and one notice mechanism.
 async function notifyPendingPriceChangesForTenant(tenantId) {
-  const pending = await tierPriceModel.findUnnotifiedPendingForTenant(tenantId);
-  if (pending.length === 0) return 0;
+  const [pendingTiers, pendingSeats] = await Promise.all([
+    tierPriceModel.findUnnotifiedPendingForTenant(tenantId),
+    seatPriceModel.findUnnotifiedPendingForTenant(tenantId),
+  ]);
+  if (pendingTiers.length === 0 && pendingSeats.length === 0) return 0;
 
   const tenant = await tenantModel.findById(tenantId);
-  for (const tierPrice of pending) {
+  for (const tierPrice of pendingTiers) {
     const previousPriceUsd = await getCurrentPrice(tierPrice.tier, tierPrice.billing_interval);
     await notificationService.createPriceChangeAnnounced(tenant, tierPrice, previousPriceUsd);
   }
-  return pending.length;
+  for (const seatPrice of pendingSeats) {
+    const previousPriceUsd = await getCurrentSeatPrice(seatPrice.billing_interval);
+    await notificationService.createSeatPriceChangeAnnounced(tenant, seatPrice, previousPriceUsd);
+  }
+  return pendingTiers.length + pendingSeats.length;
 }
 
 // Shared per-tenant loop, tolerating one tenant's failure without aborting
@@ -162,6 +177,81 @@ async function getPriceById(id) {
   return row;
 }
 
+// --- Extra-seat add-on pricing (ADR-032) ---
+// Mirrors every tier-price function above 1:1, minus the `tier` dimension —
+// the seat price is flat across every tier. Deliberately a second set of
+// functions rather than a generalized "priced item" abstraction over both
+// tier_prices and seat_prices: the two tables have different keys (tier+
+// interval vs. interval only) and keeping them separate avoids risking a
+// regression in the tier-price path, which the 30-day legal notice depends on.
+
+async function getSeatPriceAsOf(billingInterval, asOfDate) {
+  assertValidInterval(billingInterval);
+  const row = await seatPriceModel.findCurrent(billingInterval, asOfDate);
+  if (!row) {
+    throw new AppError(`No published seat price found for ${billingInterval} as of ${asOfDate.toISOString()}`, 500, ErrorCodes.PRICE_NOT_FOUND);
+  }
+  return parseFloat(row.price_usd);
+}
+
+async function getCurrentSeatPrice(billingInterval) {
+  return getSeatPriceAsOf(billingInterval, new Date());
+}
+
+async function getUpcomingSeatPrice(billingInterval) {
+  assertValidInterval(billingInterval);
+  const row = await seatPriceModel.findUpcoming(billingInterval);
+  if (!row) return null;
+  return { priceUsd: parseFloat(row.price_usd), effectiveAt: row.effective_at };
+}
+
+async function createSeatPriceDraft({ billingInterval, priceUsd }) {
+  assertValidInterval(billingInterval);
+  return seatPriceModel.create({ billingInterval, priceUsd });
+}
+
+async function updateSeatPriceDraft(id, priceUsd) {
+  const row = await seatPriceModel.updatePriceUsd(id, priceUsd);
+  if (!row) {
+    const existing = await seatPriceModel.findById(id);
+    if (!existing) throw new NotFoundError('Seat price');
+    throw new AppError('Only a DRAFT price can be edited', 400, ErrorCodes.PRICE_NOT_DRAFT);
+  }
+  return row;
+}
+
+async function publishSeatPrice(id, { noticeDays } = {}) {
+  const floor = config.priceChangeMinNoticeDays;
+  if (noticeDays !== undefined && noticeDays < floor) {
+    throw new AppError(`noticeDays must be at least ${floor}`, 400, ErrorCodes.PRICE_NOTICE_TOO_SHORT);
+  }
+  const days = Math.max(noticeDays || floor, floor);
+  const effectiveAt = new Date();
+  effectiveAt.setDate(effectiveAt.getDate() + days);
+
+  const published = await seatPriceModel.publish(id, effectiveAt);
+  if (!published) {
+    const existing = await seatPriceModel.findById(id);
+    if (!existing) throw new NotFoundError('Seat price');
+    throw new AppError('Only a DRAFT price can be published', 400, ErrorCodes.PRICE_NOT_DRAFT);
+  }
+
+  const activeTenants = await tenantModel.findAllByStatus(TenantStatus.ACTIVE);
+  await notifyPendingPriceChangesForTenants(activeTenants);
+
+  return published;
+}
+
+async function listSeatPrices() {
+  return seatPriceModel.findAll();
+}
+
+async function getSeatPriceById(id) {
+  const row = await seatPriceModel.findById(id);
+  if (!row) throw new NotFoundError('Seat price');
+  return row;
+}
+
 module.exports = {
   getPriceAsOf,
   getCurrentPrice,
@@ -173,4 +263,12 @@ module.exports = {
   reconcilePendingPriceChangeNotifications,
   listPrices,
   getPriceById,
+  getSeatPriceAsOf,
+  getCurrentSeatPrice,
+  getUpcomingSeatPrice,
+  createSeatPriceDraft,
+  updateSeatPriceDraft,
+  publishSeatPrice,
+  listSeatPrices,
+  getSeatPriceById,
 };

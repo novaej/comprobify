@@ -314,6 +314,49 @@ const getTierPrice = async (req, res) => {
   res.json({ ok: true, price: formatTierPrice(row) });
 };
 
+// Seat prices (ADR-032) — same shape as tier prices, minus `tier`: the
+// extra-seat add-on's price is flat across every tier.
+
+function formatSeatPrice(row) {
+  return {
+    id: row.id,
+    billingInterval: row.billing_interval,
+    priceUsd: parseFloat(row.price_usd),
+    status: row.status,
+    effectiveAt: row.effective_at,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+  };
+}
+
+const createSeatPrice = async (req, res) => {
+  const row = await pricingService.createSeatPriceDraft({
+    billingInterval: req.body.billingInterval,
+    priceUsd: req.body.priceUsd,
+  });
+  res.status(201).json({ ok: true, price: formatSeatPrice(row) });
+};
+
+const updateSeatPrice = async (req, res) => {
+  const row = await pricingService.updateSeatPriceDraft(req.params.id, req.body.priceUsd);
+  res.json({ ok: true, price: formatSeatPrice(row) });
+};
+
+const publishSeatPrice = async (req, res) => {
+  const row = await pricingService.publishSeatPrice(req.params.id, { noticeDays: req.body.noticeDays });
+  res.json({ ok: true, price: formatSeatPrice(row) });
+};
+
+const listSeatPrices = async (req, res) => {
+  const rows = await pricingService.listSeatPrices();
+  res.json({ ok: true, prices: rows.map(formatSeatPrice) });
+};
+
+const getSeatPrice = async (req, res) => {
+  const row = await pricingService.getSeatPriceById(req.params.id);
+  res.json({ ok: true, price: formatSeatPrice(row) });
+};
+
 // Jobs
 
 /**
@@ -450,4 +493,5 @@ module.exports = {
   listCurrentNotificationEmailTemplates,
   getDocumentRide,
   createTierPrice, updateTierPrice, publishTierPrice, listTierPrices, getTierPrice,
+  createSeatPrice, updateSeatPrice, publishSeatPrice, listSeatPrices, getSeatPrice,
 };

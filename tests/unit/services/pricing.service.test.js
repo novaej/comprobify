@@ -1,9 +1,11 @@
 jest.mock('../../../src/models/tier-price.model');
+jest.mock('../../../src/models/seat-price.model');
 jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/services/pending-effect.service');
 jest.mock('../../../src/services/notification.service');
 
 const tierPriceModel = require('../../../src/models/tier-price.model');
+const seatPriceModel = require('../../../src/models/seat-price.model');
 const tenantModel = require('../../../src/models/tenant.model');
 const pendingEffectService = require('../../../src/services/pending-effect.service');
 const notificationService = require('../../../src/services/notification.service');
@@ -13,6 +15,10 @@ describe('PricingService', () => {
   beforeEach(() => {
     pendingEffectService.enqueue.mockResolvedValue({ id: 'effect-x', effect_type: 'X' });
     pendingEffectService.dispatch.mockResolvedValue();
+    // Every test in this file predates the seat add-on and doesn't care about
+    // it — default to "nothing pending" so notifyPendingPriceChangesForTenant's
+    // seat half is a no-op unless a test explicitly overrides it.
+    seatPriceModel.findUnnotifiedPendingForTenant.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -201,6 +207,75 @@ describe('PricingService', () => {
 
       expect(secondCallCount).toBe(0);
       expect(notificationService.createPriceChangeAnnounced).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('extra-seat pricing', () => {
+    test('getCurrentSeatPrice resolves the newest PUBLISHED seat price', async () => {
+      seatPriceModel.findCurrent.mockResolvedValue({ price_usd: '5.00' });
+
+      const price = await pricingService.getCurrentSeatPrice('MONTHLY');
+
+      expect(seatPriceModel.findCurrent).toHaveBeenCalledWith('MONTHLY', expect.any(Date));
+      expect(price).toBe(5);
+    });
+
+    test('getSeatPriceAsOf rejects an invalid billingInterval', async () => {
+      await expect(pricingService.getSeatPriceAsOf('WEEKLY', new Date()))
+        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_BILLING_INTERVAL' });
+    });
+
+    test('getSeatPriceAsOf throws PRICE_NOT_FOUND when nothing is published', async () => {
+      seatPriceModel.findCurrent.mockResolvedValue(null);
+
+      await expect(pricingService.getSeatPriceAsOf('MONTHLY', new Date()))
+        .rejects.toMatchObject({ code: 'PRICE_NOT_FOUND' });
+    });
+
+    test('createSeatPriceDraft delegates to the model, no tier involved', async () => {
+      seatPriceModel.create.mockResolvedValue({ id: 'sp1', status: 'DRAFT' });
+
+      const result = await pricingService.createSeatPriceDraft({ billingInterval: 'MONTHLY', priceUsd: 6 });
+
+      expect(seatPriceModel.create).toHaveBeenCalledWith({ billingInterval: 'MONTHLY', priceUsd: 6 });
+      expect(result).toEqual({ id: 'sp1', status: 'DRAFT' });
+    });
+
+    test('publishSeatPrice notifies every ACTIVE tenant, mirroring publishPrice', async () => {
+      seatPriceModel.publish.mockResolvedValue({ id: 'sp1', status: 'PUBLISHED' });
+      tenantModel.findAllByStatus.mockResolvedValue([{ id: 'tenant-1' }]);
+
+      await pricingService.publishSeatPrice('sp1');
+
+      expect(tenantModel.findAllByStatus).toHaveBeenCalledWith('ACTIVE');
+    });
+  });
+
+  describe('notifyPendingPriceChangesForTenant — combined tier + seat', () => {
+    test('one tenant with a pending tier price and a pending seat price gets two notifications, distinct metadata keys', async () => {
+      tierPriceModel.findUnnotifiedPendingForTenant.mockResolvedValue([
+        { id: 'price-1', tier: 'STARTER', billing_interval: 'MONTHLY' },
+      ]);
+      seatPriceModel.findUnnotifiedPendingForTenant.mockResolvedValue([
+        { id: 'seat-price-1', billing_interval: 'MONTHLY', price_usd: '6.00' },
+      ]);
+      tenantModel.findById.mockResolvedValue({ id: 'tenant-1' });
+      tierPriceModel.findCurrent.mockResolvedValue({ price_usd: '20.00' });
+      seatPriceModel.findCurrent.mockResolvedValue({ price_usd: '5.00' });
+
+      const count = await pricingService.notifyPendingPriceChangesForTenant('tenant-1');
+
+      expect(count).toBe(2);
+      expect(notificationService.createPriceChangeAnnounced).toHaveBeenCalledWith(
+        { id: 'tenant-1' },
+        { id: 'price-1', tier: 'STARTER', billing_interval: 'MONTHLY' },
+        20
+      );
+      expect(notificationService.createSeatPriceChangeAnnounced).toHaveBeenCalledWith(
+        { id: 'tenant-1' },
+        { id: 'seat-price-1', billing_interval: 'MONTHLY', price_usd: '6.00' },
+        5
+      );
     });
   });
 

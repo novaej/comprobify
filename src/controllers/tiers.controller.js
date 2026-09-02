@@ -3,6 +3,30 @@ const { TIER_LIMIT_SCOPE } = require('../constants/tier-limit-scope');
 const pricingService = require('../services/pricing.service');
 
 const list = async (req, res) => {
+  // Extra-seat add-on (ADR-032) — a single flat price, not per-tier, so it's
+  // resolved once and returned as a top-level field alongside `tiers` rather
+  // than repeated on every tier row.
+  const [seatMonthly, seatYearly, upcomingSeatMonthly, upcomingSeatYearly] = await Promise.all([
+    pricingService.getCurrentSeatPrice('MONTHLY'),
+    pricingService.getCurrentSeatPrice('YEARLY'),
+    pricingService.getUpcomingSeatPrice('MONTHLY'),
+    pricingService.getUpcomingSeatPrice('YEARLY'),
+  ]);
+  const seatIvaMonthly = Math.round(seatMonthly * IVA_RATE * 100) / 100;
+  const seatIvaYearly = Math.round(seatYearly * IVA_RATE * 100) / 100;
+  const extraSeat = {
+    priceMonthlyUsd: seatMonthly,
+    priceMonthlyUsdIva: seatIvaMonthly,
+    priceMonthlyUsdTotal: Math.round((seatMonthly + seatIvaMonthly) * 100) / 100,
+    priceYearlyUsd: seatYearly,
+    priceYearlyUsdIva: seatIvaYearly,
+    priceYearlyUsdTotal: Math.round((seatYearly + seatIvaYearly) * 100) / 100,
+    upcomingPriceMonthlyUsd: upcomingSeatMonthly ? upcomingSeatMonthly.priceUsd : null,
+    monthlyPriceEffectiveAt: upcomingSeatMonthly ? upcomingSeatMonthly.effectiveAt : null,
+    upcomingPriceYearlyUsd: upcomingSeatYearly ? upcomingSeatYearly.priceUsd : null,
+    yearlyPriceEffectiveAt: upcomingSeatYearly ? upcomingSeatYearly.effectiveAt : null,
+  };
+
   const tiers = await Promise.all(Object.entries(TIERS).map(async ([name, tier]) => {
     // tier_prices.price_usd is the advertised, tax-EXCLUSIVE sticker price —
     // matches how every local competitor publishes prices (IVA added at
@@ -53,7 +77,7 @@ const list = async (req, res) => {
       overagePerDocumentUsd:   tier.overagePerDocumentUsd,
     };
   }));
-  res.json({ ok: true, ivaRate: IVA_RATE, limitScopes: TIER_LIMIT_SCOPE, tiers });
+  res.json({ ok: true, ivaRate: IVA_RATE, limitScopes: TIER_LIMIT_SCOPE, tiers, extraSeat });
 };
 
 module.exports = { list };

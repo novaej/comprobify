@@ -71,6 +71,15 @@ router.get('/prices/:id',         v.getTierPrice,      validateRequest, asyncHan
 router.patch('/prices/:id',       v.updateTierPrice,   validateRequest, asyncHandler(controller.updateTierPrice));
 router.post('/prices/:id/publish', v.publishTierPrice, validateRequest, asyncHandler(controller.publishTierPrice));
 
+// Seat prices (ADR-032) — sibling of /prices, not a rename: /prices stays the
+// tier-price surface, seat prices get their own path since they have no
+// `tier` dimension.
+router.post('/seat-prices',            v.createSeatPrice,  validateRequest, asyncHandler(controller.createSeatPrice));
+router.get('/seat-prices',             asyncHandler(controller.listSeatPrices));
+router.get('/seat-prices/:id',         v.getSeatPrice,     validateRequest, asyncHandler(controller.getSeatPrice));
+router.patch('/seat-prices/:id',       v.updateSeatPrice,  validateRequest, asyncHandler(controller.updateSeatPrice));
+router.post('/seat-prices/:id/publish', v.publishSeatPrice, validateRequest, asyncHandler(controller.publishSeatPrice));
+
 // Jobs
 router.post('/jobs/notifications', asyncHandler(controller.runNotificationJobs));
 router.post('/jobs/subscriptions', asyncHandler(controller.runSubscriptionJobs));
