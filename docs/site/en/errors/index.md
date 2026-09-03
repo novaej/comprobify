@@ -116,7 +116,8 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `DOCUMENT_TYPE_NOT_ENABLED` | Requested document type is not active for this issuer |
 | `DOCUMENT_TYPE_NOT_SUPPORTED` | Document type code is not registered in the system |
 | `INVALID_STATE_TRANSITION` | Document operation is not valid for its current status |
-| `DOCUMENT_NOT_AUTHORIZED` | Operation (RIDE, email) requires document status `AUTHORIZED` |
+| `DOCUMENT_NOT_AUTHORIZED` | Operation (RIDE, email, void) requires document status `AUTHORIZED` |
+| `DOCUMENT_VOID_CONFIRMATION_REQUIRED` | `POST /:accessKey/void` was called without `confirmedSriVoid: true` |
 | `SELF_REVOCATION_FORBIDDEN` | Cannot revoke the API key used to authenticate this request |
 | `INVALID_FILE_UPLOAD` | Uploaded file is missing, the wrong type, or exceeds the field's size limit (e.g. a logo over 500 KB) |
 | `PROOF_FILE_LIMIT_REACHED` | Payment already has the maximum number of active proof files (10) — delete one before uploading more |

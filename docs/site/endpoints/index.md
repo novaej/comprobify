@@ -80,6 +80,7 @@ Cada endpoint de comprobantes requiere tanto `Authorization: Bearer <key>` como 
 | `POST` | `/v1/documents/:accessKey/send/retry` | Recupera un comprobante estancado tras agotar los reintentos automáticos de envío/autorización ([Reintentar Envío/Autorización](retry-send.md) — devuelve 202, asíncrono) |
 | `GET` | `/v1/documents/:accessKey/authorize` | Encola una verificación de autorización ante el SRI ([Check Authorization](check-authorization.md) — devuelve 202, asíncrono) |
 | `POST` | `/v1/documents/:accessKey/rebuild` | Reconstruye y vuelve a firmar un comprobante rechazado |
+| `POST` | `/v1/documents/:accessKey/void` | Anula un comprobante `AUTHORIZED` ([Anular Comprobante](void-document.md) — sincronización manual, no llama al SRI) |
 | `GET` | `/v1/documents/:accessKey/ride` | Descarga el PDF RIDE |
 | `GET` | `/v1/documents/:accessKey/xml` | Descarga el XML firmado |
 | `GET` | `/v1/documents/:accessKey/events` | Obtiene el historial de eventos de auditoría |

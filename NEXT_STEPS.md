@@ -25,8 +25,6 @@ Facturas (`01`) and notas de crédito (`04`) are supported. The builder registry
 
 Creation and rebuild services already guard invoice-only logic (e.g. the payments-total check) behind `Array.isArray(body.payments)`, so they need zero changes unless the new type introduces another invoice-only assumption. Transmission and query services need zero changes.
 
-**If a voiding/cancellation endpoint is ever added** (not currently planned as part of this item — SRI document types are additive, not a cancel flow), add `documents:void` to `src/constants/api-key-scopes.js`'s `ApiKeyScopes`/`ALL_SCOPES` and to migration `084_api_key_scopes.sql`'s `CHECK` constraint (new migration) in the same PR — see CLAUDE.md's "Tenant-scoped API key permissions" entry.
-
 ---
 
 ## 2. Reporting

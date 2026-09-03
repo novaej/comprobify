@@ -1807,6 +1807,45 @@
           }
         },
         {
+          "name": "Void Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Issuer-Id",
+                "value": "{{issuer_id}}",
+                "description": "UUID of the issuing branch (from GET /v1/issuers)"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/documents/{{access_key}}/void",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "v1",
+                "documents",
+                "{{access_key}}",
+                "void"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirmedSriVoid\": true,\n  \"reason\": \"Duplicate invoice \u2014 customer already received the original 001-001-000000010\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Marks an AUTHORIZED document as VOIDED. SRI has no SOAP service to cancel an already-authorized document \u2014 that cancellation happens on SRI's own portal. This endpoint only synchronizes the local record after you have already voided the document there; confirmedSriVoid: true is a required attestation of that. Irreversible \u2014 VOIDED is a terminal status."
+          }
+        },
+        {
           "name": "Get RIDE PDF",
           "request": {
             "method": "GET",

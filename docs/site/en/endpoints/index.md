@@ -80,6 +80,7 @@ Every document endpoint requires both `Authorization: Bearer <key>` and `X-Issue
 | `POST` | `/v1/documents/:accessKey/send/retry` | Recovers a stuck document after its automatic send/authorize retries are exhausted ([Retry Send/Authorize](retry-send.md) — returns 202, async) |
 | `GET` | `/v1/documents/:accessKey/authorize` | Queue an SRI authorization check ([Check Authorization](check-authorization.md) — returns 202, async) |
 | `POST` | `/v1/documents/:accessKey/rebuild` | Rebuild and re-sign a rejected document |
+| `POST` | `/v1/documents/:accessKey/void` | Void an `AUTHORIZED` document ([Void Document](void-document.md) — manual sync, does not call SRI) |
 | `GET` | `/v1/documents/:accessKey/ride` | Download RIDE PDF |
 | `GET` | `/v1/documents/:accessKey/xml` | Download signed XML |
 | `GET` | `/v1/documents/:accessKey/events` | Get audit event history |
