@@ -17,6 +17,8 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   // Rebuild data — updated only when transitioning back to SIGNED
   'unsigned_xml', 'signed_xml', 'request_payload', 'subtotal', 'total',
   'buyer_id', 'buyer_name', 'buyer_id_type', 'buyer_email',
+  // Void data — set once by document-void.service.js
+  'void_reason', 'voided_at',
 ]);
 
 async function create({ issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload, buyerEmail, idempotencyKey, payloadHash }, client) {

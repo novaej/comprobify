@@ -12,6 +12,7 @@ const resolveIssuer = require('../middleware/resolve-issuer');
 const { writeLimiter, readLimiter } = require('../middleware/rate-limit');
 const selectDocumentValidator = require('../middleware/select-document-validator');
 const { accessKeyParam, listDocumentsQuery } = require('../validators/common.validator');
+const { voidDocument: voidDocumentValidator } = require('../validators/document-void.validator');
 
 const router = Router();
 
@@ -24,6 +25,7 @@ router.use(asyncHandler(resolveIssuer));
 // live SRI call and can fire the authorization email, so it stays blocked.
 const readScope = requireScope(ApiKeyScopes.DOCUMENTS_READ);
 const writeScope = requireScope(ApiKeyScopes.DOCUMENTS_WRITE);
+const voidScope = requireScope(ApiKeyScopes.DOCUMENTS_VOID);
 
 router.get('/', readLimiter, readScope, listDocumentsQuery, validateRequest, asyncHandler(controller.list));
 router.get('/stats', readLimiter, readScope, asyncHandler(controller.getStats));
@@ -42,5 +44,6 @@ router.post('/:accessKey/send', writeLimiter, requireNotSuspended, requireNotPas
 router.post('/:accessKey/send/retry', writeLimiter, requireNotSuspended, requireNotPastDue, writeScope, accessKeyParam, validateRequest, asyncHandler(controller.retrySend));
 router.post('/:accessKey/rebuild', writeLimiter, requireNotSuspended, requireNotPastDue, writeScope, accessKeyParam, asyncHandler(selectDocumentValidator), validateRequest, asyncHandler(controller.rebuild));
 router.post('/:accessKey/email-retry', writeLimiter, requireNotSuspended, requireNotPastDue, writeScope, accessKeyParam, validateRequest, asyncHandler(controller.retrySingleEmail));
+router.post('/:accessKey/void', writeLimiter, requireNotSuspended, requireNotPastDue, voidScope, accessKeyParam, voidDocumentValidator, validateRequest, asyncHandler(controller.voidDocument));
 
 module.exports = router;
