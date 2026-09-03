@@ -11,13 +11,8 @@ const MONTHLY_PERIOD_MONTHS = 1;
 // CLAUDE.md's "Document quota enforcement"/"Yearly billing" entries.
 const YEARLY_POOL_MONTHS = 12;
 
-// FREE never pools annually even though FREE.billingIntervals nominally
-// lists YEARLY (createSubscription rejects FREE outright — PAID_TIERS
-// excludes it — so a live YEARLY+FREE subscription can't actually exist,
-// but call sites that downgrade TO free pass whatever billingInterval the
-// subscription still has lying around). Guarding here, once, means every
-// caller can pass through its billingInterval unconditionally without its
-// own FREE special-case.
+// FREE never pools annually, even if a refund-reversal downgrade passes a
+// leftover YEARLY interval through.
 function periodMonthsForTier(tier, billingInterval) {
   if (tier === 'FREE') return MONTHLY_PERIOD_MONTHS;
   return billingInterval === 'YEARLY' ? YEARLY_POOL_MONTHS : MONTHLY_PERIOD_MONTHS;

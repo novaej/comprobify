@@ -42,7 +42,8 @@ const TIERS = {
     maxUsers:                1,
     writeRateLimit:          10,
     readRateLimit:           60,
-    billingIntervals:        ['MONTHLY', 'YEARLY'],
+    // FREE is never purchased, so it has no real billing cadence — display-only.
+    billingIntervals:        ['MONTHLY'],
     allowedDocumentTypes:    ['01'],
     overagePerDocumentUsd:   null,
   },

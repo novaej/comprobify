@@ -313,7 +313,7 @@ Los precios listados son la tarifa **sin IVA** (el "precio de etiqueta") — el 
 
 | Plan | Precio/mes (+ IVA) | Precio/año (+ IVA) | Cuota de comprobantes **(cifra mensual base)** | Tipos de comprobante | Sucursales máx. | Puntos de emisión máx. por sucursal | Endpoints de webhook máx. | Llaves API máx. | Límite de escritura |
 |---|---|---|---|---|---|---|---|---|---|
-| Free | $0 | $0 | 2 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
+| Free | $0 | — (solo mensual) | 2 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
 | Solo | — (solo anual) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 2 | 15 req/min |
 | Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 3 | 30 req/min |
 | Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 5 | 60 req/min |
@@ -321,7 +321,7 @@ Los precios listados son la tarifa **sin IVA** (el "precio de etiqueta") — el 
 | Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Ilimitado | Ilimitado | 10 | 20 | 300 req/min |
 | Enterprise | $450 (+IVA $517.50) | $4,500 (+IVA $5,175) | **Ilimitado** | Factura, Nota de Crédito (`01`, `04`) | Ilimitado | Ilimitado | 20 | Ilimitado | 600 req/min |
 
-**Solo es solo anual** (facturación mensual no disponible en ese plan) — un compromiso anual de bajo costo pensado para el escalón de entrada, por debajo de Starter. **Enterprise no tiene cuota de comprobantes**: es genuinamente ilimitado (no un número grande), y tampoco tiene tarifa de excedente, porque no hay tope que exceder.
+**Free es solo mensual** — nunca se compra realmente (no hay una suscripción detrás), así que no existe una variante anual a la que cambiar. **Solo es solo anual** (facturación mensual no disponible en ese plan) — un compromiso anual de bajo costo pensado para el escalón de entrada, por debajo de Starter. **Enterprise no tiene cuota de comprobantes**: es genuinamente ilimitado (no un número grande), y tampoco tiene tarifa de excedente, porque no hay tope que exceder.
 
 > **Nota:** estos precios reflejan el catálogo publicado en este momento y pueden cambiar — todo cambio de precio requiere al menos 30 días de aviso previo a los tenants activos (ver [Tu suscripción y cómo pagarla](paying-your-subscription.md)), así que un precio nunca cambia de un día para otro. Consulta siempre la aplicación web de Comprobify para el catálogo vigente en tiempo real; esta tabla es una referencia y puede quedar desactualizada entre ediciones de esta página.
 

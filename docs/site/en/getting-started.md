@@ -313,7 +313,7 @@ Listed prices are the **tax-exclusive** rate (the "sticker price") — IVA (curr
 
 | Tier | Price/mo (+ IVA) | Price/yr (+ IVA) | Document quota **(monthly base figure)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Max API keys | Write limit |
 |---|---|---|---|---|---|---|---|---|---|
-| Free | $0 | $0 | 2 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
+| Free | $0 | — (monthly only) | 2 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
 | Solo | — (yearly only) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 2 | 15 req/min |
 | Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 3 | 30 req/min |
 | Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 5 | 60 req/min |
@@ -321,7 +321,7 @@ Listed prices are the **tax-exclusive** rate (the "sticker price") — IVA (curr
 | Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 20 | 300 req/min |
 | Enterprise | $450 (+IVA $517.50) | $4,500 (+IVA $5,175) | **Unlimited** | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 20 | Unlimited | 600 req/min |
 
-**Solo is yearly-only** (no monthly billing on that plan) — a low-cost annual commitment below Starter, meant as the entry rung. **Enterprise has no document quota at all**: it's genuinely unlimited (not a large number), and has no overage rate either, since there's no cap to ever overage past.
+**Free is monthly-only** — it's never actually purchased (there's no subscription behind it), so there's no annual variant to switch to. **Solo is yearly-only** (no monthly billing on that plan) — a low-cost annual commitment below Starter, meant as the entry rung. **Enterprise has no document quota at all**: it's genuinely unlimited (not a large number), and has no overage rate either, since there's no cap to ever overage past.
 
 > **Note:** these prices reflect the currently published catalog and can change — any price change requires at least 30 days' notice to active tenants (see [Your subscription & billing](paying-your-subscription.md)), so a price never changes overnight. Always check the Comprobify web app for the live catalog; this table is a reference and can fall out of date between edits to this page.
 
