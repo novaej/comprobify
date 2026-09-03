@@ -34,7 +34,7 @@ const IVA_RATE = config.ivaRate;
 
 const TIERS = {
   FREE: {
-    documentQuota:           5,
+    documentQuota:           2,
     maxBranches:             1,
     maxIssuePointsPerBranch: 1,
     maxWebhookEndpoints:     1,
@@ -138,7 +138,10 @@ const TIERS = {
     maxIssuePointsPerBranch: null,
     maxWebhookEndpoints:     20,
     maxApiKeys:              null,
-    maxUsers:                null,
+    // Unlike everything else on this tier, maxUsers is a real cap, not
+    // unlimited — a dashboard seat count still needs a ceiling even at the
+    // top tier; extra seats above it are the paid add-on (ADR-032).
+    maxUsers:                25,
     writeRateLimit:          600,
     readRateLimit:           3000,
     billingIntervals:        ['MONTHLY', 'YEARLY'],

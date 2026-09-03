@@ -51,7 +51,7 @@ Response:
     "email": "your@email.com",
     "subscriptionTier": "FREE",
     "status": "PENDING_VERIFICATION",
-    "documentQuota": 5
+    "documentQuota": 2
   },
   "issuer": { "id": "00000000-0000-0000-0000-000000000001", "ruc": "...", "sandbox": true },
   "apiKey": "<your-sandbox-api-key>"
@@ -60,7 +60,7 @@ Response:
 
 **Store the `apiKey` — it is shown only once.**
 
-The account starts on the **FREE** tier (5 documents, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
+The account starts on the **FREE** tier (2 documents, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
 
 **Registration errors:**
 
@@ -313,7 +313,7 @@ Listed prices are the **tax-exclusive** rate (the "sticker price") — IVA (curr
 
 | Tier | Price/mo (+ IVA) | Price/yr (+ IVA) | Document quota **(monthly base figure)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Max API keys | Write limit |
 |---|---|---|---|---|---|---|---|---|---|
-| Free | $0 | $0 | 5 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
+| Free | $0 | $0 | 2 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
 | Solo | — (yearly only) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 2 | 15 req/min |
 | Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 3 | 30 req/min |
 | Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 5 | 60 req/min |

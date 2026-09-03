@@ -51,7 +51,7 @@ Respuesta:
     "email": "your@email.com",
     "subscriptionTier": "FREE",
     "status": "PENDING_VERIFICATION",
-    "documentQuota": 5
+    "documentQuota": 2
   },
   "issuer": { "id": "00000000-0000-0000-0000-000000000001", "ruc": "...", "sandbox": true },
   "apiKey": "<your-sandbox-api-key>"
@@ -60,7 +60,7 @@ Respuesta:
 
 **Guarda el `apiKey` — se muestra solo una vez.**
 
-La cuenta comienza en el tier **FREE** (5 comprobantes, 1 sucursal, 1 punto de emisión, solo facturas). Todos los comprobantes se envían al ambiente de pruebas del SRI hasta que te promuevas a producción. Las pruebas en sandbox no consumen la cuota — solo los comprobantes de producción lo hacen.
+La cuenta comienza en el tier **FREE** (2 comprobantes, 1 sucursal, 1 punto de emisión, solo facturas). Todos los comprobantes se envían al ambiente de pruebas del SRI hasta que te promuevas a producción. Las pruebas en sandbox no consumen la cuota — solo los comprobantes de producción lo hacen.
 
 **Errores de registro:**
 
@@ -313,7 +313,7 @@ Los precios listados son la tarifa **sin IVA** (el "precio de etiqueta") — el 
 
 | Plan | Precio/mes (+ IVA) | Precio/año (+ IVA) | Cuota de comprobantes **(cifra mensual base)** | Tipos de comprobante | Sucursales máx. | Puntos de emisión máx. por sucursal | Endpoints de webhook máx. | Llaves API máx. | Límite de escritura |
 |---|---|---|---|---|---|---|---|---|---|
-| Free | $0 | $0 | 5 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
+| Free | $0 | $0 | 2 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
 | Solo | — (solo anual) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 2 | 15 req/min |
 | Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 3 | 30 req/min |
 | Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 5 | 60 req/min |

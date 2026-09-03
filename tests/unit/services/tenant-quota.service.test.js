@@ -69,7 +69,7 @@ describe('TenantQuotaService', () => {
       await tenantQuotaService.setCap('tenant-1', 'FREE', 'YEARLY');
 
       expect(tenantQuotaModel.updateCapAndInterval).toHaveBeenCalledWith(
-        'tenant-1', 5, 'MONTHLY', new Date('2026-02-01T00:00:00.000Z')
+        'tenant-1', 2, 'MONTHLY', new Date('2026-02-01T00:00:00.000Z')
       );
     });
 
@@ -84,7 +84,7 @@ describe('TenantQuotaService', () => {
       await tenantQuotaService.setCap('tenant-1', 'NOT_A_REAL_TIER', 'MONTHLY');
 
       expect(tenantQuotaModel.updateCapAndInterval).toHaveBeenCalledWith(
-        'tenant-1', 5, 'MONTHLY', new Date('2026-02-01T00:00:00.000Z')
+        'tenant-1', 2, 'MONTHLY', new Date('2026-02-01T00:00:00.000Z')
       );
     });
 
@@ -169,7 +169,7 @@ describe('TenantQuotaService', () => {
         'tenant-3',
         new Date('2026-03-01T00:00:00.000Z'),
         new Date('2026-04-01T00:00:00.000Z'),
-        5,
+        2,
         'MONTHLY'
       );
     });

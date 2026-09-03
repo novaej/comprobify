@@ -50,18 +50,18 @@ describe('AdminService', () => {
         id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscription_tier: 'FREE', status: 'ACTIVE',
         created_at: new Date('2026-01-01'),
       });
-      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
+      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 2, document_count: 0 });
 
       const result = await adminService.createTenant({ email: 'a@b.com' });
 
       expect(tenantModel.create).toHaveBeenCalledWith({
         email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE',
       }, mockClient);
-      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 5, mockClient);
+      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 2, mockClient);
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
       expect(result).toEqual({
         id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE',
-        suspensionReasonCode: null, documentQuota: 5, documentCount: 0, createdAt: new Date('2026-01-01'),
+        suspensionReasonCode: null, documentQuota: 2, documentCount: 0, createdAt: new Date('2026-01-01'),
       });
     });
 
@@ -83,7 +83,7 @@ describe('AdminService', () => {
 
     // Regression guard: `TIERS[tier]?.documentQuota ?? TIERS.FREE.documentQuota`
     // would silently collapse ENTERPRISE's legitimate null (unlimited) cap
-    // down to FREE's 5, since `??` treats null and undefined identically.
+    // down to FREE's, since `??` treats null and undefined identically.
     test('creates an ENTERPRISE tenant with a null (unlimited) quota, not FREE\'s', async () => {
       tenantModel.findByEmail.mockResolvedValue(null);
       tenantModel.create.mockResolvedValue({

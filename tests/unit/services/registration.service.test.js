@@ -164,7 +164,7 @@ describe('RegistrationService', () => {
         subscriptionTier: 'FREE',
         status: 'PENDING_VERIFICATION',
       }), mockClient);
-      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 5, mockClient);
+      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 2, mockClient);
       expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
         tenantId: '00000000-0000-0000-0000-000000000002',
         ruc: baseFields.ruc,
