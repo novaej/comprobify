@@ -51,7 +51,7 @@ Response:
     "email": "your@email.com",
     "subscriptionTier": "FREE",
     "status": "PENDING_VERIFICATION",
-    "documentQuota": 5
+    "documentQuota": 2
   },
   "issuer": { "id": "00000000-0000-0000-0000-000000000001", "ruc": "...", "sandbox": true },
   "apiKey": "<your-sandbox-api-key>"
@@ -60,7 +60,7 @@ Response:
 
 **Store the `apiKey` — it is shown only once.**
 
-The account starts on the **FREE** tier (5 documents, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
+The account starts on the **FREE** tier (2 documents, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
 
 **Registration errors:**
 
@@ -311,17 +311,17 @@ Distribute each token to the integration that previously used the sandbox key wi
 
 Listed prices are the **tax-exclusive** rate (the "sticker price") — IVA (currently 15%) is added at checkout, never baked into the published figure. The parenthetical is the IVA-inclusive total, which is what you actually transfer.
 
-| Tier | Price/mo (+ IVA) | Price/yr (+ IVA) | Document quota **(monthly base figure)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Write limit |
-|---|---|---|---|---|---|---|---|---|
-| Free | $0 | $0 | 5 | Factura (`01`) | 1 | 1 | 1 | 10 req/min |
-| Solo | — (yearly only) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 15 req/min |
-| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 30 req/min |
-| Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 60 req/min |
-| Growth | $90 (+IVA $103.50) | $900 (+IVA $1,035) | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 120 req/min |
-| Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 300 req/min |
-| Enterprise | $450 (+IVA $517.50) | $4,500 (+IVA $5,175) | **Unlimited** | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 20 | 600 req/min |
+| Tier | Price/mo (+ IVA) | Price/yr (+ IVA) | Document quota **(monthly base figure)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Max API keys | Write limit |
+|---|---|---|---|---|---|---|---|---|---|
+| Free | $0 | — (monthly only) | 2 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
+| Solo | — (yearly only) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 2 | 15 req/min |
+| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 3 | 30 req/min |
+| Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 5 | 60 req/min |
+| Growth | $90 (+IVA $103.50) | $900 (+IVA $1,035) | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 10 | 120 req/min |
+| Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 20 | 300 req/min |
+| Enterprise | $450 (+IVA $517.50) | $4,500 (+IVA $5,175) | **Unlimited** | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 20 | Unlimited | 600 req/min |
 
-**Solo is yearly-only** (no monthly billing on that plan) — a low-cost annual commitment below Starter, meant as the entry rung. **Enterprise has no document quota at all**: it's genuinely unlimited (not a large number), and has no overage rate either, since there's no cap to ever overage past.
+**Free is monthly-only** — it's never actually purchased (there's no subscription behind it), so there's no annual variant to switch to. **Solo is yearly-only** (no monthly billing on that plan) — a low-cost annual commitment below Starter, meant as the entry rung. **Enterprise has no document quota at all**: it's genuinely unlimited (not a large number), and has no overage rate either, since there's no cap to ever overage past.
 
 > **Note:** these prices reflect the currently published catalog and can change — any price change requires at least 30 days' notice to active tenants (see [Your subscription & billing](paying-your-subscription.md)), so a price never changes overnight. Always check the Comprobify web app for the live catalog; this table is a reference and can fall out of date between edits to this page.
 
@@ -335,11 +335,11 @@ The document quota is shared across all branches and document types, and counts 
 
 **Billing is handled in the Comprobify web app, not over the API.** You pick a tier there and pay by card (active within seconds) or by bank transfer (your provider reviews the proof, then it activates). There are no endpoints to integrate for any of it.
 
-See [Your subscription & billing](paying-your-subscription.md) for the full walkthrough: the two payment methods, renewals and the grace period, changing tier, cancelling, and the 30-day price-change notice.
+See [Your subscription & billing](paying-your-subscription.md) for the full walkthrough: the two payment methods, renewals and the grace period, changing tier, cancelling, [extra user seats](paying-your-subscription.md#extra-user-seats), and the 30-day price-change notice.
 
 What you *can* do over the API is track the outcome:
 
-- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — your current tier, quota and account status. `subscriptionTier`/`documentQuota` update the moment a payment is verified.
+- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — your current tier, quota, extra seats, and account status. `subscriptionTier`/`documentQuota` update the moment a payment is verified.
 - [Notifications](endpoints/notifications.md) — `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_EXPIRED` and more, fanned out to your [webhooks](endpoints/webhooks.md) if you've registered any. No polling needed.
 - The Comprobify web app — current plans and pricing are checked there; there's no equivalent public endpoint intended for external integrators.
 

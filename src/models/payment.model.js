@@ -12,12 +12,12 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'applied_from',
 ]);
 
-async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = PaymentMethods.SPI_TRANSFER, purpose = 'INITIAL', targetTier = null, targetBillingInterval = null }) {
+async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = PaymentMethods.SPI_TRANSFER, purpose = 'INITIAL', targetTier = null, targetBillingInterval = null, targetExtraSeats = null, seatsCharged = 0 }) {
   const { rows } = await db.query(
-    `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier, target_billing_interval)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier, target_billing_interval, target_extra_seats, seats_charged)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING *`,
-    [subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method, purpose, targetTier, targetBillingInterval]
+    [subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method, purpose, targetTier, targetBillingInterval, targetExtraSeats, seatsCharged]
   );
   return rows[0];
 }
@@ -83,6 +83,25 @@ async function findPendingTierChangeBySubscriptionId(subscriptionId) {
   const { rows } = await db.query(
     `SELECT * FROM payments
      WHERE subscription_id = $1 AND purpose = 'TIER_CHANGE'
+       AND period_start IS NULL
+       AND status IN ('PENDING', 'REPORTED', 'VERIFIED')
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [subscriptionId]
+  );
+  return rows[0] || null;
+}
+
+// Mirrors findPendingTierChangeBySubscriptionId, but for a seat-change
+// payment — used to block a second concurrent seat-increase request, and to
+// block a tier/interval change from being requested while a seat increase is
+// still awaiting verification (see subscription.service.js's
+// requestSeatChange/requestTierChange guards). A seat decrease never opens a
+// payment, so this can only ever match an in-flight increase.
+async function findPendingSeatChangeBySubscriptionId(subscriptionId) {
+  const { rows } = await db.query(
+    `SELECT * FROM payments
+     WHERE subscription_id = $1 AND purpose = 'SEAT_CHANGE'
        AND period_start IS NULL
        AND status IN ('PENDING', 'REPORTED', 'VERIFIED')
      ORDER BY created_at DESC
@@ -200,6 +219,7 @@ module.exports = {
   findBySubscriptionId,
   findAllByStatus,
   findPendingTierChangeBySubscriptionId,
+  findPendingSeatChangeBySubscriptionId,
   findPendingRenewalBySubscriptionId,
   findOldestUninvoicedBySubscriptionId,
   findPendingInvoice,

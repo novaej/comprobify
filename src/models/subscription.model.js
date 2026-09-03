@@ -90,6 +90,44 @@ async function findDuePendingDowngrades() {
   return rows;
 }
 
+// Records a scheduled seat decrease without touching the active extra_seats
+// count — applied later, at current_period_end, by applyScheduledSeatChanges().
+// A seat increase never goes through this path (see requestSeatChange): it
+// applies immediately, prorated, once its payment verifies.
+async function scheduleSeatDecrease(id, pendingExtraSeats) {
+  const { rows } = await db.query(
+    'UPDATE subscriptions SET pending_extra_seats = $2 WHERE id = $1 RETURNING *',
+    [id, pendingExtraSeats]
+  );
+  return rows[0] || null;
+}
+
+// Flips the active extra_seats count immediately and clears any scheduled
+// pending_extra_seats. Used by an immediate paid increase, a scheduled
+// decrease landing at period-end, a SEAT_CHANGE refund, and by the FREE/
+// cancellation and expiry paths (extraSeats = 0 there — a subscription that
+// dropped to FREE must not keep advertising a paid seat entitlement nobody
+// is paying for). Deliberately separate from applyTierChange: seats and tier
+// are orthogonal dimensions, and applyTierChange never touches this column.
+async function applySeatChange(id, extraSeats) {
+  const { rows } = await db.query(
+    `UPDATE subscriptions
+     SET extra_seats = $2, pending_extra_seats = NULL
+     WHERE id = $1
+     RETURNING *`,
+    [id, extraSeats]
+  );
+  return rows[0] || null;
+}
+
+async function findDuePendingSeatDecreases() {
+  const { rows } = await db.query(
+    `SELECT * FROM subscriptions
+     WHERE status = 'ACTIVE' AND pending_extra_seats IS NOT NULL AND current_period_end <= NOW()`
+  );
+  return rows;
+}
+
 // ACTIVE subscriptions whose current_period_end falls within reminderDays from
 // now, with no scheduled downgrade (that period transition is handled for free
 // by findDuePendingDowngrades/applyScheduledTierChanges instead) and no renewal
@@ -208,6 +246,9 @@ module.exports = {
   scheduleDowngrade,
   applyTierChange,
   findDuePendingDowngrades,
+  scheduleSeatDecrease,
+  applySeatChange,
+  findDuePendingSeatDecreases,
   findDueForRenewalReminder,
   findDueForSuspensionWarning,
   findExpiredPastGrace,

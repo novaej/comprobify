@@ -78,6 +78,25 @@ describe('NotificationService', () => {
         metadata: expect.objectContaining({ tier: 'GROWTH', billingInterval: 'YEARLY', amount: 900 }),
       }));
     });
+
+    test('a SEAT_CHANGE payment names the seat count, not "the GROWTH plan"', async () => {
+      notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000103', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'PAYMENT_VERIFIED' });
+
+      await notificationService.createPaymentReviewed(
+        {
+          id: '00000000-0000-0000-0000-000000000020', purpose: 'SEAT_CHANGE', amount: 8.70, total_amount: 10,
+          target_extra_seats: 3, seats_charged: 2,
+        },
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', billing_interval: 'MONTHLY' },
+        'VERIFIED',
+      );
+
+      expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        message: 'Your extra seats payment (2 seats) was verified.',
+        metadata: expect.objectContaining({ purpose: 'SEAT_CHANGE', seatsCharged: 2, targetExtraSeats: 3 }),
+      }));
+      expect(notificationModel.create.mock.calls[0][0].message).not.toContain('GROWTH plan');
+    });
   });
 
   describe('createSubscriptionRenewalDue', () => {

@@ -126,6 +126,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `ISSUER_HAS_DOCUMENTS` | El emisor tiene comprobantes emitidos (en cualquiera de los dos ambientes) y no se puede eliminar |
 | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` no es mayor que el valor actual del contador |
 | `TIER_CHANGE_NO_OP` | El tier y el intervalo de facturación solicitados en Change Tier coinciden con los valores actuales de la suscripción |
+| `SEAT_CHANGE_NO_OP` | El `extraSeats` solicitado en Change Seats coincide con el número actual de la suscripción |
 | `INVALID_BILLING_INTERVAL` | `billingInterval` en Create Subscription o Change Tier no es `MONTHLY` ni `YEARLY` |
 | `BAD_REQUEST` | Otra solicitud mal formada (respaldo — lee `detail`) |
 
@@ -144,6 +145,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `BRANCH_LIMIT_REACHED` | El tenant alcanzó el número máximo de sucursales para su plan |
 | `ISSUE_POINT_LIMIT_REACHED` | La sucursal alcanzó el número máximo de puntos de emisión para este plan |
 | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | El tenant alcanzó el número máximo de endpoints de webhook para su plan |
+| `API_KEY_LIMIT_REACHED` | El tenant alcanzó el número máximo de llaves API activas para su plan |
 | `DOCUMENT_TYPE_NOT_IN_TIER` | El tipo de comprobante no está incluido en el plan actual del tenant — mejora de plan para habilitarlo |
 
 ### 403 Forbidden
@@ -178,8 +180,9 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 |---|---|
 | `ALREADY_VERIFIED` | Se intentó reenviar la verificación a una cuenta ya verificada |
 | `SUBSCRIPTION_ALREADY_IN_FLIGHT` | El tenant ya tiene una suscripción en curso (promoción con `tier`, o Create Subscription del admin) |
-| `NO_ACTIVE_SUBSCRIPTION` | Se solicitó Cancel o Change Tier pero el tenant no tiene una suscripción `ACTIVE` |
-| `TIER_CHANGE_ALREADY_PENDING` | Ya hay un cambio de tier/intervalo de facturación programado, o su pago ya está en curso, para esta suscripción |
+| `NO_ACTIVE_SUBSCRIPTION` | Se solicitó Cancel, Change Tier o Change Seats pero el tenant no tiene una suscripción `ACTIVE` |
+| `TIER_CHANGE_ALREADY_PENDING` | Ya hay un cambio de tier/intervalo de facturación programado, o su pago ya está en curso, para esta suscripción — también lo devuelve Change Seats cuando hay un cambio de intervalo de facturación pendiente |
+| `SEAT_CHANGE_ALREADY_PENDING` | Ya hay un cambio de usuarios adicionales programado, o su pago ya está en curso, para esta suscripción |
 | `CANCELLATION_ALREADY_PENDING` | Ya hay una cancelación (`DELETE /v1/subscriptions`) programada para esta suscripción |
 | `CONFLICT` | Se reutilizó una llave de idempotencia con un payload distinto, el pago ya fue decidido, u otro conflicto |
 

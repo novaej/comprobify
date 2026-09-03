@@ -12,10 +12,13 @@ async function findByKeyHash(keyHash) {
             tq.document_quota   AS tenant_document_quota,
             t.sandbox           AS tenant_sandbox,
             t.agreement_accepted_at AS tenant_agreement_accepted_at,
-            t.agreement_version     AS tenant_agreement_version
+            t.agreement_version     AS tenant_agreement_version,
+            s.extra_seats           AS tenant_extra_seats,
+            s.pending_extra_seats   AS tenant_pending_extra_seats
      FROM api_keys ak
      JOIN tenants t ON t.id = ak.tenant_id
      LEFT JOIN tenant_quotas tq ON tq.tenant_id = t.id AND tq.is_current = true
+     LEFT JOIN subscriptions s ON s.tenant_id = t.id AND s.status = 'ACTIVE'
      WHERE ak.key_hash = $1
        AND ak.active = true`,
     [keyHash]
@@ -103,10 +106,19 @@ async function revokeAllByTenantIdAndEnvironment(tenantId, environment) {
   );
 }
 
+async function countActiveByTenantId(tenantId) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*) AS count FROM api_keys WHERE tenant_id = $1 AND active = true`,
+    [tenantId]
+  );
+  return parseInt(rows[0].count, 10);
+}
+
 module.exports = {
   findByKeyHash,
   create,
   findActiveByTenantId,
+  countActiveByTenantId,
   findByIdAndTenantId,
   revoke,
   revokeAllByTenantIdAndEnvironment,

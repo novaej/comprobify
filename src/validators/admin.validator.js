@@ -376,6 +376,39 @@ const getTierPrice = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
 ];
 
+// Seat prices (ADR-032) — no `tier` field: the extra-seat add-on's price is
+// flat across every tier.
+const createSeatPrice = [
+  body('billingInterval')
+    .isIn(['MONTHLY', 'YEARLY'])
+    .withMessage('billingInterval must be one of: MONTHLY, YEARLY'),
+
+  body('priceUsd')
+    .isFloat({ min: 0 })
+    .withMessage('priceUsd must be a non-negative number'),
+];
+
+const updateSeatPrice = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+
+  body('priceUsd')
+    .isFloat({ min: 0 })
+    .withMessage('priceUsd must be a non-negative number'),
+];
+
+const publishSeatPrice = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+
+  body('noticeDays')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('noticeDays must be a positive integer'),
+];
+
+const getSeatPrice = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+];
+
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey,
@@ -387,4 +420,5 @@ module.exports = {
   publishNotificationEmailTemplate, getNotificationEmailTemplateVersion,
   activateNotificationEmailTemplate, listNotificationEmailTemplateVersions,
   createTierPrice, updateTierPrice, publishTierPrice, listTierPrices, getTierPrice,
+  createSeatPrice, updateSeatPrice, publishSeatPrice, getSeatPrice,
 };

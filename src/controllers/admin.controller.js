@@ -314,6 +314,49 @@ const getTierPrice = async (req, res) => {
   res.json({ ok: true, price: formatTierPrice(row) });
 };
 
+// Seat prices (ADR-032) — same shape as tier prices, minus `tier`: the
+// extra-seat add-on's price is flat across every tier.
+
+function formatSeatPrice(row) {
+  return {
+    id: row.id,
+    billingInterval: row.billing_interval,
+    priceUsd: parseFloat(row.price_usd),
+    status: row.status,
+    effectiveAt: row.effective_at,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+  };
+}
+
+const createSeatPrice = async (req, res) => {
+  const row = await pricingService.createSeatPriceDraft({
+    billingInterval: req.body.billingInterval,
+    priceUsd: req.body.priceUsd,
+  });
+  res.status(201).json({ ok: true, price: formatSeatPrice(row) });
+};
+
+const updateSeatPrice = async (req, res) => {
+  const row = await pricingService.updateSeatPriceDraft(req.params.id, req.body.priceUsd);
+  res.json({ ok: true, price: formatSeatPrice(row) });
+};
+
+const publishSeatPrice = async (req, res) => {
+  const row = await pricingService.publishSeatPrice(req.params.id, { noticeDays: req.body.noticeDays });
+  res.json({ ok: true, price: formatSeatPrice(row) });
+};
+
+const listSeatPrices = async (req, res) => {
+  const rows = await pricingService.listSeatPrices();
+  res.json({ ok: true, prices: rows.map(formatSeatPrice) });
+};
+
+const getSeatPrice = async (req, res) => {
+  const row = await pricingService.getSeatPriceById(req.params.id);
+  res.json({ ok: true, price: formatSeatPrice(row) });
+};
+
 // Jobs
 
 /**
@@ -359,13 +402,20 @@ const runNotificationJobs = async (req, res) => {
  * for the minute-level frequency the notification job uses).
  */
 const runSubscriptionJobs = async (req, res) => {
-  // Order matters: a downgrade applied here also rolls its period forward, and
+  // Order matters, seats -> tiers -> renewals (CLAUDE.md Common Mistake #50,
+  // sibling of #27): applyScheduledTierChanges rolls current_period_end
+  // forward, and applyScheduledSeatChanges' due-query is keyed on
+  // current_period_end <= NOW() — running tiers first would make a due seat
+  // decrease invisible for a whole extra period. Then tiers before renewals:
+  // a downgrade applied here also rolls its period forward, and
   // processDueRenewals' warning/expiry checks read that same
-  // current_period_end in this tick. Reversing these would flag every
-  // subscription downgrading today as freshly expired.
+  // current_period_end in this tick. Reversing either pair would flag every
+  // subscription changing today as freshly expired (or silently skip a due
+  // seat decrease for a full cycle).
+  const seatChanges = await subscriptionService.applyScheduledSeatChanges();
   const tierChanges = await subscriptionService.applyScheduledTierChanges();
   const renewals = await subscriptionService.processDueRenewals();
-  res.json({ ok: true, ...tierChanges, ...renewals });
+  res.json({ ok: true, ...seatChanges, ...tierChanges, ...renewals });
 };
 
 /**
@@ -450,4 +500,5 @@ module.exports = {
   listCurrentNotificationEmailTemplates,
   getDocumentRide,
   createTierPrice, updateTierPrice, publishTierPrice, listTierPrices, getTierPrice,
+  createSeatPrice, updateSeatPrice, publishSeatPrice, listSeatPrices, getSeatPrice,
 };

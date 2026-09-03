@@ -14,6 +14,10 @@
 // overagePerDocumentUsd stays here (not yet enforced — no payment gateway,
 // see NEXT_STEPS.md's "Payment Gateway Integration" item) since overage
 // billing hasn't been built and so has no history/notice requirement yet.
+//
+// maxApiKeys is enforced here (api-key.service.js); maxUsers has no backing
+// table in this API at all — it's comprobify-web's own seat cap, published
+// here only so it has one source of truth. See tier-limit-scope.js / ADR-031.
 
 const config = require('../config');
 
@@ -30,13 +34,16 @@ const IVA_RATE = config.ivaRate;
 
 const TIERS = {
   FREE: {
-    documentQuota:           5,
+    documentQuota:           2,
     maxBranches:             1,
     maxIssuePointsPerBranch: 1,
     maxWebhookEndpoints:     1,
+    maxApiKeys:              2,
+    maxUsers:                1,
     writeRateLimit:          10,
     readRateLimit:           60,
-    billingIntervals:        ['MONTHLY', 'YEARLY'],
+    // FREE is never purchased, so it has no real billing cadence — display-only.
+    billingIntervals:        ['MONTHLY'],
     allowedDocumentTypes:    ['01'],
     overagePerDocumentUsd:   null,
   },
@@ -53,6 +60,8 @@ const TIERS = {
     maxBranches:             1,
     maxIssuePointsPerBranch: 1,
     maxWebhookEndpoints:     1,
+    maxApiKeys:              2,
+    maxUsers:                1,
     writeRateLimit:          15,
     readRateLimit:           90,
     // Yearly-only — a ~$3.50/mo recurring charge carries payment-processing
@@ -68,6 +77,8 @@ const TIERS = {
     maxBranches:             1,
     maxIssuePointsPerBranch: 1,
     maxWebhookEndpoints:     1,
+    maxApiKeys:              3,
+    maxUsers:                2,
     writeRateLimit:          30,
     readRateLimit:           150,
     billingIntervals:        ['MONTHLY', 'YEARLY'],
@@ -79,6 +90,8 @@ const TIERS = {
     maxBranches:             3,
     maxIssuePointsPerBranch: 2,
     maxWebhookEndpoints:     2,
+    maxApiKeys:              5,
+    maxUsers:                3,
     writeRateLimit:          60,
     readRateLimit:           300,
     billingIntervals:        ['MONTHLY', 'YEARLY'],
@@ -90,6 +103,8 @@ const TIERS = {
     maxBranches:             10,
     maxIssuePointsPerBranch: 5,
     maxWebhookEndpoints:     5,
+    maxApiKeys:              10,
+    maxUsers:                5,
     writeRateLimit:          120,
     readRateLimit:           600,
     billingIntervals:        ['MONTHLY', 'YEARLY'],
@@ -101,6 +116,8 @@ const TIERS = {
     maxBranches:             null,
     maxIssuePointsPerBranch: null,
     maxWebhookEndpoints:     10,
+    maxApiKeys:              20,
+    maxUsers:                10,
     writeRateLimit:          300,
     readRateLimit:           1500,
     billingIntervals:        ['MONTHLY', 'YEARLY'],
@@ -121,6 +138,11 @@ const TIERS = {
     maxBranches:             null,
     maxIssuePointsPerBranch: null,
     maxWebhookEndpoints:     20,
+    maxApiKeys:              null,
+    // Unlike everything else on this tier, maxUsers is a real cap, not
+    // unlimited — a dashboard seat count still needs a ceiling even at the
+    // top tier; extra seats above it are the paid add-on (ADR-032).
+    maxUsers:                25,
     writeRateLimit:          600,
     readRateLimit:           3000,
     billingIntervals:        ['MONTHLY', 'YEARLY'],

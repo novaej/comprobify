@@ -238,6 +238,40 @@ describe('ApiKeyService', () => {
         .rejects.toMatchObject({ statusCode: 403, code: 'SCOPE_ESCALATION_FORBIDDEN' });
       expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
+
+    // These set countActiveByTenantId's mocked return value, which persists across tests
+    // (afterEach only clears call history) — kept last in this describe block so they can't
+    // leak a stale count into an earlier test that doesn't set it.
+    test('rejects when the tenant has reached their tier API key limit', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscriptionTier: 'FREE' };
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(2); // FREE allows 2
+
+      await expect(apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES))
+        .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+    });
+
+    test('allows creating up to (but not exceeding) the tier API key limit', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscriptionTier: 'FREE' };
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(1); // FREE allows 2
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
+
+      const { token } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES);
+
+      expect(typeof token).toBe('string');
+      expect(apiKeyModel.create).toHaveBeenCalled();
+    });
+
+    test('never enforces an API key limit for a tier with maxApiKeys: null', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscriptionTier: 'ENTERPRISE' };
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(9999);
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
+
+      const { token } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES);
+
+      expect(typeof token).toBe('string');
+      expect(apiKeyModel.create).toHaveBeenCalled();
+    });
   });
 
   describe('getDailyUsage', () => {

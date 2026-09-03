@@ -4,6 +4,7 @@ const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const TenantStatus = require('../constants/tenant-status');
 const ErrorCodes = require('../constants/error-codes');
+const { TIERS } = require('../constants/subscription-tiers');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -66,6 +67,17 @@ async function createKey(tenant, { label, environment, scopes }, requestingScope
       403,
       ErrorCodes.SCOPE_ESCALATION_FORBIDDEN
     );
+  }
+  const tierConfig = TIERS[tenant.subscriptionTier] || TIERS.FREE;
+  if (tierConfig.maxApiKeys !== null) {
+    const currentCount = await apiKeyModel.countActiveByTenantId(tenant.id);
+    if (currentCount >= tierConfig.maxApiKeys) {
+      throw new AppError(
+        `Your plan allows a maximum of ${tierConfig.maxApiKeys} API key(s). Upgrade your plan or revoke an existing key to add a new one.`,
+        402,
+        ErrorCodes.API_KEY_LIMIT_REACHED
+      );
+    }
   }
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({

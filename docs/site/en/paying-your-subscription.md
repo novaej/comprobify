@@ -62,18 +62,29 @@ From the web app you can move up or down a tier, and switch between monthly and 
 
 Only one change can be pending at a time. The full history of tier changes over time is in [Tenant Events](endpoints/tenant-events.md).
 
+## Extra user seats
+
+Every plan includes a certain number of dashboard user seats. If you need more, you can buy extra seats from the web app at a flat per-seat price (the same regardless of your plan) — visible there alongside the rest of the catalog.
+
+| Change | When it applies | What you pay |
+|---|---|---|
+| **Add a seat** | Immediately, once paid | Prorated by the time left in your current period |
+| **Remove a seat** | At the end of the current period | Nothing — the current period is already paid for at the higher count |
+
+Once you have extra seats, their cost is folded into your regular plan renewal — **one payment, not two** — so nothing extra to track separately. Changing your billing interval (monthly ↔ yearly) reprices any active extra seats at the new interval too, as part of that same change.
+
 ## Cancelling
 
 You can schedule a cancellation from the web app. Your plan keeps working normally until the end of the period you've already paid for; on that date the account drops to FREE. There's no refund for the remaining time.
 
 ## Price protection
 
-If Comprobify changes your tier's price, you get **at least 30 days' notice** (a `PRICE_CHANGE_ANNOUNCED` notification and email — this one can't be turned off). Any renewal falling due before the new price's effective date is automatically billed at the old price.
+If Comprobify changes your tier's price — or the price of the extra-seat add-on — you get **at least 30 days' notice** (a `PRICE_CHANGE_ANNOUNCED` notification and email — this one can't be turned off). Any renewal falling due before the new price's effective date is automatically billed at the old price.
 
 ## Tracking all of this over the API
 
 Even though payment happens in the web app, you can still receive billing events programmatically:
 
 - [Notifications](endpoints/notifications.md) — `PAYMENT_VERIFIED`, `PAYMENT_REJECTED`, `SUBSCRIPTION_RENEWAL_DUE`, `SUBSCRIPTION_PAST_DUE_WARNING`, `SUBSCRIPTION_EXPIRED`, `PRICE_CHANGE_ANNOUNCED`, pollable or delivered by [webhook](endpoints/webhooks.md).
-- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — your current tier, quota and account status.
+- [`GET /v1/tenants/me`](endpoints/tenant-me.md) — your current tier, quota, extra-seat count, and account status.
 - [Tenant Events](endpoints/tenant-events.md) — the full sequence of what has happened to your account.

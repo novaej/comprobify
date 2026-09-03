@@ -76,6 +76,8 @@ const ErrorCodes = Object.freeze({
   INSUFFICIENT_SCOPE: 'INSUFFICIENT_SCOPE',
   /** Cannot mint a key with scopes broader than the requesting key's own scopes */
   SCOPE_ESCALATION_FORBIDDEN: 'SCOPE_ESCALATION_FORBIDDEN',
+  /** Tenant has reached the maximum number of active API keys for their plan */
+  API_KEY_LIMIT_REACHED: 'API_KEY_LIMIT_REACHED',
 
   // --- Tenant / plan limits ---
   /** Tenant has reached the maximum number of branches for their plan */
@@ -118,6 +120,10 @@ const ErrorCodes = Object.freeze({
   TIER_CHANGE_ALREADY_PENDING: 'TIER_CHANGE_ALREADY_PENDING',
   /** A cancellation is already scheduled for this subscription */
   CANCELLATION_ALREADY_PENDING: 'CANCELLATION_ALREADY_PENDING',
+  /** Requested extraSeats count is the same as the subscription's current extra_seats */
+  SEAT_CHANGE_NO_OP: 'SEAT_CHANGE_NO_OP',
+  /** A seat change (increase payment or scheduled decrease) is already in flight for this subscription */
+  SEAT_CHANGE_ALREADY_PENDING: 'SEAT_CHANGE_ALREADY_PENDING',
   /** rejectionReasonCode is missing or not a recognised value when rejecting a payment */
   INVALID_REJECTION_REASON: 'INVALID_REJECTION_REASON',
   /** suspensionReasonCode is missing or not a recognised value when suspending a tenant */

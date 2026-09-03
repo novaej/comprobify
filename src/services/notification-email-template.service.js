@@ -46,9 +46,15 @@ const EMAIL_TEMPLATE_TYPES = [
 // it for them). Mirrors notification.service.js's own (English-only, in-app
 // message) PAYMENT_PURPOSE_LABELS/REJECTION_REASON_LABELS, just per-language.
 const PURPOSE_LABELS = {
-  es: { INITIAL: 'suscripción', TIER_CHANGE: 'cambio de plan', RENEWAL: 'renovación' },
-  en: { INITIAL: 'subscription', TIER_CHANGE: 'tier change', RENEWAL: 'renewal' },
+  es: { INITIAL: 'suscripción', TIER_CHANGE: 'cambio de plan', RENEWAL: 'renovación', SEAT_CHANGE: 'usuarios adicionales' },
+  en: { INITIAL: 'subscription', TIER_CHANGE: 'tier change', RENEWAL: 'renewal', SEAT_CHANGE: 'extra seats' },
 };
+
+// The item label PRICE_CHANGE_ANNOUNCED substitutes for {{tier}} when the
+// notification is about the seat add-on (metadata.seatPriceId present, no
+// `tier` key at all) rather than an actual subscription tier — see
+// notification.service.js's createSeatPriceChangeAnnounced.
+const SEAT_ITEM_LABELS = { es: 'Usuarios adicionales', en: 'Extra user seats' };
 const REJECTION_REASON_LABELS = {
   es: {
     AMOUNT_MISMATCH: 'El monto transferido no coincide con el solicitado.',
@@ -147,6 +153,7 @@ function buildValues(notificationType, language, notification) {
         tier: metadata.tier,
         billingInterval: metadata.billingInterval,
         amount: parseFloat(metadata.amount).toFixed(2),
+        seatsCharged: metadata.seatsCharged ?? 0,
       };
       if (notificationType === 'PAYMENT_REJECTED') {
         values.reasonLabel = REJECTION_REASON_LABELS[language][metadata.rejectionReasonCode] || REJECTION_REASON_LABELS[language].OTHER;
@@ -173,8 +180,12 @@ function buildValues(notificationType, language, notification) {
     case 'SUBSCRIPTION_EXPIRED':
       return { tier: metadata.previousTier };
     case 'PRICE_CHANGE_ANNOUNCED':
+      // metadata.seatPriceId (no `tier` key at all) means this is the seat
+      // add-on's price, not a real tier's — substitute an item label instead,
+      // or the {{tier}} token would render literally (template-placeholders.js
+      // leaves an unmatched token as-is rather than erroring).
       return {
-        tier: metadata.tier,
+        tier: metadata.seatPriceId ? SEAT_ITEM_LABELS[language] : metadata.tier,
         billingInterval: metadata.billingInterval,
         currentPrice: parseFloat(metadata.previousPriceUsd).toFixed(2),
         newPrice: parseFloat(metadata.newPriceUsd).toFixed(2),

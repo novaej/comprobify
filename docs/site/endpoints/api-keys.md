@@ -112,6 +112,8 @@ Crea una nueva llave a nivel de tenant. El token en texto plano se muestra **una
 
 **Contención de privilegios:** cada elemento de `scopes` debe estar ya presente en la llave que hace esta solicitud — no puedes crear una llave más amplia que la tuya, ni siquiera si tienes `keys:manage`. Una llave con acceso total puede crear cualquier combinación (incluyendo otra llave con acceso total); una llave con solo `["keys:manage", "documents:read"]` puede crear una llave con `["documents:read"]` pero no una con `["documents:write"]`.
 
+**Límite del plan:** cada tier limita cuántas llaves activas puede tener un tenant a la vez (ver [Tiers de suscripción](../getting-started.md#tiers-de-suscripcion)). Revoca una llave sin uso vía `DELETE /v1/keys/:id` para liberar un cupo, o mejora tu plan.
+
 ### Respuesta
 
 **201 Created**
@@ -135,6 +137,7 @@ El token en texto plano (`apiKey`) se muestra una sola vez; `scopes` refleja lo 
 | `403` | `FORBIDDEN` | El correo del tenant no está verificado, O se intenta crear una llave de producción antes de que algún emisor haya sido promovido |
 | `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `keys:manage` |
 | `403` | `SCOPE_ESCALATION_FORBIDDEN` | `scopes` incluye un elemento que la llave solicitante no tiene — ver Contención de privilegios arriba |
+| `402` | `API_KEY_LIMIT_REACHED` | El tenant ya tiene el número máximo de llaves activas que permite su plan — ver [Tiers de suscripción](../getting-started.md#tiers-de-suscripcion) |
 
 ---
 
