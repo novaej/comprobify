@@ -62,6 +62,11 @@ ALTER TABLE sandbox.document_events
                         'EMAIL_TEMP_FAILED','EMAIL_COMPLAINED','EMAIL_SKIPPED',
                         'VOIDED'));
 
+-- Must drop the old constraint before rewriting data — it only allows the
+-- old 9 values, so the backfill below would violate it if run first (same
+-- ordering mistake migration 085's comment already flags).
+ALTER TABLE api_keys DROP CONSTRAINT chk_api_keys_scopes;
+
 -- Any key that already holds every scope that existed before this migration
 -- was granted "everything" (mirrors the 084/085 backfill precedent) — extend
 -- that same intent to the new scope. A key that was deliberately narrower is
@@ -75,7 +80,6 @@ WHERE scopes @> ARRAY[
   ]::TEXT[]
   AND NOT ('documents:void' = ANY(scopes));
 
-ALTER TABLE api_keys DROP CONSTRAINT chk_api_keys_scopes;
 ALTER TABLE api_keys ADD CONSTRAINT chk_api_keys_scopes
   CHECK (scopes <@ ARRAY[
     'documents:write', 'documents:read', 'documents:void',

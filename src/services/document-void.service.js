@@ -21,7 +21,7 @@ async function voidDocument(accessKey, body, issuer) {
   if (document.status !== DocumentStatus.AUTHORIZED) {
     throw new AppError(
       'Only an AUTHORIZED document can be voided',
-      409,
+      400,
       ErrorCodes.DOCUMENT_NOT_AUTHORIZED
     );
   }
