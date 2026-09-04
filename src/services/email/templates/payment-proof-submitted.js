@@ -25,6 +25,7 @@ function render(payment, subscription, tenant, referenceNumber) {
     `Tenant #${tenant.id} (${tenant.email}) uploaded proof for a ${purposeLabel} payment.`,
     '',
     `  Payment ID:        ${payment.id}`,
+    `  Payment Code:      ${payment.payment_code}`,
     `  Subscription ID:   ${subscription.id}`,
     `  Tier:              ${tier}`,
     `  Billing Frequency: ${billingInterval}`,
@@ -46,6 +47,7 @@ function render(payment, subscription, tenant, referenceNumber) {
   <p>Tenant #${tenant.id} (${escapeHtml(tenant.email)}) uploaded proof for a ${escapeHtml(purposeLabel)} payment.</p>
   <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Payment ID</td><td style="padding: 6px 12px;">${payment.id}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Payment Code</td><td style="padding: 6px 12px; font-family: monospace;">${escapeHtml(payment.payment_code)}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Subscription ID</td><td style="padding: 6px 12px;">${subscription.id}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Tier</td><td style="padding: 6px 12px;">${escapeHtml(tier)}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Billing Frequency</td><td style="padding: 6px 12px;">${escapeHtml(billingInterval)}</td></tr>

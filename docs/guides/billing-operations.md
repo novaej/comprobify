@@ -31,6 +31,8 @@ Two methods, converging on the same place.
 
 **SPI bank transfer.** The tenant transfers, then uploads proof plus their bank's reference number. The payment moves to `REPORTED` and waits for you. You get an email when proof lands.
 
+Every payment also carries a `payment_code` (e.g. `CB-4K7N9QRT`, migration 097) — a short, hand-typable code the tenant is asked to include in the transfer's own description/glosa. It's generated at creation time (DB `DEFAULT`, no application code involved) and never changes for that payment. Use it as a second cross-reference against the bank statement's free-text field, alongside the tenant-supplied `referenceNumber` below — some banks preserve the description, some don't, so treat it as a helpful hint, not a guarantee.
+
 Both end at `applyVerifiedPayment`, so everything downstream — periods, tier changes, refunds — behaves identically regardless of method.
 
 ## 2. Reviewing an SPI proof
@@ -167,7 +169,7 @@ Listing them isn't the useful part. **"Correct" means these invariants hold:**
 One payment, whole chain:
 
 ```sql
-SELECT p.id AS payment_id, p.purpose, p.method, p.status AS payment_status,
+SELECT p.id AS payment_id, p.payment_code, p.purpose, p.method, p.status AS payment_status,
        p.total_amount, p.verified_at, p.invoiced_at,
        (p.applied_from IS NOT NULL) AS has_rollback_snapshot,
        (p.period_start IS NOT NULL) AS applied,
@@ -186,8 +188,10 @@ JOIN subscriptions s ON s.id = p.subscription_id
 JOIN tenants t       ON t.id = s.tenant_id
 LEFT JOIN tenant_quotas q ON q.tenant_id = t.id AND q.is_current
 LEFT JOIN payphone_transactions pt ON pt.payment_id = p.id AND pt.status <> 'CANCELLED'
-WHERE p.id = '<PAYMENT_ID>';
+WHERE p.id = '<PAYMENT_ID>' OR p.payment_code = '<PAYMENT_CODE>';
 ```
+
+`payment_code` is useful here specifically when all you have is a bank statement description (a tenant referenced it there instead of the UUID) and no `<PAYMENT_ID>` yet.
 
 `has_rollback_snapshot = false` on a `VERIFIED` payment means it predates migration 090 — `PATCH /v1/admin/payments/:id/refund` will refuse it and the rollback has to be done by hand.
 

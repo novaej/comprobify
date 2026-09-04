@@ -166,6 +166,7 @@ function buildValues(notificationType, language, notification) {
         dueDate: moment(metadata.currentPeriodEnd).format('DD/MM/YYYY'),
         amount: parseFloat(metadata.amount).toFixed(2),
         paymentId: metadata.paymentId,
+        paymentCode: metadata.paymentCode,
         bankName: config.bankTransfer.bankName,
         accountType: config.bankTransfer.accountType,
         accountNumber: config.bankTransfer.accountNumber,

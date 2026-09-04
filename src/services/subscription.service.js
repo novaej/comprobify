@@ -1133,6 +1133,7 @@ async function listPendingInvoices() {
     items: rows.map((row) => ({
       payment: {
         id: row.id,
+        paymentCode: row.payment_code,
         purpose: row.purpose,
         method: row.method,
         amount: row.amount,

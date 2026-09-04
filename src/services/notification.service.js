@@ -294,6 +294,7 @@ async function createSubscriptionRenewalDue(subscription, payment) {
     metadata: {
       subscriptionId: subscription.id,
       paymentId: payment.id,
+      paymentCode: payment.payment_code,
       tier: subscription.tier,
       amount: payment.amount,
       currentPeriodEnd: subscription.current_period_end,

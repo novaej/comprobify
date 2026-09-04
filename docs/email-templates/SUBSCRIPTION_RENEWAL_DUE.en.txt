@@ -10,8 +10,9 @@ SUBJECT: Your {{tier}} subscription renews soon
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Plan</td><td style="padding: 6px 12px;">{{tier}}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Renewal date</td><td style="padding: 6px 12px;">{{dueDate}}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Amount due</td><td style="padding: 6px 12px;">${{amount}}</td></tr>
-    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Payment ID</td><td style="padding: 6px 12px;">{{paymentId}}</td></tr>
+    <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Reference code</td><td style="padding: 6px 12px; font-family: monospace; font-size: 16px;">{{paymentCode}}</td></tr>
   </table>
+  <p><strong>Include the reference code above in your transfer's description</strong> — it helps us match it to your account faster.</p>
   <p>Send the transfer to:</p>
   <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Bank</td><td style="padding: 6px 12px;">{{bankName}}</td></tr>
@@ -20,7 +21,7 @@ SUBJECT: Your {{tier}} subscription renews soon
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Account holder</td><td style="padding: 6px 12px;">{{accountHolder}}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Identification</td><td style="padding: 6px 12px;">{{identification}}</td></tr>
   </table>
-  <p>Once sent, submit proof via PATCH /v1/payments/:id/proof using the Payment ID above.</p>
+  <p>Once sent, submit proof via PATCH /v1/payments/:id/proof using payment ID {{paymentId}}.</p>
   <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
   <p style="font-size: 11px; color: #999;">Do not reply — this is an automated message.</p>
 </body>
@@ -33,7 +34,9 @@ Your {{tier}} subscription renews on {{dueDate}}. Please send the renewal transf
   Plan:      {{tier}}
   Renewal date:   {{dueDate}}
   Amount due:    ${{amount}}
-  Payment ID: {{paymentId}}
+  Reference code: {{paymentCode}}
+
+Include the reference code above in your transfer's description — it helps us match it to your account faster.
 
 Send the transfer to:
   Bank:       {{bankName}}
@@ -42,6 +45,6 @@ Send the transfer to:
   Account holder:  {{accountHolder}}
   Identification: {{identification}}
 
-Once sent, submit proof via PATCH /v1/payments/:id/proof using the Payment ID above.
+Once sent, submit proof via PATCH /v1/payments/:id/proof using payment ID {{paymentId}}.
 
 Do not reply — this is an automated message.
