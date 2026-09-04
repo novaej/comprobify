@@ -57,6 +57,8 @@ PATCH /v1/admin/payments/:id/review
 
 Either decision emails the tenant and raises a notification, fanned out to their webhooks. You don't need to tell them separately.
 
+**A payment can also disappear from your queue before it ever gets here.** `DELETE /v1/payments/:id` lets a tenant self-cancel their own payment while it's still `PENDING` — no proof submitted, nothing for you to review. Typically a wrong tier or seat count picked by mistake. You'll see it as `status = 'CANCELLED'`, not `REJECTED` — nothing to action, no email needed (they did it themselves).
+
 ## 3. Issuing the factura
 
 ```

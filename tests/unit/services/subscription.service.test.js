@@ -1742,6 +1742,68 @@ describe('SubscriptionService', () => {
     });
   });
 
+  describe('cancelPayment', () => {
+    const TENANT = '00000000-0000-0000-0000-000000000001';
+    const SUB = '00000000-0000-0000-0000-000000000010';
+    const PAY = '00000000-0000-0000-0000-000000000020';
+
+    test('throws PAYMENT_NOT_FOUND when the payment does not belong to this tenant', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(null);
+      await expect(subscriptionService.cancelPayment(PAY, TENANT)).rejects.toMatchObject({ statusCode: 404 });
+      expect(paymentModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    test('refuses to cancel a payment that is not PENDING', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'TIER_CHANGE', status: 'REPORTED' });
+      await expect(subscriptionService.cancelPayment(PAY, TENANT)).rejects.toMatchObject({ code: 'PAYMENT_NOT_CANCELLABLE' });
+      expect(paymentModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    test('refuses to cancel a RENEWAL payment even while PENDING', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'RENEWAL', status: 'PENDING' });
+      await expect(subscriptionService.cancelPayment(PAY, TENANT)).rejects.toMatchObject({ code: 'PAYMENT_NOT_CANCELLABLE' });
+      expect(paymentModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    test('cancels a PENDING TIER_CHANGE payment without touching the subscription', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'TIER_CHANGE', status: 'PENDING', target_tier: 'GROWTH' });
+      paymentModel.updateStatus.mockResolvedValue({ id: PAY, status: 'CANCELLED' });
+
+      const result = await subscriptionService.cancelPayment(PAY, TENANT);
+
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'CANCELLED', { cancelled_at: expect.any(Date) });
+      expect(subscriptionModel.findById).not.toHaveBeenCalled();
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'PAYMENT_CANCELLED', { paymentId: PAY, purpose: 'TIER_CHANGE', targetTier: 'GROWTH' });
+      expect(result).toEqual({ payment: { id: PAY, status: 'CANCELLED' }, subscription: null });
+    });
+
+    test('cancelling an INITIAL payment also cancels the still-PENDING_PAYMENT subscription', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'INITIAL', status: 'PENDING', target_tier: null });
+      paymentModel.updateStatus.mockResolvedValue({ id: PAY, status: 'CANCELLED' });
+      subscriptionModel.findById.mockResolvedValue({ id: SUB, status: 'PENDING_PAYMENT' });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: SUB, status: 'CANCELLED' });
+
+      const result = await subscriptionService.cancelPayment(PAY, TENANT);
+
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(SUB, 'CANCELLED', { canceled_at: expect.any(Date) });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'SUBSCRIPTION_CANCELLED', { subscriptionId: SUB });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'PAYMENT_CANCELLED', { paymentId: PAY, purpose: 'INITIAL', targetTier: null });
+      expect(result.subscription).toEqual({ id: SUB, status: 'CANCELLED' });
+    });
+
+    test('cancelling an INITIAL payment leaves an already-ACTIVE subscription alone (defensive: should not happen in practice)', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'INITIAL', status: 'PENDING', target_tier: null });
+      paymentModel.updateStatus.mockResolvedValue({ id: PAY, status: 'CANCELLED' });
+      subscriptionModel.findById.mockResolvedValue({ id: SUB, status: 'ACTIVE' });
+
+      const result = await subscriptionService.cancelPayment(PAY, TENANT);
+
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(result.subscription).toBeNull();
+    });
+  });
+
   describe('refundPayment', () => {
     const TENANT = '00000000-0000-0000-0000-000000000001';
     const SUB = '00000000-0000-0000-0000-000000000010';

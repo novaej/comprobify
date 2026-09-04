@@ -44,6 +44,14 @@ const deleteProof = async (req, res) => {
   res.json({ ok: true });
 };
 
+// Tenant-initiated: cancel a payment before ever submitting proof for it —
+// e.g. picked the wrong tier or seat count. See subscription.service.js's
+// cancelPayment for why this only works on a still-PENDING payment.
+const cancelPayment = async (req, res) => {
+  const result = await subscriptionService.cancelPayment(req.params.id, req.tenant.id);
+  res.json({ ok: true, ...result });
+};
+
 // Mints the config comprobify-web feeds into Payphone's browser widget.
 const createPayphoneSession = async (req, res) => {
   const session = await payphonePaymentService.createSession(req.params.id, req.tenant.id);
@@ -62,4 +70,4 @@ const confirmPayphone = async (req, res) => {
   res.json({ ok: true, ...result });
 };
 
-module.exports = { submitProof, listProofs, downloadProof, deleteProof, createPayphoneSession, confirmPayphone };
+module.exports = { submitProof, listProofs, downloadProof, deleteProof, cancelPayment, createPayphoneSession, confirmPayphone };

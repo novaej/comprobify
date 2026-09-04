@@ -10,6 +10,7 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'invoice_document_id',
   'invoiced_at',
   'applied_from',
+  'cancelled_at',
 ]);
 
 async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = PaymentMethods.SPI_TRANSFER, purpose = 'INITIAL', targetTier = null, targetBillingInterval = null, targetExtraSeats = null, seatsCharged = 0 }) {

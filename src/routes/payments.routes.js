@@ -68,6 +68,10 @@ const handleProofUpload = (req, res, next) => {
   });
 };
 
+// Cancel a still-PENDING payment (wrong tier/seat count, never submitted
+// proof) — see subscription.service.js's cancelPayment.
+router.delete('/:id', writeLimiter, requireNotSuspended, requireNotPastDue, idParam, validateRequest, asyncHandler(controller.cancelPayment));
+
 // A SUSPENDED tenant may still view/download proof files already submitted —
 // relevant precisely when the suspension itself is payment-related.
 router.get('/:id/proofs', readLimiter, idParam, validateRequest, asyncHandler(controller.listProofs));

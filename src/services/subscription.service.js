@@ -788,6 +788,60 @@ async function listPaymentProofsForTenant(paymentId, tenantId) {
   return proofs.map(formatPaymentProof);
 }
 
+// Tenant-initiated cancellation of their own payment — e.g. picked the wrong
+// tier or seat count and doesn't want to pay for it. Deliberately distinct
+// from reviewPayment's REJECTED (an operator reviewed submitted proof and
+// found it wanting) and refundPayment's REFUNDED (money already moved and is
+// being reversed): CANCELLED means the tenant backed out before ever
+// transferring anything, so there's nothing to review and nothing to roll
+// back financially. Only PENDING qualifies — once proof is uploaded
+// (REPORTED) the tenant is claiming a transfer already happened, and that
+// claim needs an operator's eyes, not a silent self-cancel; REJECTED already
+// has its own resubmit path. RENEWAL payments are excluded too — the
+// renewal/grace-period machinery (processDueRenewals) assumes one open
+// payment per due cycle, and cancelling it here would leave nothing to
+// replace it until the next scheduled reminder pass.
+async function cancelPayment(paymentId, tenantId) {
+  const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
+  if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
+
+  if (payment.status !== 'PENDING') {
+    throw new ConflictError(
+      `Payment cannot be cancelled — status is '${payment.status}', not 'PENDING'`,
+      ErrorCodes.PAYMENT_NOT_CANCELLABLE
+    );
+  }
+  if (payment.purpose === 'RENEWAL') {
+    throw new ConflictError('Renewal payments cannot be self-cancelled', ErrorCodes.PAYMENT_NOT_CANCELLABLE);
+  }
+
+  const updatedPayment = await paymentModel.updateStatus(paymentId, 'CANCELLED', { cancelled_at: new Date() });
+
+  // An INITIAL payment is the only payment a PENDING_PAYMENT subscription
+  // will ever have — cancelling it without also cancelling the subscription
+  // would leave that subscription stuck in PENDING_PAYMENT, blocking a fresh
+  // POST /v1/subscriptions forever (findActiveOrPendingByTenantId matches
+  // anything not CANCELLED/EXPIRED, regardless of the payment's own status).
+  // TIER_CHANGE/SEAT_CHANGE payments need no such step: the subscription was
+  // already ACTIVE the whole time and stays untouched.
+  let updatedSubscription = null;
+  if (payment.purpose === 'INITIAL') {
+    const subscription = await subscriptionModel.findById(payment.subscription_id);
+    if (subscription && subscription.status === 'PENDING_PAYMENT') {
+      updatedSubscription = await subscriptionModel.updateStatus(subscription.id, 'CANCELLED', { canceled_at: new Date() });
+      await tenantEventModel.create(tenantId, 'SUBSCRIPTION_CANCELLED', { subscriptionId: subscription.id });
+    }
+  }
+
+  await tenantEventModel.create(tenantId, 'PAYMENT_CANCELLED', {
+    paymentId,
+    purpose: payment.purpose,
+    targetTier: payment.target_tier,
+  });
+
+  return { payment: updatedPayment, subscription: updatedSubscription };
+}
+
 // Admin: every file ever uploaded for this payment, active or not, so the
 // operator can see the full history across rejections/resubmissions.
 async function listPaymentProofsForAdmin(paymentId) {
@@ -1518,6 +1572,7 @@ module.exports = {
   listPaymentProofsForTenant,
   listPaymentProofsForAdmin,
   deletePaymentProofForTenant,
+  cancelPayment,
   reviewPayment,
   applyVerifiedPayment,
   linkInvoice,
