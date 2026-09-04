@@ -195,6 +195,57 @@ WHERE p.id = '<PAYMENT_ID>' OR p.payment_code = '<PAYMENT_CODE>';
 
 `has_rollback_snapshot = false` on a `VERIFIED` payment means it predates migration 090 — `PATCH /v1/admin/payments/:id/refund` will refuse it and the rollback has to be done by hand.
 
+### Verifying a prorated TIER_CHANGE amount
+
+A same-interval upgrade (`requestTierChange`'s immediate branch, `subscription.service.js`) prorates by **time remaining in the period, not usage**:
+
+```
+proratedBase = round((toTierPrice - fromTierPrice) × remainingFraction, 2)
+remainingFraction = (current_period_end - requestedAt) / (current_period_end - current_period_start)
+```
+
+Two things catch people out:
+
+- It's the **price difference** that's prorated, not the new tier's full sticker price. On the same day a subscription starts, `remainingFraction` is close to `1`, so the charge lands close to the *full* difference between the two tiers — e.g. LITE ($8/mo) → STARTER ($20/mo) minutes after signup prorates to something like `(20 - 8) × 0.996 ≈ 11.95`, not "$20 minus a small proration" and not "$20 minus $8." That's expected, not a bug.
+- Both `toTierPrice` and `fromTierPrice` resolve to whatever was `PUBLISHED` and effective **as of the moment the upgrade was requested** (`payments.created_at`) — not necessarily what the tenant originally paid for the old tier, if a price changed in between (see "Price history + 30-day change notice" in CLAUDE.md).
+
+To check a specific payment, fill in `<PAYMENT_ID>` and the tier the tenant was upgrading *from* (check `tenant_events` for the `TIER_CHANGE_REQUESTED` row around the same timestamp — `payments` itself only stores `target_tier`, the tier being upgraded *to*):
+
+```sql
+SELECT
+  p.id AS payment_id, p.payment_code, p.created_at AS requested_at,
+  p.amount AS charged_base, p.total_amount AS charged_total,
+  s.current_period_start, s.current_period_end,
+  from_price.price_usd AS from_tier_price,
+  to_price.price_usd   AS to_tier_price,
+  ROUND(
+    EXTRACT(EPOCH FROM (s.current_period_end - p.created_at))::numeric /
+    EXTRACT(EPOCH FROM (s.current_period_end - s.current_period_start))::numeric
+  , 6) AS remaining_fraction,
+  ROUND(
+    (to_price.price_usd - from_price.price_usd) *
+    (EXTRACT(EPOCH FROM (s.current_period_end - p.created_at))::numeric /
+     EXTRACT(EPOCH FROM (s.current_period_end - s.current_period_start))::numeric)
+  , 2) AS expected_charged_base
+FROM payments p
+JOIN subscriptions s ON s.id = p.subscription_id
+JOIN LATERAL (
+  SELECT price_usd FROM tier_prices
+  WHERE tier = '<FROM_TIER>' AND billing_interval = s.billing_interval
+    AND status = 'PUBLISHED' AND effective_at <= p.created_at
+  ORDER BY effective_at DESC LIMIT 1
+) from_price ON true
+JOIN LATERAL (
+  SELECT price_usd FROM tier_prices
+  WHERE tier = p.target_tier AND billing_interval = s.billing_interval
+    AND status = 'PUBLISHED' AND effective_at <= p.created_at
+  ORDER BY effective_at DESC LIMIT 1
+) to_price ON true
+WHERE p.id = '<PAYMENT_ID>' OR p.payment_code = '<PAYMENT_CODE>';
+```
+
+`expected_charged_base` should equal `charged_base` (rounding aside — each is rounded independently to 2 decimals). If they disagree by more than a cent, something upstream is wrong (stale `current_period_end`, a price resolved at the wrong instant, etc.) — worth pulling the surrounding `TIER_CHANGE_REQUESTED` tenant event for the exact inputs `requestTierChange` used.
+
 ### Auditing every payment at once
 
 More useful than checking one at a time. This returns a `problem` column, null when a payment is consistent:
