@@ -10,6 +10,7 @@ const EventType = Object.freeze({
   EMAIL_TEMP_FAILED: 'EMAIL_TEMP_FAILED',
   EMAIL_COMPLAINED:  'EMAIL_COMPLAINED',
   EMAIL_SKIPPED:     'EMAIL_SKIPPED',
+  VOIDED:            'VOIDED',
 });
 
 module.exports = EventType;

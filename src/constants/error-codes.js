@@ -66,6 +66,8 @@ const ErrorCodes = Object.freeze({
   DOCUMENT_NOT_AUTHORIZED: 'DOCUMENT_NOT_AUTHORIZED',
   /** AUTHORIZED document has neither authorization_xml nor signed_xml stored — RIDE cannot be built */
   RIDE_XML_UNAVAILABLE: 'RIDE_XML_UNAVAILABLE',
+  /** Void request is missing the confirmedSriVoid attestation that the document was already cancelled in SRI's own portal */
+  DOCUMENT_VOID_CONFIRMATION_REQUIRED: 'DOCUMENT_VOID_CONFIRMATION_REQUIRED',
 
   // --- API keys ---
   /** The key used to authenticate this request cannot revoke itself */

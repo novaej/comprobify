@@ -3,6 +3,7 @@ const documentTransmission = require('../services/document-transmission.service'
 const documentRebuild = require('../services/document-rebuild.service');
 const documentEmail = require('../services/document-email.service');
 const documentQuery = require('../services/document-query.service');
+const documentVoid = require('../services/document-void.service');
 const rideService = require('../services/ride.service');
 const NotFoundError = require('../errors/not-found-error');
 
@@ -98,4 +99,9 @@ const getStats = async (req, res) => {
   res.json({ ok: true, stats });
 };
 
-module.exports = { create, getByAccessKey, getCreditNotes, sendToSri, retrySend, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, getSriResponses, list, getStats };
+const voidDocument = async (req, res) => {
+  const document = await documentVoid.voidDocument(req.params.accessKey, req.body, req.issuer);
+  res.json({ ok: true, document });
+};
+
+module.exports = { create, getByAccessKey, getCreditNotes, sendToSri, retrySend, checkAuthorization, rebuild, getRide, retryEmails, retrySingleEmail, getXml, getEvents, getSriResponses, list, getStats, voidDocument };

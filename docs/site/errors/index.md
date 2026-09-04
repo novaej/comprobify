@@ -116,7 +116,8 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `DOCUMENT_TYPE_NOT_ENABLED` | El tipo de comprobante solicitado no está activo para este emisor |
 | `DOCUMENT_TYPE_NOT_SUPPORTED` | El código de tipo de comprobante no está registrado en el sistema |
 | `INVALID_STATE_TRANSITION` | La operación del comprobante no es válida para su estado actual |
-| `DOCUMENT_NOT_AUTHORIZED` | La operación (RIDE, correo) requiere que el comprobante tenga estado `AUTHORIZED` |
+| `DOCUMENT_NOT_AUTHORIZED` | La operación (RIDE, correo, anulación) requiere que el comprobante tenga estado `AUTHORIZED` |
+| `DOCUMENT_VOID_CONFIRMATION_REQUIRED` | `POST /:accessKey/void` fue llamado sin `confirmedSriVoid: true` |
 | `SELF_REVOCATION_FORBIDDEN` | No se puede revocar la API key usada para autenticar esta solicitud |
 | `INVALID_FILE_UPLOAD` | El archivo subido falta, es del tipo incorrecto, o excede el límite de tamaño del campo (p. ej. un logo de más de 500 KB) |
 | `PROOF_FILE_LIMIT_REACHED` | El pago ya tiene el número máximo de archivos de comprobante activos (10) — elimina uno antes de subir más |

@@ -17,6 +17,8 @@ function formatDocument(doc) {
     },
     ...(doc.authorization_number && { authorizationNumber: doc.authorization_number }),
     ...(doc.authorization_date && { authorizationDate: doc.authorization_date }),
+    ...(doc.void_reason && { voidReason: doc.void_reason }),
+    ...(doc.voided_at && { voidedAt: doc.voided_at }),
     email: {
       status: doc.email_status || EmailStatus.PENDING,
       ...(doc.email_sent_at && { sentAt: doc.email_sent_at }),

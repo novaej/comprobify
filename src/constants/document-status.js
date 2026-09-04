@@ -5,6 +5,7 @@ const DocumentStatus = Object.freeze({
   RETURNED:       'RETURNED',
   AUTHORIZED:     'AUTHORIZED',
   NOT_AUTHORIZED: 'NOT_AUTHORIZED',
+  VOIDED:         'VOIDED',
 });
 
 module.exports = DocumentStatus;

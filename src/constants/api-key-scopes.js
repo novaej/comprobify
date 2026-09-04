@@ -1,6 +1,7 @@
 const ApiKeyScopes = Object.freeze({
   DOCUMENTS_WRITE: 'documents:write',
   DOCUMENTS_READ: 'documents:read',
+  DOCUMENTS_VOID: 'documents:void',
   ISSUERS_READ: 'issuers:read',
   ISSUERS_WRITE: 'issuers:write',
   KEYS_MANAGE: 'keys:manage',

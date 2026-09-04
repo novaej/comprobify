@@ -8,7 +8,8 @@ const TRANSITIONS = Object.freeze({
   [DocumentStatus.RECEIVED]:       [DocumentStatus.AUTHORIZED, DocumentStatus.NOT_AUTHORIZED],
   [DocumentStatus.RETURNED]:       [DocumentStatus.SIGNED],
   [DocumentStatus.NOT_AUTHORIZED]: [DocumentStatus.SIGNED],
-  [DocumentStatus.AUTHORIZED]:     [],
+  [DocumentStatus.AUTHORIZED]:     [DocumentStatus.VOIDED],
+  [DocumentStatus.VOIDED]:         [],
 });
 
 function canTransition(from, to) {
