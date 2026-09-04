@@ -116,6 +116,41 @@ async function rollover(tenantId, newPeriodStart, newPeriodEnd, documentQuota, b
   }
 }
 
+// One-time/idempotent correction of a CURRENT row's own recorded period
+// boundaries (and cap/interval) to match its tenant's subscription — used by
+// tenant-quota.service.js's resyncFromSubscriptions() to catch up rows that
+// drifted before syncPeriod() existed on every subscription-period-changing
+// call site. Unlike rollover(), this is NOT a new period starting — it's a
+// data correction to the SAME ongoing period, so document_count is
+// deliberately left untouched (mirrors updateCapAndInterval's own reasoning).
+async function resyncPeriod(tenantId, periodStart, periodEnd, documentQuota, billingInterval) {
+  const { rows } = await db.query(
+    `UPDATE tenant_quotas
+     SET period_start = $1, period_end = $2, document_quota = $3, billing_interval = $4
+     WHERE tenant_id = $5 AND is_current = true
+     RETURNING *`,
+    [periodStart, periodEnd, documentQuota, billingInterval, tenantId]
+  );
+  return rows[0] || null;
+}
+
+// Every CURRENT quota row whose recorded period disagrees with its tenant's
+// ACTIVE subscription's own period — the drift class fixed going forward by
+// syncPeriod(), and what resyncFromSubscriptions() catches up in one pass.
+async function findMisalignedWithSubscription() {
+  const { rows } = await db.query(
+    `SELECT q.tenant_id, s.tier, s.billing_interval,
+            s.current_period_start, s.current_period_end
+     FROM tenant_quotas q
+     JOIN subscriptions s ON s.tenant_id = q.tenant_id
+     WHERE q.is_current = true
+       AND s.status = 'ACTIVE'
+       AND s.current_period_start IS NOT NULL
+       AND (q.period_start <> s.current_period_start OR q.period_end <> s.current_period_end)`
+  );
+  return rows;
+}
+
 module.exports = {
   create,
   findCurrentByTenantId,
@@ -124,4 +159,6 @@ module.exports = {
   incrementIfWithinCap,
   findDueForReset,
   rollover,
+  resyncPeriod,
+  findMisalignedWithSubscription,
 };

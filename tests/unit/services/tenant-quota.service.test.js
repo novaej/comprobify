@@ -103,6 +103,87 @@ describe('TenantQuotaService', () => {
     });
   });
 
+  describe('syncPeriod', () => {
+    test('does nothing when the tenant has no current period', async () => {
+      tenantQuotaModel.findCurrentByTenantId.mockResolvedValue(null);
+
+      const result = await tenantQuotaService.syncPeriod(
+        'tenant-1', new Date('2026-04-15T00:00:00.000Z'), new Date('2026-05-15T00:00:00.000Z'), 'GROWTH', 'MONTHLY'
+      );
+
+      expect(result).toBeNull();
+      expect(tenantQuotaModel.rollover).not.toHaveBeenCalled();
+    });
+
+    // The core difference from setCap(): the caller's own periodStart/
+    // periodEnd are used verbatim — not recomputed via addMonths() from the
+    // quota row's own (possibly stale) prior period_start. That's what keeps
+    // this in lockstep with a subscription's period instead of drifting.
+    test('rolls over to the exact periodStart/periodEnd given, ignoring the row\'s own prior period_start', async () => {
+      tenantQuotaModel.findCurrentByTenantId.mockResolvedValue({
+        period_start: new Date('2020-01-01T00:00:00.000Z'), // wildly stale on purpose
+      });
+      const periodStart = new Date('2026-04-15T00:00:00.000Z');
+      const periodEnd = new Date('2026-05-15T00:00:00.000Z');
+
+      await tenantQuotaService.syncPeriod('tenant-1', periodStart, periodEnd, 'GROWTH', 'MONTHLY');
+
+      expect(tenantQuotaModel.rollover).toHaveBeenCalledWith('tenant-1', periodStart, periodEnd, 1000, 'MONTHLY');
+    });
+
+    test('YEARLY: pools documentQuota x 12 for the given period', async () => {
+      tenantQuotaModel.findCurrentByTenantId.mockResolvedValue({ period_start: new Date('2026-01-01T00:00:00.000Z') });
+      const periodStart = new Date('2026-04-15T00:00:00.000Z');
+      const periodEnd = new Date('2027-04-15T00:00:00.000Z');
+
+      await tenantQuotaService.syncPeriod('tenant-1', periodStart, periodEnd, 'GROWTH', 'YEARLY');
+
+      expect(tenantQuotaModel.rollover).toHaveBeenCalledWith('tenant-1', periodStart, periodEnd, 12000, 'YEARLY');
+    });
+  });
+
+  describe('resyncFromSubscriptions', () => {
+    test('reports zero when nothing is misaligned', async () => {
+      tenantQuotaModel.findMisalignedWithSubscription.mockResolvedValue([]);
+
+      const result = await tenantQuotaService.resyncFromSubscriptions();
+
+      expect(result).toEqual({ quotaPeriodsResynced: 0 });
+      expect(tenantQuotaModel.resyncPeriod).not.toHaveBeenCalled();
+    });
+
+    // A correction, not a rollover: document_count must not be touched by
+    // this, so it goes through resyncPeriod() (in-place update), never
+    // rollover() — the tenant's billing period didn't actually change here,
+    // only the recorded boundaries were wrong.
+    test('corrects a misaligned row to the subscription\'s own period, using resyncPeriod not rollover', async () => {
+      const periodStart = new Date('2026-09-04T09:07:12.131Z');
+      const periodEnd = new Date('2026-10-04T09:07:12.131Z');
+      tenantQuotaModel.findMisalignedWithSubscription.mockResolvedValue([
+        { tenant_id: 'tenant-1', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_start: periodStart, current_period_end: periodEnd },
+      ]);
+
+      const result = await tenantQuotaService.resyncFromSubscriptions();
+
+      expect(tenantQuotaModel.resyncPeriod).toHaveBeenCalledWith('tenant-1', periodStart, periodEnd, 200, 'MONTHLY');
+      expect(tenantQuotaModel.rollover).not.toHaveBeenCalled();
+      expect(result).toEqual({ quotaPeriodsResynced: 1 });
+    });
+
+    test('resyncs multiple misaligned tenants in one pass', async () => {
+      tenantQuotaModel.findMisalignedWithSubscription.mockResolvedValue([
+        { tenant_id: 'tenant-1', tier: 'STARTER', billing_interval: 'MONTHLY', current_period_start: new Date('2026-01-01'), current_period_end: new Date('2026-02-01') },
+        { tenant_id: 'tenant-2', tier: 'GROWTH', billing_interval: 'YEARLY', current_period_start: new Date('2026-01-01'), current_period_end: new Date('2027-01-01') },
+      ]);
+
+      const result = await tenantQuotaService.resyncFromSubscriptions();
+
+      expect(tenantQuotaModel.resyncPeriod).toHaveBeenCalledTimes(2);
+      expect(tenantQuotaModel.resyncPeriod).toHaveBeenCalledWith('tenant-2', new Date('2026-01-01'), new Date('2027-01-01'), 12000, 'YEARLY');
+      expect(result).toEqual({ quotaPeriodsResynced: 2 });
+    });
+  });
+
   describe('consumeOne', () => {
     test('throws QuotaExceededError when the model reports at-cap', async () => {
       tenantQuotaModel.incrementIfWithinCap.mockResolvedValue(false);

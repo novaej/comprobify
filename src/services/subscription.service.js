@@ -972,7 +972,11 @@ async function applyInitialPayment(payment, subscription, tenant) {
   });
 
   await tenantModel.updateTier(subscription.tenant_id, subscription.tier);
-  await tenantQuotaService.setCap(subscription.tenant_id, subscription.tier, subscription.billing_interval);
+  // syncPeriod, not setCap: this is a genuinely new quota period starting
+  // (not a mid-cycle cap resize), so it should reset document_count and take
+  // on the subscription's own period boundaries exactly — see
+  // tenant-quota.service.js's syncPeriod() and ADR-029's addendum.
+  await tenantQuotaService.syncPeriod(subscription.tenant_id, periodStart, periodEnd, subscription.tier, subscription.billing_interval);
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
     subscriptionId: subscription.id,
     tier: subscription.tier,
@@ -1109,6 +1113,14 @@ async function applyRenewalPayment(payment, subscription) {
     period_start: periodStart,
     period_end: periodEnd,
   });
+
+  // A renewal is a new quota period exactly as much as it's a new billing
+  // period — resets document_count and takes on this period's own start/end,
+  // precisely when the payment verifies, rather than leaving it to the
+  // independently-scheduled daily resetDuePeriods() cron to notice up to a
+  // day later (or before the tenant has actually paid). See syncPeriod() and
+  // ADR-029's addendum.
+  await tenantQuotaService.syncPeriod(subscription.tenant_id, periodStart, periodEnd, subscription.tier, subscription.billing_interval);
 
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_RENEWED', {
     subscriptionId: subscription.id,
@@ -1348,7 +1360,11 @@ async function applyScheduledTierChanges() {
         current_period_end: periodEnd,
       });
       await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier);
-      await tenantQuotaService.setCap(subscription.tenant_id, subscription.pending_tier, newInterval);
+      // syncPeriod, not setCap: the subscription's period is rolling forward
+      // to periodStart/periodEnd here too (see above), so this is a new
+      // quota period starting, not a mid-cycle cap resize — see syncPeriod()
+      // and ADR-029's addendum.
+      await tenantQuotaService.syncPeriod(subscription.tenant_id, periodStart, periodEnd, subscription.pending_tier, newInterval);
 
       // If this pending change was funded by a paid TIER_CHANGE payment (an
       // interval switch — free tier-only downgrades have no such payment),
@@ -1614,6 +1630,15 @@ async function resetPeriodOnPromotion(subscriptionId) {
       period_end: periodEnd,
     });
   }
+
+  // Same reasoning as the subscription period reset above, applied to the
+  // quota period too: sandbox documents never consume quota at all (see
+  // "Document quota enforcement"), so a quota period still anchored to a
+  // pre-promotion signup timestamp was never measuring anything real. Without
+  // this, tenant_quotas kept ticking on its own signup-anchored clock right
+  // through promotion — the exact drift this fix (and ADR-029's addendum)
+  // exists to close.
+  await tenantQuotaService.syncPeriod(subscription.tenant_id, periodStart, periodEnd, subscription.tier, subscription.billing_interval);
 
   return updated;
 }

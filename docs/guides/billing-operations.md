@@ -167,6 +167,7 @@ Listing them isn't the useful part. **"Correct" means these invariants hold:**
 | 4 | `tenant_quotas.document_quota` matches that tier *and* `billing_interval` | `updateTier` and `setCap` are separate calls; miss one and the tier changes while the cap doesn't. Since ADR-029, the expected cap also depends on `tenant_quotas.billing_interval`: a YEARLY period's cap is the tier's monthly figure × 12, not the flat monthly one — and ENTERPRISE's cap is always `NULL` (genuinely unlimited), regardless of interval |
 | 5 | Card ⟹ an `APPROVED` attempt with `applied_at` | `applied_at` null means captured but never credited |
 | 6 | `invoiced_at IS NULL` ⟹ factura still owed | — |
+| 7 | ACTIVE subscription ⟹ `tenant_quotas.period_start`/`period_end` == `subscriptions.current_period_start`/`current_period_end` | Was a real bug (ADR-029's addendum): the two used to run on independent clocks. Now synced at every subscription-period change (`syncPeriod()`); `POST /v1/admin/jobs/quota` runs an idempotent backfill (`resyncFromSubscriptions()`) for anything still misaligned |
 
 One payment, whole chain:
 

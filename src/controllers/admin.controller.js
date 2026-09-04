@@ -421,11 +421,24 @@ const runSubscriptionJobs = async (req, res) => {
 /**
  * POST /api/admin/jobs/quota
  *
- * Rolls over every tenant's document-quota period whose period_end has
- * passed — resets document_count to 0 for a new monthly cycle, using the
- * tenant's current subscription_tier to size the new cap. Independent of the
- * billing cycle (subscriptions.current_period_end) on purpose — see
- * CLAUDE.md's quota-enforcement entry.
+ * Two passes:
+ * 1. resetDuePeriods() — rolls over every tenant's document-quota period
+ *    whose period_end has passed, resetting document_count to 0 for a new
+ *    cycle. This remains the only mechanism for a FREE-tier tenant (no
+ *    subscription ever drives their quota period) and acts as a safety net
+ *    for anything that fell behind.
+ * 2. resyncFromSubscriptions() — a one-time/idempotent catch-up for any
+ *    ACTIVE-subscription tenant whose quota period drifted out of sync with
+ *    their subscription's own period before every subscription-period-
+ *    changing call site started calling syncPeriod() (see
+ *    tenant-quota.service.js and ADR-029's addendum). Safe to run every
+ *    time — an already-aligned row is simply skipped on subsequent runs.
+ *
+ * For an ACTIVE-subscription tenant going forward, the quota period is kept
+ * in lockstep with the billing period by syncPeriod() at the moment each one
+ * actually changes (initial activation, promotion, renewal, a deferred
+ * tier/interval change) — no longer "independent on purpose" the way
+ * CLAUDE.md's quota-enforcement entry originally described.
  *
  * Designed to be called by an external scheduler on a daily cadence.
  * Recommended to run after jobs/subscriptions in the same tick, since a
@@ -434,8 +447,9 @@ const runSubscriptionJobs = async (req, res) => {
  * ordering requirement.
  */
 const runQuotaJobs = async (req, res) => {
-  const result = await tenantQuotaService.resetDuePeriods();
-  res.json({ ok: true, ...result });
+  const resetResult = await tenantQuotaService.resetDuePeriods();
+  const resyncResult = await tenantQuotaService.resyncFromSubscriptions();
+  res.json({ ok: true, ...resetResult, ...resyncResult });
 };
 
 /**

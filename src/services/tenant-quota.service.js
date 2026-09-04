@@ -82,6 +82,50 @@ async function setCap(tenantId, tier, billingInterval = 'MONTHLY') {
   return tenantQuotaModel.updateCapAndInterval(tenantId, cap, effectiveInterval, periodEnd);
 }
 
+// Resyncs the CURRENT quota period's own boundaries to exactly match a
+// subscription period that just started (INITIAL activation, promotion,
+// renewal, or a deferred tier/interval change taking effect) — as opposed to
+// setCap(), which resizes the cap of the SAME ongoing period for a mid-cycle
+// change without touching document_count. A genuinely new period starts its
+// count at 0, the same way resetDuePeriods()'s rollover() already does for
+// its own (independently-scheduled) rollovers — so this reuses rollover()
+// rather than an in-place update, preserving the one-row-per-period audit
+// trail tenant_quotas already keeps.
+//
+// The key difference from setCap(): the caller supplies periodStart/periodEnd
+// directly — the exact dates it just computed for subscriptions.
+// current_period_start/end — instead of this function recomputing its own via
+// addMonths() from the quota row's prior (possibly long-stale) anchor. That
+// independent recomputation is exactly what let the two periods drift apart;
+// see CLAUDE.md's "Document quota enforcement" and ADR-029's addendum.
+async function syncPeriod(tenantId, periodStart, periodEnd, tier, billingInterval = 'MONTHLY') {
+  const current = await tenantQuotaModel.findCurrentByTenantId(tenantId);
+  if (!current) return null;
+  const cap = capForTier(tier, billingInterval);
+  const months = periodMonthsForTier(tier, billingInterval);
+  const effectiveInterval = months === YEARLY_POOL_MONTHS ? 'YEARLY' : 'MONTHLY';
+  return tenantQuotaModel.rollover(tenantId, periodStart, periodEnd, cap, effectiveInterval);
+}
+
+// One-time/idempotent catch-up for quota rows that drifted out of sync with
+// their subscription before syncPeriod() existed on every period-changing
+// call site (e.g. a promotion that predates this fix). Deliberately does NOT
+// use rollover()/reset document_count — the tenant's billing period didn't
+// actually change, only the RECORDED boundaries were wrong, so correcting
+// them must not look like a fresh period grant. Safe to call repeatedly
+// (e.g. from POST /v1/admin/jobs/quota on every run) — a already-aligned row
+// simply won't be returned by findMisalignedWithSubscription() next time.
+async function resyncFromSubscriptions() {
+  const misaligned = await tenantQuotaModel.findMisalignedWithSubscription();
+  for (const row of misaligned) {
+    const cap = capForTier(row.tier, row.billing_interval);
+    const months = periodMonthsForTier(row.tier, row.billing_interval);
+    const effectiveInterval = months === YEARLY_POOL_MONTHS ? 'YEARLY' : 'MONTHLY';
+    await tenantQuotaModel.resyncPeriod(row.tenant_id, row.current_period_start, row.current_period_end, cap, effectiveInterval);
+  }
+  return { quotaPeriodsResynced: misaligned.length };
+}
+
 async function getCurrentForTenant(tenantId) {
   return tenantQuotaModel.findCurrentByTenantId(tenantId);
 }
@@ -117,6 +161,8 @@ module.exports = {
   initializeForTenant,
   consumeOne,
   setCap,
+  syncPeriod,
+  resyncFromSubscriptions,
   getCurrentForTenant,
   getCurrentForTenants,
   resetDuePeriods,
