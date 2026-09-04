@@ -26,7 +26,7 @@ Payphone won't process charges under **$1.00**. This is rare — it only comes u
 
 ### Bank transfer (SPI)
 
-The web app shows you the account details to transfer to. Once you've made the transfer, you upload proof of it (image or PDF) along with your bank's reference number.
+The web app shows you the account details to transfer to, along with a short reference code for that payment. Include the code in the transfer's own description if your bank allows it — it helps your provider match the transfer to your account before proof is even reviewed. Once you've made the transfer, you upload proof of it (image or PDF) along with your bank's reference number.
 
 Your provider checks the proof against the bank and either approves or rejects it. **You'll get a notification and an email the moment they record their decision** (see [Notifications](endpoints/notifications.md)). If approved, your plan activates right then.
 

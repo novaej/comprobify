@@ -26,7 +26,7 @@ Payphone no procesa cobros menores a **$1,00**. Es poco frecuente — solo ocurr
 
 ### Transferencia bancaria (SPI)
 
-La aplicación web te muestra los datos de la cuenta a la que transferir. Una vez hecha la transferencia, subes el comprobante (imagen o PDF) junto con el número de referencia de tu banco.
+La aplicación web te muestra los datos de la cuenta a la que transferir, junto con un código de referencia corto para ese pago. Inclúyelo en la descripción de tu transferencia si tu banco lo permite — así tu proveedor puede identificarla más rápido, incluso antes de que revise el comprobante. Una vez hecha la transferencia, subes el comprobante (imagen o PDF) junto con el número de referencia de tu banco.
 
 Tu proveedor revisa el comprobante contra el banco y lo aprueba o lo rechaza. **Recibirás una notificación y un correo en cuanto registre su decisión** (ver [Notificaciones](endpoints/notifications.md)). Si se aprueba, tu plan se activa en ese mismo momento.
 
