@@ -171,10 +171,11 @@ async function confirmTransaction({ payphoneId, clientTransactionId, tenantId })
 // lock releases before the slower apply work.
 async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
   const client = await db.getClient();
+  let attempt;
   try {
     await client.query('BEGIN');
 
-    const attempt = await payphoneTransactionModel.claimByClientTransactionId(client, clientTransactionId);
+    attempt = await payphoneTransactionModel.claimByClientTransactionId(client, clientTransactionId);
     if (!attempt) {
       await client.query('ROLLBACK');
       throw new NotFoundError('Card payment attempt', ErrorCodes.PAYPHONE_SESSION_NOT_FOUND);
@@ -259,6 +260,24 @@ async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
     return { status: 'APPROVED', attempt: updated };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
+    // Best-effort, outside the rolled-back transaction: whatever failed
+    // above, make sure Payphone's own transaction id still lands on the row
+    // by itself. Without it, findStalePending()'s reconciliation sweep gives
+    // up without ever retrying — it assumes a missing payphone_transaction_id
+    // means the return page never reached us at all, not that we reached
+    // Payphone, got a real outcome, and then failed to persist it for some
+    // unrelated reason (a vendor field exceeding a column's assumed width
+    // is exactly what happened here — see migration 100). Mirrors the same
+    // defensive persist already done on the transport-failure path above.
+    if (attempt && payphoneId) {
+      try {
+        await payphoneTransactionModel.updateStatus(attempt.id, 'PENDING', { payphone_transaction_id: payphoneId });
+      } catch (recoveryErr) {
+        logger.error('failed to persist payphone_transaction_id after a confirm-processing error', {
+          clientTransactionId, error: recoveryErr.message,
+        });
+      }
+    }
     throw err;
   } finally {
     client.release();

@@ -282,6 +282,27 @@ describe('payphonePaymentService', () => {
       );
     });
 
+    // The failure mode migration 100 exists for: the outcome-write itself
+    // throws (e.g. a vendor field like card_brand exceeding a column's
+    // assumed width). Losing payphone_transaction_id here would mean a
+    // captured charge looks identical to one whose return page never
+    // arrived — findStalePending() gives up on those without ever retrying.
+    test('when persisting the outcome throws, still records Payphone\'s id for recovery', async () => {
+      payphoneTransactionModel.claimByClientTransactionId.mockResolvedValue(attempt());
+      paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
+      payphoneService.confirm.mockResolvedValue({ ok: true, statusCode: 200, body: approvedBody });
+      payphoneTransactionModel.updateStatus.mockRejectedValueOnce(new Error('value too long for type character varying(30)'));
+
+      await expect(payphonePaymentService.confirmTransaction(confirmArgs)).rejects.toThrow('value too long');
+
+      // The recovery write happens after rollback, on the pool directly —
+      // no `client` argument, unlike the in-transaction calls above it.
+      expect(payphoneTransactionModel.updateStatus).toHaveBeenLastCalledWith(
+        ATTEMPT, 'PENDING', { payphone_transaction_id: 987 }
+      );
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+    });
+
     test('a declined charge marks the attempt CANCELLED and leaves the payment PENDING', async () => {
       payphoneTransactionModel.claimByClientTransactionId.mockResolvedValue(attempt());
       paymentModel.findByIdAndTenantId.mockResolvedValue(payment());
