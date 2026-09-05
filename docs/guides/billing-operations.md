@@ -162,7 +162,7 @@ Listing them isn't the useful part. **"Correct" means these invariants hold:**
 | # | Invariant | Why it breaks |
 |---|---|---|
 | 1 | `VERIFIED` ⟹ `verified_at` set | — |
-| 2 | Applied ⟹ `period_start` stamped | Exception: a *deferred* `TIER_CHANGE` sets `pending_tier` instead and stays unstamped until it lands |
+| 2 | Applied ⟹ `period_start` stamped | Exception: a *deferred* `TIER_CHANGE` sets `pending_tier` instead and stays unstamped until it lands. A `TIER_CHANGE` with `interval_change_immediate = true` (ADR-033, a MONTHLY→YEARLY genuine upgrade) is *not* deferred — it stamps `period_start` at verification time same as any immediate change, just with a brand-new period rather than the old cycle's dates |
 | 3 | `subscriptions.tier` == `tenants.subscription_tier` | A hand-rolled tier edit writes only the tenant. The next renewal is then priced off a tier nobody paid for |
 | 4 | `tenant_quotas.document_quota` matches that tier *and* `billing_interval` | `updateTier` and `setCap` are separate calls; miss one and the tier changes while the cap doesn't. Since ADR-029, the expected cap also depends on `tenant_quotas.billing_interval`: a YEARLY period's cap is the tier's monthly figure × 12, not the flat monthly one — and ENTERPRISE's cap is always `NULL` (genuinely unlimited), regardless of interval |
 | 5 | Card ⟹ an `APPROVED` attempt with `applied_at` | `applied_at` null means captured but never credited |

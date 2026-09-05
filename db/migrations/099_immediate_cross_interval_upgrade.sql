@@ -1,0 +1,15 @@
+-- Flags a TIER_CHANGE payment (with target_billing_interval set) that should
+-- apply IMMEDIATELY once verified, instead of deferring to
+-- current_period_end like every other billing-interval change. Only ever
+-- set true by requestTierChange's MONTHLY -> YEARLY upgrade branch — the one
+-- direction where an immediate proration credit can never mathematically
+-- exceed the new period's cost (at most one month's credit from the old,
+-- cheaper-by-definition plan, against a full YEAR at the new, pricier
+-- monthly-equivalent rate). See ADR-033 and CLAUDE.md's "Tier and
+-- billing-interval changes".
+--
+-- The decision is made once, at request time, and persisted here rather
+-- than re-derived from (possibly since-changed) pricing data at payment
+-- verification time — a price change between request and verification must
+-- not flip which code path a payment takes.
+ALTER TABLE payments ADD COLUMN interval_change_immediate BOOLEAN NOT NULL DEFAULT false;

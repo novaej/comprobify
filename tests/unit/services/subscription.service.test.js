@@ -402,10 +402,16 @@ describe('SubscriptionService', () => {
       expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ amount: 1000, seatsCharged: 2 }));
     });
 
-    test('tier upgrade + interval change: deferred (not the immediate prorated path)', async () => {
+    // ADR-033: MONTHLY -> YEARLY where the switch is a genuine upgrade by
+    // monthly-equivalent price applies immediately with a prorated credit,
+    // instead of deferring to period end at full price — the one
+    // interval-change direction where a credit can never exceed the new
+    // charge. STARTER MONTHLY ($20/mo) -> GROWTH YEARLY ($900/yr = $75/mo
+    // equivalent) qualifies.
+    test('cross-interval upgrade (MONTHLY -> YEARLY, genuine upgrade): prorates and applies via payment verification, not deferred', async () => {
       const now = Date.now();
       const periodStart = new Date(now - 15 * 24 * 60 * 60 * 1000);
-      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000);
+      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000); // 50% of period remaining
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
       subscriptionModel.findActiveByTenantId.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', pending_tier: null,
@@ -413,12 +419,50 @@ describe('SubscriptionService', () => {
       });
       paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000041', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' });
 
-      await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+      const result = await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+
+      // Not applied yet — access only after the payment is verified, same as
+      // every other paid tier change.
+      expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+      expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+      expect(tenantQuotaService.syncPeriod).not.toHaveBeenCalled();
+
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.targetTier).toBe('GROWTH');
+      expect(createArgs.targetBillingInterval).toBe('YEARLY');
+      expect(createArgs.intervalChangeImmediate).toBe(true);
+      // Credit = $20 (STARTER monthly) * 50% remaining = $10.
+      // New full price = $900 (GROWTH yearly, no seats). Charged = $890 base, +15% IVA = $1023.50.
+      expect(createArgs.amount).toBe(890);
+      expect(createArgs.totalAmount).toBe(1023.5);
+      expect(result).toEqual({
+        subscription: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000010' }),
+        payment: expect.objectContaining({ target_tier: 'GROWTH', target_billing_interval: 'YEARLY' }),
+        bankTransfer: config.bankTransfer,
+      });
+    });
+
+    // A genuine downgrade by monthly-equivalent (GROWTH MONTHLY $90/mo ->
+    // STARTER YEARLY $200/yr = $16.67/mo equivalent) stays on the deferred,
+    // full-price path even though it's also MONTHLY -> YEARLY — the safety
+    // proof only holds when the new plan is actually pricier per month.
+    test('MONTHLY -> YEARLY that is a downgrade by monthly-equivalent still defers (not the immediate path)', async () => {
+      const now = Date.now();
+      const periodStart = new Date(now - 15 * 24 * 60 * 60 * 1000);
+      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000);
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_start: periodStart, current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000041', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', target_tier: 'STARTER', target_billing_interval: 'YEARLY' });
+
+      await subscriptionService.requestTierChange(1, 'STARTER', 'YEARLY');
 
       expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
       const [createArgs] = paymentModel.create.mock.calls[0];
-      expect(createArgs.targetBillingInterval).toBe('YEARLY');
-      expect(createArgs.totalAmount).toBe(1035); // full yearly-GROWTH price (900 base + IVA), not prorated
+      expect(createArgs.intervalChangeImmediate).toBeUndefined();
+      expect(createArgs.totalAmount).toBe(230); // full yearly-STARTER price (200 base + IVA), not prorated
     });
 
     test('tier downgrade + interval change: deferred and paid (unlike a plain same-interval downgrade)', async () => {
@@ -846,6 +890,46 @@ describe('SubscriptionService', () => {
         await subscriptionService.applyVerifiedPayment(payment, subscription);
 
         expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', 'YEARLY');
+      });
+
+      // ADR-033: a payment flagged interval_change_immediate (set only by
+      // requestTierChange's MONTHLY -> YEARLY genuine-upgrade branch) applies
+      // right away at verification — unlike the ordinary deferred path above
+      // (same target_billing_interval, same production tenant), and unlike
+      // the same-interval case at the top of this describe block, it opens a
+      // genuinely NEW period starting now, not the existing cycle's dates.
+      test('a payment flagged interval_change_immediate applies now with a fresh period, not deferred', async () => {
+        const payment = {
+          id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED',
+          target_tier: 'GROWTH', target_billing_interval: 'YEARLY', interval_change_immediate: true,
+        };
+        subscriptionModel.applyTierChange.mockResolvedValue({ id: SUB, tier: 'GROWTH', billing_interval: 'YEARLY' });
+
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', 'YEARLY');
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
+
+        const periodFields = subscriptionModel.updateStatus.mock.calls.find((c) => c[0] === SUB && c[1] === 'ACTIVE')[2];
+        // A fresh 12-month period starting now — NOT the old subscription's
+        // current_period_start/end (2026-03-01/2026-04-01).
+        expect(periodFields.current_period_start).not.toEqual(subscription.current_period_start);
+        const months = (periodFields.current_period_end.getFullYear() - periodFields.current_period_start.getFullYear()) * 12
+          + (periodFields.current_period_end.getMonth() - periodFields.current_period_start.getMonth());
+        expect(months).toBe(12);
+
+        expect(tenantQuotaService.syncPeriod).toHaveBeenCalledWith(
+          TENANT, periodFields.current_period_start, periodFields.current_period_end, 'GROWTH', 'YEARLY'
+        );
+        expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'VERIFIED', {
+          period_start: periodFields.current_period_start,
+          period_end: periodFields.current_period_end,
+        });
+        expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'TIER_CHANGED', {
+          subscriptionId: SUB, fromTier: 'STARTER', toTier: 'GROWTH', paymentId: PAY,
+          fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY',
+        });
       });
 
       // period_start is what marks a TIER_CHANGE payment as still-unapplied

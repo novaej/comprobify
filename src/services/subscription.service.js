@@ -334,6 +334,77 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     return { subscription, payment, bankTransfer: config.bankTransfer };
   }
 
+  // Cross-interval upgrade, MONTHLY -> YEARLY only (ADR-033): the one
+  // interval-change direction where an immediate proration credit can never
+  // mathematically exceed the new period's cost. At most one month's credit
+  // from the old (cheaper, by definition of "upgrade") plan, against a full
+  // YEAR at the new (pricier, by the monthly-equivalent comparison below)
+  // rate — the new charge is always at least ~11x the maximum possible
+  // credit. This matters because the codebase has no mechanism to pay money
+  // back to a tenant (see docs/guides/billing-operations.md's refund note),
+  // so any proration scheme that could produce a negative amount (a credit
+  // owed) is unsafe — which every OTHER interval-change direction risks
+  // (see the deferred, non-prorated fallback below).
+  if (intervalChanged && subscription.billing_interval === 'MONTHLY' && targetInterval === 'YEARLY') {
+    const targetYearlyPrice = await pricingService.getCurrentPrice(tier, 'YEARLY');
+    const isCrossIntervalUpgrade = (targetYearlyPrice / 12) > currentMonthlyPrice;
+
+    if (isCrossIntervalUpgrade) {
+      const periodStartMs = new Date(subscription.current_period_start).getTime();
+      const periodEndMs = new Date(subscription.current_period_end).getTime();
+      const totalMs = periodEndMs - periodStartMs;
+      const remainingMs = Math.min(Math.max(periodEndMs - Date.now(), 0), totalMs);
+      const remainingFraction = totalMs > 0 ? remainingMs / totalMs : 0;
+      const credit = currentMonthlyPrice * remainingFraction;
+
+      const seats = effectiveSeatsAtPeriodEnd(subscription);
+      const seatPrice = seats > 0 ? await pricingService.getCurrentSeatPrice('YEARLY') : 0;
+      const newFullPrice = targetYearlyPrice + seats * seatPrice;
+      const proratedTotal = Math.max(0, Math.round((newFullPrice - credit) * 100) / 100);
+
+      // Mirrors the same-interval upgrade's $0 handling above — mathematically
+      // near-unreachable here (see the safety proof in the comment above),
+      // but a tenant still can't submit proof of a $0 transfer if it happened.
+      if (proratedTotal <= 0) {
+        const { subscription: updated } = await applyImmediateIntervalUpgrade(tenant.id, subscription.id, tier, targetInterval);
+        await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
+          subscriptionId: subscription.id,
+          fromTier: subscription.tier,
+          toTier: tier,
+          fromBillingInterval: subscription.billing_interval,
+          toBillingInterval: targetInterval,
+          totalAmount: 0,
+        });
+        return { subscription: updated, payment: null, amount: 0 };
+      }
+
+      const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
+      const payment = await paymentModel.create({
+        subscriptionId: subscription.id,
+        amount: baseAmount,
+        ivaRate: IVA_RATE,
+        ivaAmount,
+        totalAmount,
+        purpose: 'TIER_CHANGE',
+        targetTier: tier,
+        targetBillingInterval: targetInterval,
+        seatsCharged: seats,
+        intervalChangeImmediate: true,
+      });
+
+      await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
+        subscriptionId: subscription.id,
+        fromTier: subscription.tier,
+        toTier: tier,
+        fromBillingInterval: subscription.billing_interval,
+        toBillingInterval: targetInterval,
+        totalAmount,
+      });
+
+      return { subscription, payment, bankTransfer: config.bankTransfer };
+    }
+  }
+
   // Any billing-interval change (tier same, up, or down) — deferred to
   // current_period_end, paid in full at the new tier+interval's sticker
   // price. No cross-interval proration: the current period is already paid
@@ -1010,14 +1081,38 @@ async function applyInitialPayment(payment, subscription, tenant) {
   return updated;
 }
 
+// Applies a cross-interval upgrade's new tier + interval AND a genuinely NEW
+// period starting now — shared by requestTierChange's $0-proration
+// short-circuit and applyTierChangePayment's immediate branch (see ADR-033).
+// Always anchored to "now": there's no prior period of this new interval to
+// anchor to, the same exception already established for
+// applyInitialPayment/resetPeriodOnPromotion. syncPeriod, not setCap — this
+// is a new quota period starting, not a mid-cycle cap resize.
+async function applyImmediateIntervalUpgrade(tenantId, subscriptionId, tier, targetInterval) {
+  const periodStart = new Date();
+  const periodEnd = addBillingPeriod(periodStart, targetInterval);
+  const updated = await subscriptionModel.applyTierChange(subscriptionId, tier, targetInterval);
+  await subscriptionModel.updateStatus(subscriptionId, 'ACTIVE', {
+    current_period_start: periodStart,
+    current_period_end: periodEnd,
+  });
+  await tenantModel.updateTier(tenantId, tier);
+  await tenantQuotaService.syncPeriod(tenantId, periodStart, periodEnd, tier, targetInterval);
+  return { subscription: updated, periodStart, periodEnd };
+}
+
 async function applyTierChangePayment(payment, subscription, tenant) {
-  // An interval change can't prorate mid-cycle, so production defers it to
-  // current_period_end. Sandbox never defers: its period is discarded at
-  // promotion, so a scheduled change would land late or never.
+  // An interval change can't prorate mid-cycle in general, so production
+  // defers it to current_period_end by default. Sandbox never defers: its
+  // period is discarded at promotion, so a scheduled change would land late
+  // or never. `interval_change_immediate` is the one exception — set only by
+  // requestTierChange's MONTHLY -> YEARLY upgrade branch (see ADR-033),
+  // where an immediate proration credit can never exceed the new period's
+  // cost, unlike every other interval-change direction.
   //
   // period_start stays unstamped on the deferred path — it marks the payment
   // still-unapplied until applyScheduledTierChanges lands it.
-  if (payment.target_billing_interval && !tenant.sandbox) {
+  if (payment.target_billing_interval && !tenant.sandbox && !payment.interval_change_immediate) {
     const updated = await subscriptionModel.scheduleDowngrade(
       subscription.id,
       payment.target_tier,
@@ -1031,6 +1126,31 @@ async function applyTierChangePayment(payment, subscription, tenant) {
       fromBillingInterval: subscription.billing_interval,
       toBillingInterval: payment.target_billing_interval,
       effectiveAt: subscription.current_period_end,
+      paymentId: payment.id,
+    });
+
+    return updated;
+  }
+
+  // Immediate cross-interval upgrade (ADR-033): a genuinely NEW period
+  // starts now, at the new interval — unlike the same-interval case below,
+  // which keeps the existing cycle's dates ("takes over the remainder").
+  if (payment.interval_change_immediate) {
+    const { subscription: updated, periodStart, periodEnd } = await applyImmediateIntervalUpgrade(
+      subscription.tenant_id, subscription.id, payment.target_tier, payment.target_billing_interval
+    );
+
+    await paymentModel.updateStatus(payment.id, payment.status, {
+      period_start: periodStart,
+      period_end: periodEnd,
+    });
+
+    await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: payment.target_tier,
+      fromBillingInterval: subscription.billing_interval,
+      toBillingInterval: payment.target_billing_interval,
       paymentId: payment.id,
     });
 

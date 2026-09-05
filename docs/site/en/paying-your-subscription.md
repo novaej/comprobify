@@ -58,7 +58,10 @@ From the web app you can move up or down a tier, and switch between monthly and 
 |---|---|---|
 | **Upgrade** (same interval) | Immediately, once paid | Only the difference, prorated by the time left in your current period |
 | **Downgrade** (same interval) | At the end of the current period | Nothing — the current period is already paid at the higher tier |
-| **Switch monthly ↔ yearly** | At the end of the current period | Full price of the new tier+interval, never prorated |
+| **Switch monthly to yearly, upgrading tier** | Immediately, once paid | Full price of the new yearly plan, minus a prorated credit for the time left on your current monthly plan |
+| **Any other interval switch** (yearly to monthly, or monthly to yearly without an upgrade) | At the end of the current period | Full price of the new tier+interval, never prorated |
+
+The first case is the only exception to "never prorated": if the yearly switch is a genuine upgrade, there's no reason to wait until the period ends — it applies that same day.
 
 Only one change can be pending at a time. The full history of tier changes over time is in [Tenant Events](endpoints/tenant-events.md).
 

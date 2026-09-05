@@ -13,12 +13,17 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'cancelled_at',
 ]);
 
-async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = PaymentMethods.SPI_TRANSFER, purpose = 'INITIAL', targetTier = null, targetBillingInterval = null, targetExtraSeats = null, seatsCharged = 0 }) {
+// intervalChangeImmediate: only ever true for requestTierChange's
+// MONTHLY -> YEARLY upgrade branch — tells applyTierChangePayment to apply
+// this TIER_CHANGE payment immediately once verified instead of deferring to
+// current_period_end like every other billing-interval change. See
+// migration 099 and ADR-033.
+async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = PaymentMethods.SPI_TRANSFER, purpose = 'INITIAL', targetTier = null, targetBillingInterval = null, targetExtraSeats = null, seatsCharged = 0, intervalChangeImmediate = false }) {
   const { rows } = await db.query(
-    `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier, target_billing_interval, target_extra_seats, seats_charged)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier, target_billing_interval, target_extra_seats, seats_charged, interval_change_immediate)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING *`,
-    [subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method, purpose, targetTier, targetBillingInterval, targetExtraSeats, seatsCharged]
+    [subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method, purpose, targetTier, targetBillingInterval, targetExtraSeats, seatsCharged, intervalChangeImmediate]
   );
   return rows[0];
 }

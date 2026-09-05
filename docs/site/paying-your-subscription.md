@@ -58,7 +58,10 @@ Desde la aplicación web puedes subir o bajar de plan, y cambiar entre facturaci
 |---|---|---|
 | **Subir de plan** (mismo intervalo) | De inmediato, al pagarse | Solo la diferencia, prorrateada por el tiempo que queda del período actual |
 | **Bajar de plan** (mismo intervalo) | Al final del período actual | Nada — el período actual ya está pagado al plan superior |
-| **Cambiar mensual ↔ anual** | Al final del período actual | Precio completo del nuevo plan+intervalo, sin prorrateo |
+| **Pasar de mensual a anual, subiendo de plan** | De inmediato, al pagarse | Precio completo del nuevo plan anual, menos un crédito prorrateado por el tiempo que queda de tu plan mensual actual |
+| **Cualquier otro cambio de intervalo** (anual → mensual, o mensual → anual sin subir de plan) | Al final del período actual | Precio completo del nuevo plan+intervalo, sin prorrateo |
+
+El primer caso es la única excepción al "sin prorrateo": si el cambio anual representa una mejora real de plan, no tiene sentido esperar hasta el final del período — se aplica ese mismo día.
 
 Solo puede haber un cambio pendiente a la vez. El historial completo de cambios de plan a lo largo del tiempo está en [Historial de eventos del tenant](endpoints/tenant-events.md).
 
