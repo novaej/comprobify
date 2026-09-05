@@ -44,6 +44,35 @@ describe('NotificationService', () => {
       expect(result).toEqual({ id: '00000000-0000-0000-0000-000000000100', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'PAYMENT_VERIFIED' });
     });
 
+    test('carries payment.pricing_breakdown through into notification metadata', async () => {
+      notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000100', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'PAYMENT_VERIFIED' });
+      const breakdown = { model: 'CROSS_INTERVAL_UPGRADE', newTierPrice: 4500, credit: 222.73, proratedBase: 4427.27 };
+
+      await notificationService.createPaymentReviewed(
+        { id: '00000000-0000-0000-0000-000000000020', purpose: 'TIER_CHANGE', target_tier: 'ENTERPRISE', total_amount: 5091.36, pricing_breakdown: breakdown },
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'BUSINESS', billing_interval: 'MONTHLY' },
+        'VERIFIED',
+      );
+
+      expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        metadata: expect.objectContaining({ pricingBreakdown: breakdown }),
+      }));
+    });
+
+    test('metadata.pricingBreakdown is null when the payment has none (e.g. INITIAL/RENEWAL)', async () => {
+      notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000100', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'PAYMENT_VERIFIED' });
+
+      await notificationService.createPaymentReviewed(
+        { id: '00000000-0000-0000-0000-000000000020', purpose: 'INITIAL', amount: 17.39, total_amount: 20 },
+        { id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', billing_interval: 'MONTHLY' },
+        'VERIFIED',
+      );
+
+      expect(notificationModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        metadata: expect.objectContaining({ pricingBreakdown: null }),
+      }));
+    });
+
     test('creates a WARNING PAYMENT_REJECTED notification including the rejection reason', async () => {
       notificationModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000101', tenant_id: '00000000-0000-0000-0000-000000000001', type: 'PAYMENT_REJECTED' });
 

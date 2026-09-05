@@ -55,6 +55,71 @@ const PURPOSE_LABELS = {
 // `tier` key at all) rather than an actual subscription tier — see
 // notification.service.js's createSeatPriceChangeAnnounced.
 const SEAT_ITEM_LABELS = { es: 'Usuarios adicionales', en: 'Extra user seats' };
+
+const BREAKDOWN_LABELS = {
+  es: {
+    title: 'Detalle del cálculo:', currentPlan: 'Plan actual', newPlan: 'Plan nuevo', proratedDiff: 'Diferencia prorrateada',
+    seats: 'Usuarios adicionales', subtotal: 'Subtotal', credit: 'Crédito por tiempo no usado de tu plan actual',
+    fullPriceNoProration: 'Precio completo (sin prorrateo)', seatsAdded: 'Usuarios adicionales agregados',
+    pricePerSeat: 'Precio por usuario', prorated: 'Prorrateado', ofPeriodRemaining: 'del período restante',
+  },
+  en: {
+    title: 'How this was calculated:', currentPlan: 'Current plan', newPlan: 'New plan', proratedDiff: 'Prorated difference',
+    seats: 'Extra seats', subtotal: 'Subtotal', credit: 'Credit for unused time on your current plan',
+    fullPriceNoProration: 'Full price (not prorated)', seatsAdded: 'Extra seats added',
+    pricePerSeat: 'Price per seat', prorated: 'Prorated', ofPeriodRemaining: 'of period remaining',
+  },
+};
+
+const money = (n) => `$${parseFloat(n).toFixed(2)}`;
+const pct = (fraction) => `${(fraction * 100).toFixed(1)}%`;
+
+// Renders a payment's stored pricing_breakdown (see subscription.service.js's
+// requestTierChange/requestSeatChange, migration 101) into one plain-text,
+// newline-joined block — used as-is in the TEXT email body, and wrapped in
+// a `white-space: pre-line` element in the HTML body so the same string
+// renders as multiple lines without needing raw HTML (which substituteHtml()
+// would otherwise escape). Returns '' when there's no breakdown to show
+// (INITIAL/RENEWAL payments never set one — a flat sticker price needs no
+// explanation).
+function formatPricingBreakdown(breakdown, language) {
+  if (!breakdown) return '';
+  const l = BREAKDOWN_LABELS[language] || BREAKDOWN_LABELS.es;
+  const lines = [];
+  switch (breakdown.model) {
+    case 'SAME_INTERVAL_UPGRADE':
+      lines.push(`${l.currentPlan}: ${money(breakdown.currentTierPrice)}`);
+      lines.push(`${l.newPlan}: ${money(breakdown.newTierPrice)}`);
+      lines.push(`${l.proratedDiff} (${pct(breakdown.remainingFraction)} ${l.ofPeriodRemaining}): ${money(breakdown.proratedBase)}`);
+      break;
+    case 'CROSS_INTERVAL_UPGRADE':
+      lines.push(`${l.newPlan}: ${money(breakdown.newTierPrice)}`);
+      if (breakdown.seatsCount > 0) {
+        lines.push(`${l.seats} (${breakdown.seatsCount} x ${money(breakdown.seatPrice)}): ${money(breakdown.seatsCost)}`);
+      }
+      lines.push(`${l.subtotal}: ${money(breakdown.fullPrice)}`);
+      lines.push(`${l.credit}: -${money(breakdown.credit)}`);
+      break;
+    case 'DEFERRED_FULL_PRICE':
+      lines.push(`${l.newPlan}: ${money(breakdown.newTierPrice)}`);
+      if (breakdown.seatsCount > 0) {
+        lines.push(`${l.seats} (${breakdown.seatsCount} x ${money(breakdown.seatPrice)}): ${money(breakdown.seatsCost)}`);
+      }
+      lines.push(`${l.fullPriceNoProration}: ${money(breakdown.fullPrice)}`);
+      break;
+    case 'SEAT_INCREASE':
+      lines.push(`${l.seatsAdded}: ${breakdown.seatDelta}`);
+      lines.push(`${l.pricePerSeat}: ${money(breakdown.seatPrice)}`);
+      lines.push(`${l.prorated} (${pct(breakdown.remainingFraction)} ${l.ofPeriodRemaining}): ${money(breakdown.proratedBase)}`);
+      break;
+    default:
+      return '';
+  }
+  // The heading lives inside this same string, not as separate static
+  // template text — so an INITIAL/RENEWAL payment with no breakdown renders
+  // nothing at all here, rather than a heading with an empty list under it.
+  return `${l.title}\n${lines.join('\n')}`;
+}
 const REJECTION_REASON_LABELS = {
   es: {
     AMOUNT_MISMATCH: 'El monto transferido no coincide con el solicitado.',
@@ -154,6 +219,7 @@ function buildValues(notificationType, language, notification) {
         billingInterval: metadata.billingInterval,
         amount: parseFloat(metadata.amount).toFixed(2),
         seatsCharged: metadata.seatsCharged ?? 0,
+        breakdownText: formatPricingBreakdown(metadata.pricingBreakdown, language),
       };
       if (notificationType === 'PAYMENT_REJECTED') {
         values.reasonLabel = REJECTION_REASON_LABELS[language][metadata.rejectionReasonCode] || REJECTION_REASON_LABELS[language].OTHER;

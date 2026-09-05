@@ -300,6 +300,18 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     // to $0 — asking for proof of a $0 transfer isn't something a tenant can
     // actually do. Apply the upgrade immediately instead of routing it through
     // the payment/proof pipeline; there's nothing to collect.
+    // Frontend-facing breakdown of how proratedTotal was computed — a
+    // confirmation screen can render "current plan / new plan / difference /
+    // % of period remaining / what you pay" instead of only the final total.
+    const breakdown = {
+      model: 'SAME_INTERVAL_UPGRADE',
+      currentTierPrice: currentPrice,
+      newTierPrice: targetPrice,
+      priceDifference: Math.round((targetPrice - currentPrice) * 100) / 100,
+      remainingFraction,
+      proratedBase: Math.max(0, proratedTotal),
+    };
+
     if (proratedTotal <= 0) {
       const updated = await subscriptionModel.applyTierChange(subscription.id, tier);
       await tenantModel.updateTier(tenant.id, tier);
@@ -310,7 +322,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
         toTier: tier,
         totalAmount: 0,
       });
-      return { subscription: updated, payment: null, amount: 0 };
+      return { subscription: updated, payment: null, amount: 0, breakdown };
     }
 
     const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
@@ -322,6 +334,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
       totalAmount,
       purpose: 'TIER_CHANGE',
       targetTier: tier,
+      pricingBreakdown: breakdown,
     });
 
     await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
@@ -331,7 +344,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
       totalAmount,
     });
 
-    return { subscription, payment, bankTransfer: config.bankTransfer };
+    return { subscription, payment, bankTransfer: config.bankTransfer, breakdown };
   }
 
   // Cross-interval upgrade, MONTHLY -> YEARLY only (ADR-033): the one
@@ -359,8 +372,26 @@ async function requestTierChange(tenantId, tier, billingInterval) {
 
       const seats = effectiveSeatsAtPeriodEnd(subscription);
       const seatPrice = seats > 0 ? await pricingService.getCurrentSeatPrice('YEARLY') : 0;
+      const seatsCost = Math.round(seats * seatPrice * 100) / 100;
       const newFullPrice = targetYearlyPrice + seats * seatPrice;
       const proratedTotal = Math.max(0, Math.round((newFullPrice - credit) * 100) / 100);
+
+      // Frontend-facing breakdown: "new plan + seats − credit for unused
+      // time on your current plan = what you pay". fullPrice/credit/
+      // proratedBase are all pre-tax (base imponible) — the payment's own
+      // amount/iva_amount/total_amount carry the tax breakdown on top.
+      const breakdown = {
+        model: 'CROSS_INTERVAL_UPGRADE',
+        newTierPrice: targetYearlyPrice,
+        seatsCount: seats,
+        seatPrice,
+        seatsCost,
+        fullPrice: Math.round(newFullPrice * 100) / 100,
+        previousPlanPrice: currentMonthlyPrice,
+        remainingFraction,
+        credit: Math.round(credit * 100) / 100,
+        proratedBase: proratedTotal,
+      };
 
       // Mirrors the same-interval upgrade's $0 handling above — mathematically
       // near-unreachable here (see the safety proof in the comment above),
@@ -375,7 +406,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
           toBillingInterval: targetInterval,
           totalAmount: 0,
         });
-        return { subscription: updated, payment: null, amount: 0 };
+        return { subscription: updated, payment: null, amount: 0, breakdown };
       }
 
       const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
@@ -390,6 +421,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
         targetBillingInterval: targetInterval,
         seatsCharged: seats,
         intervalChangeImmediate: true,
+        pricingBreakdown: breakdown,
       });
 
       await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
@@ -401,7 +433,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
         totalAmount,
       });
 
-      return { subscription, payment, bankTransfer: config.bankTransfer };
+      return { subscription, payment, bankTransfer: config.bankTransfer, breakdown };
     }
   }
 
@@ -420,8 +452,27 @@ async function requestTierChange(tenantId, tier, billingInterval) {
   const seatPrice = seats > 0
     ? await pricingService.getSeatPriceAsOf(targetInterval, subscription.current_period_end)
     : 0;
-  const fullPrice = await pricingService.getPriceAsOf(tier, targetInterval, subscription.current_period_end) + seats * seatPrice;
+  const seatsCost = Math.round(seats * seatPrice * 100) / 100;
+  const newTierPrice = await pricingService.getPriceAsOf(tier, targetInterval, subscription.current_period_end);
+  const fullPrice = newTierPrice + seats * seatPrice;
   const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
+
+  // Frontend-facing breakdown: no credit/proration at all on this path — the
+  // full sticker price of the new plan + seats, billed now but not applied
+  // until effectiveAt (see the comment above for why: this codebase has no
+  // way to refund a credit that could exceed the new charge on this
+  // direction, so it deliberately doesn't try).
+  const breakdown = {
+    model: 'DEFERRED_FULL_PRICE',
+    newTierPrice,
+    seatsCount: seats,
+    seatPrice,
+    seatsCost,
+    fullPrice: Math.round(fullPrice * 100) / 100,
+    proratedBase: null,
+    credit: 0,
+  };
+
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
     amount: baseAmount,
@@ -432,6 +483,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     targetTier: tier,
     targetBillingInterval: targetInterval,
     seatsCharged: seats,
+    pricingBreakdown: breakdown,
   });
 
   await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
@@ -444,7 +496,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     effectiveAt: subscription.current_period_end,
   });
 
-  return { subscription, payment, bankTransfer: config.bankTransfer, effectiveAt: subscription.current_period_end };
+  return { subscription, payment, bankTransfer: config.bankTransfer, effectiveAt: subscription.current_period_end, breakdown };
 }
 
 // Sandbox variant. Its current_period_end is discarded at promotion, so there
@@ -616,6 +668,15 @@ async function requestSeatChange(tenantId, extraSeats) {
   const seatPrice = await pricingService.getCurrentSeatPrice(subscription.billing_interval);
   const proratedTotal = Math.round(seatDelta * seatPrice * remainingFraction * 100) / 100;
 
+  // Frontend-facing breakdown, same idea as requestTierChange's.
+  const breakdown = {
+    model: 'SEAT_INCREASE',
+    seatDelta,
+    seatPrice,
+    remainingFraction,
+    proratedBase: Math.max(0, proratedTotal),
+  };
+
   // With ~no time left in the current period, the prorated amount can round
   // to $0 — same escape hatch as a same-interval tier upgrade.
   if (proratedTotal <= 0) {
@@ -626,7 +687,7 @@ async function requestSeatChange(tenantId, extraSeats) {
       toExtraSeats: extraSeats,
       totalAmount: 0,
     });
-    return { subscription: updated, payment: null, amount: 0 };
+    return { subscription: updated, payment: null, amount: 0, breakdown };
   }
 
   const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
@@ -639,6 +700,7 @@ async function requestSeatChange(tenantId, extraSeats) {
     purpose: 'SEAT_CHANGE',
     targetExtraSeats: extraSeats,
     seatsCharged: seatDelta,
+    pricingBreakdown: breakdown,
   });
 
   await tenantEventModel.create(tenant.id, 'SEAT_CHANGE_REQUESTED', {
@@ -648,7 +710,7 @@ async function requestSeatChange(tenantId, extraSeats) {
     totalAmount,
   });
 
-  return { subscription, payment, bankTransfer: config.bankTransfer };
+  return { subscription, payment, bankTransfer: config.bankTransfer, breakdown };
 }
 
 // Sandbox variant, mirroring requestSandboxTierChange: no period to prorate

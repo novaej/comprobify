@@ -266,6 +266,7 @@ async function createPaymentReviewed(payment, subscription, decision) {
       rejectionReasonCode: payment.rejection_reason_code || null,
       seatsCharged: payment.seats_charged,
       targetExtraSeats: payment.target_extra_seats,
+      pricingBreakdown: payment.pricing_breakdown || null,
     },
   });
 

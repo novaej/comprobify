@@ -200,7 +200,17 @@ WHERE p.id = '<PAYMENT_ID>' OR p.payment_code = '<PAYMENT_CODE>';
 
 ### Verifying a prorated TIER_CHANGE amount
 
-A same-interval upgrade (`requestTierChange`'s immediate branch, `subscription.service.js`) prorates by **time remaining in the period, not usage**:
+**Fastest path first: `payments.pricing_breakdown` (`JSONB`, migration 101).** Every proration-capable path — the same-interval upgrade below, the cross-interval MONTHLY → YEARLY immediate upgrade (ADR-033), the deferred full-price fallback, and `requestSeatChange`'s seat increase — stores exactly the numbers it computed, tagged with a `model` discriminator:
+
+```sql
+SELECT id, payment_code, amount AS charged_base, pricing_breakdown
+FROM payments
+WHERE id = '<PAYMENT_ID>' OR payment_code = '<PAYMENT_CODE>';
+```
+
+`pricing_breakdown->>'model'` tells you which shape you're looking at (`SAME_INTERVAL_UPGRADE`, `CROSS_INTERVAL_UPGRADE`, `DEFERRED_FULL_PRICE`, or `SEAT_INCREASE` — see CLAUDE.md's "Pricing breakdown" for each shape's fields) and `pricing_breakdown->>'proratedBase'` should equal `amount` (rounding aside). `NULL` means either an `INITIAL`/`RENEWAL` payment (never sets one — flat sticker price, nothing to explain) or a payment that predates migration 101 — fall back to the manual reconstruction below for those.
+
+The rest of this section is that manual reconstruction, useful as a cross-check or for a pre-101 payment. A same-interval upgrade (`requestTierChange`'s immediate branch, `subscription.service.js`) prorates by **time remaining in the period, not usage**:
 
 ```
 proratedBase = round((toTierPrice - fromTierPrice) × remainingFraction, 2)

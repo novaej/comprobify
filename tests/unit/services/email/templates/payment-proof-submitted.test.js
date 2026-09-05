@@ -50,6 +50,37 @@ describe('payment-proof-submitted template', () => {
     expect(text).toContain('Billing Frequency: MONTHLY');
   });
 
+  test('includes a "How this was calculated" breakdown when the payment has one stored', () => {
+    const payment = {
+      id: '00000000-0000-0000-0000-000000000005', purpose: 'TIER_CHANGE', amount: 4427.27, total_amount: 5091.36,
+      target_tier: 'ENTERPRISE', target_billing_interval: 'YEARLY',
+      pricing_breakdown: {
+        model: 'CROSS_INTERVAL_UPGRADE', newTierPrice: 4500, seatsCount: 3, seatPrice: 50,
+        seatsCost: 150, fullPrice: 4650, credit: 222.73, remainingFraction: 0.9678, proratedBase: 4427.27,
+      },
+    };
+    const subscription = { id: '00000000-0000-0000-0000-000000000004', tier: 'BUSINESS', billing_interval: 'MONTHLY' };
+
+    const { text, html } = render(payment, subscription, tenant);
+
+    expect(text).toContain('How this was calculated:');
+    expect(text).toContain('New plan: $4500.00');
+    expect(text).toContain('Extra seats (3 x $50.00): $150.00');
+    expect(text).toContain('Credit for unused time on the previous plan: -$222.73');
+    expect(html).toContain('How this was calculated:');
+    expect(html).toContain('$4500.00');
+  });
+
+  test('omits the breakdown block entirely when the payment has none (INITIAL/RENEWAL)', () => {
+    const payment = { id: '00000000-0000-0000-0000-000000000005', purpose: 'INITIAL', amount: 17.39, total_amount: 20 };
+    const subscription = { id: '00000000-0000-0000-0000-000000000004', tier: 'STARTER', billing_interval: 'MONTHLY' };
+
+    const { text, html } = render(payment, subscription, tenant);
+
+    expect(text).not.toContain('How this was calculated');
+    expect(html).not.toContain('How this was calculated');
+  });
+
   test('still includes the actionable admin endpoint references (operator-facing, not tenant-facing)', () => {
     const payment = { id: '00000000-0000-0000-0000-000000000005', purpose: 'INITIAL', amount: 17.39, total_amount: 20 };
     const subscription = { id: '00000000-0000-0000-0000-000000000004', tier: 'STARTER', billing_interval: 'MONTHLY' };

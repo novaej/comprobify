@@ -1,5 +1,45 @@
 const PURPOSE_LABELS = { INITIAL: 'initial subscription', TIER_CHANGE: 'tier change', RENEWAL: 'renewal' };
 
+const money = (n) => `$${parseFloat(n).toFixed(2)}`;
+const pct = (fraction) => `${(fraction * 100).toFixed(1)}%`;
+
+// English-only breakdown lines (operator-facing, no locale system) — mirrors
+// notification-email-template.service.js's formatPricingBreakdown, same
+// pricing_breakdown shape (see migration 101). Returns [] when the payment
+// has none (INITIAL/RENEWAL never set one).
+function breakdownLines(breakdown) {
+  if (!breakdown) return [];
+  switch (breakdown.model) {
+    case 'SAME_INTERVAL_UPGRADE':
+      return [
+        ['Current plan', money(breakdown.currentTierPrice)],
+        ['New plan', money(breakdown.newTierPrice)],
+        [`Prorated difference (${pct(breakdown.remainingFraction)} of period remaining)`, money(breakdown.proratedBase)],
+      ];
+    case 'CROSS_INTERVAL_UPGRADE':
+      return [
+        ['New plan', money(breakdown.newTierPrice)],
+        ...(breakdown.seatsCount > 0 ? [[`Extra seats (${breakdown.seatsCount} x ${money(breakdown.seatPrice)})`, money(breakdown.seatsCost)]] : []),
+        ['Subtotal', money(breakdown.fullPrice)],
+        ['Credit for unused time on the previous plan', `-${money(breakdown.credit)}`],
+      ];
+    case 'DEFERRED_FULL_PRICE':
+      return [
+        ['New plan', money(breakdown.newTierPrice)],
+        ...(breakdown.seatsCount > 0 ? [[`Extra seats (${breakdown.seatsCount} x ${money(breakdown.seatPrice)})`, money(breakdown.seatsCost)]] : []),
+        ['Full price (not prorated)', money(breakdown.fullPrice)],
+      ];
+    case 'SEAT_INCREASE':
+      return [
+        ['Extra seats added', String(breakdown.seatDelta)],
+        ['Price per seat', money(breakdown.seatPrice)],
+        [`Prorated (${pct(breakdown.remainingFraction)} of period remaining)`, money(breakdown.proratedBase)],
+      ];
+    default:
+      return [];
+  }
+}
+
 /**
  * Operator-facing notification — not tenant-facing, so no locale system.
  *
@@ -18,6 +58,7 @@ function render(payment, subscription, tenant, referenceNumber) {
   // target_tier, so this correctly falls back to the subscription's own.
   const tier = payment.target_tier || subscription.tier;
   const billingInterval = payment.target_billing_interval || subscription.billing_interval;
+  const breakdown = breakdownLines(payment.pricing_breakdown);
 
   const subject = `[Comprobify] Payment proof submitted — tenant #${tenant.id}, payment #${payment.id}`;
 
@@ -31,6 +72,7 @@ function render(payment, subscription, tenant, referenceNumber) {
     `  Billing Frequency: ${billingInterval}`,
     `  Amount:            $${amount}`,
     `  Reference Number:  ${referenceNumber}`,
+    ...(breakdown.length ? ['', 'How this was calculated:', ...breakdown.map(([label, value]) => `  ${label}: ${value}`)] : []),
     '',
     'Review the uploaded file:',
     `  GET /v1/admin/payments/${payment.id}/proof`,
@@ -54,6 +96,11 @@ function render(payment, subscription, tenant, referenceNumber) {
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Amount</td><td style="padding: 6px 12px;">$${amount}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Reference Number</td><td style="padding: 6px 12px;">${escapeHtml(referenceNumber)}</td></tr>
   </table>
+  ${breakdown.length ? `
+  <p style="font-weight: bold; margin-bottom: 4px;">How this was calculated:</p>
+  <table style="border-collapse: collapse; width: 100%; margin: 0 0 16px;">
+    ${breakdown.map(([label, value]) => `<tr><td style="padding: 4px 12px; color: #555;">${escapeHtml(label)}</td><td style="padding: 4px 12px;">${escapeHtml(value)}</td></tr>`).join('\n    ')}
+  </table>` : ''}
   <p>Review: <code>GET /v1/admin/payments/${payment.id}/proof</code></p>
   <p>Decide: <code>PATCH /v1/admin/payments/${payment.id}/review</code></p>
 </body>

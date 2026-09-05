@@ -120,6 +120,55 @@ describe('NotificationEmailTemplateService', () => {
       expect(result.subject).toBe('renovación — STARTER');
     });
 
+    test('PAYMENT_VERIFIED/REJECTED with no stored pricing_breakdown substitutes an empty breakdownText (INITIAL/RENEWAL never set one)', async () => {
+      notificationEmailTemplateModel.findCurrent.mockResolvedValue({
+        subject_template: 'x', html_template: '<p>Detail: {{breakdownText}}</p>', text_template: 'Detail: {{breakdownText}}',
+      });
+
+      const result = await notificationEmailTemplateService.render('PAYMENT_REJECTED', 'en', notification);
+
+      expect(result.text).toBe('Detail: ');
+    });
+
+    test('CROSS_INTERVAL_UPGRADE breakdown renders plan + seats + credit as separate lines', async () => {
+      notificationEmailTemplateModel.findCurrent.mockResolvedValue({
+        subject_template: 'x', html_template: '{{breakdownText}}', text_template: '{{breakdownText}}',
+      });
+      const verifiedNotification = {
+        tenant_id: 'tenant-1', type: 'PAYMENT_VERIFIED',
+        metadata: {
+          purpose: 'TIER_CHANGE', tier: 'ENTERPRISE', billingInterval: 'YEARLY', amount: 4427.27,
+          pricingBreakdown: {
+            model: 'CROSS_INTERVAL_UPGRADE', newTierPrice: 4500, seatsCount: 3, seatPrice: 50,
+            seatsCost: 150, fullPrice: 4650, previousPlanPrice: 230, remainingFraction: 0.9678, credit: 222.73, proratedBase: 4427.27,
+          },
+        },
+      };
+
+      const result = await notificationEmailTemplateService.render('PAYMENT_VERIFIED', 'en', verifiedNotification);
+
+      expect(result.text).toBe(
+        'How this was calculated:\nNew plan: $4500.00\nExtra seats (3 x $50.00): $150.00\nSubtotal: $4650.00\nCredit for unused time on your current plan: -$222.73'
+      );
+    });
+
+    test('SAME_INTERVAL_UPGRADE breakdown localizes to Spanish', async () => {
+      notificationEmailTemplateModel.findCurrent.mockResolvedValue({
+        subject_template: 'x', html_template: '{{breakdownText}}', text_template: '{{breakdownText}}',
+      });
+      const verifiedNotification = {
+        tenant_id: 'tenant-1', type: 'PAYMENT_VERIFIED',
+        metadata: {
+          purpose: 'TIER_CHANGE', tier: 'GROWTH', billingInterval: 'MONTHLY', amount: 35,
+          pricingBreakdown: { model: 'SAME_INTERVAL_UPGRADE', currentTierPrice: 20, newTierPrice: 90, priceDifference: 70, remainingFraction: 0.5, proratedBase: 35 },
+        },
+      };
+
+      const result = await notificationEmailTemplateService.render('PAYMENT_VERIFIED', 'es', verifiedNotification);
+
+      expect(result.text).toBe('Detalle del cálculo:\nPlan actual: $20.00\nPlan nuevo: $90.00\nDiferencia prorrateada (50.0% del período restante): $35.00');
+    });
+
     test('throws NotFoundError when neither the requested nor the default language has a published template', async () => {
       notificationEmailTemplateModel.findCurrent.mockResolvedValue(null);
 

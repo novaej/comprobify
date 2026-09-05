@@ -309,6 +309,7 @@ describe('SubscriptionService', () => {
         subscription: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000010' }),
         payment: { id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 30, purpose: 'TIER_CHANGE', target_tier: 'GROWTH' },
         bankTransfer: config.bankTransfer,
+        breakdown: expect.objectContaining({ model: 'SAME_INTERVAL_UPGRADE', currentTierPrice: 20, newTierPrice: 90 }),
       });
     });
 
@@ -332,7 +333,10 @@ describe('SubscriptionService', () => {
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGED', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'STARTER', toTier: 'GROWTH', totalAmount: 0,
       });
-      expect(result).toEqual({ subscription: { id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' }, payment: null, amount: 0 });
+      expect(result).toEqual({
+        subscription: { id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' }, payment: null, amount: 0,
+        breakdown: expect.objectContaining({ model: 'SAME_INTERVAL_UPGRADE' }),
+      });
     });
 
     test('rejects an invalid billingInterval', async () => {
@@ -383,6 +387,7 @@ describe('SubscriptionService', () => {
         payment: { id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' },
         bankTransfer: config.bankTransfer,
         effectiveAt: periodEnd,
+        breakdown: expect.objectContaining({ model: 'DEFERRED_FULL_PRICE', proratedBase: null, credit: 0 }),
       });
     });
 
@@ -439,6 +444,7 @@ describe('SubscriptionService', () => {
         subscription: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000010' }),
         payment: expect.objectContaining({ target_tier: 'GROWTH', target_billing_interval: 'YEARLY' }),
         bankTransfer: config.bankTransfer,
+        breakdown: expect.objectContaining({ model: 'CROSS_INTERVAL_UPGRADE', newTierPrice: 900, credit: 10, proratedBase: 890 }),
       });
     });
 
@@ -670,7 +676,10 @@ describe('SubscriptionService', () => {
 
       expect(subscriptionModel.applySeatChange).toHaveBeenCalledWith(SUB, 3);
       expect(paymentModel.create).not.toHaveBeenCalled();
-      expect(result).toEqual({ subscription: { id: SUB, extra_seats: 3 }, payment: null, amount: 0 });
+      expect(result).toEqual({
+        subscription: { id: SUB, extra_seats: 3 }, payment: null, amount: 0,
+        breakdown: expect.objectContaining({ model: 'SEAT_INCREASE' }),
+      });
     });
 
     describe('sandbox', () => {
