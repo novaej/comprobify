@@ -300,6 +300,18 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     // to $0 — asking for proof of a $0 transfer isn't something a tenant can
     // actually do. Apply the upgrade immediately instead of routing it through
     // the payment/proof pipeline; there's nothing to collect.
+    // Frontend-facing breakdown of how proratedTotal was computed — a
+    // confirmation screen can render "current plan / new plan / difference /
+    // % of period remaining / what you pay" instead of only the final total.
+    const breakdown = {
+      model: 'SAME_INTERVAL_UPGRADE',
+      currentTierPrice: currentPrice,
+      newTierPrice: targetPrice,
+      priceDifference: Math.round((targetPrice - currentPrice) * 100) / 100,
+      remainingFraction,
+      proratedBase: Math.max(0, proratedTotal),
+    };
+
     if (proratedTotal <= 0) {
       const updated = await subscriptionModel.applyTierChange(subscription.id, tier);
       await tenantModel.updateTier(tenant.id, tier);
@@ -310,7 +322,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
         toTier: tier,
         totalAmount: 0,
       });
-      return { subscription: updated, payment: null, amount: 0 };
+      return { subscription: updated, payment: null, amount: 0, breakdown };
     }
 
     const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
@@ -322,6 +334,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
       totalAmount,
       purpose: 'TIER_CHANGE',
       targetTier: tier,
+      pricingBreakdown: breakdown,
     });
 
     await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
@@ -331,7 +344,97 @@ async function requestTierChange(tenantId, tier, billingInterval) {
       totalAmount,
     });
 
-    return { subscription, payment, bankTransfer: config.bankTransfer };
+    return { subscription, payment, bankTransfer: config.bankTransfer, breakdown };
+  }
+
+  // Cross-interval upgrade, MONTHLY -> YEARLY only (ADR-033): the one
+  // interval-change direction where an immediate proration credit can never
+  // mathematically exceed the new period's cost. At most one month's credit
+  // from the old (cheaper, by definition of "upgrade") plan, against a full
+  // YEAR at the new (pricier, by the monthly-equivalent comparison below)
+  // rate — the new charge is always at least ~11x the maximum possible
+  // credit. This matters because the codebase has no mechanism to pay money
+  // back to a tenant (see docs/guides/billing-operations.md's refund note),
+  // so any proration scheme that could produce a negative amount (a credit
+  // owed) is unsafe — which every OTHER interval-change direction risks
+  // (see the deferred, non-prorated fallback below).
+  if (intervalChanged && subscription.billing_interval === 'MONTHLY' && targetInterval === 'YEARLY') {
+    const targetYearlyPrice = await pricingService.getCurrentPrice(tier, 'YEARLY');
+    const isCrossIntervalUpgrade = (targetYearlyPrice / 12) > currentMonthlyPrice;
+
+    if (isCrossIntervalUpgrade) {
+      const periodStartMs = new Date(subscription.current_period_start).getTime();
+      const periodEndMs = new Date(subscription.current_period_end).getTime();
+      const totalMs = periodEndMs - periodStartMs;
+      const remainingMs = Math.min(Math.max(periodEndMs - Date.now(), 0), totalMs);
+      const remainingFraction = totalMs > 0 ? remainingMs / totalMs : 0;
+      const credit = currentMonthlyPrice * remainingFraction;
+
+      const seats = effectiveSeatsAtPeriodEnd(subscription);
+      const seatPrice = seats > 0 ? await pricingService.getCurrentSeatPrice('YEARLY') : 0;
+      const seatsCost = Math.round(seats * seatPrice * 100) / 100;
+      const newFullPrice = targetYearlyPrice + seats * seatPrice;
+      const proratedTotal = Math.max(0, Math.round((newFullPrice - credit) * 100) / 100);
+
+      // Frontend-facing breakdown: "new plan + seats − credit for unused
+      // time on your current plan = what you pay". fullPrice/credit/
+      // proratedBase are all pre-tax (base imponible) — the payment's own
+      // amount/iva_amount/total_amount carry the tax breakdown on top.
+      const breakdown = {
+        model: 'CROSS_INTERVAL_UPGRADE',
+        newTierPrice: targetYearlyPrice,
+        seatsCount: seats,
+        seatPrice,
+        seatsCost,
+        fullPrice: Math.round(newFullPrice * 100) / 100,
+        previousPlanPrice: currentMonthlyPrice,
+        remainingFraction,
+        credit: Math.round(credit * 100) / 100,
+        proratedBase: proratedTotal,
+      };
+
+      // Mirrors the same-interval upgrade's $0 handling above — mathematically
+      // near-unreachable here (see the safety proof in the comment above),
+      // but a tenant still can't submit proof of a $0 transfer if it happened.
+      if (proratedTotal <= 0) {
+        const { subscription: updated } = await applyImmediateIntervalUpgrade(tenant.id, subscription.id, tier, targetInterval);
+        await tenantEventModel.create(tenant.id, 'TIER_CHANGED', {
+          subscriptionId: subscription.id,
+          fromTier: subscription.tier,
+          toTier: tier,
+          fromBillingInterval: subscription.billing_interval,
+          toBillingInterval: targetInterval,
+          totalAmount: 0,
+        });
+        return { subscription: updated, payment: null, amount: 0, breakdown };
+      }
+
+      const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
+      const payment = await paymentModel.create({
+        subscriptionId: subscription.id,
+        amount: baseAmount,
+        ivaRate: IVA_RATE,
+        ivaAmount,
+        totalAmount,
+        purpose: 'TIER_CHANGE',
+        targetTier: tier,
+        targetBillingInterval: targetInterval,
+        seatsCharged: seats,
+        intervalChangeImmediate: true,
+        pricingBreakdown: breakdown,
+      });
+
+      await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
+        subscriptionId: subscription.id,
+        fromTier: subscription.tier,
+        toTier: tier,
+        fromBillingInterval: subscription.billing_interval,
+        toBillingInterval: targetInterval,
+        totalAmount,
+      });
+
+      return { subscription, payment, bankTransfer: config.bankTransfer, breakdown };
+    }
   }
 
   // Any billing-interval change (tier same, up, or down) — deferred to
@@ -349,8 +452,27 @@ async function requestTierChange(tenantId, tier, billingInterval) {
   const seatPrice = seats > 0
     ? await pricingService.getSeatPriceAsOf(targetInterval, subscription.current_period_end)
     : 0;
-  const fullPrice = await pricingService.getPriceAsOf(tier, targetInterval, subscription.current_period_end) + seats * seatPrice;
+  const seatsCost = Math.round(seats * seatPrice * 100) / 100;
+  const newTierPrice = await pricingService.getPriceAsOf(tier, targetInterval, subscription.current_period_end);
+  const fullPrice = newTierPrice + seats * seatPrice;
   const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(fullPrice);
+
+  // Frontend-facing breakdown: no credit/proration at all on this path — the
+  // full sticker price of the new plan + seats, billed now but not applied
+  // until effectiveAt (see the comment above for why: this codebase has no
+  // way to refund a credit that could exceed the new charge on this
+  // direction, so it deliberately doesn't try).
+  const breakdown = {
+    model: 'DEFERRED_FULL_PRICE',
+    newTierPrice,
+    seatsCount: seats,
+    seatPrice,
+    seatsCost,
+    fullPrice: Math.round(fullPrice * 100) / 100,
+    proratedBase: null,
+    credit: 0,
+  };
+
   const payment = await paymentModel.create({
     subscriptionId: subscription.id,
     amount: baseAmount,
@@ -361,6 +483,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     targetTier: tier,
     targetBillingInterval: targetInterval,
     seatsCharged: seats,
+    pricingBreakdown: breakdown,
   });
 
   await tenantEventModel.create(tenant.id, 'TIER_CHANGE_REQUESTED', {
@@ -373,7 +496,7 @@ async function requestTierChange(tenantId, tier, billingInterval) {
     effectiveAt: subscription.current_period_end,
   });
 
-  return { subscription, payment, bankTransfer: config.bankTransfer, effectiveAt: subscription.current_period_end };
+  return { subscription, payment, bankTransfer: config.bankTransfer, effectiveAt: subscription.current_period_end, breakdown };
 }
 
 // Sandbox variant. Its current_period_end is discarded at promotion, so there
@@ -545,6 +668,15 @@ async function requestSeatChange(tenantId, extraSeats) {
   const seatPrice = await pricingService.getCurrentSeatPrice(subscription.billing_interval);
   const proratedTotal = Math.round(seatDelta * seatPrice * remainingFraction * 100) / 100;
 
+  // Frontend-facing breakdown, same idea as requestTierChange's.
+  const breakdown = {
+    model: 'SEAT_INCREASE',
+    seatDelta,
+    seatPrice,
+    remainingFraction,
+    proratedBase: Math.max(0, proratedTotal),
+  };
+
   // With ~no time left in the current period, the prorated amount can round
   // to $0 — same escape hatch as a same-interval tier upgrade.
   if (proratedTotal <= 0) {
@@ -555,7 +687,7 @@ async function requestSeatChange(tenantId, extraSeats) {
       toExtraSeats: extraSeats,
       totalAmount: 0,
     });
-    return { subscription: updated, payment: null, amount: 0 };
+    return { subscription: updated, payment: null, amount: 0, breakdown };
   }
 
   const { baseAmount, ivaAmount, totalAmount } = breakdownAmount(proratedTotal);
@@ -568,6 +700,7 @@ async function requestSeatChange(tenantId, extraSeats) {
     purpose: 'SEAT_CHANGE',
     targetExtraSeats: extraSeats,
     seatsCharged: seatDelta,
+    pricingBreakdown: breakdown,
   });
 
   await tenantEventModel.create(tenant.id, 'SEAT_CHANGE_REQUESTED', {
@@ -577,7 +710,7 @@ async function requestSeatChange(tenantId, extraSeats) {
     totalAmount,
   });
 
-  return { subscription, payment, bankTransfer: config.bankTransfer };
+  return { subscription, payment, bankTransfer: config.bankTransfer, breakdown };
 }
 
 // Sandbox variant, mirroring requestSandboxTierChange: no period to prorate
@@ -788,6 +921,60 @@ async function listPaymentProofsForTenant(paymentId, tenantId) {
   return proofs.map(formatPaymentProof);
 }
 
+// Tenant-initiated cancellation of their own payment — e.g. picked the wrong
+// tier or seat count and doesn't want to pay for it. Deliberately distinct
+// from reviewPayment's REJECTED (an operator reviewed submitted proof and
+// found it wanting) and refundPayment's REFUNDED (money already moved and is
+// being reversed): CANCELLED means the tenant backed out before ever
+// transferring anything, so there's nothing to review and nothing to roll
+// back financially. Only PENDING qualifies — once proof is uploaded
+// (REPORTED) the tenant is claiming a transfer already happened, and that
+// claim needs an operator's eyes, not a silent self-cancel; REJECTED already
+// has its own resubmit path. RENEWAL payments are excluded too — the
+// renewal/grace-period machinery (processDueRenewals) assumes one open
+// payment per due cycle, and cancelling it here would leave nothing to
+// replace it until the next scheduled reminder pass.
+async function cancelPayment(paymentId, tenantId) {
+  const payment = await paymentModel.findByIdAndTenantId(paymentId, tenantId);
+  if (!payment) throw new NotFoundError('Payment', ErrorCodes.PAYMENT_NOT_FOUND);
+
+  if (payment.status !== 'PENDING') {
+    throw new ConflictError(
+      `Payment cannot be cancelled — status is '${payment.status}', not 'PENDING'`,
+      ErrorCodes.PAYMENT_NOT_CANCELLABLE
+    );
+  }
+  if (payment.purpose === 'RENEWAL') {
+    throw new ConflictError('Renewal payments cannot be self-cancelled', ErrorCodes.PAYMENT_NOT_CANCELLABLE);
+  }
+
+  const updatedPayment = await paymentModel.updateStatus(paymentId, 'CANCELLED', { cancelled_at: new Date() });
+
+  // An INITIAL payment is the only payment a PENDING_PAYMENT subscription
+  // will ever have — cancelling it without also cancelling the subscription
+  // would leave that subscription stuck in PENDING_PAYMENT, blocking a fresh
+  // POST /v1/subscriptions forever (findActiveOrPendingByTenantId matches
+  // anything not CANCELLED/EXPIRED, regardless of the payment's own status).
+  // TIER_CHANGE/SEAT_CHANGE payments need no such step: the subscription was
+  // already ACTIVE the whole time and stays untouched.
+  let updatedSubscription = null;
+  if (payment.purpose === 'INITIAL') {
+    const subscription = await subscriptionModel.findById(payment.subscription_id);
+    if (subscription && subscription.status === 'PENDING_PAYMENT') {
+      updatedSubscription = await subscriptionModel.updateStatus(subscription.id, 'CANCELLED', { canceled_at: new Date() });
+      await tenantEventModel.create(tenantId, 'SUBSCRIPTION_CANCELLED', { subscriptionId: subscription.id });
+    }
+  }
+
+  await tenantEventModel.create(tenantId, 'PAYMENT_CANCELLED', {
+    paymentId,
+    purpose: payment.purpose,
+    targetTier: payment.target_tier,
+  });
+
+  return { payment: updatedPayment, subscription: updatedSubscription };
+}
+
 // Admin: every file ever uploaded for this payment, active or not, so the
 // operator can see the full history across rejections/resubmissions.
 async function listPaymentProofsForAdmin(paymentId) {
@@ -918,7 +1105,11 @@ async function applyInitialPayment(payment, subscription, tenant) {
   });
 
   await tenantModel.updateTier(subscription.tenant_id, subscription.tier);
-  await tenantQuotaService.setCap(subscription.tenant_id, subscription.tier, subscription.billing_interval);
+  // syncPeriod, not setCap: this is a genuinely new quota period starting
+  // (not a mid-cycle cap resize), so it should reset document_count and take
+  // on the subscription's own period boundaries exactly — see
+  // tenant-quota.service.js's syncPeriod() and ADR-029's addendum.
+  await tenantQuotaService.syncPeriod(subscription.tenant_id, periodStart, periodEnd, subscription.tier, subscription.billing_interval);
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_ACTIVATED', {
     subscriptionId: subscription.id,
     tier: subscription.tier,
@@ -952,14 +1143,38 @@ async function applyInitialPayment(payment, subscription, tenant) {
   return updated;
 }
 
+// Applies a cross-interval upgrade's new tier + interval AND a genuinely NEW
+// period starting now — shared by requestTierChange's $0-proration
+// short-circuit and applyTierChangePayment's immediate branch (see ADR-033).
+// Always anchored to "now": there's no prior period of this new interval to
+// anchor to, the same exception already established for
+// applyInitialPayment/resetPeriodOnPromotion. syncPeriod, not setCap — this
+// is a new quota period starting, not a mid-cycle cap resize.
+async function applyImmediateIntervalUpgrade(tenantId, subscriptionId, tier, targetInterval) {
+  const periodStart = new Date();
+  const periodEnd = addBillingPeriod(periodStart, targetInterval);
+  const updated = await subscriptionModel.applyTierChange(subscriptionId, tier, targetInterval);
+  await subscriptionModel.updateStatus(subscriptionId, 'ACTIVE', {
+    current_period_start: periodStart,
+    current_period_end: periodEnd,
+  });
+  await tenantModel.updateTier(tenantId, tier);
+  await tenantQuotaService.syncPeriod(tenantId, periodStart, periodEnd, tier, targetInterval);
+  return { subscription: updated, periodStart, periodEnd };
+}
+
 async function applyTierChangePayment(payment, subscription, tenant) {
-  // An interval change can't prorate mid-cycle, so production defers it to
-  // current_period_end. Sandbox never defers: its period is discarded at
-  // promotion, so a scheduled change would land late or never.
+  // An interval change can't prorate mid-cycle in general, so production
+  // defers it to current_period_end by default. Sandbox never defers: its
+  // period is discarded at promotion, so a scheduled change would land late
+  // or never. `interval_change_immediate` is the one exception — set only by
+  // requestTierChange's MONTHLY -> YEARLY upgrade branch (see ADR-033),
+  // where an immediate proration credit can never exceed the new period's
+  // cost, unlike every other interval-change direction.
   //
   // period_start stays unstamped on the deferred path — it marks the payment
   // still-unapplied until applyScheduledTierChanges lands it.
-  if (payment.target_billing_interval && !tenant.sandbox) {
+  if (payment.target_billing_interval && !tenant.sandbox && !payment.interval_change_immediate) {
     const updated = await subscriptionModel.scheduleDowngrade(
       subscription.id,
       payment.target_tier,
@@ -973,6 +1188,31 @@ async function applyTierChangePayment(payment, subscription, tenant) {
       fromBillingInterval: subscription.billing_interval,
       toBillingInterval: payment.target_billing_interval,
       effectiveAt: subscription.current_period_end,
+      paymentId: payment.id,
+    });
+
+    return updated;
+  }
+
+  // Immediate cross-interval upgrade (ADR-033): a genuinely NEW period
+  // starts now, at the new interval — unlike the same-interval case below,
+  // which keeps the existing cycle's dates ("takes over the remainder").
+  if (payment.interval_change_immediate) {
+    const { subscription: updated, periodStart, periodEnd } = await applyImmediateIntervalUpgrade(
+      subscription.tenant_id, subscription.id, payment.target_tier, payment.target_billing_interval
+    );
+
+    await paymentModel.updateStatus(payment.id, payment.status, {
+      period_start: periodStart,
+      period_end: periodEnd,
+    });
+
+    await tenantEventModel.create(subscription.tenant_id, 'TIER_CHANGED', {
+      subscriptionId: subscription.id,
+      fromTier: subscription.tier,
+      toTier: payment.target_tier,
+      fromBillingInterval: subscription.billing_interval,
+      toBillingInterval: payment.target_billing_interval,
       paymentId: payment.id,
     });
 
@@ -1056,6 +1296,14 @@ async function applyRenewalPayment(payment, subscription) {
     period_end: periodEnd,
   });
 
+  // A renewal is a new quota period exactly as much as it's a new billing
+  // period — resets document_count and takes on this period's own start/end,
+  // precisely when the payment verifies, rather than leaving it to the
+  // independently-scheduled daily resetDuePeriods() cron to notice up to a
+  // day later (or before the tenant has actually paid). See syncPeriod() and
+  // ADR-029's addendum.
+  await tenantQuotaService.syncPeriod(subscription.tenant_id, periodStart, periodEnd, subscription.tier, subscription.billing_interval);
+
   await tenantEventModel.create(subscription.tenant_id, 'SUBSCRIPTION_RENEWED', {
     subscriptionId: subscription.id,
     tier: subscription.tier,
@@ -1133,6 +1381,7 @@ async function listPendingInvoices() {
     items: rows.map((row) => ({
       payment: {
         id: row.id,
+        paymentCode: row.payment_code,
         purpose: row.purpose,
         method: row.method,
         amount: row.amount,
@@ -1293,7 +1542,11 @@ async function applyScheduledTierChanges() {
         current_period_end: periodEnd,
       });
       await tenantModel.updateTier(subscription.tenant_id, subscription.pending_tier);
-      await tenantQuotaService.setCap(subscription.tenant_id, subscription.pending_tier, newInterval);
+      // syncPeriod, not setCap: the subscription's period is rolling forward
+      // to periodStart/periodEnd here too (see above), so this is a new
+      // quota period starting, not a mid-cycle cap resize — see syncPeriod()
+      // and ADR-029's addendum.
+      await tenantQuotaService.syncPeriod(subscription.tenant_id, periodStart, periodEnd, subscription.pending_tier, newInterval);
 
       // If this pending change was funded by a paid TIER_CHANGE payment (an
       // interval switch — free tier-only downgrades have no such payment),
@@ -1517,6 +1770,7 @@ module.exports = {
   listPaymentProofsForTenant,
   listPaymentProofsForAdmin,
   deletePaymentProofForTenant,
+  cancelPayment,
   reviewPayment,
   applyVerifiedPayment,
   linkInvoice,
@@ -1558,6 +1812,15 @@ async function resetPeriodOnPromotion(subscriptionId) {
       period_end: periodEnd,
     });
   }
+
+  // Same reasoning as the subscription period reset above, applied to the
+  // quota period too: sandbox documents never consume quota at all (see
+  // "Document quota enforcement"), so a quota period still anchored to a
+  // pre-promotion signup timestamp was never measuring anything real. Without
+  // this, tenant_quotas kept ticking on its own signup-anchored clock right
+  // through promotion — the exact drift this fix (and ADR-029's addendum)
+  // exists to close.
+  await tenantQuotaService.syncPeriod(subscription.tenant_id, periodStart, periodEnd, subscription.tier, subscription.billing_interval);
 
   return updated;
 }

@@ -26,7 +26,7 @@ Payphone won't process charges under **$1.00**. This is rare — it only comes u
 
 ### Bank transfer (SPI)
 
-The web app shows you the account details to transfer to. Once you've made the transfer, you upload proof of it (image or PDF) along with your bank's reference number.
+The web app shows you the account details to transfer to, along with a short reference code for that payment. Include the code in the transfer's own description if your bank allows it — it helps your provider match the transfer to your account before proof is even reviewed. Once you've made the transfer, you upload proof of it (image or PDF) along with your bank's reference number.
 
 Your provider checks the proof against the bank and either approves or rejects it. **You'll get a notification and an email the moment they record their decision** (see [Notifications](endpoints/notifications.md)). If approved, your plan activates right then.
 
@@ -58,7 +58,10 @@ From the web app you can move up or down a tier, and switch between monthly and 
 |---|---|---|
 | **Upgrade** (same interval) | Immediately, once paid | Only the difference, prorated by the time left in your current period |
 | **Downgrade** (same interval) | At the end of the current period | Nothing — the current period is already paid at the higher tier |
-| **Switch monthly ↔ yearly** | At the end of the current period | Full price of the new tier+interval, never prorated |
+| **Switch monthly to yearly, upgrading tier** | Immediately, once paid | Full price of the new yearly plan, minus a prorated credit for the time left on your current monthly plan |
+| **Any other interval switch** (yearly to monthly, or monthly to yearly without an upgrade) | At the end of the current period | Full price of the new tier+interval, never prorated |
+
+The first case is the only exception to "never prorated": if the yearly switch is a genuine upgrade, there's no reason to wait until the period ends — it applies that same day.
 
 Only one change can be pending at a time. The full history of tier changes over time is in [Tenant Events](endpoints/tenant-events.md).
 

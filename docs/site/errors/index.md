@@ -185,6 +185,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `TIER_CHANGE_ALREADY_PENDING` | Ya hay un cambio de tier/intervalo de facturación programado, o su pago ya está en curso, para esta suscripción — también lo devuelve Change Seats cuando hay un cambio de intervalo de facturación pendiente |
 | `SEAT_CHANGE_ALREADY_PENDING` | Ya hay un cambio de usuarios adicionales programado, o su pago ya está en curso, para esta suscripción |
 | `CANCELLATION_ALREADY_PENDING` | Ya hay una cancelación (`DELETE /v1/subscriptions`) programada para esta suscripción |
+| `PAYMENT_NOT_CANCELLABLE` | Se intentó `DELETE /v1/payments/:id` sobre un pago que ya no está `PENDING` (ya se subió o revisó un comprobante), o sobre un pago de renovación |
 | `CONFLICT` | Se reutilizó una llave de idempotencia con un payload distinto, el pago ya fue decidido, u otro conflicto |
 
 ### 429 Too Many Requests

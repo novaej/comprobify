@@ -309,6 +309,7 @@ describe('SubscriptionService', () => {
         subscription: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000010' }),
         payment: { id: '00000000-0000-0000-0000-000000000030', subscription_id: '00000000-0000-0000-0000-000000000010', amount: 30, purpose: 'TIER_CHANGE', target_tier: 'GROWTH' },
         bankTransfer: config.bankTransfer,
+        breakdown: expect.objectContaining({ model: 'SAME_INTERVAL_UPGRADE', currentTierPrice: 20, newTierPrice: 90 }),
       });
     });
 
@@ -332,7 +333,10 @@ describe('SubscriptionService', () => {
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGED', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'STARTER', toTier: 'GROWTH', totalAmount: 0,
       });
-      expect(result).toEqual({ subscription: { id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' }, payment: null, amount: 0 });
+      expect(result).toEqual({
+        subscription: { id: '00000000-0000-0000-0000-000000000010', tier: 'GROWTH' }, payment: null, amount: 0,
+        breakdown: expect.objectContaining({ model: 'SAME_INTERVAL_UPGRADE' }),
+      });
     });
 
     test('rejects an invalid billingInterval', async () => {
@@ -383,6 +387,7 @@ describe('SubscriptionService', () => {
         payment: { id: '00000000-0000-0000-0000-000000000040', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' },
         bankTransfer: config.bankTransfer,
         effectiveAt: periodEnd,
+        breakdown: expect.objectContaining({ model: 'DEFERRED_FULL_PRICE', proratedBase: null, credit: 0 }),
       });
     });
 
@@ -402,10 +407,16 @@ describe('SubscriptionService', () => {
       expect(paymentModel.create).toHaveBeenCalledWith(expect.objectContaining({ amount: 1000, seatsCharged: 2 }));
     });
 
-    test('tier upgrade + interval change: deferred (not the immediate prorated path)', async () => {
+    // ADR-033: MONTHLY -> YEARLY where the switch is a genuine upgrade by
+    // monthly-equivalent price applies immediately with a prorated credit,
+    // instead of deferring to period end at full price — the one
+    // interval-change direction where a credit can never exceed the new
+    // charge. STARTER MONTHLY ($20/mo) -> GROWTH YEARLY ($900/yr = $75/mo
+    // equivalent) qualifies.
+    test('cross-interval upgrade (MONTHLY -> YEARLY, genuine upgrade): prorates and applies via payment verification, not deferred', async () => {
       const now = Date.now();
       const periodStart = new Date(now - 15 * 24 * 60 * 60 * 1000);
-      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000);
+      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000); // 50% of period remaining
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
       subscriptionModel.findActiveByTenantId.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'STARTER', pending_tier: null,
@@ -413,12 +424,51 @@ describe('SubscriptionService', () => {
       });
       paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000041', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', target_tier: 'GROWTH', target_billing_interval: 'YEARLY' });
 
-      await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+      const result = await subscriptionService.requestTierChange(1, 'GROWTH', 'YEARLY');
+
+      // Not applied yet — access only after the payment is verified, same as
+      // every other paid tier change.
+      expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
+      expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+      expect(tenantQuotaService.syncPeriod).not.toHaveBeenCalled();
+
+      const [createArgs] = paymentModel.create.mock.calls[0];
+      expect(createArgs.targetTier).toBe('GROWTH');
+      expect(createArgs.targetBillingInterval).toBe('YEARLY');
+      expect(createArgs.intervalChangeImmediate).toBe(true);
+      // Credit = $20 (STARTER monthly) * 50% remaining = $10.
+      // New full price = $900 (GROWTH yearly, no seats). Charged = $890 base, +15% IVA = $1023.50.
+      expect(createArgs.amount).toBe(890);
+      expect(createArgs.totalAmount).toBe(1023.5);
+      expect(result).toEqual({
+        subscription: expect.objectContaining({ id: '00000000-0000-0000-0000-000000000010' }),
+        payment: expect.objectContaining({ target_tier: 'GROWTH', target_billing_interval: 'YEARLY' }),
+        bankTransfer: config.bankTransfer,
+        breakdown: expect.objectContaining({ model: 'CROSS_INTERVAL_UPGRADE', newTierPrice: 900, credit: 10, proratedBase: 890 }),
+      });
+    });
+
+    // A genuine downgrade by monthly-equivalent (GROWTH MONTHLY $90/mo ->
+    // STARTER YEARLY $200/yr = $16.67/mo equivalent) stays on the deferred,
+    // full-price path even though it's also MONTHLY -> YEARLY — the safety
+    // proof only holds when the new plan is actually pricier per month.
+    test('MONTHLY -> YEARLY that is a downgrade by monthly-equivalent still defers (not the immediate path)', async () => {
+      const now = Date.now();
+      const periodStart = new Date(now - 15 * 24 * 60 * 60 * 1000);
+      const periodEnd = new Date(now + 15 * 24 * 60 * 60 * 1000);
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
+      subscriptionModel.findActiveByTenantId.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', tier: 'GROWTH', pending_tier: null,
+        billing_interval: 'MONTHLY', current_period_start: periodStart, current_period_end: periodEnd,
+      });
+      paymentModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000041', subscription_id: '00000000-0000-0000-0000-000000000010', purpose: 'TIER_CHANGE', target_tier: 'STARTER', target_billing_interval: 'YEARLY' });
+
+      await subscriptionService.requestTierChange(1, 'STARTER', 'YEARLY');
 
       expect(subscriptionModel.applyTierChange).not.toHaveBeenCalled();
       const [createArgs] = paymentModel.create.mock.calls[0];
-      expect(createArgs.targetBillingInterval).toBe('YEARLY');
-      expect(createArgs.totalAmount).toBe(1035); // full yearly-GROWTH price (900 base + IVA), not prorated
+      expect(createArgs.intervalChangeImmediate).toBeUndefined();
+      expect(createArgs.totalAmount).toBe(230); // full yearly-STARTER price (200 base + IVA), not prorated
     });
 
     test('tier downgrade + interval change: deferred and paid (unlike a plain same-interval downgrade)', async () => {
@@ -626,7 +676,10 @@ describe('SubscriptionService', () => {
 
       expect(subscriptionModel.applySeatChange).toHaveBeenCalledWith(SUB, 3);
       expect(paymentModel.create).not.toHaveBeenCalled();
-      expect(result).toEqual({ subscription: { id: SUB, extra_seats: 3 }, payment: null, amount: 0 });
+      expect(result).toEqual({
+        subscription: { id: SUB, extra_seats: 3 }, payment: null, amount: 0,
+        breakdown: expect.objectContaining({ model: 'SEAT_INCREASE' }),
+      });
     });
 
     describe('sandbox', () => {
@@ -720,7 +773,9 @@ describe('SubscriptionService', () => {
         expect(months).toBe(1);
 
         expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'STARTER');
-        expect(tenantQuotaService.setCap).toHaveBeenCalledWith(TENANT, 'STARTER', 'MONTHLY');
+        // syncPeriod, not setCap — a brand-new quota period, in lockstep with
+        // the subscription's own newly-computed period.
+        expect(tenantQuotaService.syncPeriod).toHaveBeenCalledWith(TENANT, fields.current_period_start, fields.current_period_end, 'STARTER', 'MONTHLY');
         expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'SUBSCRIPTION_ACTIVATED', {
           subscriptionId: SUB, tier: 'STARTER', paymentId: PAY,
         });
@@ -846,6 +901,46 @@ describe('SubscriptionService', () => {
         expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', 'YEARLY');
       });
 
+      // ADR-033: a payment flagged interval_change_immediate (set only by
+      // requestTierChange's MONTHLY -> YEARLY genuine-upgrade branch) applies
+      // right away at verification — unlike the ordinary deferred path above
+      // (same target_billing_interval, same production tenant), and unlike
+      // the same-interval case at the top of this describe block, it opens a
+      // genuinely NEW period starting now, not the existing cycle's dates.
+      test('a payment flagged interval_change_immediate applies now with a fresh period, not deferred', async () => {
+        const payment = {
+          id: PAY, purpose: 'TIER_CHANGE', status: 'VERIFIED',
+          target_tier: 'GROWTH', target_billing_interval: 'YEARLY', interval_change_immediate: true,
+        };
+        subscriptionModel.applyTierChange.mockResolvedValue({ id: SUB, tier: 'GROWTH', billing_interval: 'YEARLY' });
+
+        await subscriptionService.applyVerifiedPayment(payment, subscription);
+
+        expect(subscriptionModel.scheduleDowngrade).not.toHaveBeenCalled();
+        expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith(SUB, 'GROWTH', 'YEARLY');
+        expect(tenantModel.updateTier).toHaveBeenCalledWith(TENANT, 'GROWTH');
+
+        const periodFields = subscriptionModel.updateStatus.mock.calls.find((c) => c[0] === SUB && c[1] === 'ACTIVE')[2];
+        // A fresh 12-month period starting now — NOT the old subscription's
+        // current_period_start/end (2026-03-01/2026-04-01).
+        expect(periodFields.current_period_start).not.toEqual(subscription.current_period_start);
+        const months = (periodFields.current_period_end.getFullYear() - periodFields.current_period_start.getFullYear()) * 12
+          + (periodFields.current_period_end.getMonth() - periodFields.current_period_start.getMonth());
+        expect(months).toBe(12);
+
+        expect(tenantQuotaService.syncPeriod).toHaveBeenCalledWith(
+          TENANT, periodFields.current_period_start, periodFields.current_period_end, 'GROWTH', 'YEARLY'
+        );
+        expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'VERIFIED', {
+          period_start: periodFields.current_period_start,
+          period_end: periodFields.current_period_end,
+        });
+        expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'TIER_CHANGED', {
+          subscriptionId: SUB, fromTier: 'STARTER', toTier: 'GROWTH', paymentId: PAY,
+          fromBillingInterval: 'MONTHLY', toBillingInterval: 'YEARLY',
+        });
+      });
+
       // period_start is what marks a TIER_CHANGE payment as still-unapplied
       // (findPendingTierChangeBySubscriptionId); applyScheduledTierChanges
       // stamps it when the deferred change actually lands.
@@ -941,12 +1036,7 @@ describe('SubscriptionService', () => {
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'STARTER', null);
       expect(subscriptionModel.applyTierChange).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', 'GROWTH', null);
       expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER', 'MONTHLY');
       expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 'GROWTH');
-      // Subscription 11 is YEARLY (pending_billing_interval null -> falls back
-      // to the subscription's own billing_interval) — the pooled annual cap
-      // must carry over, not silently collapse to a flat monthly one.
-      expect(tenantQuotaService.setCap).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 'GROWTH', 'YEARLY');
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'TIER_CHANGED', {
         subscriptionId: '00000000-0000-0000-0000-000000000010', fromTier: 'GROWTH', toTier: 'STARTER', fromBillingInterval: 'MONTHLY', toBillingInterval: 'MONTHLY',
       });
@@ -962,6 +1052,18 @@ describe('SubscriptionService', () => {
       expect(call11[1]).toBe('ACTIVE');
       expect(call11[2].current_period_start).toEqual(periodEnd2);
       expect(call11[2].current_period_end.getFullYear()).toBe(periodEnd2.getFullYear() + 1);
+
+      // syncPeriod, not setCap — this is a new quota period starting in step
+      // with the subscription's own rolled-forward period, using the exact
+      // same dates (not independently recomputed). Subscription 11 is YEARLY
+      // (pending_billing_interval null -> falls back to the subscription's
+      // own billing_interval) — the pooled annual cap must carry over.
+      expect(tenantQuotaService.syncPeriod).toHaveBeenCalledWith(
+        '00000000-0000-0000-0000-000000000001', call10[2].current_period_start, call10[2].current_period_end, 'STARTER', 'MONTHLY'
+      );
+      expect(tenantQuotaService.syncPeriod).toHaveBeenCalledWith(
+        '00000000-0000-0000-0000-000000000002', call11[2].current_period_start, call11[2].current_period_end, 'GROWTH', 'YEARLY'
+      );
 
       expect(result).toEqual({ applied: 2 });
     });
@@ -1484,6 +1586,13 @@ describe('SubscriptionService', () => {
       // stopover waiting on the operator's invoice.
       expect(subscriptionModel.updateStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', 'ACTIVE', expect.any(Object));
       expect(tenantModel.updateTier).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'STARTER');
+      // syncPeriod, not setCap — a brand-new quota period starting exactly
+      // when the subscription's own does, not left anchored to whatever the
+      // tenant's pre-existing (e.g. signup-time) quota row's period_start was.
+      const fields = subscriptionModel.updateStatus.mock.calls[0][2];
+      expect(tenantQuotaService.syncPeriod).toHaveBeenCalledWith(
+        '00000000-0000-0000-0000-000000000001', fields.current_period_start, fields.current_period_end, 'STARTER', 'MONTHLY'
+      );
       expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'PAYMENT_VERIFIED', { paymentId: '00000000-0000-0000-0000-000000000020' });
       expect(result.subscription).toEqual({ id: '00000000-0000-0000-0000-000000000010', status: 'ACTIVE' });
       // createPaymentReviewed owns creating the in-app row synchronously and
@@ -1529,6 +1638,15 @@ describe('SubscriptionService', () => {
       const fields = subscriptionModel.updateStatus.mock.calls[0][2];
       expect(fields.current_period_start).toEqual(new Date('2026-04-15T12:00:00Z'));
       expect(fields.current_period_end).toEqual(new Date('2026-05-15T12:00:00Z'));
+
+      // The quota period is kept in lockstep, not left to the daily
+      // resetDuePeriods() cron to notice up to a day later (or before the
+      // tenant has actually paid) — see ADR-029's addendum.
+      expect(tenantQuotaService.syncPeriod).toHaveBeenCalledWith(
+        '00000000-0000-0000-0000-000000000001',
+        new Date('2026-04-15T12:00:00Z'), new Date('2026-05-15T12:00:00Z'),
+        'GROWTH', 'MONTHLY'
+      );
     });
 
     test('REJECTED leaves the subscription untouched and stores the rejection reason code', async () => {
@@ -1742,6 +1860,68 @@ describe('SubscriptionService', () => {
     });
   });
 
+  describe('cancelPayment', () => {
+    const TENANT = '00000000-0000-0000-0000-000000000001';
+    const SUB = '00000000-0000-0000-0000-000000000010';
+    const PAY = '00000000-0000-0000-0000-000000000020';
+
+    test('throws PAYMENT_NOT_FOUND when the payment does not belong to this tenant', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue(null);
+      await expect(subscriptionService.cancelPayment(PAY, TENANT)).rejects.toMatchObject({ statusCode: 404 });
+      expect(paymentModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    test('refuses to cancel a payment that is not PENDING', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'TIER_CHANGE', status: 'REPORTED' });
+      await expect(subscriptionService.cancelPayment(PAY, TENANT)).rejects.toMatchObject({ code: 'PAYMENT_NOT_CANCELLABLE' });
+      expect(paymentModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    test('refuses to cancel a RENEWAL payment even while PENDING', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'RENEWAL', status: 'PENDING' });
+      await expect(subscriptionService.cancelPayment(PAY, TENANT)).rejects.toMatchObject({ code: 'PAYMENT_NOT_CANCELLABLE' });
+      expect(paymentModel.updateStatus).not.toHaveBeenCalled();
+    });
+
+    test('cancels a PENDING TIER_CHANGE payment without touching the subscription', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'TIER_CHANGE', status: 'PENDING', target_tier: 'GROWTH' });
+      paymentModel.updateStatus.mockResolvedValue({ id: PAY, status: 'CANCELLED' });
+
+      const result = await subscriptionService.cancelPayment(PAY, TENANT);
+
+      expect(paymentModel.updateStatus).toHaveBeenCalledWith(PAY, 'CANCELLED', { cancelled_at: expect.any(Date) });
+      expect(subscriptionModel.findById).not.toHaveBeenCalled();
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'PAYMENT_CANCELLED', { paymentId: PAY, purpose: 'TIER_CHANGE', targetTier: 'GROWTH' });
+      expect(result).toEqual({ payment: { id: PAY, status: 'CANCELLED' }, subscription: null });
+    });
+
+    test('cancelling an INITIAL payment also cancels the still-PENDING_PAYMENT subscription', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'INITIAL', status: 'PENDING', target_tier: null });
+      paymentModel.updateStatus.mockResolvedValue({ id: PAY, status: 'CANCELLED' });
+      subscriptionModel.findById.mockResolvedValue({ id: SUB, status: 'PENDING_PAYMENT' });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: SUB, status: 'CANCELLED' });
+
+      const result = await subscriptionService.cancelPayment(PAY, TENANT);
+
+      expect(subscriptionModel.updateStatus).toHaveBeenCalledWith(SUB, 'CANCELLED', { canceled_at: expect.any(Date) });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'SUBSCRIPTION_CANCELLED', { subscriptionId: SUB });
+      expect(tenantEventModel.create).toHaveBeenCalledWith(TENANT, 'PAYMENT_CANCELLED', { paymentId: PAY, purpose: 'INITIAL', targetTier: null });
+      expect(result.subscription).toEqual({ id: SUB, status: 'CANCELLED' });
+    });
+
+    test('cancelling an INITIAL payment leaves an already-ACTIVE subscription alone (defensive: should not happen in practice)', async () => {
+      paymentModel.findByIdAndTenantId.mockResolvedValue({ id: PAY, subscription_id: SUB, purpose: 'INITIAL', status: 'PENDING', target_tier: null });
+      paymentModel.updateStatus.mockResolvedValue({ id: PAY, status: 'CANCELLED' });
+      subscriptionModel.findById.mockResolvedValue({ id: SUB, status: 'ACTIVE' });
+
+      const result = await subscriptionService.cancelPayment(PAY, TENANT);
+
+      expect(subscriptionModel.updateStatus).not.toHaveBeenCalled();
+      expect(result.subscription).toBeNull();
+    });
+  });
+
   describe('refundPayment', () => {
     const TENANT = '00000000-0000-0000-0000-000000000001';
     const SUB = '00000000-0000-0000-0000-000000000010';
@@ -1876,6 +2056,38 @@ describe('SubscriptionService', () => {
       await subscriptionService.refundPayment(PAY);
 
       expect(tenantModel.updateStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetPeriodOnPromotion', () => {
+    test('resets the subscription period to now AND syncs the quota period to match', async () => {
+      const SUB = '00000000-0000-0000-0000-000000000010';
+      const TENANT = '00000000-0000-0000-0000-000000000001';
+      subscriptionModel.findById.mockResolvedValue({
+        id: SUB, tenant_id: TENANT, tier: 'STARTER', billing_interval: 'MONTHLY', status: 'ACTIVE',
+      });
+      subscriptionModel.updateStatus.mockResolvedValue({ id: SUB, status: 'ACTIVE' });
+      paymentModel.findBySubscriptionId.mockResolvedValue([]);
+
+      await subscriptionService.resetPeriodOnPromotion(SUB);
+
+      const fields = subscriptionModel.updateStatus.mock.calls[0][2];
+      // A quota period still anchored to a pre-promotion (sandbox-era)
+      // timestamp was never measuring anything real — sandbox documents
+      // never consume quota — so this must sync to the same "now" the
+      // subscription period resets to, not be left on its own clock.
+      expect(tenantQuotaService.syncPeriod).toHaveBeenCalledWith(
+        TENANT, fields.current_period_start, fields.current_period_end, 'STARTER', 'MONTHLY'
+      );
+    });
+
+    test('no-ops when the subscription is not ACTIVE', async () => {
+      subscriptionModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', status: 'PENDING_PAYMENT' });
+
+      const result = await subscriptionService.resetPeriodOnPromotion('00000000-0000-0000-0000-000000000010');
+
+      expect(result).toBeNull();
+      expect(tenantQuotaService.syncPeriod).not.toHaveBeenCalled();
     });
   });
 

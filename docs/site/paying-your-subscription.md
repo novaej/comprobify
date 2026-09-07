@@ -26,7 +26,7 @@ Payphone no procesa cobros menores a **$1,00**. Es poco frecuente — solo ocurr
 
 ### Transferencia bancaria (SPI)
 
-La aplicación web te muestra los datos de la cuenta a la que transferir. Una vez hecha la transferencia, subes el comprobante (imagen o PDF) junto con el número de referencia de tu banco.
+La aplicación web te muestra los datos de la cuenta a la que transferir, junto con un código de referencia corto para ese pago. Inclúyelo en la descripción de tu transferencia si tu banco lo permite — así tu proveedor puede identificarla más rápido, incluso antes de que revise el comprobante. Una vez hecha la transferencia, subes el comprobante (imagen o PDF) junto con el número de referencia de tu banco.
 
 Tu proveedor revisa el comprobante contra el banco y lo aprueba o lo rechaza. **Recibirás una notificación y un correo en cuanto registre su decisión** (ver [Notificaciones](endpoints/notifications.md)). Si se aprueba, tu plan se activa en ese mismo momento.
 
@@ -58,7 +58,10 @@ Desde la aplicación web puedes subir o bajar de plan, y cambiar entre facturaci
 |---|---|---|
 | **Subir de plan** (mismo intervalo) | De inmediato, al pagarse | Solo la diferencia, prorrateada por el tiempo que queda del período actual |
 | **Bajar de plan** (mismo intervalo) | Al final del período actual | Nada — el período actual ya está pagado al plan superior |
-| **Cambiar mensual ↔ anual** | Al final del período actual | Precio completo del nuevo plan+intervalo, sin prorrateo |
+| **Pasar de mensual a anual, subiendo de plan** | De inmediato, al pagarse | Precio completo del nuevo plan anual, menos un crédito prorrateado por el tiempo que queda de tu plan mensual actual |
+| **Cualquier otro cambio de intervalo** (anual → mensual, o mensual → anual sin subir de plan) | Al final del período actual | Precio completo del nuevo plan+intervalo, sin prorrateo |
+
+El primer caso es la única excepción al "sin prorrateo": si el cambio anual representa una mejora real de plan, no tiene sentido esperar hasta el final del período — se aplica ese mismo día.
 
 Solo puede haber un cambio pendiente a la vez. El historial completo de cambios de plan a lo largo del tiempo está en [Historial de eventos del tenant](endpoints/tenant-events.md).
 

@@ -31,6 +31,8 @@ Two methods, converging on the same place.
 
 **SPI bank transfer.** The tenant transfers, then uploads proof plus their bank's reference number. The payment moves to `REPORTED` and waits for you. You get an email when proof lands.
 
+Every payment also carries a `payment_code` (e.g. `CB-4K7N9QRT`, migration 097) — a short, hand-typable code the tenant is asked to include in the transfer's own description/glosa. It's generated at creation time (DB `DEFAULT`, no application code involved) and never changes for that payment. Use it as a second cross-reference against the bank statement's free-text field, alongside the tenant-supplied `referenceNumber` below — some banks preserve the description, some don't, so treat it as a helpful hint, not a guarantee.
+
 Both end at `applyVerifiedPayment`, so everything downstream — periods, tier changes, refunds — behaves identically regardless of method.
 
 ## 2. Reviewing an SPI proof
@@ -54,6 +56,8 @@ PATCH /v1/admin/payments/:id/review
 **Rejection is not a dead end.** The tenant uploads fresh proof for the *same* payment and it returns to `REPORTED`. Nothing already uploaded is deleted; you keep the full history across attempts, including from rejected rounds. A tenant can soft-delete a file from their own view, but you still see every one.
 
 Either decision emails the tenant and raises a notification, fanned out to their webhooks. You don't need to tell them separately.
+
+**A payment can also disappear from your queue before it ever gets here.** `DELETE /v1/payments/:id` lets a tenant self-cancel their own payment while it's still `PENDING` — no proof submitted, nothing for you to review. Typically a wrong tier or seat count picked by mistake. You'll see it as `status = 'CANCELLED'`, not `REJECTED` — nothing to action, no email needed (they did it themselves).
 
 ## 3. Issuing the factura
 
@@ -158,16 +162,17 @@ Listing them isn't the useful part. **"Correct" means these invariants hold:**
 | # | Invariant | Why it breaks |
 |---|---|---|
 | 1 | `VERIFIED` ⟹ `verified_at` set | — |
-| 2 | Applied ⟹ `period_start` stamped | Exception: a *deferred* `TIER_CHANGE` sets `pending_tier` instead and stays unstamped until it lands |
+| 2 | Applied ⟹ `period_start` stamped | Exception: a *deferred* `TIER_CHANGE` sets `pending_tier` instead and stays unstamped until it lands. A `TIER_CHANGE` with `interval_change_immediate = true` (ADR-033, a MONTHLY→YEARLY genuine upgrade) is *not* deferred — it stamps `period_start` at verification time same as any immediate change, just with a brand-new period rather than the old cycle's dates |
 | 3 | `subscriptions.tier` == `tenants.subscription_tier` | A hand-rolled tier edit writes only the tenant. The next renewal is then priced off a tier nobody paid for |
 | 4 | `tenant_quotas.document_quota` matches that tier *and* `billing_interval` | `updateTier` and `setCap` are separate calls; miss one and the tier changes while the cap doesn't. Since ADR-029, the expected cap also depends on `tenant_quotas.billing_interval`: a YEARLY period's cap is the tier's monthly figure × 12, not the flat monthly one — and ENTERPRISE's cap is always `NULL` (genuinely unlimited), regardless of interval |
 | 5 | Card ⟹ an `APPROVED` attempt with `applied_at` | `applied_at` null means captured but never credited |
 | 6 | `invoiced_at IS NULL` ⟹ factura still owed | — |
+| 7 | ACTIVE subscription ⟹ `tenant_quotas.period_start`/`period_end` == `subscriptions.current_period_start`/`current_period_end` | Was a real bug (ADR-029's addendum): the two used to run on independent clocks. Now synced at every subscription-period change (`syncPeriod()`); `POST /v1/admin/jobs/quota` runs an idempotent backfill (`resyncFromSubscriptions()`) for anything still misaligned |
 
 One payment, whole chain:
 
 ```sql
-SELECT p.id AS payment_id, p.purpose, p.method, p.status AS payment_status,
+SELECT p.id AS payment_id, p.payment_code, p.purpose, p.method, p.status AS payment_status,
        p.total_amount, p.verified_at, p.invoiced_at,
        (p.applied_from IS NOT NULL) AS has_rollback_snapshot,
        (p.period_start IS NOT NULL) AS applied,
@@ -186,10 +191,73 @@ JOIN subscriptions s ON s.id = p.subscription_id
 JOIN tenants t       ON t.id = s.tenant_id
 LEFT JOIN tenant_quotas q ON q.tenant_id = t.id AND q.is_current
 LEFT JOIN payphone_transactions pt ON pt.payment_id = p.id AND pt.status <> 'CANCELLED'
-WHERE p.id = '<PAYMENT_ID>';
+WHERE p.id = '<PAYMENT_ID>' OR p.payment_code = '<PAYMENT_CODE>';
 ```
 
+`payment_code` is useful here specifically when all you have is a bank statement description (a tenant referenced it there instead of the UUID) and no `<PAYMENT_ID>` yet.
+
 `has_rollback_snapshot = false` on a `VERIFIED` payment means it predates migration 090 — `PATCH /v1/admin/payments/:id/refund` will refuse it and the rollback has to be done by hand.
+
+### Verifying a prorated TIER_CHANGE amount
+
+**Fastest path first: `payments.pricing_breakdown` (`JSONB`, migration 101).** Every proration-capable path — the same-interval upgrade below, the cross-interval MONTHLY → YEARLY immediate upgrade (ADR-033), the deferred full-price fallback, and `requestSeatChange`'s seat increase — stores exactly the numbers it computed, tagged with a `model` discriminator:
+
+```sql
+SELECT id, payment_code, amount AS charged_base, pricing_breakdown
+FROM payments
+WHERE id = '<PAYMENT_ID>' OR payment_code = '<PAYMENT_CODE>';
+```
+
+`pricing_breakdown->>'model'` tells you which shape you're looking at (`SAME_INTERVAL_UPGRADE`, `CROSS_INTERVAL_UPGRADE`, `DEFERRED_FULL_PRICE`, or `SEAT_INCREASE` — see CLAUDE.md's "Pricing breakdown" for each shape's fields) and `pricing_breakdown->>'proratedBase'` should equal `amount` (rounding aside). `NULL` means either an `INITIAL`/`RENEWAL` payment (never sets one — flat sticker price, nothing to explain) or a payment that predates migration 101 — fall back to the manual reconstruction below for those.
+
+The rest of this section is that manual reconstruction, useful as a cross-check or for a pre-101 payment. A same-interval upgrade (`requestTierChange`'s immediate branch, `subscription.service.js`) prorates by **time remaining in the period, not usage**:
+
+```
+proratedBase = round((toTierPrice - fromTierPrice) × remainingFraction, 2)
+remainingFraction = (current_period_end - requestedAt) / (current_period_end - current_period_start)
+```
+
+Two things catch people out:
+
+- It's the **price difference** that's prorated, not the new tier's full sticker price. On the same day a subscription starts, `remainingFraction` is close to `1`, so the charge lands close to the *full* difference between the two tiers — e.g. LITE ($8/mo) → STARTER ($20/mo) minutes after signup prorates to something like `(20 - 8) × 0.996 ≈ 11.95`, not "$20 minus a small proration" and not "$20 minus $8." That's expected, not a bug.
+- Both `toTierPrice` and `fromTierPrice` resolve to whatever was `PUBLISHED` and effective **as of the moment the upgrade was requested** (`payments.created_at`) — not necessarily what the tenant originally paid for the old tier, if a price changed in between (see "Price history + 30-day change notice" in CLAUDE.md).
+
+To check a specific payment, fill in `<PAYMENT_ID>` and the tier the tenant was upgrading *from* (check `tenant_events` for the `TIER_CHANGE_REQUESTED` row around the same timestamp — `payments` itself only stores `target_tier`, the tier being upgraded *to*):
+
+```sql
+SELECT
+  p.id AS payment_id, p.payment_code, p.created_at AS requested_at,
+  p.amount AS charged_base, p.total_amount AS charged_total,
+  s.current_period_start, s.current_period_end,
+  from_price.price_usd AS from_tier_price,
+  to_price.price_usd   AS to_tier_price,
+  ROUND(
+    EXTRACT(EPOCH FROM (s.current_period_end - p.created_at))::numeric /
+    EXTRACT(EPOCH FROM (s.current_period_end - s.current_period_start))::numeric
+  , 6) AS remaining_fraction,
+  ROUND(
+    (to_price.price_usd - from_price.price_usd) *
+    (EXTRACT(EPOCH FROM (s.current_period_end - p.created_at))::numeric /
+     EXTRACT(EPOCH FROM (s.current_period_end - s.current_period_start))::numeric)
+  , 2) AS expected_charged_base
+FROM payments p
+JOIN subscriptions s ON s.id = p.subscription_id
+JOIN LATERAL (
+  SELECT price_usd FROM tier_prices
+  WHERE tier = '<FROM_TIER>' AND billing_interval = s.billing_interval
+    AND status = 'PUBLISHED' AND effective_at <= p.created_at
+  ORDER BY effective_at DESC LIMIT 1
+) from_price ON true
+JOIN LATERAL (
+  SELECT price_usd FROM tier_prices
+  WHERE tier = p.target_tier AND billing_interval = s.billing_interval
+    AND status = 'PUBLISHED' AND effective_at <= p.created_at
+  ORDER BY effective_at DESC LIMIT 1
+) to_price ON true
+WHERE p.id = '<PAYMENT_ID>' OR p.payment_code = '<PAYMENT_CODE>';
+```
+
+`expected_charged_base` should equal `charged_base` (rounding aside — each is rounded independently to 2 decimals). If they disagree by more than a cent, something upstream is wrong (stale `current_period_end`, a price resolved at the wrong instant, etc.) — worth pulling the surrounding `TIER_CHANGE_REQUESTED` tenant event for the exact inputs `requestTierChange` used.
 
 ### Auditing every payment at once
 

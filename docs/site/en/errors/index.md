@@ -185,6 +185,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `TIER_CHANGE_ALREADY_PENDING` | A tier/billing-interval change is already scheduled, or its payment is already in flight, for this subscription — also returned by Change Seats when a billing-interval change is pending |
 | `SEAT_CHANGE_ALREADY_PENDING` | A seat change is already scheduled, or its payment is already in flight, for this subscription |
 | `CANCELLATION_ALREADY_PENDING` | A cancellation (`DELETE /v1/subscriptions`) is already scheduled for this subscription |
+| `PAYMENT_NOT_CANCELLABLE` | `DELETE /v1/payments/:id` was called on a payment that's no longer `PENDING` (proof already submitted or reviewed), or on a renewal payment |
 | `CONFLICT` | Idempotency key reused with a different payload, payment already decided, or other conflict |
 
 ### 429 Too Many Requests

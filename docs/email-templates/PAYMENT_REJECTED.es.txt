@@ -12,6 +12,7 @@ SUBJECT: Tu pago de {{purposeLabel}} necesita atención
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Monto</td><td style="padding: 6px 12px;">${{amount}}</td></tr>
     <tr><td style="padding: 6px 12px; background: #f5f5f5; font-weight: bold;">Motivo</td><td style="padding: 6px 12px;">{{reasonLabel}}</td></tr>
   </table>
+  <div style="white-space: pre-line; margin: 16px 0; font-size: 13px; color: #555;">{{breakdownText}}</div>
   <p>Revisa el motivo indicado arriba y envía un nuevo comprobante para el mismo pago.</p>
   <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
   <p style="font-size: 11px; color: #999;">No responder — este es un mensaje automático.</p>
@@ -26,6 +27,8 @@ Tu pago de {{purposeLabel}} para el plan {{tier}} fue rechazado.
   Frecuencia: {{billingInterval}}
   Monto: ${{amount}}
   Motivo: {{reasonLabel}}
+
+{{breakdownText}}
 
 Revisa el motivo indicado arriba y envía un nuevo comprobante para el mismo pago.
 

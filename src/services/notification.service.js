@@ -266,6 +266,7 @@ async function createPaymentReviewed(payment, subscription, decision) {
       rejectionReasonCode: payment.rejection_reason_code || null,
       seatsCharged: payment.seats_charged,
       targetExtraSeats: payment.target_extra_seats,
+      pricingBreakdown: payment.pricing_breakdown || null,
     },
   });
 
@@ -294,6 +295,7 @@ async function createSubscriptionRenewalDue(subscription, payment) {
     metadata: {
       subscriptionId: subscription.id,
       paymentId: payment.id,
+      paymentCode: payment.payment_code,
       tier: subscription.tier,
       amount: payment.amount,
       currentPeriodEnd: subscription.current_period_end,

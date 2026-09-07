@@ -105,6 +105,14 @@ Every card attempt is a row in `payphone_transactions` — **one row per attempt
 **Data:** attempt stays `PENDING`, but **`payphone_transaction_id` is recorded**. Deliberately not marked terminal: the charge's real state is unknown, and recording it as declined would strand real money.
 **Action:** none. The reconciliation job retries the confirm with that id. If the original request actually reached Payphone and only the response was lost, the charge *was* captured — this retry is what finds it and credits the tenant. Without the id persisted there is nothing to look the charge up by, and it would be marked `EXPIRED` and lost.
 
+### Persisting the confirm outcome itself failed
+
+Payphone answered, we know the outcome, and writing it to `payphone_transactions` threw — a real production case: `card_brand` once exceeded its column's assumed width (`VARCHAR(30)`), crashing an otherwise-successful confirmation. Both `card_brand` and `authorization_code` are now `TEXT` (migration 100) since there's no length guarantee from Payphone's side to size a `VARCHAR` against, but the underlying gap this exposed matters beyond that one column.
+
+**Tenant sees:** a `500` on `/v1/payments/payphone/confirm`, even though Payphone actually approved the charge.
+**Data:** attempt stays `PENDING`, but **`payphone_transaction_id` is still recorded** — `resolveOutcome`'s `catch` block persists it on its own, best-effort, after rolling back everything else. Without this, the row would look identical to "payer closed the browser before the return page loaded" below (`PENDING`, no vendor id), and `findStalePending()` would mark it `EXPIRED` without ever asking Payphone about it — a real captured charge, silently lost.
+**Action:** none if the persist succeeded — the reconciliation job's first sweep retries the confirm with that id, same as "the confirm call couldn't reach Payphone" above. If the persist *also* failed (logged as `failed to persist payphone_transaction_id after a confirm-processing error`), you're back to a manual lookup: check Payphone's own dashboard for the charge by `clientTransactionId`, and compare against what your system shows.
+
 ### Payer closed the browser before the return page loaded
 
 **Tenant sees:** nothing. They paid and navigated away.

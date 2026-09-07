@@ -132,6 +132,8 @@ const ErrorCodes = Object.freeze({
   INVALID_SUSPENSION_REASON: 'INVALID_SUSPENSION_REASON',
   /** Payment cannot be refunded — not VERIFIED, already REFUNDED, or applied before applied_from existed */
   PAYMENT_NOT_REFUNDABLE: 'PAYMENT_NOT_REFUNDABLE',
+  /** Payment cannot be self-cancelled — not PENDING (proof already submitted/decided), or a RENEWAL payment */
+  PAYMENT_NOT_CANCELLABLE: 'PAYMENT_NOT_CANCELLABLE',
   /** Card payments are not configured in this environment (PAYPHONE_TOKEN unset) */
   PAYMENT_GATEWAY_NOT_CONFIGURED: 'PAYMENT_GATEWAY_NOT_CONFIGURED',
   /** Payphone's confirm call could not be completed (network/transport failure) — the charge is unresolved, not declined */

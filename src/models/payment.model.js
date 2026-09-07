@@ -10,14 +10,24 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
   'invoice_document_id',
   'invoiced_at',
   'applied_from',
+  'cancelled_at',
 ]);
 
-async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = PaymentMethods.SPI_TRANSFER, purpose = 'INITIAL', targetTier = null, targetBillingInterval = null, targetExtraSeats = null, seatsCharged = 0 }) {
+// intervalChangeImmediate: only ever true for requestTierChange's
+// MONTHLY -> YEARLY upgrade branch — tells applyTierChangePayment to apply
+// this TIER_CHANGE payment immediately once verified instead of deferring to
+// current_period_end like every other billing-interval change. See
+// migration 099 and ADR-033.
+// pricingBreakdown: the frontend/email-facing breakdown of how amount was
+// computed (new plan price, seats cost, credit, etc.) — only ever set by
+// requestTierChange/requestSeatChange's proration paths, null for
+// INITIAL/RENEWAL. See migration 101.
+async function create({ subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method = PaymentMethods.SPI_TRANSFER, purpose = 'INITIAL', targetTier = null, targetBillingInterval = null, targetExtraSeats = null, seatsCharged = 0, intervalChangeImmediate = false, pricingBreakdown = null }) {
   const { rows } = await db.query(
-    `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier, target_billing_interval, target_extra_seats, seats_charged)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `INSERT INTO payments (subscription_id, amount, iva_rate, iva_amount, total_amount, method, purpose, target_tier, target_billing_interval, target_extra_seats, seats_charged, interval_change_immediate, pricing_breakdown)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING *`,
-    [subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method, purpose, targetTier, targetBillingInterval, targetExtraSeats, seatsCharged]
+    [subscriptionId, amount, ivaRate, ivaAmount, totalAmount, method, purpose, targetTier, targetBillingInterval, targetExtraSeats, seatsCharged, intervalChangeImmediate, pricingBreakdown]
   );
   return rows[0];
 }

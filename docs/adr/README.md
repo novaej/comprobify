@@ -115,3 +115,6 @@ YYYY-MM-DD
 | [028](028-payphone-card-payments.md) | Card Payments via Payphone's Cajita de Pagos | Accepted | 2026-08-24 |
 | [029](029-unlimited-tier-and-yearly-quota-pooling.md) | Genuinely Unlimited ENTERPRISE Quota, and Pooled Annual Quota for YEARLY Subscribers | Accepted | 2026-08-31 |
 | [030](030-render-to-digitalocean-migration.md) | Staging Infrastructure Migration from Render to Terraform-Managed DigitalOcean | Accepted (written retroactively) | 2026-07-23 |
+| [031](031-api-vs-web-tier-limit-scope.md) | API vs. Web Tier Limit Scope | Accepted | 2026-09-01 |
+| [032](032-extra-user-seats-add-on.md) | Extra User Seats Add-On | Accepted | 2026-09-02 |
+| [033](033-immediate-cross-interval-upgrade.md) | Immediate Proration for a MONTHLY → YEARLY Upgrade | Accepted | 2026-09-04 |
