@@ -106,6 +106,13 @@ DB_SSL=false
 # production → uses SRI production endpoint for issuers with sandbox=false
 APP_ENV=staging
 
+# Optional — skip SRI entirely instead of hitting its test endpoint. Useful if
+# you're generating demo tenants/documents locally and don't want to depend on
+# SRI's test environment being reachable. Uncomment on both this .env and the
+# one npm run worker reads (same file, if run from this same directory) —
+# the real "call" happens inside the worker, not the API.
+# SRI_MOCK_MODE=true
+
 # 32-byte AES encryption key for private keys stored in the database
 ENCRYPTION_KEY=             # see step 4
 

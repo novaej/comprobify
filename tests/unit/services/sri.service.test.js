@@ -237,4 +237,56 @@ describe('SriService', () => {
       expect(result.pending).toBe(true);
     });
   });
+
+  describe('SRI_MOCK_MODE', () => {
+    afterEach(() => {
+      config.sri.mockMode = false;
+    });
+
+    test('sendReceipt fakes an immediate RECIBIDA without touching the network', async () => {
+      config.appEnv = 'staging';
+      config.sri.mockMode = true;
+
+      const result = await sriService.sendReceipt('<factura/>', { sandbox: true });
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(result.status).toBe('RECIBIDA');
+      expect(result.messages).toEqual([]);
+    });
+
+    test('checkAuthorization fakes an immediate AUTORIZADO, using the access key as the authorization number', async () => {
+      config.appEnv = 'staging';
+      config.sri.mockMode = true;
+
+      const result = await sriService.checkAuthorization('1234567890', { sandbox: true });
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        pending: false,
+        status: 'AUTORIZADO',
+        authorizationNumber: '1234567890',
+        authorizationXml: null,
+      });
+      expect(result.authorizationDate).toEqual(expect.any(String));
+    });
+
+    test('is never active when appEnv is production, even if SRI_MOCK_MODE is set', async () => {
+      config.appEnv = 'production';
+      config.sri.mockMode = true;
+      global.fetch.mockResolvedValue(mockFetchResponse({ body: '<estado>RECIBIDA</estado>' }));
+
+      await sriService.sendReceipt('<factura/>', { sandbox: false });
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    test('does nothing when SRI_MOCK_MODE is unset (default)', async () => {
+      config.appEnv = 'staging';
+      global.fetch.mockResolvedValue(mockFetchResponse({ body: '<estado>RECIBIDA</estado>' }));
+
+      await sriService.sendReceipt('<factura/>', { sandbox: true });
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+  });
 });

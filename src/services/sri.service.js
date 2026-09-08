@@ -1,6 +1,14 @@
 const config = require('../config');
 const SriError = require('../errors/sri-error');
 
+// Re-derived at each call site, never cached — same "recompute from config
+// every time" discipline getSriUrls() already uses for ambiente, so mock
+// mode can never activate on a real production deployment even if
+// SRI_MOCK_MODE were mistakenly set there. See src/config/index.js.
+function isMockModeActive() {
+  return config.appEnv !== 'production' && config.sri.mockMode;
+}
+
 async function fetchWithRetry(url, options, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -108,6 +116,14 @@ function getSriUrls(issuer) {
 }
 
 async function sendReceipt(signedXml, issuer) {
+  if (isMockModeActive()) {
+    return {
+      status: 'RECIBIDA',
+      messages: [],
+      rawResponse: '<!-- SRI_MOCK_MODE: not sent to SRI -->',
+    };
+  }
+
   const { receptionUrl } = getSriUrls(issuer);
   const xmlBase64 = Buffer.from(signedXml, 'utf8').toString('base64');
   const envelope = buildReceptionEnvelope(xmlBase64);
@@ -141,6 +157,22 @@ async function sendReceipt(signedXml, issuer) {
 }
 
 async function checkAuthorization(accessKey, issuer) {
+  if (isMockModeActive()) {
+    // authorizationXml is deliberately left null — ride.service.js already
+    // falls back to document.signed_xml when it's absent, and that's exactly
+    // the comprobante content a real SRI response's <comprobante> field would
+    // have echoed back unchanged, so there's nothing to fabricate.
+    return {
+      pending: false,
+      status: 'AUTORIZADO',
+      authorizationNumber: accessKey,
+      authorizationDate: new Date().toISOString(),
+      authorizationXml: null,
+      messages: [],
+      rawResponse: '<!-- SRI_MOCK_MODE: not sent to SRI -->',
+    };
+  }
+
   const { authorizationUrl } = getSriUrls(issuer);
   const envelope = buildAuthorizationEnvelope(accessKey);
 

@@ -35,7 +35,7 @@ Not a core API feature. Only worth building once a client explicitly needs it.
 
 **What:**
 - Revenue summaries by issuer, date range, document type
-- **Exclude the operator's own tenant** — it holds a paid tier with no payments behind it, so including it inflates tenant counts and distorts revenue. Needs the `OPERATOR_TENANT_ID` pointer from #5; worth doing together rather than retrofitting.
+- **Consider excluding the operator's own tenant from income/revenue figures** — it's set to a high tier via the admin override (`PATCH /v1/admin/tenants/:id/tier`) but pays nothing to use the system, so counting it would inflate tenant counts and distort revenue/MRR. No dedicated mechanism for this today (identify it by email or tenant id when writing the query) — revisit if this ever needs to be more robust than that.
 - Document counts by status
 - CSV export
 
@@ -74,50 +74,3 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 4. Expose the toggle (e.g. `PATCH /v1/tenants/overage`) and surface current-cycle overage usage somewhere the tenant can see it before the bill arrives, so it's never a surprise.
 
 **Effort:** Medium — the toggle endpoint, the counter/tracking split, and wiring a new payment purpose through `applyVerifiedPayment`'s existing dispatch — no new payment infrastructure required.
-
-
----
-
-## 5. Operator Tenant as a First-Class Concept
-
-**Priority: Low now, rising — becomes real the moment reporting (#2) exists, or the operator's own quota runs out**
-
-The operator is a tenant in the system: they need a tenant row and an issuer to self-bill subscription invoices from. But nothing can *tell* that row apart from a customer's. `config.operator` (`src/config/index.js`) holds identity strings only — `OPERATOR_NAME`/`RUC`/`EMAIL`/`ADDRESS`, used for legal-document token substitution and the "RUC Proveedor" `infoAdicional` field — with no `OPERATOR_TENANT_ID` or `OPERATOR_ISSUER_ID` anywhere. Every tenant-scoped mechanism therefore treats the operator as an ordinary paying customer.
-
-Concrete consequences today:
-
-- **Quota.** `document-creation.service.js` calls `tenantQuotaService.consumeOne()` for every production document with no exemption, so the operator burns their own quota issuing subscription invoices *to* customers — one per paying tenant per month, on top of any real invoicing they do. Exhausting it makes subscription invoicing fail with `402 QUOTA_EXCEEDED`, which reads like a bug rather than a cap.
-- **Subscription lifecycle.** If an operator tenant ever gets a `subscriptions` row, `processDueRenewals()` will open `RENEWAL` payments for it, email the operator renewal reminders about themselves, and eventually mark their own account `PAST_DUE` for not paying themselves. Avoided today only by never creating one — a convention nothing enforces.
-- **Price-change announcements.** `pricingService.publishPrice()` / `reconcilePendingPriceChangeNotifications()` scan `findAllByStatus(ACTIVE)`, so publishing a price change emails the operator a 30-day notice about their own price change.
-- **Reporting (#2), and this needs care.** The operator's tenant is not a bookkeeping fiction — it is a real business issuing real invoices, both the subscription invoices it sends Comprobify customers *and* invoices for the operator's other work to unrelated clients. So "exclude the operator" is the wrong instruction, and applying it bluntly trades one wrong number for another:
-  - **Subscription/MRR reporting must exclude it.** It holds a paid tier with no payment behind it — money moving from one pocket to the other — so counting it inflates tenant counts and distorts MRR/ARR.
-  - **Document/usage reporting must NOT exclude it.** Those documents are genuine system activity; dropping them undercounts real load and real usage.
-  - **The operator's own invoiced work is not Comprobify revenue at all.** It is the operator's business income, a different figure that happens to flow through the same system. Never let it land in a "Comprobify revenue" number.
-
-  Getting any of these wrong is quiet: the numbers look plausible and are simply off.
-
-**What:**
-1. **Model it in two places that must agree**, because the failure mode is expensive and quiet: if the wrong tenant is ever marked as the operator, a real paying customer silently stops being billed, drops out of MRR, and gets uncapped quota — a revenue leak nothing surfaces.
-
-   - **`tenants.kind`** — `VARCHAR(20) NOT NULL DEFAULT 'CUSTOMER'`, CHECK-constrained to `CUSTOMER` / `OPERATOR` / `INTERNAL` / `DEMO`. This is the queryable fact every report and predicate hangs off, and it extends to a sales-demo or internal QA tenant later without inventing a second mechanism.
-   - **A partial unique index** makes a second operator structurally impossible rather than merely discouraged:
-     ```sql
-     CREATE UNIQUE INDEX one_operator_tenant ON tenants(kind) WHERE kind = 'OPERATOR';
-     ```
-   - **`OPERATOR_TENANT_ID` config** as an independent cross-check. The index prevents *two* operators; it cannot prevent the *wrong* one. Requiring the DB row and the environment variable to name the same tenant means a mistaken `UPDATE` alone never takes effect — someone would have to make the same mistake twice, in two different systems.
-
-   **Fail toward billing, never toward exempting.** If `OPERATOR_TENANT_ID` is unset, behave exactly as today (no operator concept at all). If it is set but disagrees with the `kind = 'OPERATOR'` row, refuse to apply any exemption and raise it loudly — treat everyone as a `CUSTOMER`. The worst outcome of that choice is the operator consuming their own quota; the worst outcome of the opposite is silently not charging a real customer.
-
-   Add `OPERATOR_ISSUER_ID` alongside it if a future auto-issued-invoice feature lands (see ADR-028 on why auto-issue was cut).
-
-   Setting `kind` should be admin-only — either a migration/manual `UPDATE` done once per environment, or a narrow admin endpoint. It is not something a normal tenant flow should ever touch.
-2. **Quota exemption** — skip `consumeOne` when `issuer.tenant_id === config.operator.tenantId`. A narrow, explicit carve-out at the one call site, not a general "exempt" flag on `tenants` that could be set by mistake. Note what this actually means: the operator becomes **uncapped**, not "subscription invoices are free" — their other invoicing stops counting too. That is the right outcome (the operator should not be rate-limited by their own product's tiers) but the documents should still be *counted* for usage reporting even while not being *capped*.
-3. **Keep it out of the subscription lifecycle** — the operator should never hold a `subscriptions` row, and the renewal/expiry queries should skip it defensively rather than rely on nobody ever creating one.
-4. **Exclude from price-change announcements**, and from any future revenue/tenant reporting.
-5. **Do NOT exclude it from everything.** Certificate-expiry alerts (`notificationScheduler.runAll()` → `runCertChecksForTenant`) must keep covering the operator — their certificate expiring breaks subscription invoicing for every customer, so that is the one alert they most need. This is a targeted exclusion list, not a blanket "ignore this tenant" flag.
-6. Optionally surface it in the admin tenant list so it is visibly not a customer.
-7. **Consider a dedicated issue point for subscription invoicing**, separate from the one used for the operator's other work. `BUSINESS` allows unlimited branches and issue points, and `POST /v1/issuers` with `sourceIssuerId` copies the existing certificate, so this costs nothing to set up. Two benefits: SRI sequential ranges stay cleanly separated between "invoices I send Comprobify customers" and "invoices for my own work", which matters for accounting; and every report above becomes a trivial filter on `issuer_id` instead of a join through `subscriptions.initial_invoice_document_id` / `payments.invoice_document_id` (the only way to tell the two apart today). Worth deciding *before* volume accumulates — sequentials cannot be retroactively split.
-
-**Why defer:** the current workaround holds and is cheap — put the operator tenant on BUSINESS via `PATCH /v1/admin/tenants/:id/tier` (an admin override that sets `subscription_tier` and the quota cap without creating a subscription), and simply never open a subscription for it. BUSINESS is 4,000 documents/month, which covers 4,000 paying tenants plus the operator's own invoicing, so quota is not a near-term constraint. What that workaround does *not* fix is the reporting distortion — which is why this should land before, or with, #2.
-
-**Effort:** Small for the config pointer and the quota carve-out; the rest is a handful of query predicates. The reporting exclusion is best done as part of #2 rather than retrofitted afterwards.
