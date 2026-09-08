@@ -118,3 +118,4 @@ YYYY-MM-DD
 | [031](031-api-vs-web-tier-limit-scope.md) | API vs. Web Tier Limit Scope | Accepted | 2026-09-01 |
 | [032](032-extra-user-seats-add-on.md) | Extra User Seats Add-On | Accepted | 2026-09-02 |
 | [033](033-immediate-cross-interval-upgrade.md) | Immediate Proration for a MONTHLY → YEARLY Upgrade | Accepted | 2026-09-04 |
+| [034](034-entry-tier-gating-and-reserved-frontend-pool.md) | Entry-Tier Feature Gating and a Reserved Frontend API Key/Webhook Pool | Accepted | 2026-09-08 |

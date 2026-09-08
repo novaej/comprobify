@@ -15,7 +15,7 @@ const certificateService = require('./certificate.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
-const { TIERS } = require('../constants/subscription-tiers');
+const { TIERS, effectiveApiKeyLimit } = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const SuspensionReasons = require('../constants/suspension-reasons');
 const ErrorCodes = require('../constants/error-codes');
@@ -317,11 +317,12 @@ async function createApiKey(tenantId, label, environment, revokeExistingInEnv = 
     await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, resolvedEnvironment);
   }
   const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
-  if (tierConfig.maxApiKeys !== null) {
+  const maxKeys = effectiveApiKeyLimit(tierConfig);
+  if (maxKeys !== null) {
     const currentCount = await apiKeyModel.countActiveByTenantId(tenantId);
-    if (currentCount >= tierConfig.maxApiKeys) {
+    if (currentCount >= maxKeys) {
       throw new AppError(
-        `Tenant has reached the API key limit for the ${tenant.subscription_tier} plan (${tierConfig.maxApiKeys}).`,
+        `Tenant has reached the API key limit for the ${tenant.subscription_tier} plan (${maxKeys}).`,
         402,
         ErrorCodes.API_KEY_LIMIT_REACHED
       );

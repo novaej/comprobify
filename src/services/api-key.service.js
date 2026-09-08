@@ -4,7 +4,7 @@ const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const TenantStatus = require('../constants/tenant-status');
 const ErrorCodes = require('../constants/error-codes');
-const { TIERS } = require('../constants/subscription-tiers');
+const { TIERS, effectiveApiKeyLimit } = require('../constants/subscription-tiers');
 
 function sha256Hex(value) {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -24,9 +24,16 @@ function formatKey(row) {
   };
 }
 
-async function listKeys(tenantId) {
-  const rows = await apiKeyModel.findActiveByTenantId(tenantId);
-  return rows.map(formatKey);
+// Returns { keys, limit: { max, used } } — max is the same enforced ceiling
+// createKey checks against (tier's self-service pool + the frontend's
+// reserved keys), so the frontend never has to reimplement that arithmetic.
+async function listKeys(tenant) {
+  const rows = await apiKeyModel.findActiveByTenantId(tenant.id);
+  const tierConfig = TIERS[tenant.subscriptionTier] || TIERS.FREE;
+  return {
+    keys: rows.map(formatKey),
+    limit: { max: effectiveApiKeyLimit(tierConfig), used: rows.length },
+  };
 }
 
 // requestingScopes is the scopes array of the key making this request
@@ -69,11 +76,12 @@ async function createKey(tenant, { label, environment, scopes }, requestingScope
     );
   }
   const tierConfig = TIERS[tenant.subscriptionTier] || TIERS.FREE;
-  if (tierConfig.maxApiKeys !== null) {
+  const maxKeys = effectiveApiKeyLimit(tierConfig);
+  if (maxKeys !== null) {
     const currentCount = await apiKeyModel.countActiveByTenantId(tenant.id);
-    if (currentCount >= tierConfig.maxApiKeys) {
+    if (currentCount >= maxKeys) {
       throw new AppError(
-        `Your plan allows a maximum of ${tierConfig.maxApiKeys} API key(s). Upgrade your plan or revoke an existing key to add a new one.`,
+        `Your plan allows a maximum of ${maxKeys} API key(s). Upgrade your plan or revoke an existing key to add a new one.`,
         402,
         ErrorCodes.API_KEY_LIMIT_REACHED
       );

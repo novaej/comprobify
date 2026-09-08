@@ -164,6 +164,11 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
     );
   }
 
+  // Calls apiKeyModel.create directly, not apiKeyService.createKey — this
+  // must NEVER be gated by effectiveApiKeyLimit()/TIERS[tier].maxApiKeys.
+  // FREE/SOLO/LITE have a 0 self-service pool (see ADR-034), but every
+  // tenant, regardless of tier, still needs one fully-working key the moment
+  // they register so they can use the API directly with no further setup.
   plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId: tenant.id,
@@ -234,6 +239,9 @@ async function recover(email, p12Buffer, p12Password) {
   // certificate being reused rather than one being guessed.
   await attemptTrackerService.recordEvent(AttemptEventTypes.RECOVERY_SUCCESS, tenant.id);
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenant.id, environment);
+  // Same deliberate bypass as register()'s "Initial master key" above — a
+  // FREE/SOLO/LITE tenant recovering access must get a working key back even
+  // though their self-service pool is 0.
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId: tenant.id,

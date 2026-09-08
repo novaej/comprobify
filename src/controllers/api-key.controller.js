@@ -1,8 +1,8 @@
 const apiKeyService = require('../services/api-key.service');
 
 const list = async (req, res) => {
-  const keys = await apiKeyService.listKeys(req.tenant.id);
-  res.json({ ok: true, keys });
+  const { keys, limit } = await apiKeyService.listKeys(req.tenant);
+  res.json({ ok: true, keys, limit });
 };
 
 const create = async (req, res) => {

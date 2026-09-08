@@ -1,4 +1,9 @@
-const { TIERS, IVA_RATE } = require('../constants/subscription-tiers');
+const {
+  TIERS,
+  IVA_RATE,
+  RESERVED_API_KEYS_FOR_FRONTEND,
+  RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND,
+} = require('../constants/subscription-tiers');
 const { TIER_LIMIT_SCOPE } = require('../constants/tier-limit-scope');
 const pricingService = require('../services/pricing.service');
 
@@ -77,7 +82,21 @@ const list = async (req, res) => {
       overagePerDocumentUsd:   tier.overagePerDocumentUsd,
     };
   }));
-  res.json({ ok: true, ivaRate: IVA_RATE, limitScopes: TIER_LIMIT_SCOPE, tiers, extraSeat });
+  res.json({
+    ok: true,
+    ivaRate: IVA_RATE,
+    limitScopes: TIER_LIMIT_SCOPE,
+    tiers,
+    extraSeat,
+    // maxApiKeys/maxWebhookEndpoints above are each tier's own self-service
+    // pool — these are added on top of it for every tier (see
+    // effectiveApiKeyLimit/effectiveWebhookEndpointLimit), reserved for
+    // comprobify-web's internal keys/webhook, never for a tenant to spend.
+    reservedForFrontend: {
+      apiKeys: RESERVED_API_KEYS_FOR_FRONTEND,
+      webhookEndpoints: RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND,
+    },
+  });
 };
 
 module.exports = { list };

@@ -27,7 +27,7 @@ describe('WebhookEndpointService', () => {
     });
 
     test('allows creating up to (but not exceeding) the tier limit', async () => {
-      webhookEndpointModel.countActiveByTenantId.mockResolvedValue(1); // GROWTH allows 5
+      webhookEndpointModel.countActiveByTenantId.mockResolvedValue(1); // GROWTH: 5 self-service + 1 reserved for the frontend
       webhookEndpointModel.create.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000010', url: 'https://example.com/hook', event_types: [], active: true,
         created_at: new Date(), updated_at: new Date(),
@@ -84,22 +84,25 @@ describe('WebhookEndpointService', () => {
         { id: '00000000-0000-0000-0000-000000000011', url: 'https://b.example.com', event_types: ['DOCUMENT_AUTHORIZED'], active: true, created_at: new Date('2026-01-02'), updated_at: new Date('2026-01-02'), secret: 'should-not-leak-either' },
       ]);
 
-      const result = await webhookEndpointService.list(1);
+      const result = await webhookEndpointService.list(1, 'FREE');
 
       expect(webhookEndpointModel.findActiveByTenantId).toHaveBeenCalledWith(1);
-      expect(result).toEqual([
-        { id: '00000000-0000-0000-0000-000000000010', url: 'https://a.example.com', eventTypes: [], active: true, createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01') },
-        { id: '00000000-0000-0000-0000-000000000011', url: 'https://b.example.com', eventTypes: ['DOCUMENT_AUTHORIZED'], active: true, createdAt: new Date('2026-01-02'), updatedAt: new Date('2026-01-02') },
-      ]);
-      expect(result[0].secret).toBeUndefined();
+      expect(result).toEqual({
+        endpoints: [
+          { id: '00000000-0000-0000-0000-000000000010', url: 'https://a.example.com', eventTypes: [], active: true, createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01') },
+          { id: '00000000-0000-0000-0000-000000000011', url: 'https://b.example.com', eventTypes: ['DOCUMENT_AUTHORIZED'], active: true, createdAt: new Date('2026-01-02'), updatedAt: new Date('2026-01-02') },
+        ],
+        limit: { max: 1, used: 2 }, // FREE: 0 self-service + 1 reserved for the frontend
+      });
+      expect(result.endpoints[0].secret).toBeUndefined();
     });
 
     test('returns an empty array when the tenant has no endpoints', async () => {
       webhookEndpointModel.findActiveByTenantId.mockResolvedValue([]);
 
-      const result = await webhookEndpointService.list(1);
+      const result = await webhookEndpointService.list(1, 'FREE');
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ endpoints: [], limit: { max: 1, used: 0 } });
     });
   });
 

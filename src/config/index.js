@@ -215,6 +215,16 @@ const config = {
     // prepared before the flag is flipped back on.
     enabled: process.env.AGREEMENTS_ENABLED !== 'false',
   },
+
+  // Extra API keys / webhook endpoints available on every tier on top of
+  // whatever TIERS[tier].maxApiKeys/maxWebhookEndpoints allows — reserved for
+  // comprobify-web's own internal keys (one per dashboard role) and its own
+  // webhook subscription, so those never eat into what a tenant actually
+  // purchased. See src/constants/subscription-tiers.js's
+  // effectiveApiKeyLimit/effectiveWebhookEndpointLimit, the only two places
+  // these are read.
+  reservedApiKeysForFrontend: parseInt(process.env.RESERVED_FRONTEND_API_KEYS, 10) || 5,
+  reservedWebhookEndpointsForFrontend: parseInt(process.env.RESERVED_FRONTEND_WEBHOOKS, 10) || 1,
 };
 
 module.exports = config;

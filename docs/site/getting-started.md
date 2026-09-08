@@ -104,6 +104,8 @@ Authorization: Bearer <your-api-key>
 
 La llave se hashea con SHA-256 en cada solicitud — el texto plano nunca se persiste después de la creación. Si una llave se ve comprometida, contacta a soporte para revocarla y emitir una nueva.
 
+> **¿Qué necesito para usar la API directamente?** Solo la llave que `POST /v1/register` te devolvió. Esa llave ya tiene todos los permisos (`ALL_SCOPES`) y cubre todas tus sucursales — no necesitas llamar a `POST /v1/keys` ni ningún otro endpoint de configuración antes de crear tu primer comprobante. Generar llaves adicionales (`POST /v1/keys`) y registrar webhooks propios (`POST /v1/webhooks`) son funciones de los planes Starter en adelante — ver "Múltiples llaves con nombre por tenant" y la tabla de tiers más abajo — pero ninguna de las dos es un requisito para integrar.
+
 ---
 
 ## Entendiendo las API keys y las sucursales
@@ -150,9 +152,9 @@ El nuevo emisor hereda tu RUC, razón social y certificado digital del primer em
 
 No se genera ninguna API key nueva — la llave que ya tienes cubre cada sucursal bajo tu tenant.
 
-### Múltiples llaves con nombre por tenant
+### Múltiples llaves con nombre por tenant (Starter en adelante)
 
-Dado que una sola llave vinculada al tenant cubre todas tus sucursales, puedes generar llaves adicionales vía `POST /v1/keys` para rastrear qué integración está haciendo cada llamada (frontend, ERP, app móvil, etc.):
+**Free/Solo/Lite no pueden generar llaves adicionales por self-service** — solo cuentan con la llave inicial que el registro ya les entregó, que es suficiente para integrar un solo sistema. A partir de Starter, dado que una sola llave vinculada al tenant cubre todas tus sucursales, puedes generar llaves adicionales vía `POST /v1/keys` para rastrear qué integración está haciendo cada llamada (frontend, ERP, app móvil, etc.):
 
 ```http
 POST /v1/keys
@@ -162,7 +164,7 @@ Content-Type: application/json
 { "label": "ERP integration", "environment": "sandbox" }
 ```
 
-Usa `GET /v1/keys` para listarlas y `DELETE /v1/keys/:id` para revocar una. `environment` por defecto es `sandbox`; generar una llave `production` requiere que el tenant ya se haya promovido. Todas las llaves bajo el mismo tenant pueden operar sobre el mismo conjunto de sucursales — la diferencia está en la observabilidad (qué integración hizo la llamada) y en la revocación granular (revocar una integración comprometida sin afectar a las demás). `GET /v1/keys` ya incluye `lastUsedAt`/`requestCount` por llave, y [`GET /v1/keys/:id/usage`](endpoints/api-keys.md#uso-diario-de-una-llave) devuelve una serie diaria lista para graficar — útil para detectar una llave sin uso o un pico de tráfico inesperado.
+Usa `GET /v1/keys` para listarlas y `DELETE /v1/keys/:id` para revocar una. `environment` por defecto es `sandbox`; generar una llave `production` requiere que el tenant ya se haya promovido. Todas las llaves bajo el mismo tenant pueden operar sobre el mismo conjunto de sucursales — la diferencia está en la observabilidad (qué integración hizo la llamada) y en la revocación granular (revocar una integración comprometida sin afectar a las demás). `GET /v1/keys` ya incluye `lastUsedAt`/`requestCount` por llave y un bloque `limit: { max, used }` con cuántas llaves puedes crear todavía, y [`GET /v1/keys/:id/usage`](endpoints/api-keys.md#uso-diario-de-una-llave) devuelve una serie diaria lista para graficar — útil para detectar una llave sin uso o un pico de tráfico inesperado.
 
 ### Ciclo de vida de las llaves
 
@@ -179,9 +181,11 @@ Una sola llave cubre toda tu cuenta, así que un frontend o ERP que opera sobre 
 
 ---
 
-## 4. Registra un endpoint de webhook (recomendado)
+## 4. Registra un endpoint de webhook (recomendado, Starter en adelante)
 
 Registra una URL HTTPS en tu servidor para recibir notificaciones de eventos casi en tiempo real — autorizaciones de comprobantes, alertas de certificados, y cualquier futuro tipo de evento que la API produzca.
+
+**Los webhooks propios son una función de los planes Starter en adelante** — Free/Solo/Lite no pueden registrar un endpoint (ver la tabla de tiers abajo). Si estás en uno de esos planes, o simplemente no puedes exponer una URL pública todavía, usa el sondeo descrito al final de esta sección — funciona en todos los planes sin excepción.
 
 ```http
 POST /v1/webhooks
@@ -211,7 +215,7 @@ Respuesta:
 
 **Guarda el `secret` de inmediato — se muestra solo una vez.** Úsalo para verificar el encabezado `X-Comprobify-Signature` en cada solicitud entrante.
 
-Omite `eventTypes` (o pasa `[]`) para suscribirte a todos los tipos de evento. Puedes registrar hasta el límite de tu plan (FREE: 1, STARTER: 2, GROWTH: 5, BUSINESS: 10) y gestionarlos vía `GET / PATCH / DELETE /v1/webhooks`.
+Omite `eventTypes` (o pasa `[]`) para suscribirte a todos los tipos de evento. Puedes registrar hasta el límite de tu plan (Free/Solo/Lite: 0 — no disponible; Starter: 2, Growth: 5, Business: 10, Enterprise: 20) y gestionarlos vía `GET / PATCH / DELETE /v1/webhooks`. `GET /v1/webhooks` incluye un bloque `limit: { max, used }` para que puedas verificar cuánto espacio te queda sin adivinar.
 
 > **Si no puedes exponer una URL HTTPS pública** (desarrollo local, detrás de un firewall), sondea `GET /v1/notifications?sinceId=<lastId>` en su lugar. Guarda el `id` más alto visto en cada sondeo y pásalo en la siguiente solicitud para ponerte al día de forma eficiente — consulta [Notificaciones](endpoints/notifications.md).
 
@@ -311,17 +315,19 @@ Distribuye cada token a la integración que anteriormente usaba la llave de sand
 
 Los precios listados son la tarifa **sin IVA** (el "precio de etiqueta") — el IVA (15% actualmente) se añade al momento de pagar, nunca está incluido en la cifra publicada. Entre paréntesis se muestra el total con IVA incluido, que es lo que efectivamente transfieres.
 
-| Plan | Precio/mes (+ IVA) | Precio/año (+ IVA) | Cuota de comprobantes **(cifra mensual base)** | Tipos de comprobante | Sucursales máx. | Puntos de emisión máx. por sucursal | Endpoints de webhook máx. | Llaves API máx. | Límite de escritura |
+| Plan | Precio/mes (+ IVA) | Precio/año (+ IVA) | Cuota de comprobantes **(cifra mensual base)** | Tipos de comprobante | Sucursales máx. | Puntos de emisión máx. por sucursal | Endpoints de webhook máx.¹ | Llaves API máx.¹ | Límite de escritura |
 |---|---|---|---|---|---|---|---|---|---|
-| Free | $0 | — (solo mensual) | 2 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
-| Solo | — (solo anual) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 2 | 15 req/min |
-| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 3 | 30 req/min |
+| Free | $0 | — (solo mensual) | 5 | Factura (`01`) | 1 | 1 | 0 | 0 | 10 req/min |
+| Solo | — (solo anual) | $25 (+IVA $28.75) | 15 | Factura (`01`) | 1 | 1 | 0 | 0 | 15 req/min |
+| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 0 | 0 | 30 req/min |
 | Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 5 | 60 req/min |
 | Growth | $90 (+IVA $103.50) | $900 (+IVA $1,035) | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 10 | 120 req/min |
 | Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Ilimitado | Ilimitado | 10 | 20 | 300 req/min |
 | Enterprise | $450 (+IVA $517.50) | $4,500 (+IVA $5,175) | **Ilimitado** | Factura, Nota de Crédito (`01`, `04`) | Ilimitado | Ilimitado | 20 | Ilimitado | 600 req/min |
 
 **Free es solo mensual** — nunca se compra realmente (no hay una suscripción detrás), así que no existe una variante anual a la que cambiar. **Solo es solo anual** (facturación mensual no disponible en ese plan) — un compromiso anual de bajo costo pensado para el escalón de entrada, por debajo de Starter. **Enterprise no tiene cuota de comprobantes**: es genuinamente ilimitado (no un número grande), y tampoco tiene tarifa de excedente, porque no hay tope que exceder.
+
+¹ **"0" no significa que no puedas usar la API.** Estas dos columnas son cuántas llaves/webhooks *adicionales* puedes crear tú mismo vía self-service — generar llaves adicionales y registrar webhooks propios son funciones de Starter en adelante. En Free/Solo/Lite ya tienes, desde el registro, una llave con todos los permisos que es suficiente para integrar tus propios sistemas; solo no puedes crear una segunda por tu cuenta ni registrar un webhook hasta subir de plan. Consulta la nota de "¿Qué necesito para usar la API directamente?" en la sección 3.
 
 > **Nota:** estos precios reflejan el catálogo publicado en este momento y pueden cambiar — todo cambio de precio requiere al menos 30 días de aviso previo a los tenants activos (ver [Tu suscripción y cómo pagarla](paying-your-subscription.md)), así que un precio nunca cambia de un día para otro. Consulta siempre la aplicación web de Comprobify para el catálogo vigente en tiempo real; esta tabla es una referencia y puede quedar desactualizada entre ediciones de esta página.
 

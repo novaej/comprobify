@@ -24,8 +24,8 @@ async function create(req, res) {
  * List all active webhook endpoints for the tenant (secrets excluded).
  */
 async function list(req, res) {
-  const endpoints = await webhookEndpointService.list(req.tenant.id);
-  res.json({ ok: true, endpoints });
+  const { endpoints, limit } = await webhookEndpointService.list(req.tenant.id, req.tenant.subscriptionTier);
+  res.json({ ok: true, endpoints, limit });
 }
 
 /**

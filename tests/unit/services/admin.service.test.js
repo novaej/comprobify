@@ -50,18 +50,18 @@ describe('AdminService', () => {
         id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscription_tier: 'FREE', status: 'ACTIVE',
         created_at: new Date('2026-01-01'),
       });
-      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 2, document_count: 0 });
+      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
 
       const result = await adminService.createTenant({ email: 'a@b.com' });
 
       expect(tenantModel.create).toHaveBeenCalledWith({
         email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE',
       }, mockClient);
-      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 2, mockClient);
+      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 5, mockClient);
       expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
       expect(result).toEqual({
         id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE',
-        suspensionReasonCode: null, documentQuota: 2, documentCount: 0, createdAt: new Date('2026-01-01'),
+        suspensionReasonCode: null, documentQuota: 5, documentCount: 0, createdAt: new Date('2026-01-01'),
       });
     });
 
@@ -574,7 +574,7 @@ describe('AdminService', () => {
       tenantModel.findById.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE',
       });
-      apiKeyModel.countActiveByTenantId.mockResolvedValue(2); // FREE allows 2
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(5); // FREE: 0 self-service + 5 reserved for the frontend
 
       await expect(adminService.createApiKey(1, 'label', 'sandbox'))
         .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
