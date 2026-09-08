@@ -45,6 +45,18 @@ const config = {
   sri: {
     testBaseUrl: process.env.SRI_TEST_BASE_URL || 'https://celcer.sri.gob.ec/comprobantes-electronicos-ws',
     prodBaseUrl: process.env.SRI_PROD_BASE_URL || 'https://cel.sri.gob.ec/comprobantes-electronicos-ws',
+    // Deployment-wide — skips the real SOAP round-trip entirely and fakes an
+    // immediate RECIBIDA/AUTORIZADO outcome, for generating demo tenants and
+    // documents without depending on SRI's test environment being up or the
+    // fake business data passing SRI's own validation. This is the raw flag;
+    // sri.service.js re-derives the actual "is mocking active" check at each
+    // call site as `config.appEnv !== 'production' && config.sri.mockMode`,
+    // never trusting a precomputed value, so it is structurally impossible
+    // for this to activate on a real production deployment even if the env
+    // var were set there by mistake. Must be set on BOTH the api and worker
+    // processes (they already share one .env in deploy/docker-compose.yml) —
+    // the actual SRI call happens inside the worker, not the API process.
+    mockMode: process.env.SRI_MOCK_MODE === 'true',
   },
   // RabbitMQ — the async SRI send/authorize pipeline (see ADR-019).
   // sriExchange is a single durable direct exchange; the send/authorize
