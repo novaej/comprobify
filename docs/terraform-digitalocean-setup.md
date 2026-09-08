@@ -594,6 +594,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `PENDING_EFFECTS_MAX_ATTEMPTS` | No | Default `5` is fine |
 | `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` | No — but the card-payment endpoints are dead without them | Both unset means `POST /v1/payments/:id/payphone-session` returns `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and only SPI bank transfer works; billing is otherwise unaffected, which is the intended degradation. Staging and production need **different** values — a Payphone application is bound to its registered domain, so the staging store's credentials will not authorise a production charge. |
 | `AGREEMENTS_ENABLED` | No | Unset (or any value other than the exact string `false`) keeps legal documents enabled. Unlike `IVA_RATE` below, an empty value from an unset GitHub Variable is **safe** here — `'' !== 'false'` evaluates to enabled, so the acceptance gate fails closed rather than open. Set it to `false` only to launch without Terms/Privacy/DPA. |
+| `SRI_MOCK_MODE` | No | Default `false` (real SRI calls) is correct for normal operation on every environment, including staging. Set to `true` only as a deliberate, temporary edit to the droplet's own `.env` when you want to generate demo tenants/documents on staging without depending on SRI's test environment — not something to wire into the deploy pipeline's baseline `.env`, since it should never be a persistent setting. Structurally inert when `APP_ENV=production` even if left set by mistake. |
 | `IVA_RATE` | **No — must actually be omitted, not set to an empty value** | Default `0.15` is Ecuador's current correct rate, but this one reads via `!== undefined` instead of `||`, so a *present-but-empty* value (what an unset GitHub Variable renders as, if referenced in the heredoc at all) produces `parseFloat('')` = `NaN` and silently corrupts every tax/pricing calculation. Leaving the variable out of GitHub entirely — so it's genuinely absent from the environment, not empty — is the only safe way to get the correct default. Only add it if you need to override the actual rate. |
 
 If you already created a GitHub Secret/Variable for anything in the "No" rows while we were still figuring this out (`QUEUE_RECONCILE_EFFECT_STALE_MINUTES`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE`, `DOCS_BASE_URL`), it's safe to delete those now — they're unused by the trimmed `.env` heredoc below and won't be referenced by anything.
@@ -696,7 +697,7 @@ Rotation, for either kind: update the value in the GitHub Environment, then trig
 
 ## Scheduled jobs
 
-The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — see `deployment.md`'s "Scheduled jobs" section for what each one actually does) previously ran as Render Cron Job services. They now run via a system `cron.d` file, written to the droplet by cloud-init:
+The 5 admin jobs (notifications, subscriptions, quota, queue-reconciliation, payphone-reconciliation — see `deployment.md`'s "Scheduled jobs" section for what each one actually does) previously ran as Render Cron Job services. They now run via a system `cron.d` file, written to the droplet by cloud-init:
 
 `cloud-init.yaml.tftpl` templates every occurrence via `${deploy_username}`, so each environment's actual `/etc/cron.d/comprobify-jobs` file gets its own value baked in at first boot — shown below is staging's rendered output (`cpfydeploy9x`); production's reads `cpfydeploy4c7a` in each of the four leftmost username fields instead, nothing else different:
 
@@ -717,7 +718,7 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 
 **Logs to a plain file per job under `/opt/comprobify/logs/`, not `logger`/syslog — this was a deliberate design decision, not an oversight.** An earlier version piped each job's output through `logger -t comprobify-cron-<name>`, monitorable via `journalctl -t comprobify-cron-<name>`. That stopped being viable once root SSH was fully disabled (see "SSH access model" above): reading the systemd journal requires either root or membership in the `systemd-journal` group, and this box's `AllowUsers` only ever admits the unprivileged deploy user — granting that group would mean either re-enabling some form of elevated access (defeating the point) or recreating the droplet just to add a group, for a monitoring nicety. Plain files sidestep the permission question entirely: each job's `{ date -Is; ...; } >> /opt/comprobify/logs/cron-<name>.log 2>&1` (the `date -Is` prefix stands in for `journalctl`'s own timestamp column, so a run is still correlatable to a time window) writes as the deploy user, who already owns `/opt/comprobify/logs` (see `runcmd`'s `chown`). Rotated weekly via `/etc/logrotate.d/comprobify-cron` (`rotate 4`, `compress`) so the two 5-minute-cadence jobs can't grow unbounded; `create 0644 ${deploy_username} ${deploy_username}` re-creates each file owned by the deploy user after rotation, so the next run can still write to it without root.
 
-**Monitoring** (as the deploy user, over SSH — see "SSH access model" above): `tail -100 /opt/comprobify/logs/cron-quota.log` (for example) shows just that job's runs; `tail -f` to follow live. All four at once, most-recent-first: `tail -n 50 /opt/comprobify/logs/cron-*.log`.
+**Monitoring** (as the deploy user, over SSH — see "SSH access model" above): `tail -100 /opt/comprobify/logs/cron-quota.log` (for example) shows just that job's runs; `tail -f` to follow live. All five at once, most-recent-first: `tail -n 50 /opt/comprobify/logs/cron-*.log`.
 
 **If the schedule itself needs to change:** edit `cloud-init.yaml.tftpl`, then recreate the droplet (`user_data` only applies at first boot, same constraint as everything else in cloud-init — see "Day-2 operations" below). Not something you'd expect to do often.
 
@@ -857,7 +858,7 @@ The intended cycle: flip `STAGING_INFRA_ENABLED` to `true`, `terraform apply` st
 
 A `terraform/**` push that lands while `STAGING_INFRA_ENABLED` is `false` still runs `plan-production`/`apply-production` normally — `plan-staging`/`apply-staging` just show as skipped in the Actions UI, not failed, and the change simply doesn't reach staging until the variable is flipped back on and the workflow re-run (`workflow_dispatch`) against it.
 
-### App deploy workflow — `.github/workflows/deploy-staging.yml`
+### App deploy workflow — `.github/workflows/deploy-staging.yml` / `deploy-production.yml`
 
 Full file lives in the repo; the shape is checkout → build/push the image to GHCR → SCP the compose files → SSH in (as `cpfydeploy9x`, not root — see "SSH access model" above) to write `.env` and restart containers. No firewall dance needed — SSH is open, so the runner just connects directly, same as the Terraform-managed pieces below it in the module. An earlier version of this workflow briefly added/removed a just-in-time firewall rule per deploy instead of relying on open SSH; see "SSH access model" for why that approach was tried and then abandoned.
 
@@ -866,6 +867,8 @@ The `production` equivalent triggers on push to the `production` branch, matchin
 ---
 
 ## Day-2 operations
+
+**Destroy/Recreate below are deliberately staging-only** — see "Toggling staging infra on/off" above: only staging is meant to be torn down between uses, production runs continuously once live and is never routinely destroyed. **Resize, the SSH-reset troubleshooting, and SSH key rotation are environment-agnostic** and apply equally to production once it exists — swap in `environments/production`, `comprobify_deploy_production`, `cpfydeploy4c7a`, and the `production` GitHub Environment wherever a staging-specific path/key/username appears below (rotation already says this explicitly; the same substitution applies to Resize and Troubleshooting even though they don't repeat it inline).
 
 **Destroy staging once you're done testing for the day/week:**
 ```bash
