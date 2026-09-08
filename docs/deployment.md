@@ -167,16 +167,9 @@ Migrations run automatically at startup — `app.js` calls `migrate()` before th
 
 ### Production status
 
-The production pipeline is **written but disabled** — `release-production.yml` and `deploy-production.yml` exist in the repo with their triggers commented out and an `if: false` guard on their jobs, because the production droplet, `production` branch, database, domain, and secrets don't exist yet. Production is deliberately on standby — staging validated the DigitalOcean/Terraform setup first.
+**Partially provisioned, still disabled.** The `production` branch, `terraform/environments/production`, and the `plan-production`/`apply-production` job pair in `terraform.yml` already exist and are written — production is no longer purely hypothetical. `release-production.yml` and `deploy-production.yml` are also both fully written (the latter mirrors `deploy-staging.yml` exactly, nothing left to rewrite), but both stay behind an `if: false` guard with their real triggers commented out, and the production droplet itself has never been `terraform apply`'d — no database, domain, or GitHub Environment secrets exist yet either. Production is deliberately on standby until the remaining setup steps are done.
 
-To enable production once it's ready to provision:
-1. Create the `production` branch (fast-forwarded only by the automation, same invariant as `staging`)
-2. Provision the production droplet via Terraform (`terraform/environments/production`, mirroring `staging`'s setup — see `docs/terraform-digitalocean-setup.md`'s "First-time setup" steps) + a production **DigitalOcean Managed Postgres** database (own cluster, `public` + `sandbox` schemas — mirrors staging's setup, see `docs/deployment-reference-staging.md`, including sharing the cluster with `comprobify-web`'s production database if/when that's provisioned), with **independent** `ADMIN_SECRET` / `ENCRYPTION_KEY` / DB credentials from staging — never share these between environments
-3. Set up the `production` GitHub Environment's Secrets/Variables (same full set as `staging` — see `docs/terraform-digitalocean-setup.md`'s env var reference table)
-4. In `release-production.yml`: uncomment the `release: types: [published]` trigger and remove the `if: false` guard on the `promote` job
-5. In `deploy-production.yml`: rewrite to mirror `deploy-staging.yml` (build/push/SSH-deploy), uncomment the `push: branches: [production]` trigger, remove the `if: false` guard
-6. Add branch protection to `production` (restrict who can push to the automation only; no force pushes) — see GitHub repository setup below
-7. Extend the droplet's `cron.d` schedule for the production instance too (same 4 jobs, same schedules — see `docs/terraform-digitalocean-setup.md`'s "Scheduled jobs" section)
+`docs/production-readiness-checklist.md` is the authoritative, actively-maintained list of exactly what's done versus still pending — don't rely on a step list here, since one already drifted out of sync with reality once. `docs/deployment-reference-production.md` is the target-configuration reference (mirrors `docs/deployment-reference-staging.md`'s structure) for every concrete value — droplet name, deploy user, GitHub Environment names, DB/broker setup, DNS record — once each piece is ready to provision.
 
 ---
 

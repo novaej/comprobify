@@ -37,6 +37,8 @@ Not a separate action: the 5 scheduled cron jobs (notifications, subscriptions, 
 - [ ] Set real `OPERATOR_*` env vars
 - [ ] Onboard the first real tenant, promote to production, verify one real invoice against SRI's actual production endpoint
 - [ ] **Card payments in production.** A Payphone application is bound to its registered domain, so production needs its own application and its own `PAYPHONE_TOKEN`/`PAYPHONE_STORE_ID` — the staging store's credentials will not authorise a production charge. Creating it requires KYC against the registered legal entity, which is what puts this here rather than under Unblocked. Until then, leave both unset: the card endpoints return `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and SPI bank transfer is unaffected, which is a supported launch state, not a broken one
+- [ ] Register the production Payphone application against `comprobify-web`'s actual **production** domain, not just create it — the Cajita widget only renders on the domain registered in Payphone's console (ADR-028), so a mismatched domain looks configured (credentials set, `503` gone) but silently fails to render at checkout
+- [ ] Once credentials exist, verify one real card payment end-to-end against Payphone's live (non-sandbox) endpoint — mirrors the "verify one real invoice against SRI's actual production endpoint" item above; a Payphone sandbox pass doesn't guarantee the live credentials/domain pairing actually works
 
 ### Publishing the legal documents is no longer a hard blocker
 
