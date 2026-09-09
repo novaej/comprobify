@@ -19,6 +19,7 @@
 - [guides/repeated-attempt-detection.md](guides/repeated-attempt-detection.md) — Where repeated-attempt alerts surface and how to respond
 - [guides/documentation-checklist.md](guides/documentation-checklist.md) — What documentation to update for each type of change
 - [guides/updating-api-documentation.md](guides/updating-api-documentation.md) — Workflow for the public VitePress docs site
+- [guides/app-b-integration-plan.md](guides/app-b-integration-plan.md) — Planning notes for bundling Comprobify into a separate product ("App B"): two invoicing relationships, partner-billing design, not yet built
 
 ### Architecture decisions
 - [adr/README.md](adr/README.md) — ADR index, template, and guidelines
@@ -47,7 +48,8 @@ docs/
 │   ├── repeated-attempt-detection.md  Where attempt alerts surface, and how to respond
 │   ├── billing-operations.md  The operator's side of billing, end to end
 │   ├── payphone-payments.md  Card payments end to end, and every failure mode
-│   └── testing-scheduled-jobs.md  SQL recipes to force each cron job's scenarios locally
+│   ├── testing-scheduled-jobs.md  SQL recipes to force each cron job's scenarios locally
+│   └── app-b-integration-plan.md  Planning notes for bundling Comprobify into another product (not yet built)
 └── adr/
     ├── README.md           ADR index, template, and process
     ├── 001-layered-architecture.md
@@ -73,6 +75,9 @@ The full card-payment flow — session, widget, Payphone's five-minute auto-reve
 
 ### `guides/testing-scheduled-jobs.md`
 Step-by-step SQL recipes for forcing each of the three admin-triggered jobs (notifications, subscriptions, quota) to actually have something due, since none of them find anything against fresh data. Covers certificate expiry alerts, webhook retry exhaustion, scheduled tier downgrades, renewal reminders, subscription expiry (and why it doesn't suspend the tenant), and quota period rollover — including the yearly-vs-monthly independence guarantee.
+
+### `guides/app-b-integration-plan.md`
+Reasoning and a build plan for bundling Comprobify's invoicing into a separate product ("App B"). Covers why each end customer still needs their own Comprobify tenant (SRI's one-RUC-per-tenant constraint), why registration stays frontend-only (ADR-035 unaffected), the two independent invoicing relationships (you invoicing App B's customers vs. each customer invoicing theirs), and the not-yet-built partner-billing mechanism for activating a bundled customer's subscription without handing out full `ADMIN_SECRET`. Nothing in it is built yet — read it before starting that work, not as a description of current behavior.
 
 ### `adr/README.md`
 Index of Architecture Decision Records — the significant design choices made during development, their context, and the alternatives that were considered. Start here to understand *why* the system is built the way it is, not just how.
