@@ -27,22 +27,25 @@ describe('ApiKeyService', () => {
         },
       ]);
 
-      const result = await apiKeyService.listKeys(7);
+      const result = await apiKeyService.listKeys({ id: 7, subscriptionTier: 'FREE' });
 
       expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith(7);
-      expect(result).toEqual([
-        {
-          id: '00000000-0000-0000-0000-000000000001',
-          label: 'frontend-prod',
-          environment: 'production',
-          scopes: ALL_SCOPES,
-          active: true,
-          createdAt: createdAt,
-          revokedAt: null,
-          lastUsedAt: lastUsedAt,
-          requestCount: 15832,
-        },
-      ]);
+      expect(result).toEqual({
+        keys: [
+          {
+            id: '00000000-0000-0000-0000-000000000001',
+            label: 'frontend-prod',
+            environment: 'production',
+            scopes: ALL_SCOPES,
+            active: true,
+            createdAt: createdAt,
+            revokedAt: null,
+            lastUsedAt: lastUsedAt,
+            requestCount: 15832,
+          },
+        ],
+        limit: { max: 5, used: 1 }, // FREE: 0 self-service + 5 reserved for the frontend
+      });
     });
 
     test('casts a never-used key (BIGINT string "0", null last_used_at) to the right JSON shape', async () => {
@@ -59,7 +62,7 @@ describe('ApiKeyService', () => {
         },
       ]);
 
-      const [result] = await apiKeyService.listKeys(7);
+      const { keys: [result] } = await apiKeyService.listKeys({ id: 7, subscriptionTier: 'FREE' });
 
       expect(result.lastUsedAt).toBeNull();
       expect(result.requestCount).toBe(0);
@@ -68,9 +71,9 @@ describe('ApiKeyService', () => {
     test('returns an empty array when the tenant has no active keys', async () => {
       apiKeyModel.findActiveByTenantId.mockResolvedValue([]);
 
-      const result = await apiKeyService.listKeys(7);
+      const result = await apiKeyService.listKeys({ id: 7, subscriptionTier: 'FREE' });
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ keys: [], limit: { max: 5, used: 0 } });
     });
   });
 
@@ -244,7 +247,7 @@ describe('ApiKeyService', () => {
     // leak a stale count into an earlier test that doesn't set it.
     test('rejects when the tenant has reached their tier API key limit', async () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscriptionTier: 'FREE' };
-      apiKeyModel.countActiveByTenantId.mockResolvedValue(2); // FREE allows 2
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(5); // FREE: 0 self-service + 5 reserved for the frontend
 
       await expect(apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES))
         .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
@@ -253,7 +256,7 @@ describe('ApiKeyService', () => {
 
     test('allows creating up to (but not exceeding) the tier API key limit', async () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscriptionTier: 'FREE' };
-      apiKeyModel.countActiveByTenantId.mockResolvedValue(1); // FREE allows 2
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(4); // FREE: 0 self-service + 5 reserved for the frontend
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
       const { token } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES);

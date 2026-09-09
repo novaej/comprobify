@@ -76,10 +76,13 @@ async function sendInvoiceAuthorized(document) {
   return { sent: true, messageId };
 }
 
-async function sendVerificationEmail(email, token, redirectUrl = null, language = 'es') {
-  const verificationUrl = redirectUrl
-    ? `${redirectUrl}?token=${token}`
-    : `${config.appBaseUrl}/v1/verify-email?token=${token}`;
+// redirectUrl always points at the Comprobify web app now — registration
+// only happens through it (ADR-035), so verificationRedirectUrl is a
+// required field on POST /v1/register, and recover()/resendVerification()
+// only ever reuse that same tenant-stored value. There is no API-hosted
+// verification page to fall back to any more.
+async function sendVerificationEmail(email, token, redirectUrl, language = 'es') {
+  const verificationUrl = `${redirectUrl}?token=${token}`;
   const rendered = verifyEmailTemplate.render(verificationUrl, config.verificationTokenTtlHours, language);
   const { subject } = rendered;
   const { text, html } = applyStagingBanner(rendered, language);

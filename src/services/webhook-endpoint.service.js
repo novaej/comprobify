@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const webhookEndpointModel = require('../models/webhook-endpoint.model');
 const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
-const { TIERS } = require('../constants/subscription-tiers');
+const { TIERS, effectiveWebhookEndpointLimit } = require('../constants/subscription-tiers');
 const ErrorCodes = require('../constants/error-codes');
 
 /** Generate a 64-char hex secret (32 random bytes). */
@@ -45,10 +45,11 @@ async function create(tenantId, subscriptionTier, url, eventTypes = []) {
   const tier = TIERS[subscriptionTier];
   if (!tier) throw new AppError('Unknown subscription tier', 400);
 
+  const maxEndpoints = effectiveWebhookEndpointLimit(tier);
   const currentCount = await webhookEndpointModel.countActiveByTenantId(tenantId);
-  if (currentCount >= tier.maxWebhookEndpoints) {
+  if (currentCount >= maxEndpoints) {
     throw new AppError(
-      `Your plan allows a maximum of ${tier.maxWebhookEndpoints} webhook endpoint(s). ` +
+      `Your plan allows a maximum of ${maxEndpoints} webhook endpoint(s). ` +
       `Upgrade your plan or deregister an existing endpoint to add a new one.`,
       402,
       ErrorCodes.WEBHOOK_ENDPOINT_LIMIT_REACHED
@@ -62,13 +63,20 @@ async function create(tenantId, subscriptionTier, url, eventTypes = []) {
 }
 
 /**
- * List all active webhook endpoints for a tenant (secrets excluded).
+ * List all active webhook endpoints for a tenant (secrets excluded), plus
+ * the same { max, used } limit info `create` enforces (tier's self-service
+ * pool + the frontend's reserved endpoints).
  *
  * @param {number} tenantId
+ * @param {string} subscriptionTier
  */
-async function list(tenantId) {
+async function list(tenantId, subscriptionTier) {
   const rows = await webhookEndpointModel.findActiveByTenantId(tenantId);
-  return rows.map(formatEndpoint);
+  const tier = TIERS[subscriptionTier] || TIERS.FREE;
+  return {
+    endpoints: rows.map(formatEndpoint),
+    limit: { max: effectiveWebhookEndpointLimit(tier), used: rows.length },
+  };
 }
 
 /**

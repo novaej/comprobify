@@ -1,125 +1,20 @@
 # Registro
 
-Registro por autoservicio. Crea un tenant, un emisor y una API key de sandbox en una sola llamada. La API key devuelta se muestra **una sola vez** — guárdala de inmediato.
-
 ```
 POST /v1/register
 ```
 
-## Autenticación
+Crea un tenant, un emisor y una API key de sandbox en una sola llamada.
 
-Ninguna — endpoint público.
+## Este no es un endpoint invocable por terceros
 
-## Límite de tasa
+`POST /v1/register` requiere un encabezado `X-Internal-Service-Secret` válido, una credencial que solo posee la aplicación web de Comprobify. Una solicitud sin él es rechazada con `403 INTERNAL_SERVICE_ONLY` — no hay forma de que una integración de terceros cree una cuenta de Comprobify directamente contra esta API.
 
-Compartido con `POST /v1/resend-verification` — 5 solicitudes por hora por IP.
+**Para obtener una cuenta, regístrate en la aplicación web de Comprobify.** Una vez que tu cuenta existe, esta te entrega la misma API key con todos los permisos que `POST /v1/register` habría devuelto — consulta [Primeros Pasos](../getting-started.md) para ver qué puedes hacer con esa llave sin ninguna configuración adicional.
 
-## Cuerpo de la solicitud
+Si estás construyendo tu propio frontend sobre Comprobify y necesitas que tus usuarios se registren sin pasar por la aplicación web de Comprobify, contacta a soporte — el acceso directo al registro es una decisión comercial, no algo de autoservicio.
 
-`multipart/form-data` (requerido — debe incluirse un archivo de certificado P12).
+## Relacionado
 
-| Campo | Tipo | Requerido | Descripción |
-|---|---|---|---|
-| `cert` | file | Sí | Archivo de certificado P12 del SRI |
-| `certPassword` | string | No | Contraseña del P12 (omitir si no tiene) |
-| `logo` | file | No | Logo de la empresa a mostrar en los PDF RIDE. Formatos aceptados: **PNG** (recomendado), JPEG, GIF. Tamaño máximo: **500 KB**. Dimensiones recomendadas: **600 × 170 px** (horizontal, relación ~3.5:1). Se puede subir o reemplazar más adelante vía `PATCH /v1/issuers/:id/logo`. |
-| `email` | string | Sí | Correo de contacto del tenant — usado para verificación y notificaciones de facturas |
-| `ruc` | string | Sí | RUC de 13 dígitos |
-| `businessName` | string | Sí | Razón social (máx. 300 caracteres) |
-| `tradeName` | string | No | Nombre comercial |
-| `mainAddress` | string | No | Dirección principal |
-| `branchCode` | string | Sí | Código de sucursal de 3 dígitos, por ejemplo `001` |
-| `issuePointCode` | string | Sí | Código de punto de emisión de 3 dígitos, por ejemplo `001` |
-| `emissionType` | string | Sí | `1` (emisión normal) |
-| `requiredAccounting` | boolean | Sí | Si el negocio está obligado a llevar contabilidad |
-| `specialTaxpayer` | string | No | Código de contribuyente especial |
-| `branchAddress` | string | No | Dirección de la sucursal |
-| `documentTypes` | array | No | Códigos de tipo de comprobante a habilitar (por defecto: `["01"]`). Deben ser tipos soportados. |
-| `initialSequentials` | array | No | Números secuenciales iniciales por tipo de comprobante. Cualquier tipo no listado tiene por defecto `1`. Ver estructura abajo. |
-| `language` | string | No | Idioma para los correos salientes. Soportados: `es` (por defecto), `en`. Se guarda en el tenant y se usa para todos los correos posteriores, incluyendo reenvíos. |
-| `verificationRedirectUrl` | string | No | URL del frontend a la que apuntará el enlace de verificación en el correo. El token se añade como `?token=<token>`. Si se omite, el enlace va directamente al endpoint de verificación de la API. |
-
-### Estructura de `initialSequentials`
-
-Cada entrada establece el primer número secuencial que se emitirá para un tipo de comprobante dado en este emisor. Útil al migrar desde otro sistema y necesitar continuidad.
-
-| Campo | Tipo | Requerido | Descripción |
-|---|---|---|---|
-| `documentType` | string | Sí | Código de tipo de comprobante, por ejemplo `"01"` |
-| `sequential` | integer | Sí | Siguiente número secuencial a emitir (≥ 1) |
-
-```json
-{
-  "initialSequentials": [
-    { "documentType": "01", "sequential": 500 }
-  ]
-}
-```
-
-### Comportamiento de `verificationRedirectUrl`
-
-Cuando se establece, el correo de verificación contiene un enlace a tu página del frontend:
-
-```
-https://app.comprobify.com/verify?token=<64-char-hex>
-```
-
-Tu página del frontend debería llamar a `GET /v1/verify-email/check?token=<token>` al cargar la página para mostrar si el enlace sigue siendo válido (seguro de llamar repetidamente, incluso por escáneres de enlaces de correo), y luego a `POST /v1/verify-email` con `{ "token": "<token>" }` solo en respuesta a una acción explícita del usuario (por ejemplo, un botón "Verificar mi correo") — ver [Verificar Correo](./verify-email.md).
-
-Cuando se omite, el enlace va directamente al endpoint heredado de consumo de la API:
-
-```
-https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
-```
-
-**Validación:** en producción la URL debe usar `https`. En otros entornos, también se acepta `http`.
-
-## Respuesta
-
-### 201 Created — registro nuevo
-
-```json
-{
-  "ok": true,
-  "tenant": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "email": "you@company.com",
-    "subscriptionTier": "FREE",
-    "status": "PENDING_VERIFICATION",
-    "documentQuota": 100,
-    "documentCount": 0,
-    "createdAt": "2026-04-30T00:00:00.000Z",
-    "agreementAcceptedAt": "2026-06-28T12:00:00.000Z",
-    "agreementVersion": "2026-06-28"
-  },
-  "issuer": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "ruc": "1712345678001",
-    "businessName": "My Company S.A.",
-    "tradeName": null,
-    "branchCode": "001",
-    "issuePointCode": "001",
-    "certFingerprint": "SHA256:...",
-    "certExpiry": "2027-01-01T00:00:00.000Z"
-  },
-  "apiKey": "abc123..."
-}
-```
-
-## Errores
-
-| Estado HTTP | Código | Cuándo ocurre |
-|---|---|---|
-| `400` | `VALIDATION_FAILED` | Campos faltantes o inválidos, o falta el archivo P12 |
-| `400` | `BAD_REQUEST` | El archivo P12 está corrupto o la contraseña del certificado es incorrecta |
-| `400` | `INVALID_FILE_UPLOAD` | El archivo de logo excede los 500 KB |
-| `409` | `CONFLICT` | El RUC ya está registrado bajo otro correo, o el correo ya tiene una cuenta — usa [`POST /v1/recover`](recover.md) para recuperar el acceso |
-| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
-
-## Notas
-
-- El tenant inicia en estado `PENDING_VERIFICATION`. Se envía de inmediato un correo de verificación (fire-and-forget).
-- Los tenants no verificados pueden usar sandbox pero no pueden promoverse a producción.
-- El token de verificación expira después del TTL configurado (24 horas por defecto). Usa `POST /v1/resend-verification` para emitir uno nuevo.
-- Este endpoint es solo para cuentas nuevas — si el correo ya está registrado, la solicitud se rechaza con `409 CONFLICT` sin importar el estado de la cuenta. Si perdiste tu API key, usa [`POST /v1/recover`](recover.md) en su lugar.
-- El registro **no** acepta ningún documento legal — solo crea la cuenta. Instancias personalizadas de TERMS/PRIVACY/DPA para el tenant se generan poco después en segundo plano (estado `PENDING`, aún no aceptadas). La aceptación explícita es un paso posterior y separado: usa `GET /v1/tenants/agreements` para ver qué documentos están pendientes y `POST /v1/tenants/agreements` para aceptarlos — requisito indispensable antes de promover a producción. Ver [Agreement Acceptance](agreement-acceptance.md).
+- [Recuperar cuenta](recover.md) — también restringido a la app web, por la misma razón
+- [Verificar correo](verify-email.md) — la única parte del flujo de creación de cuenta que sigue siendo pública

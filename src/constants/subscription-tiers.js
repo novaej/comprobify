@@ -18,6 +18,12 @@
 // maxApiKeys is enforced here (api-key.service.js); maxUsers has no backing
 // table in this API at all — it's comprobify-web's own seat cap, published
 // here only so it has one source of truth. See tier-limit-scope.js / ADR-031.
+//
+// maxApiKeys/maxWebhookEndpoints are the tenant's own self-service pool —
+// comprobify-web's internal per-role keys and its own webhook subscription
+// are never drawn from it. Always read the enforced ceiling through
+// effectiveApiKeyLimit/effectiveWebhookEndpointLimit below, never
+// TIERS[tier].maxApiKeys/maxWebhookEndpoints directly.
 
 const config = require('../config');
 
@@ -34,11 +40,16 @@ const IVA_RATE = config.ivaRate;
 
 const TIERS = {
   FREE: {
-    documentQuota:           2,
+    documentQuota:           5,
     maxBranches:             1,
     maxIssuePointsPerBranch: 1,
-    maxWebhookEndpoints:     1,
-    maxApiKeys:              2,
+    // 0 on FREE/SOLO/LITE, not a small positive number — self-service keys
+    // and webhooks are a STARTER+ feature; every tier still gets a working
+    // API (RESERVED_API_KEYS_FOR_FRONTEND keys always mint regardless of
+    // this value). Bump this back up whenever a tier should sell its own
+    // keys/webhooks again — nothing else needs to change.
+    maxWebhookEndpoints:     0,
+    maxApiKeys:              0,
     maxUsers:                1,
     writeRateLimit:          10,
     readRateLimit:           60,
@@ -53,21 +64,22 @@ const TIERS = {
   // than STARTER's, not better — overagePerDocumentUsd/documentQuota ladder
   // downward exactly like STARTER->GROWTH->BUSINESS ladders upward, so the
   // per-unit price only ever improves as a tenant grows, never regresses.
-  // Branch/issue-point/webhook caps stay at the FREE ceiling — multi-branch
-  // and webhooks remain a STARTER+ upsell, not a volume-tier feature.
+  // Branch/issue-point caps stay at the FREE ceiling — multi-branch remains
+  // a STARTER+ upsell, not a volume-tier feature. Same for API keys/webhooks
+  // (maxApiKeys/maxWebhookEndpoints: 0) — see the note on FREE above.
   SOLO: {
     documentQuota:           15,
     maxBranches:             1,
     maxIssuePointsPerBranch: 1,
-    maxWebhookEndpoints:     1,
-    maxApiKeys:              2,
+    maxWebhookEndpoints:     0,
+    maxApiKeys:              0,
     maxUsers:                1,
     writeRateLimit:          15,
     readRateLimit:           90,
-    // Yearly-only — a ~$3.50/mo recurring charge carries payment-processing
-    // and support overhead disproportionate to its size; the $35/yr annual
-    // commitment is the only way to buy SOLO. See requestTierChange/
-    // createSubscription's billingIntervals check.
+    // Yearly-only — a small monthly recurring charge carries payment-
+    // processing and support overhead disproportionate to its size; the
+    // $25/yr annual commitment is the only way to buy SOLO. See
+    // requestTierChange/createSubscription's billingIntervals check.
     billingIntervals:        ['YEARLY'],
     allowedDocumentTypes:    ['01'],
     overagePerDocumentUsd:   0.40,
@@ -76,8 +88,8 @@ const TIERS = {
     documentQuota:           50,
     maxBranches:             1,
     maxIssuePointsPerBranch: 1,
-    maxWebhookEndpoints:     1,
-    maxApiKeys:              3,
+    maxWebhookEndpoints:     0,
+    maxApiKeys:              0,
     maxUsers:                2,
     writeRateLimit:          30,
     readRateLimit:           150,
@@ -164,4 +176,30 @@ const TIERS = {
 // BUSINESS:   allowedDocumentTypes: ['01', '03', '04', '05', '06', '07'],
 // ENTERPRISE: allowedDocumentTypes: ['01', '03', '04', '05', '06', '07'],
 
-module.exports = { TIERS, IVA_RATE };
+// Extra API keys / webhook endpoints available on EVERY tier regardless of
+// TIERS[tier].maxApiKeys/maxWebhookEndpoints — reserved for comprobify-web's
+// own internal keys (one per dashboard role — see CLAUDE.md's
+// "Tenant-scoped API key permissions", the driving use case for the scope
+// split) and its own webhook subscription, so those never eat into what a
+// tenant actually purchased. Bump the env var if the frontend ever needs
+// more roles/hooks — every enforcement/exposition call site reads through
+// the two functions below, nothing else needs to change.
+const RESERVED_API_KEYS_FOR_FRONTEND = config.reservedApiKeysForFrontend;
+const RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND = config.reservedWebhookEndpointsForFrontend;
+
+function effectiveApiKeyLimit(tier) {
+  return tier.maxApiKeys === null ? null : tier.maxApiKeys + RESERVED_API_KEYS_FOR_FRONTEND;
+}
+
+function effectiveWebhookEndpointLimit(tier) {
+  return tier.maxWebhookEndpoints === null ? null : tier.maxWebhookEndpoints + RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND;
+}
+
+module.exports = {
+  TIERS,
+  IVA_RATE,
+  RESERVED_API_KEYS_FOR_FRONTEND,
+  RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND,
+  effectiveApiKeyLimit,
+  effectiveWebhookEndpointLimit,
+};

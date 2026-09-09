@@ -118,9 +118,12 @@ Devuelve todos los endpoints activos del tenant (los secretos de firma nunca se 
 ```json
 {
   "ok": true,
-  "endpoints": [ ... ]
+  "endpoints": [ ... ],
+  "limit": { "max": 2, "used": 1 }
 }
 ```
+
+`limit.max` es cuántos endpoints activos puedes tener en total antes de que `POST /v1/webhooks` devuelva `402 WEBHOOK_ENDPOINT_LIMIT_REACHED`, y `limit.used` es tu conteo actual — ver [Tiers de suscripción](../getting-started.md#tiers-de-suscripcion). En Free/Solo/Lite `max` puede no ser cero pese a que esos planes no venden webhooks propios por self-service: comprobify reserva una pequeña cuota fija en cada plan para su propia app web.
 
 ---
 

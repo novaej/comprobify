@@ -46,7 +46,7 @@ El valor del encabezado `X-Issuer-Id` no es un UUID válido (p. ej. `abc`, `123`
 
 El token de verificación de correo en el parámetro de consulta de la URL (`?token=…`) es inválido o ha expirado. Los tokens expiran después de 24 horas (configurable vía `VERIFICATION_TOKEN_TTL_HOURS`).
 
-**Qué hacer:** Solicita un token nuevo vía `POST /v1/resend-verification`.
+**Qué hacer:** Solicita un token nuevo desde la aplicación web de Comprobify (`POST /v1/resend-verification` es solo invocable por ella).
 
 ### `DOCUMENT_TYPE_NOT_ENABLED`
 

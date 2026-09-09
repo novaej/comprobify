@@ -20,73 +20,23 @@ You can also download the collection JSON directly: [`comprobify.postman_collect
 
 ---
 
-## 1. Register
+## 1. Create your account (in the web app, not by API)
 
-Create your account, issuer, and sandbox API key in a single call. Each RUC can only be registered once.
+**Account creation is not a third-party-callable endpoint.** `POST /v1/register` requires an `X-Internal-Service-Secret` header that only the Comprobify web app holds — any other caller gets `403 INTERNAL_SERVICE_ONLY`. This is deliberate: each RUC can only be registered once, and registration is a guided flow (uploading your `.p12` certificate, accepting the legal agreements, etc.) meant to happen in the app.
 
-```http
-POST /v1/register
-Content-Type: multipart/form-data
-```
+**Sign up at the Comprobify web app.** Once you're done, your account already has an issuer and a sandbox API key — the same API key `POST /v1/register` used to return directly. Copy it from the dashboard; it's shown only once.
 
-| Field | Description |
-|---|---|
-| `email` | Your email address — used for verification and billing |
-| `ruc` | Your 13-digit Ecuadorian tax ID (RUC) |
-| `businessName` | Legal company name as it appears on your RUC |
-| `branchCode` | 3-digit SRI branch code (e.g. `001` for the main branch) |
-| `issuePointCode` | 3-digit SRI issue point code (e.g. `001`) |
-| `emissionType` | SRI emission type: always `1` (normal) |
-| `requiredAccounting` | `true` if your company is required to keep accounting records (*obligado a llevar contabilidad*), `false` otherwise |
-| `cert` | Your `.p12` digital certificate file issued by the SRI CA (Banco Central or Security Data) |
-| `certPassword` | Password for the `.p12` file |
+The account starts on the **FREE** tier (5 documents/month, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
 
-Response:
-
-```json
-{
-  "ok": true,
-  "tenant": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "email": "your@email.com",
-    "subscriptionTier": "FREE",
-    "status": "PENDING_VERIFICATION",
-    "documentQuota": 2
-  },
-  "issuer": { "id": "00000000-0000-0000-0000-000000000001", "ruc": "...", "sandbox": true },
-  "apiKey": "<your-sandbox-api-key>"
-}
-```
-
-**Store the `apiKey` — it is shown only once.**
-
-The account starts on the **FREE** tier (2 documents, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
-
-**Registration errors:**
-
-| Status | Code | Reason |
-|---|---|---|
-| `409` | `CONFLICT` | Email already registered |
-| `409` | `CONFLICT` | RUC already registered |
-| `400` | `BAD_REQUEST` | Certificate is expired or invalid |
-| `429` | `TOO_MANY_REQUESTS` | More than 5 registration attempts per hour from this IP |
-
-Lost your API key? `POST /v1/register` won't recover it for you anymore — use [`POST /v1/recover`](endpoints/recover.md) instead, with the same `.p12` certificate you registered with.
+Lost your API key? Account recovery (`POST /v1/recover`) also happens in the web app, by uploading the same `.p12` certificate you registered with — see [Recover Account](endpoints/recover.md).
 
 ---
 
 ## 2. Verify your email
 
-A verification email is sent to the address you registered with. Click the link, or call the token from the email against the API directly:
+The web app sends a verification email to the address you registered with, linking back to its own verification page — click it there to activate your account.
 
-```http
-POST /v1/verify-email
-Content-Type: application/json
-
-{ "token": "<token>" }
-```
-
-(A `GET /v1/verify-email?token=<token>` legacy variant also exists for direct API callers — see [Verify Email](endpoints/verify-email.md) for the full check/confirm flow and why it's split this way.)
+`GET /v1/verify-email/check?token=<token>` (the read-only, non-consuming check) stays public if you want to confirm a token is valid programmatically; the action that actually activates the account (`POST /v1/verify-email`) is, like registration, only callable by the web app — see [Verify Email](endpoints/verify-email.md) for the full detail.
 
 Email verification is required before you can promote to production. You can issue sandbox invoices immediately without verifying.
 
@@ -103,6 +53,8 @@ Authorization: Bearer <your-api-key>
 ```
 
 The key is SHA-256 hashed on each request — the plaintext is never persisted after creation. If a key is compromised, contact support to revoke it and issue a new one.
+
+> **What do I need to use the API directly?** Just the key your account already came with from signing up in the web app (see section 1 above). That key already has every permission (`ALL_SCOPES`) and covers all your branches — you don't need to call `POST /v1/keys` or any other setup endpoint before creating your first document. Minting additional keys (`POST /v1/keys`) and registering your own webhooks (`POST /v1/webhooks`) are Starter-and-up features — see "Multiple named keys per tenant" and the tier table below — but neither is a requirement to integrate.
 
 ---
 
@@ -150,9 +102,9 @@ The new issuer inherits your RUC, business name, and digital certificate from yo
 
 No new API key is minted — the key you already have covers every branch under your tenant.
 
-### Multiple named keys per tenant
+### Multiple named keys per tenant (Starter and up)
 
-Since one tenant-scoped key covers all your branches, you can mint additional keys via `POST /v1/keys` to track which integration is making each call (frontend, ERP, mobile app, etc.):
+**Free/Solo/Lite cannot mint additional keys via self-service** — you only get the initial key registration already gave you, which is enough to integrate a single system. From Starter up, since one tenant-scoped key covers all your branches, you can mint additional keys via `POST /v1/keys` to track which integration is making each call (frontend, ERP, mobile app, etc.):
 
 ```http
 POST /v1/keys
@@ -162,7 +114,7 @@ Content-Type: application/json
 { "label": "ERP integration", "environment": "sandbox" }
 ```
 
-Use `GET /v1/keys` to list them and `DELETE /v1/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that the tenant has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others). `GET /v1/keys` already includes `lastUsedAt`/`requestCount` per key, and [`GET /v1/keys/:id/usage`](endpoints/api-keys.md#daily-key-usage) returns a chart-ready daily series — handy for spotting a dormant key or an unexpected traffic spike.
+Use `GET /v1/keys` to list them and `DELETE /v1/keys/:id` to revoke one. `environment` defaults to `sandbox`; minting a `production` key requires that the tenant has been promoted. All keys under the same tenant can address the same set of branches — the difference is observability (which integration made the call) and granular revocation (revoke a compromised integration without affecting others). `GET /v1/keys` already includes `lastUsedAt`/`requestCount` per key and a `limit: { max, used }` block showing how many more keys you can create, and [`GET /v1/keys/:id/usage`](endpoints/api-keys.md#daily-key-usage) returns a chart-ready daily series — handy for spotting a dormant key or an unexpected traffic spike.
 
 ### Key lifecycle
 
@@ -179,9 +131,11 @@ One key covers your whole account, so a frontend or ERP that operates on multipl
 
 ---
 
-## 4. Register a webhook endpoint (recommended)
+## 4. Register a webhook endpoint (recommended, Starter and up)
 
 Register an HTTPS URL on your server to receive event notifications in near-real time — document authorizations, certificate alerts, and any future event types the API produces.
+
+**Your own webhooks are a Starter-and-up feature** — Free/Solo/Lite cannot register an endpoint (see the tier table below). If you're on one of those plans, or you simply can't expose a public URL yet, use the polling approach at the end of this section instead — it works on every plan with no exceptions.
 
 ```http
 POST /v1/webhooks
@@ -211,7 +165,7 @@ Response:
 
 **Store the `secret` immediately — it is shown only once.** Use it to verify the `X-Comprobify-Signature` header on every incoming request.
 
-Omit `eventTypes` (or pass `[]`) to subscribe to all event types. You can register up to the limit for your plan (FREE: 1, STARTER: 2, GROWTH: 5, BUSINESS: 10) and manage them via `GET / PATCH / DELETE /v1/webhooks`.
+Omit `eventTypes` (or pass `[]`) to subscribe to all event types. You can register up to the limit for your plan (Free/Solo/Lite: 0 — not available; Starter: 2, Growth: 5, Business: 10, Enterprise: 20) and manage them via `GET / PATCH / DELETE /v1/webhooks`. `GET /v1/webhooks` includes a `limit: { max, used }` block so you can check your remaining headroom without guessing.
 
 > **If you cannot expose a public HTTPS URL** (local development, behind a firewall), poll `GET /v1/notifications?sinceId=<lastId>` instead. Store the highest `id` seen from each poll and pass it on the next request to efficiently catch up — see [Notifications](endpoints/notifications.md).
 
@@ -311,17 +265,19 @@ Distribute each token to the integration that previously used the sandbox key wi
 
 Listed prices are the **tax-exclusive** rate (the "sticker price") — IVA (currently 15%) is added at checkout, never baked into the published figure. The parenthetical is the IVA-inclusive total, which is what you actually transfer.
 
-| Tier | Price/mo (+ IVA) | Price/yr (+ IVA) | Document quota **(monthly base figure)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints | Max API keys | Write limit |
+| Tier | Price/mo (+ IVA) | Price/yr (+ IVA) | Document quota **(monthly base figure)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints¹ | Max API keys¹ | Write limit |
 |---|---|---|---|---|---|---|---|---|---|
-| Free | $0 | — (monthly only) | 2 | Factura (`01`) | 1 | 1 | 1 | 2 | 10 req/min |
-| Solo | — (yearly only) | $35 (+IVA $40.25) | 15 | Factura (`01`) | 1 | 1 | 1 | 2 | 15 req/min |
-| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 1 | 3 | 30 req/min |
+| Free | $0 | — (monthly only) | 5 | Factura (`01`) | 1 | 1 | 0 | 0 | 10 req/min |
+| Solo | — (yearly only) | $25 (+IVA $28.75) | 15 | Factura (`01`) | 1 | 1 | 0 | 0 | 15 req/min |
+| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 0 | 0 | 30 req/min |
 | Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 5 | 60 req/min |
 | Growth | $90 (+IVA $103.50) | $900 (+IVA $1,035) | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 10 | 120 req/min |
 | Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 20 | 300 req/min |
 | Enterprise | $450 (+IVA $517.50) | $4,500 (+IVA $5,175) | **Unlimited** | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 20 | Unlimited | 600 req/min |
 
 **Free is monthly-only** — it's never actually purchased (there's no subscription behind it), so there's no annual variant to switch to. **Solo is yearly-only** (no monthly billing on that plan) — a low-cost annual commitment below Starter, meant as the entry rung. **Enterprise has no document quota at all**: it's genuinely unlimited (not a large number), and has no overage rate either, since there's no cap to ever overage past.
+
+¹ **"0" doesn't mean you can't use the API.** These two columns are how many *additional* keys/webhooks you can create yourself via self-service — minting additional keys and registering your own webhooks are Starter-and-up features. On Free/Solo/Lite you already have, from registration, one fully-permissioned key that's enough to integrate your own systems; you just can't self-mint a second one or register a webhook until you upgrade. See the "What do I need to use the API directly?" note in section 3.
 
 > **Note:** these prices reflect the currently published catalog and can change — any price change requires at least 30 days' notice to active tenants (see [Your subscription & billing](paying-your-subscription.md)), so a price never changes overnight. Always check the Comprobify web app for the live catalog; this table is a reference and can fall out of date between edits to this page.
 

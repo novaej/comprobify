@@ -194,6 +194,10 @@ const ErrorCodes = Object.freeze({
   // --- Pending effects (async outbox) ---
   /** No FAILED SRI_SEND/SRI_AUTHORIZE effect found to retry for this document/tenant */
   NOTHING_TO_RETRY: 'NOTHING_TO_RETRY',
+
+  // --- Internal-service-only routes (ADR-035) ---
+  /** Missing or invalid X-Internal-Service-Secret on a route only comprobify-web may call directly */
+  INTERNAL_SERVICE_ONLY: 'INTERNAL_SERVICE_ONLY',
 });
 
 module.exports = ErrorCodes;

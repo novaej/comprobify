@@ -128,17 +128,7 @@ describe('EmailService', () => {
       });
     });
 
-    test('builds the verification URL from appBaseUrl when no redirectUrl is given', async () => {
-      await emailService.sendVerificationEmail('tenant@example.com', 'tok-123');
-
-      expect(verifyEmailTemplate.render).toHaveBeenCalledWith(
-        'https://api.comprobify.test/v1/verify-email?token=tok-123',
-        24,
-        'es'
-      );
-    });
-
-    test('uses the supplied redirectUrl when given, appending the token', async () => {
+    test('builds the verification URL from the supplied redirectUrl, appending the token', async () => {
       await emailService.sendVerificationEmail('tenant@example.com', 'tok-123', 'https://app.example.com/verify');
 
       expect(verifyEmailTemplate.render).toHaveBeenCalledWith(
@@ -149,17 +139,17 @@ describe('EmailService', () => {
     });
 
     test('passes through a custom language', async () => {
-      await emailService.sendVerificationEmail('tenant@example.com', 'tok-123', null, 'en');
+      await emailService.sendVerificationEmail('tenant@example.com', 'tok-123', 'https://app.example.com/verify', 'en');
 
       expect(verifyEmailTemplate.render).toHaveBeenCalledWith(
-        'https://api.comprobify.test/v1/verify-email?token=tok-123',
+        'https://app.example.com/verify?token=tok-123',
         24,
         'en'
       );
     });
 
     test('sends from "Comprobify" (platform sender), not an issuer name, and returns messageId', async () => {
-      const result = await emailService.sendVerificationEmail('tenant@example.com', 'tok-123');
+      const result = await emailService.sendVerificationEmail('tenant@example.com', 'tok-123', 'https://app.example.com/verify');
 
       expect(mockSend).toHaveBeenCalledWith({
         from: 'Comprobify <noreply@comprobify.test>',

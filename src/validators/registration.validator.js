@@ -80,8 +80,14 @@ const register = [
     .isIn(SUPPORTED_LANGUAGES)
     .withMessage(`language must be one of: ${SUPPORTED_LANGUAGES.join(', ')}`),
 
+  // Required, not optional — registration is only ever called by
+  // comprobify-web now (ADR-035), so there is no API-hosted verification
+  // page to fall back to any more; every verification email must link to
+  // the frontend's own page.
   body('verificationRedirectUrl')
-    .optional()
+    .notEmpty()
+    .withMessage('verificationRedirectUrl is required')
+    .bail()
     .isURL({
       protocols: config.appEnv === 'production' ? ['https'] : ['https', 'http'],
       require_protocol: true,

@@ -76,6 +76,15 @@ function validateConfig(cfg) {
     missing.push('ADMIN_SECRET');
   }
 
+  // Gates POST /v1/register, /recover, /resend-verification, and
+  // /verify-email (src/middleware/require-internal-service.js, ADR-035) —
+  // without it those routes reject every request outright, since the check
+  // fails closed. Required so a deployment can never silently ship with
+  // account creation completely unreachable, from the frontend included.
+  if (!cfg.internalServiceSecret) {
+    missing.push('INTERNAL_SERVICE_SECRET');
+  }
+
   if (!cfg.appBaseUrl) {
     missing.push('APP_BASE_URL');
   }
