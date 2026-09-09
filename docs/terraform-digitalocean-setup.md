@@ -567,7 +567,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `DB_SSL_CA` | **Yes** | Staging's DB is DigitalOcean Managed Postgres, which signs with a private CA — required or connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. See `docs/deployment.md`'s env var table for the exact single-line format the deploy workflow's heredoc needs. |
 | `ENCRYPTION_KEY` | **Yes** | No default |
 | `ADMIN_SECRET` | **Yes** | No default |
-| `INTERNAL_SERVICE_SECRET` | No | Shared secret with `comprobify-web`'s BFF for forwarding the real visitor IP (`src/middleware/trusted-forwarded-ip.js`). Absent means the feature is inactive — no functional loss until `comprobify-web`'s own side is built (see its `NEXT_STEPS.md`). When set, must match the value configured in `comprobify-web`'s own environment exactly. |
+| `INTERNAL_SERVICE_SECRET` | **Yes** | Required at startup as of #208/ADR-035 — the API refuses to boot without it. Proves a request to `POST /v1/register`/`/recover`/`/resend-verification`/the consuming `POST /v1/verify-email` genuinely came from `comprobify-web`'s own server-side BFF (`403 INTERNAL_SERVICE_ONLY` otherwise); registration is no longer callable directly. Also lets that same BFF forward the real visitor IP (`src/middleware/trusted-forwarded-ip.js`). Must match the value configured in `comprobify-web`'s own environment exactly — a mismatch (not just an absence) locks out every registration/recovery attempt. |
 | `EMAIL_FROM` | **Yes** | No default, and email is enabled by default (`EMAIL_PROVIDER` defaults to `mailgun`) |
 | `EMAIL_FROM_DOCUMENTS` | No | Falls back to `EMAIL_FROM` when unset — a legitimate, often-desired default (same sender for everything). Only set if you want document emails from a different address. |
 | `MAILGUN_API_KEY` | **Yes** | No default, required while email is enabled |
@@ -582,7 +582,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `RABBITMQ_URL` | **Yes** | No default |
 | `REDIS_URL` | No — set directly in the deploy workflow's heredoc, not a GitHub Secret/Variable | Backs the rate limiters' shared store (`src/services/redis.service.js`); value is deterministic (`redis://redis:6379`, the `redis` service's Compose-internal DNS name) and identical across environments, so there's nothing to configure per-environment. Absent means the limiters silently fall back to the in-memory store post-deploy — see `src/middleware/rate-limit.js` |
 | `PORT` | No | Default `8080` already matches the Dockerfile's `EXPOSE` |
-| `DOCS_BASE_URL` | No | Default `''` just omits the docs link from error responses — harmless; set it once you have a docs site |
+| `DOCS_BASE_URL` | **Yes** | `docs.comprobify.com` (Cloudflare Pages, shared across environments) is now live with a real `/errors/*` section matching exactly the path `error-handler.js` builds (`${DOCS_BASE_URL}/errors/{slug}`) — the earlier "set it once you have a docs site" deferral no longer applies. Default `''` still just omits the docs link from every RFC 7807 `type` field (falls back to a non-resolving relative `/problems/{slug}` placeholder) rather than erroring, so this isn't a hard boot requirement like `INTERNAL_SERVICE_SECRET` — just no longer correct to leave unset. |
 | `VERIFICATION_TOKEN_TTL_HOURS` | No | Default `24` is fine |
 | `EMAIL_PROVIDER` | No | Default `mailgun` is the only supported provider today |
 | `SRI_TEST_BASE_URL` / `SRI_PROD_BASE_URL` | No | Defaults are the real, correct SRI endpoint URLs |
@@ -597,7 +597,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `SRI_MOCK_MODE` | No | Default `false` (real SRI calls) is correct for normal operation on every environment, including staging. Set to `true` only as a deliberate, temporary edit to the droplet's own `.env` when you want to generate demo tenants/documents on staging without depending on SRI's test environment — not something to wire into the deploy pipeline's baseline `.env`, since it should never be a persistent setting. Structurally inert when `APP_ENV=production` even if left set by mistake. |
 | `IVA_RATE` | **No — must actually be omitted, not set to an empty value** | Default `0.15` is Ecuador's current correct rate, but this one reads via `!== undefined` instead of `||`, so a *present-but-empty* value (what an unset GitHub Variable renders as, if referenced in the heredoc at all) produces `parseFloat('')` = `NaN` and silently corrupts every tax/pricing calculation. Leaving the variable out of GitHub entirely — so it's genuinely absent from the environment, not empty — is the only safe way to get the correct default. Only add it if you need to override the actual rate. |
 
-If you already created a GitHub Secret/Variable for anything in the "No" rows while we were still figuring this out (`QUEUE_RECONCILE_EFFECT_STALE_MINUTES`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE`, `DOCS_BASE_URL`), it's safe to delete those now — they're unused by the trimmed `.env` heredoc below and won't be referenced by anything.
+If you already created a GitHub Secret/Variable for anything in the "No" rows while we were still figuring this out (`QUEUE_RECONCILE_EFFECT_STALE_MINUTES`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE`), it's safe to delete those now — they're unused by the trimmed `.env` heredoc below and won't be referenced by anything. `DOCS_BASE_URL` is no longer in this category — see its own row above.
 
 Split, for the "Yes" rows only:
 
@@ -608,7 +608,9 @@ Split, for the "Yes" rows only:
 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` (kept together as one group for simplicity, even though a couple of them aren't sensitive alone) | `EMAIL_FROM`, `MAILGUN_DOMAIN` |
 | `MAILGUN_API_KEY` | `BANK_TRANSFER_BANK_NAME` / `ACCOUNT_TYPE` / `ACCOUNT_NUMBER` / `ACCOUNT_HOLDER` / `IDENTIFICATION` — `deployment.md` already calls these "Display text only, not a secret" |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | `ADMIN_NOTIFICATION_EMAIL`, `OPERATOR_NAME`, `OPERATOR_RUC`, `OPERATOR_EMAIL`, `OPERATOR_ADDRESS` — an email address and public business-registry identity info, not credentials |
+| `INTERNAL_SERVICE_SECRET` (a bearer-style credential that gates account creation/recovery) | — |
 | | `BETTERSTACK_INGESTING_HOST` — just a hostname, not sensitive on its own (unlike the source token above, which is) |
+| | `DOCS_BASE_URL` — a public URL (`https://docs.comprobify.com`), not sensitive |
 | `PAYPHONE_TOKEN` (a bearer credential that can capture charges) | `AGREEMENTS_ENABLED` — a feature flag, not a secret. Leave it unset to keep legal documents enabled; set it to exactly `false` to run without them |
 | `PAYPHONE_STORE_ID` (not sensitive alone, but kept beside the token so the pair is configured together) | — |
 | `RABBITMQ_URL` (embeds credentials) | — |
@@ -660,6 +662,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             SENTRY_RELEASE=${{ github.sha }}
             BETTERSTACK_SOURCE_TOKEN=${{ secrets.BETTERSTACK_SOURCE_TOKEN }}
             BETTERSTACK_INGESTING_HOST=${{ vars.BETTERSTACK_INGESTING_HOST }}
+            DOCS_BASE_URL=${{ vars.DOCS_BASE_URL }}
             BANK_TRANSFER_BANK_NAME=${{ vars.BANK_TRANSFER_BANK_NAME }}
             BANK_TRANSFER_ACCOUNT_TYPE=${{ vars.BANK_TRANSFER_ACCOUNT_TYPE }}
             BANK_TRANSFER_ACCOUNT_NUMBER=${{ vars.BANK_TRANSFER_ACCOUNT_NUMBER }}

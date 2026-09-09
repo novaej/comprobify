@@ -12,13 +12,14 @@ Items are grouped by whether they're currently blocked, and on what.
 - [x] Write `terraform/environments/production` (droplet + DO Managed Postgres, mirroring staging's setup)
 - [x] Add the `plan-production`/`apply-production` job pair to `terraform.yml`
 - [x] Fix `deploy/caddy/Caddyfile` for the production domain (was hardcoded to `api-staging.comprobify.com`; now `{$PUBLIC_DOMAIN}`, Caddy's own env-var substitution, fed per-environment by each deploy workflow)
-- [ ] Generate unique production secrets: `ENCRYPTION_KEY`, `ADMIN_SECRET`, DB creds, RabbitMQ vhost/creds
-- [ ] Set up the `production` GitHub Environment's app secrets/variables (full set mirroring `staging`'s)
-- [ ] Set up the `production-infra` GitHub Environment (`DO_TOKEN`/`CLOUDFLARE_TOKEN`) — required-reviewer rule added *before* the secrets, never after
-- [ ] Create the "Comprobify Production" DigitalOcean Project (looked up by name in Terraform, never created by it)
-- [ ] Enable `release-production.yml` (uncomment trigger, remove `if: false`)
-- [ ] Enable `deploy-production.yml` (uncomment trigger, remove `if: false`)
-- [ ] Add branch protection to `production` (restrict pushes to automation, no force pushes)
+- [x] Generate unique production secrets: `ENCRYPTION_KEY`, `ADMIN_SECRET`, DB creds, RabbitMQ vhost/creds, `INTERNAL_SERVICE_SECRET`
+- [x] Set up the `production` GitHub Environment's app secrets/variables (full set mirroring `staging`'s)
+- [ ] **Coordinate `INTERNAL_SERVICE_SECRET` with comprobify-web's production deployment.** As of #208/ADR-035 this is required at startup — the API won't boot without it set to *something* — but a value that doesn't match comprobify-web's own production config boots fine and silently 403s every `POST /v1/register`/`/recover`/`/resend-verification` call with `INTERNAL_SERVICE_ONLY`. Unlike the other secrets above, this one can't be generated unilaterally on this side alone; both deployments must agree on the exact same value before either side goes live. See `docs/deployment-reference-production.md`'s GitHub Secrets section.
+- [x] Set up the `production-infra` GitHub Environment (`DO_TOKEN`/`CLOUDFLARE_TOKEN`) — required-reviewer rule added *before* the secrets, never after
+- [x] Create the "Comprobify Production" DigitalOcean Project (looked up by name in Terraform, never created by it)
+- [x] Enable `release-production.yml` (uncomment trigger, remove `if: false`)
+- [x] Enable `deploy-production.yml` (uncomment trigger, remove `if: false`)
+- [x] Add branch protection to `production` (restrict pushes to automation, no force pushes)
 - [ ] `terraform apply` — provision the droplet, DO Managed Postgres, Cloudflare DNS record
 - [ ] First-deploy DB steps: create the non-superuser app role, grant `public` + `sandbox` schema privileges
 - [ ] Push the first production tag/release, verify the pipeline (health check, admin auth, `xmllint`)
@@ -35,7 +36,7 @@ Not a separate action: the 5 scheduled cron jobs (notifications, subscriptions, 
 ## Blocked on legal entity registration
 
 - [ ] Set real `OPERATOR_*` env vars
-- [ ] Onboard the first real tenant, promote to production, verify one real invoice against SRI's actual production endpoint
+- [ ] Onboard the first real tenant **via comprobify-web** — direct `POST /v1/register` is no longer possible (#208/ADR-035, registration is web-app-only), so this item is also gated on comprobify-web's own production deployment being live with a matching `INTERNAL_SERVICE_SECRET` (see the coordination item above) — promote to production, verify one real invoice against SRI's actual production endpoint
 - [ ] **Card payments in production.** A Payphone application is bound to its registered domain, so production needs its own application and its own `PAYPHONE_TOKEN`/`PAYPHONE_STORE_ID` — the staging store's credentials will not authorise a production charge. Creating it requires KYC against the registered legal entity, which is what puts this here rather than under Unblocked. Until then, leave both unset: the card endpoints return `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and SPI bank transfer is unaffected, which is a supported launch state, not a broken one
 - [ ] Register the production Payphone application against `comprobify-web`'s actual **production** domain, not just create it — the Cajita widget only renders on the domain registered in Payphone's console (ADR-028), so a mismatched domain looks configured (credentials set, `503` gone) but silently fails to render at checkout
 - [ ] Once credentials exist, verify one real card payment end-to-end against Payphone's live (non-sandbox) endpoint — mirrors the "verify one real invoice against SRI's actual production endpoint" item above; a Payphone sandbox pass doesn't guarantee the live credentials/domain pairing actually works
@@ -59,6 +60,7 @@ Outstanding legal follow-ups, neither blocking: the controller/processor charact
 
 Decided: only production runs continuously. Staging's droplet and its Managed Postgres cluster (not Terraform-managed, torn down by hand) get destroyed between uses instead of left running idle — the Terraform code for staging stays in the repo, just not applied against anything most of the time.
 
-- [ ] Set the `STAGING_INFRA_ENABLED` repository variable (`terraform.yml` gates `plan-staging`/`apply-staging` on it — see `docs/terraform-digitalocean-setup.md`'s "Toggling staging infra on/off")
+- [x] Set the `STAGING_INFRA_ENABLED` repository variable (`terraform.yml` gates `plan-staging`/`apply-staging` on it — see `docs/terraform-digitalocean-setup.md`'s "Toggling staging infra on/off") — set to `false`; staging's droplet is destroyed
+- [x] Disable `deploy-staging.yml` while staging's droplet doesn't exist — otherwise every tag release fails its deploy step trying to SSH to a `DROPLET_IP` that no longer resolves to anything. `release-staging.yml` (fast-forwarding the `staging` branch) stays enabled regardless — it's harmless git bookkeeping, independent of whether a droplet exists to deploy to.
 
-Cycle going forward: flip `STAGING_INFRA_ENABLED` to `true` → `terraform apply` staging + manually recreate the DB cluster and anything else destroyed → land and validate the infra change there → flip back to `false` → destroy the droplet/cluster by hand again. `production-infra`'s required-reviewer gate (once set up, matching `staging-infra`'s existing one) is what actually sequences "validate in staging, then apply to production" — approve staging's run, check it, then separately approve production's.
+Cycle going forward: flip `STAGING_INFRA_ENABLED` to `true` → `terraform apply` staging + manually recreate the DB cluster and anything else destroyed → re-enable `deploy-staging.yml` (uncomment its `push` trigger, remove the `if: false` guard) → land and validate the infra change there → flip `STAGING_INFRA_ENABLED` back to `false` → disable `deploy-staging.yml` again → destroy the droplet/cluster by hand. `production-infra`'s required-reviewer gate is what actually sequences "validate in staging, then apply to production" — approve staging's run, check it, then separately approve production's.

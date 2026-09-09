@@ -121,7 +121,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `INFRA_SSH_PRIVATE_KEY` | |
 | `ENCRYPTION_KEY` | |
 | `ADMIN_SECRET` | |
-| `INTERNAL_SERVICE_SECRET` | Shared with `comprobify-web`'s BFF (`src/middleware/trusted-forwarded-ip.js`) — must match the value configured on that side exactly. Inactive until `comprobify-web` also sends `X-Internal-Service-Secret`/`X-Forwarded-Visitor-Ip` (see its `NEXT_STEPS.md`) |
+| `INTERNAL_SERVICE_SECRET` | Required at startup as of #208/ADR-035 — gates `POST /v1/register`/`/recover`/`/resend-verification`/the consuming `POST /v1/verify-email` to `comprobify-web`'s own BFF only; also lets it override `req.ip` with the real visitor's IP (`src/middleware/trusted-forwarded-ip.js`). Must match the value configured on the `comprobify-web` side exactly. |
 | `DB_HOST` | |
 | `DB_PORT` | |
 | `DB_NAME` | |
@@ -160,8 +160,9 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `OPERATOR_ADDRESS` | |
 | `AGREEMENTS_ENABLED` | Leave **unset** to keep legal documents enabled (the default). Set to exactly `false` to run without Terms/Privacy/DPA — the public agreement endpoints then behave as if nothing were published and `POST /v1/tenants/promote` is not gated on acceptance. An unset variable renders empty, and `'' !== 'false'`, so this fails **closed** — unlike `IVA_RATE`, an empty value here is safe. |
 | `BETTERSTACK_INGESTING_HOST` | Only needed if the Betterstack source's setup page shows a specific regional ingesting host rather than the shared default — not sensitive, so a Variable rather than a Secret |
+| `DOCS_BASE_URL` | `https://docs.comprobify.com` — the docs site is live and its `/errors/*` section matches the path `error-handler.js` builds; every RFC 7807 error response's `type` field now links there instead of a non-resolving `/problems/{slug}` placeholder |
 
-Not set at all (code-level defaults are correct as-is): `PORT`, `DOCS_BASE_URL`, `VERIFICATION_TOKEN_TTL_HOURS`, `SRI_TEST_BASE_URL`, `SRI_PROD_BASE_URL`, `RATE_LIMIT_WINDOW_MS`, `RABBITMQ_SRI_EXCHANGE`, `QUEUE_RECONCILE_*`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE` (must stay genuinely absent, not empty — see `docs/terraform-digitalocean-setup.md`'s env var reference table), `SRI_MOCK_MODE` (default `false`/real SRI calls is correct for the deploy pipeline's baseline `.env` — only ever set as a manual, temporary edit on the droplet itself when generating demo data, never wired into GitHub or the heredoc). `REDIS_URL` is a separate case — not a GitHub Secret/Variable at all, but not genuinely unset either: it's hardcoded directly into the deploy workflow's heredoc (`redis://redis:6379`, deterministic across environments) — see `docs/terraform-digitalocean-setup.md`'s env var reference table.
+Not set at all (code-level defaults are correct as-is): `PORT`, `VERIFICATION_TOKEN_TTL_HOURS`, `SRI_TEST_BASE_URL`, `SRI_PROD_BASE_URL`, `RATE_LIMIT_WINDOW_MS`, `RABBITMQ_SRI_EXCHANGE`, `QUEUE_RECONCILE_*`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE` (must stay genuinely absent, not empty — see `docs/terraform-digitalocean-setup.md`'s env var reference table), `SRI_MOCK_MODE` (default `false`/real SRI calls is correct for the deploy pipeline's baseline `.env` — only ever set as a manual, temporary edit on the droplet itself when generating demo data, never wired into GitHub or the heredoc). `REDIS_URL` is a separate case — not a GitHub Secret/Variable at all, but not genuinely unset either: it's hardcoded directly into the deploy workflow's heredoc (`redis://redis:6379`, deterministic across environments) — see `docs/terraform-digitalocean-setup.md`'s env var reference table.
 
 ### GitHub Environment: `staging-infra` — Secrets
 
