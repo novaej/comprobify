@@ -20,8 +20,9 @@ Items are grouped by whether they're currently blocked, and on what.
 - [x] Enable `release-production.yml` (uncomment trigger, remove `if: false`)
 - [x] Enable `deploy-production.yml` (uncomment trigger, remove `if: false`)
 - [x] Add branch protection to `production` (restrict pushes to automation, no force pushes)
-- [ ] `terraform apply` — provision the droplet, DO Managed Postgres, Cloudflare DNS record
-- [ ] First-deploy DB steps: create the non-superuser app role, grant `public` + `sandbox` schema privileges
+- [x] `terraform apply` — provision the droplet + Cloudflare DNS record (Terraform-managed), and separately create the DO Managed Postgres cluster by hand (not Terraform-managed, same as staging — see `docs/deployment-reference-production.md`)
+- [x] First-deploy DB step 1 — create the non-superuser app role, grant `public` schema privileges
+- [ ] First-deploy DB step 2 — grant `sandbox` schema privileges. **Blocked on the first deploy actually running**, not just on the DB existing: the `sandbox` schema itself is created by migration 033, which only runs once the `api` container starts for the first time against this database — there's nothing to grant on yet.
 - [ ] Push the first production tag/release, verify the pipeline (health check, admin auth, `xmllint`)
 - [ ] Register the production Mailgun webhook, remove the sandbox recipient restriction
 - [ ] Extend the Cloudflare Email Obfuscation rule to `api.comprobify.com`
