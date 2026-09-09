@@ -15,7 +15,7 @@ function esSidebar() {
       items: [
         { text: 'Resumen', link: '/endpoints/' },
         {
-          text: 'Registro',
+          text: 'Cuenta (solo app web)',
           collapsed: false,
           items: [
             { text: 'Registrarse', link: '/endpoints/register' },
@@ -145,7 +145,7 @@ function enSidebar() {
       items: [
         { text: 'Overview', link: '/en/endpoints/' },
         {
-          text: 'Registration',
+          text: 'Account (web app only)',
           collapsed: false,
           items: [
             { text: 'Register', link: '/en/endpoints/register' },

@@ -1,19 +1,20 @@
 # Endpoints
 
-Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** `X-Issuer-Id: <issuer-id>`. La configuración del tenant, la gestión de emisores y la gestión de llaves solo requieren `Authorization: Bearer <api-key>`. El registro y la verificación de correo son públicos.
+Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** `X-Issuer-Id: <issuer-id>`. La configuración del tenant, la gestión de emisores y la gestión de llaves solo requieren `Authorization: Bearer <api-key>`. La creación, recuperación y activación de cuentas están restringidas a la aplicación web de Comprobify — ver abajo.
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
 
-## Registro (público)
+## Creación, recuperación y activación de cuenta (solo app web de Comprobify)
+
+El registro, la recuperación de llave perdida y la confirmación de correo ocurren todos a través de la aplicación web de Comprobify, no directamente contra esta API — ver [Registro](register.md) para saber por qué. La única excepción es la comprobación de solo lectura de abajo.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/v1/register` | Autoservicio: crea tenant + emisor + API key de sandbox. Solo para cuentas nuevas — si el correo ya existe, rechaza con `409 CONFLICT` (usa `/v1/recover` en su lugar). |
-| `POST` | `/v1/recover` | Recupera el acceso a una cuenta existente con el mismo certificado P12 — revoca y reemite la llave del entorno actual solo si el certificado coincide con el archivado |
-| `GET` | `/v1/verify-email/check` | Comprueba si un token de verificación es válido, sin consumirlo — seguro para que lo precarguen escáneres de enlaces de correo |
-| `POST` | `/v1/verify-email` | Confirma la verificación con el token — activa el tenant; llamar solo ante una acción explícita del usuario |
-| `GET` | `/v1/verify-email` | Endpoint heredado que combina comprobación y consumo, mantenido por compatibilidad hacia atrás |
-| `POST` | `/v1/resend-verification` | Reenvía el correo de verificación (regenera el token) |
+| `GET` | `/v1/verify-email/check` | Comprueba si un token de verificación es válido, sin consumirlo — seguro para que lo precarguen escáneres de enlaces de correo. El único endpoint de este grupo invocable directamente. |
+| `POST` | `/v1/register` | Solo desde la app web — ver [Registro](register.md) |
+| `POST` | `/v1/recover` | Solo desde la app web — ver [Recuperar cuenta](recover.md) |
+| `POST` | `/v1/resend-verification` | Solo desde la app web — ver [Reenviar Correo de Verificación](resend-verification.md) |
+| `POST` | `/v1/verify-email` | Solo desde la app web — ver [Verificar Correo](verify-email.md) |
 
 ## Acuerdos (público)
 

@@ -1,19 +1,20 @@
 # Endpoints
 
-Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-Id: <issuer-id>`. Tenant settings, issuer management, and key management require only `Authorization: Bearer <api-key>`. Registration and email verification are public.
+Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-Id: <issuer-id>`. Tenant settings, issuer management, and key management require only `Authorization: Bearer <api-key>`. Account creation/recovery/activation are restricted to the Comprobify web app — see below.
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
 
-## Registration (public)
+## Account creation, recovery & activation (Comprobify web app only)
+
+Sign up, lost-key recovery, and email confirmation all happen through the Comprobify web app, not directly against this API — see [Register](register.md) for why. The one exception is the read-only check below.
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/v1/register` | Self-service: create tenant + issuer + sandbox API key. New accounts only — if the email already exists, rejects with `409 CONFLICT` (use `/v1/recover` instead). |
-| `POST` | `/v1/recover` | Recover access to an existing account with the same P12 certificate — revokes and reissues the current environment's key only if the certificate matches the one on file |
-| `GET` | `/v1/verify-email/check` | Check whether a verification token is valid, without consuming it — safe for email link-scanners to prefetch |
-| `POST` | `/v1/verify-email` | Confirm verification with the token — activates the tenant; call only on explicit user action |
-| `GET` | `/v1/verify-email` | Legacy combined check-and-consume endpoint, kept for backward compatibility |
-| `POST` | `/v1/resend-verification` | Resend verification email (regenerates token) |
+| `GET` | `/v1/verify-email/check` | Check whether a verification token is valid, without consuming it — safe for email link-scanners to prefetch. The only endpoint in this group callable directly. |
+| `POST` | `/v1/register` | Frontend-only — see [Register](register.md) |
+| `POST` | `/v1/recover` | Frontend-only — see [Recover Account](recover.md) |
+| `POST` | `/v1/resend-verification` | Frontend-only — see [Resend Verification](resend-verification.md) |
+| `POST` | `/v1/verify-email` | Frontend-only — see [Verify Email](verify-email.md) |
 
 ## Agreements (public)
 

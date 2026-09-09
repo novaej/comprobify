@@ -40,82 +40,13 @@ or, for an invalid/expired/unknown token:
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `token` is missing, not hexadecimal, or not exactly 64 characters |
 
-## Confirm verification (consuming)
+## Confirming verification
 
-```
-POST /v1/verify-email
-Content-Type: application/json
+The actual consuming action (`POST /v1/verify-email`) — the one that activates the tenant — is only callable by the Comprobify web app, the same as account creation itself (see [Register](register.md)). It isn't documented here as a third-party-callable endpoint. If you've built your own verification page against `verificationRedirectUrl`, use the check endpoint above to validate the token, then send the user back to the Comprobify web app to actually confirm.
 
-{ "token": "<token>" }
-```
+### Notes
 
-The actual consuming action — activates the tenant and cannot be triggered by an automated `GET` prefetch. Call this only in response to an explicit user action (e.g. a "Verify my email" button), never automatically on page load.
-
-### Authentication
-
-None — public endpoint. The token in the request body acts as the credential.
-
-### Body parameters
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `token` | string (64-char hex) | Yes | Verification token from the registration email |
-
-### Response
-
-```json
-{
-  "ok": true,
-  "email": "you@example.com",
-  "message": "Email verified. You can now promote your account to production."
-}
-```
-
-### Errors
-
-| Status | Code | When |
-|---|---|---|
-| `400` | `VALIDATION_FAILED` | `token` is missing, not hexadecimal, or not exactly 64 characters |
-| `400` | `INVALID_OR_EXPIRED_TOKEN` | Token does not match any pending tenant, or has expired |
-
-## Legacy fallback (consuming `GET`)
-
-```
-GET /v1/verify-email?token=<token>
-```
-
-Combines check-and-consume in a single `GET`, kept for backward compatibility. This is what the verification email links to directly when no `verificationRedirectUrl` was set at registration (e.g. a caller using the API directly rather than through a first-party frontend). New integrations with their own verification page should use the check/confirm pair above instead — a `GET`-only flow remains vulnerable to the link-scanner problem described above.
-
-### Authentication
-
-None — public endpoint. The token in the query string acts as the credential.
-
-### Query parameters
-
-| Parameter | Type | Required | Description |
-|---|---|---|---|
-| `token` | string (64-char hex) | Yes | Verification token from the registration email |
-
-### Response
-
-```json
-{
-  "ok": true,
-  "email": "you@example.com",
-  "message": "Email verified. You can now promote your account to production."
-}
-```
-
-### Errors
-
-| Status | Code | When |
-|---|---|---|
-| `400` | `VALIDATION_FAILED` | `token` is missing, not hexadecimal, or not exactly 64 characters |
-| `400` | `INVALID_OR_EXPIRED_TOKEN` | Token does not match any pending tenant, or has expired |
-
-## Notes
-
-- Tokens expire after the configured TTL (default 24 hours). Use `POST /v1/resend-verification` to get a fresh one.
-- If `verificationRedirectUrl` was set at registration, the email link points to that URL instead of directly to the API — the frontend at that URL is responsible for reading the `token` query parameter and driving the check → confirm flow above (or falling back to the legacy `GET` if it doesn't implement its own page).
-- Verification is a prerequisite for `POST /v1/tenants/promote`. Unverified tenants can use the sandbox but cannot switch to production.
-- Activating an account (via either the `POST` confirm or the legacy `GET`) logs an `EMAIL_VERIFIED` event to the tenant event log. The non-consuming check never logs anything.
+- Tokens expire after the configured TTL (default 24 hours). A fresh verification email is only ever sent by the Comprobify web app.
+- The verification email always links to the URL the account was created with (`verificationRedirectUrl`) — there is no API-hosted verification page.
+- Verification is a prerequisite for promoting an account to production. Unverified tenants can use the sandbox but cannot switch to production.
+- Activating an account logs an `EMAIL_VERIFIED` event to the tenant event log. The non-consuming check above never logs anything.

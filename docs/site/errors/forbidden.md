@@ -25,7 +25,7 @@ La operación requiere que se haya completado la verificación de correo. Esto b
 - Promover a producción (`POST /v1/tenants/promote`)
 - Generar nuevas API keys (`POST /v1/keys`)
 
-**Qué hacer:** Revisa la bandeja de entrada en busca del correo de verificación original, o solicita uno nuevo vía `POST /v1/resend-verification`. Luego reintenta la operación original.
+**Qué hacer:** Revisa la bandeja de entrada en busca del correo de verificación original, o pide uno nuevo desde la aplicación web de Comprobify (`POST /v1/resend-verification` es solo invocable por ella — ver [Reenviar Correo de Verificación](../endpoints/resend-verification.md)). Luego reintenta la operación original.
 
 ### `PRODUCTION_KEY_REQUIRES_PROMOTION`
 

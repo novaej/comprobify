@@ -5,11 +5,17 @@ const config = {
   docsBaseUrl: process.env.DOCS_BASE_URL || '',
   encryptionKey: process.env.ENCRYPTION_KEY || '',
   adminSecret: process.env.ADMIN_SECRET || '',
-  // Optional — lets a trusted first-party BFF (comprobify-web) override the
-  // resolved req.ip with a visitor IP it forwards itself, via
-  // src/middleware/trusted-forwarded-ip.js. Unset means the feature is
-  // inactive and req.ip resolution is unchanged (same degrade-gracefully
-  // treatment as REDIS_URL/SENTRY_DSN) — see NEXT_STEPS.md #8.
+  // Required (validated in src/config/validate.js) — shared secret proving a
+  // request genuinely came from comprobify-web's own server-side BFF, not a
+  // direct API caller. Two consumers with opposite fail modes:
+  //   - src/middleware/trusted-forwarded-ip.js: optional-feeling, degrades
+  //     gracefully — lets the BFF override req.ip with a visitor IP it
+  //     resolved itself; a missing/wrong secret there just leaves req.ip as-is.
+  //   - src/middleware/require-internal-service.js (ADR-035): a hard gate on
+  //     account creation/recovery/activation (POST /v1/register, /recover,
+  //     /resend-verification, /verify-email) — fails CLOSED, rejecting the
+  //     request outright, since those routes must be unreachable by anyone
+  //     but comprobify-web.
   internalServiceSecret: process.env.INTERNAL_SERVICE_SECRET || '',
   db: {
     host: process.env.DB_HOST || 'localhost',

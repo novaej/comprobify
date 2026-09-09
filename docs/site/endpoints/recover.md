@@ -1,101 +1,18 @@
 # Recuperar cuenta
 
-Recupera el acceso a una cuenta existente cuando se perdió la API key. Requiere el mismo certificado P12 usado al registrarse — la API key se revoca y se reemplaza únicamente cuando el certificado coincide con el que está en archivo para esa cuenta.
-
 ```
 POST /v1/recover
 ```
 
-## Autenticación
+Recupera el acceso a una cuenta existente cuando se perdió la API key, verificando el certificado P12 usado en el registro.
 
-Ninguna — endpoint público.
+## Este no es un endpoint invocable por terceros
 
-## Límite de tasa
+Al igual que [Registro](register.md), `POST /v1/recover` requiere un encabezado `X-Internal-Service-Secret` válido — una credencial que solo posee la aplicación web de Comprobify. Una solicitud sin él es rechazada con `403 INTERNAL_SERVICE_ONLY`.
 
-Compartido con `POST /v1/register` y `POST /v1/resend-verification` — 5 solicitudes por hora por IP.
+**Si perdiste tu API key, usa el flujo de recuperación de cuenta en la aplicación web de Comprobify.** Esta sube tu certificado P12 en tu nombre y, si coincide, te emite una llave nueva para el entorno actual de tu cuenta (sandbox o producción) — el mismo resultado que este endpoint siempre produjo, solo que iniciado desde la app en lugar de directamente contra la API.
 
-## Cuerpo de la solicitud
+## Relacionado
 
-`multipart/form-data` (requerido — debe incluirse un archivo de certificado P12).
-
-| Campo | Tipo | Requerido | Descripción |
-|---|---|---|---|
-| `cert` | file | Sí | Archivo de certificado P12 del SRI — debe coincidir con el certificado en archivo para la cuenta |
-| `certPassword` | string | No | Contraseña del P12 (omitir si no tiene) |
-| `email` | string | Sí | Correo de la cuenta a recuperar |
-
-## Respuesta
-
-Este endpoint devuelve **siempre la misma forma de respuesta genérica** salvo que el certificado coincida realmente con una cuenta existente — ver la sección "Comportamiento contra enumeración" abajo.
-
-### 200 OK — certificado coincide con una cuenta existente
-
-La API key actual para el entorno vigente de la cuenta (sandbox o producción) se revoca y se emite una nueva de inmediato.
-
-```json
-{
-  "ok": true,
-  "tenant": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "email": "you@company.com",
-    "subscriptionTier": "FREE",
-    "status": "PENDING_VERIFICATION",
-    "documentQuota": 100,
-    "documentCount": 12
-  },
-  "issuer": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "ruc": "1712345678001",
-    "businessName": "My Company S.A.",
-    "tradeName": null,
-    "branchCode": "001",
-    "issuePointCode": "001",
-    "certFingerprint": "SHA256:...",
-    "certExpiry": "2027-01-01T00:00:00.000Z"
-  },
-  "apiKey": "abc123...",
-  "environment": "sandbox"
-}
-```
-
-`environment` refleja el entorno **real y actual** de la cuenta (`"sandbox"` o `"production"`) — un tenant ya promovido a producción recupera su llave de producción, no una de sandbox.
-
-**Como validación adicional, la cuenta también vuelve a `PENDING_VERIFICATION`** — que el certificado coincida solo prueba que tienes el archivo P12, no que controlas el correo registrado. Se envía en segundo plano un correo de verificación con un enlace nuevo (no bloquea esta respuesta). La llave devuelta ya funciona para crear comprobantes en sandbox, pero las acciones que requieren una cuenta `ACTIVE` — crear una sucursal, promover a producción, iniciar una suscripción, o generar llaves adicionales — quedan bloqueadas hasta hacer clic en el enlace de ese correo. Ver [Verificar Correo](./verify-email.md).
-
-### 200 OK — cualquier otro caso
-
-```json
-{
-  "ok": true,
-  "message": "If this email and certificate match an existing account, a new key has been issued."
-}
-```
-
-Esta misma respuesta genérica se devuelve cuando el correo no está registrado, cuando la cuenta no tiene emisor (estado inconsistente), o cuando el certificado no coincide con el archivado — deliberadamente, para no revelar cuál de esos casos ocurrió (ver abajo).
-
-## Errores
-
-| Estado HTTP | Código | Cuándo ocurre |
-|---|---|---|
-| `400` | `VALIDATION_FAILED` | Falta el correo, el archivo P12, o tienen formato inválido |
-| `400` | `CERTIFICATE_INVALID` / `CERTIFICATE_PASSWORD_INVALID` / `CERTIFICATE_KEY_NOT_FOUND` / `CERTIFICATE_EXPIRED` | El archivo P12 está corrupto, la contraseña es incorrecta, o el certificado expiró — estos errores ocurren **antes** de buscar la cuenta, por lo que nunca revelan si el correo existe |
-| `403` | `ACCOUNT_SUSPENDED` | La cuenta está suspendida — solo se revela cuando el certificado enviado sí coincide con el archivado (ver abajo) |
-| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
-
-## Comportamiento contra enumeración
-
-Este endpoint está diseñado deliberadamente para que un llamador **sin el certificado correcto** no pueda distinguir entre:
-
-- el correo no está registrado
-- el correo está registrado pero la cuenta no tiene emisor (estado inconsistente)
-- el correo está registrado pero el certificado enviado no coincide
-
-Los tres casos devuelven exactamente la misma respuesta `200` genérica, sin llave, sin revocar ni emitir nada. Un certificado que coincide es la misma prueba de propiedad que acepta el registro nuevo — solo en ese caso se emite la llave, y solo en ese caso se revela si la cuenta está suspendida.
-
-Los errores de certificado (archivo corrupto, contraseña incorrecta, certificado expirado) se validan **antes** de buscar la cuenta por correo, así que tampoco correlacionan con la existencia de la cuenta.
-
-## Notas
-
-- No confundir con `POST /v1/register` — ese endpoint es solo para cuentas nuevas; si el correo ya existe, rechaza con `409 CONFLICT` y no revoca ni emite ninguna llave.
-- El correo de aviso reutiliza el mismo mecanismo de `POST /v1/resend-verification` (mismo token, misma plantilla) y el mismo flujo de redención (`GET /v1/verify-email/check` + `POST /v1/verify-email`, o el `GET /v1/verify-email` heredado), que devuelve la cuenta a `ACTIVE`. Si no tienes acceso al correo, un administrador también puede verificar la cuenta manualmente.
-- Este requisito de reverificación aplica incluso si la cuenta ya estaba `ACTIVE` antes de la recuperación — que el certificado coincida ya no es suficiente por sí solo para conservar todos los privilegios de la cuenta sin también confirmar el acceso al correo.
+- [Registro](register.md) — también restringido a la app web, por la misma razón
+- [Verificar correo](verify-email.md) — la recuperación también fuerza una nueva verificación; el endpoint de comprobación ahí sigue siendo público

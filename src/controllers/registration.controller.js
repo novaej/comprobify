@@ -20,12 +20,7 @@ const recover = async (req, res) => {
   res.json(result);
 };
 
-const verifyEmail = async (req, res) => {
-  const { email } = await registrationService.verifyEmail(req.query.token);
-  res.json({ ok: true, email, message: 'Email verified. You can now promote your account to production.' });
-};
-
-// Read-only counterpart of verifyEmail — safe for a link-scanner's automated
+// Read-only counterpart of confirmVerifyEmail — safe for a link-scanner's automated
 // GET to hit repeatedly, since it never consumes the token.
 const checkVerifyEmail = async (req, res) => {
   const result = await registrationService.checkVerificationToken(req.query.token);
@@ -45,4 +40,4 @@ const resendVerification = async (req, res) => {
   res.json({ ok: true, message: 'If that email is registered and unverified, a new verification email has been sent.' });
 };
 
-module.exports = { register, recover, resendVerification, verifyEmail, checkVerifyEmail, confirmVerifyEmail };
+module.exports = { register, recover, resendVerification, checkVerifyEmail, confirmVerifyEmail };

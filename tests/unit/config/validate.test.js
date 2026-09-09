@@ -12,6 +12,7 @@ function validConfig(overrides = {}) {
     docsBaseUrl: 'https://example.com',
     encryptionKey: 'a'.repeat(64),
     adminSecret: 'secret123',
+    internalServiceSecret: 'internal-secret-123',
     db: {
       host: 'localhost',
       port: 5432,
@@ -87,6 +88,11 @@ describe('validateConfig', () => {
     test('throws listing both ENCRYPTION_KEY and ADMIN_SECRET in a single combined error', () => {
       const config = validConfig({ encryptionKey: '', adminSecret: '' });
       expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): ENCRYPTION_KEY, ADMIN_SECRET');
+    });
+
+    test('throws listing INTERNAL_SERVICE_SECRET when it is missing', () => {
+      const config = validConfig({ internalServiceSecret: '' });
+      expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): INTERNAL_SERVICE_SECRET');
     });
 
     test('throws listing APP_BASE_URL when it is missing', () => {
@@ -283,10 +289,11 @@ describe('validateCoreConfig', () => {
   // auth, certificate encryption, billing, inbound webhook verification) —
   // workers/worker.js's message handlers never reach them, so
   // validateCoreConfig must not require any of them.
-  test('does not throw when ENCRYPTION_KEY, ADMIN_SECRET, APP_BASE_URL, BANK_TRANSFER_*, ADMIN_NOTIFICATION_EMAIL, and MAILGUN_WEBHOOK_SIGNING_KEY are all missing', () => {
+  test('does not throw when ENCRYPTION_KEY, ADMIN_SECRET, INTERNAL_SERVICE_SECRET, APP_BASE_URL, BANK_TRANSFER_*, ADMIN_NOTIFICATION_EMAIL, and MAILGUN_WEBHOOK_SIGNING_KEY are all missing', () => {
     const config = validConfig({
       encryptionKey: '',
       adminSecret: '',
+      internalServiceSecret: '',
       appBaseUrl: '',
       bankTransfer: {
         bankName: '',

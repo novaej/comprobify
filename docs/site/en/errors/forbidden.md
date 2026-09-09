@@ -25,7 +25,7 @@ The operation requires email verification to have been completed. This blocks:
 - Promoting to production (`POST /v1/tenants/promote`)
 - Minting new API keys (`POST /v1/keys`)
 
-**What to do:** Check the inbox for the original verification email, or request a new one via `POST /v1/resend-verification`. Then retry the original operation.
+**What to do:** Check the inbox for the original verification email, or request a new one from the Comprobify web app (`POST /v1/resend-verification` is only callable by it — see [Resend Verification](../endpoints/resend-verification.md)). Then retry the original operation.
 
 ### `PRODUCTION_KEY_REQUIRES_PROMOTION`
 

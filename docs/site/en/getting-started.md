@@ -20,73 +20,23 @@ You can also download the collection JSON directly: [`comprobify.postman_collect
 
 ---
 
-## 1. Register
+## 1. Create your account (in the web app, not by API)
 
-Create your account, issuer, and sandbox API key in a single call. Each RUC can only be registered once.
+**Account creation is not a third-party-callable endpoint.** `POST /v1/register` requires an `X-Internal-Service-Secret` header that only the Comprobify web app holds — any other caller gets `403 INTERNAL_SERVICE_ONLY`. This is deliberate: each RUC can only be registered once, and registration is a guided flow (uploading your `.p12` certificate, accepting the legal agreements, etc.) meant to happen in the app.
 
-```http
-POST /v1/register
-Content-Type: multipart/form-data
-```
+**Sign up at the Comprobify web app.** Once you're done, your account already has an issuer and a sandbox API key — the same API key `POST /v1/register` used to return directly. Copy it from the dashboard; it's shown only once.
 
-| Field | Description |
-|---|---|
-| `email` | Your email address — used for verification and billing |
-| `ruc` | Your 13-digit Ecuadorian tax ID (RUC) |
-| `businessName` | Legal company name as it appears on your RUC |
-| `branchCode` | 3-digit SRI branch code (e.g. `001` for the main branch) |
-| `issuePointCode` | 3-digit SRI issue point code (e.g. `001`) |
-| `emissionType` | SRI emission type: always `1` (normal) |
-| `requiredAccounting` | `true` if your company is required to keep accounting records (*obligado a llevar contabilidad*), `false` otherwise |
-| `cert` | Your `.p12` digital certificate file issued by the SRI CA (Banco Central or Security Data) |
-| `certPassword` | Password for the `.p12` file |
+The account starts on the **FREE** tier (5 documents/month, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
 
-Response:
-
-```json
-{
-  "ok": true,
-  "tenant": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "email": "your@email.com",
-    "subscriptionTier": "FREE",
-    "status": "PENDING_VERIFICATION",
-    "documentQuota": 2
-  },
-  "issuer": { "id": "00000000-0000-0000-0000-000000000001", "ruc": "...", "sandbox": true },
-  "apiKey": "<your-sandbox-api-key>"
-}
-```
-
-**Store the `apiKey` — it is shown only once.**
-
-The account starts on the **FREE** tier (2 documents, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
-
-**Registration errors:**
-
-| Status | Code | Reason |
-|---|---|---|
-| `409` | `CONFLICT` | Email already registered |
-| `409` | `CONFLICT` | RUC already registered |
-| `400` | `BAD_REQUEST` | Certificate is expired or invalid |
-| `429` | `TOO_MANY_REQUESTS` | More than 5 registration attempts per hour from this IP |
-
-Lost your API key? `POST /v1/register` won't recover it for you anymore — use [`POST /v1/recover`](endpoints/recover.md) instead, with the same `.p12` certificate you registered with.
+Lost your API key? Account recovery (`POST /v1/recover`) also happens in the web app, by uploading the same `.p12` certificate you registered with — see [Recover Account](endpoints/recover.md).
 
 ---
 
 ## 2. Verify your email
 
-A verification email is sent to the address you registered with. Click the link, or call the token from the email against the API directly:
+The web app sends a verification email to the address you registered with, linking back to its own verification page — click it there to activate your account.
 
-```http
-POST /v1/verify-email
-Content-Type: application/json
-
-{ "token": "<token>" }
-```
-
-(A `GET /v1/verify-email?token=<token>` legacy variant also exists for direct API callers — see [Verify Email](endpoints/verify-email.md) for the full check/confirm flow and why it's split this way.)
+`GET /v1/verify-email/check?token=<token>` (the read-only, non-consuming check) stays public if you want to confirm a token is valid programmatically; the action that actually activates the account (`POST /v1/verify-email`) is, like registration, only callable by the web app — see [Verify Email](endpoints/verify-email.md) for the full detail.
 
 Email verification is required before you can promote to production. You can issue sandbox invoices immediately without verifying.
 
@@ -104,7 +54,7 @@ Authorization: Bearer <your-api-key>
 
 The key is SHA-256 hashed on each request — the plaintext is never persisted after creation. If a key is compromised, contact support to revoke it and issue a new one.
 
-> **What do I need to use the API directly?** Just the key `POST /v1/register` returned to you. That key already has every permission (`ALL_SCOPES`) and covers all your branches — you don't need to call `POST /v1/keys` or any other setup endpoint before creating your first document. Minting additional keys (`POST /v1/keys`) and registering your own webhooks (`POST /v1/webhooks`) are Starter-and-up features — see "Multiple named keys per tenant" and the tier table below — but neither is a requirement to integrate.
+> **What do I need to use the API directly?** Just the key your account already came with from signing up in the web app (see section 1 above). That key already has every permission (`ALL_SCOPES`) and covers all your branches — you don't need to call `POST /v1/keys` or any other setup endpoint before creating your first document. Minting additional keys (`POST /v1/keys`) and registering your own webhooks (`POST /v1/webhooks`) are Starter-and-up features — see "Multiple named keys per tenant" and the tier table below — but neither is a requirement to integrate.
 
 ---
 

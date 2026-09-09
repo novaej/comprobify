@@ -20,73 +20,23 @@ También puedes descargar el JSON de la colección directamente: [`comprobify.po
 
 ---
 
-## 1. Registro
+## 1. Crea tu cuenta (en la aplicación web, no por API)
 
-Crea tu cuenta, emisor y API key de sandbox en una sola llamada. Cada RUC solo puede registrarse una vez.
+**La creación de cuentas no es un endpoint invocable por terceros.** `POST /v1/register` requiere un encabezado `X-Internal-Service-Secret` que solo posee la aplicación web de Comprobify — cualquier otra llamada recibe `403 INTERNAL_SERVICE_ONLY`. Esto es intencional: cada RUC solo puede registrarse una vez, y el registro es un flujo guiado (subir tu certificado `.p12`, aceptar los acuerdos legales, etc.) pensado para hacerse desde la app.
 
-```http
-POST /v1/register
-Content-Type: multipart/form-data
-```
+**Regístrate en la aplicación web de Comprobify.** Al terminar, tu cuenta ya tiene un emisor y una API key de sandbox — la misma API key que `POST /v1/register` habría devuelto antes. Cópiala desde el panel; se muestra solo una vez.
 
-| Campo | Descripción |
-|---|---|
-| `email` | Tu dirección de correo — usada para verificación y facturación |
-| `ruc` | Tu RUC ecuatoriano de 13 dígitos |
-| `businessName` | Razón social tal como aparece en tu RUC |
-| `branchCode` | Código de sucursal SRI de 3 dígitos (p. ej. `001` para la sucursal principal) |
-| `issuePointCode` | Código de punto de emisión SRI de 3 dígitos (p. ej. `001`) |
-| `emissionType` | Tipo de emisión SRI: siempre `1` (normal) |
-| `requiredAccounting` | `true` si tu empresa está obligada a llevar contabilidad, `false` en caso contrario |
-| `cert` | Tu archivo de certificado digital `.p12` emitido por la CA del SRI (Banco Central o Security Data) |
-| `certPassword` | Contraseña del archivo `.p12` |
+La cuenta comienza en el tier **FREE** (5 comprobantes/mes, 1 sucursal, 1 punto de emisión, solo facturas). Todos los comprobantes se envían al ambiente de pruebas del SRI hasta que te promuevas a producción. Las pruebas en sandbox no consumen la cuota — solo los comprobantes de producción lo hacen.
 
-Respuesta:
-
-```json
-{
-  "ok": true,
-  "tenant": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "email": "your@email.com",
-    "subscriptionTier": "FREE",
-    "status": "PENDING_VERIFICATION",
-    "documentQuota": 2
-  },
-  "issuer": { "id": "00000000-0000-0000-0000-000000000001", "ruc": "...", "sandbox": true },
-  "apiKey": "<your-sandbox-api-key>"
-}
-```
-
-**Guarda el `apiKey` — se muestra solo una vez.**
-
-La cuenta comienza en el tier **FREE** (2 comprobantes, 1 sucursal, 1 punto de emisión, solo facturas). Todos los comprobantes se envían al ambiente de pruebas del SRI hasta que te promuevas a producción. Las pruebas en sandbox no consumen la cuota — solo los comprobantes de producción lo hacen.
-
-**Errores de registro:**
-
-| Estado HTTP | Código | Razón |
-|---|---|---|
-| `409` | `CONFLICT` | El correo ya está registrado |
-| `409` | `CONFLICT` | El RUC ya está registrado |
-| `400` | `BAD_REQUEST` | El certificado está expirado o es inválido |
-| `429` | `TOO_MANY_REQUESTS` | Más de 5 intentos de registro por hora desde esta IP |
-
-¿Perdiste tu API key? `POST /v1/register` ya no la recupera — usa [`POST /v1/recover`](endpoints/recover.md) en su lugar, con el mismo certificado `.p12` con el que te registraste.
+¿Perdiste tu API key? La recuperación de cuenta (`POST /v1/recover`) también se hace desde la aplicación web, subiendo el mismo certificado `.p12` con el que te registraste — ver [Recuperar cuenta](endpoints/recover.md).
 
 ---
 
 ## 2. Verifica tu correo
 
-Se envía un correo de verificación a la dirección con la que te registraste. Haz clic en el enlace, o llama directamente a la API con el token del correo:
+La aplicación web te envía un correo de verificación a la dirección con la que te registraste, con un enlace de vuelta a su propia página de verificación — haz clic ahí para activar tu cuenta.
 
-```http
-POST /v1/verify-email
-Content-Type: application/json
-
-{ "token": "<token>" }
-```
-
-(También existe una variante heredada `GET /v1/verify-email?token=<token>` para consumidores directos de la API — ver [Verificar Correo](endpoints/verify-email.md) para el flujo completo de comprobar/confirmar y por qué está dividido así.)
+`GET /v1/verify-email/check?token=<token>` (la comprobación de solo lectura, sin consumir el token) sigue siendo público si quieres confirmar programáticamente que un token es válido; la acción que realmente activa la cuenta (`POST /v1/verify-email`) es, igual que el registro, solo invocable por la aplicación web — ver [Verificar Correo](endpoints/verify-email.md) para el detalle completo.
 
 Se requiere verificación de correo antes de poder promoverte a producción. Puedes emitir facturas de sandbox de inmediato sin verificar.
 
@@ -104,7 +54,7 @@ Authorization: Bearer <your-api-key>
 
 La llave se hashea con SHA-256 en cada solicitud — el texto plano nunca se persiste después de la creación. Si una llave se ve comprometida, contacta a soporte para revocarla y emitir una nueva.
 
-> **¿Qué necesito para usar la API directamente?** Solo la llave que `POST /v1/register` te devolvió. Esa llave ya tiene todos los permisos (`ALL_SCOPES`) y cubre todas tus sucursales — no necesitas llamar a `POST /v1/keys` ni ningún otro endpoint de configuración antes de crear tu primer comprobante. Generar llaves adicionales (`POST /v1/keys`) y registrar webhooks propios (`POST /v1/webhooks`) son funciones de los planes Starter en adelante — ver "Múltiples llaves con nombre por tenant" y la tabla de tiers más abajo — pero ninguna de las dos es un requisito para integrar.
+> **¿Qué necesito para usar la API directamente?** Solo la llave que tu cuenta ya trae desde que te registraste en la aplicación web (ver la sección 1 arriba). Esa llave ya tiene todos los permisos (`ALL_SCOPES`) y cubre todas tus sucursales — no necesitas llamar a `POST /v1/keys` ni ningún otro endpoint de configuración antes de crear tu primer comprobante. Generar llaves adicionales (`POST /v1/keys`) y registrar webhooks propios (`POST /v1/webhooks`) son funciones de los planes Starter en adelante — ver "Múltiples llaves con nombre por tenant" y la tabla de tiers más abajo — pero ninguna de las dos es un requisito para integrar.
 
 ---
 

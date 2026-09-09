@@ -1,125 +1,20 @@
 # Register
 
-Self-service registration. Creates a tenant, issuer, and sandbox API key in one call. The returned API key is shown **once** — store it immediately.
-
 ```
 POST /v1/register
 ```
 
-## Authentication
+Creates a tenant, issuer, and sandbox API key in one call.
 
-None — public endpoint.
+## This is not a third-party-callable endpoint
 
-## Rate limiting
+`POST /v1/register` requires a valid `X-Internal-Service-Secret` header, a credential only the Comprobify web app holds. A request without it is rejected with `403 INTERNAL_SERVICE_ONLY` — there is no way for a third-party integration to create a Comprobify account directly against this API.
 
-Shared with `POST /v1/resend-verification` — 5 requests per hour per IP.
+**To get an account, sign up at the Comprobify web app.** Once your account exists, it hands you the same fully-permissioned API key `POST /v1/register` would have returned — see [Getting Started](../getting-started.md) for what that key already lets you do with no further setup.
 
-## Request body
+If you're building your own frontend on top of Comprobify and need your users to sign up without visiting the Comprobify web app yourself, get in touch with support — direct registration access is a business decision, not something self-service.
 
-`multipart/form-data` (required — a P12 certificate file must be included).
+## Related
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `cert` | file | Yes | P12 certificate file from SRI |
-| `certPassword` | string | No | P12 password (omit if none) |
-| `logo` | file | No | Company logo to display in RIDE PDFs. Accepted formats: **PNG** (recommended), JPEG, GIF. Max size: **500 KB**. Recommended dimensions: **600 × 170 px** (landscape, ~3.5:1 ratio). Can be uploaded or replaced later via `PATCH /v1/issuers/:id/logo`. |
-| `email` | string | Yes | Tenant contact email — used for verification and invoice notifications |
-| `ruc` | string | Yes | 13-digit RUC |
-| `businessName` | string | Yes | Legal business name (max 300 chars) |
-| `tradeName` | string | No | Trade name |
-| `mainAddress` | string | No | Main address |
-| `branchCode` | string | Yes | 3-digit branch code, e.g. `001` |
-| `issuePointCode` | string | Yes | 3-digit issue point code, e.g. `001` |
-| `emissionType` | string | Yes | `1` (normal emission) |
-| `requiredAccounting` | boolean | Yes | Whether the business is required to keep accounting |
-| `specialTaxpayer` | string | No | Special taxpayer code |
-| `branchAddress` | string | No | Branch address |
-| `documentTypes` | array | No | Document type codes to enable (default: `["01"]`). Must be supported types. |
-| `initialSequentials` | array | No | Starting sequential numbers per document type. Any type not listed defaults to `1`. See structure below. |
-| `language` | string | No | Language for outgoing emails. Supported: `es` (default), `en`. Stored on the tenant and used for all subsequent emails including resends. |
-| `verificationRedirectUrl` | string | No | Frontend URL where the verification link in the email will point. The token is appended as `?token=<token>`. If omitted, the link goes directly to the API's verify endpoint. |
-
-### `initialSequentials` structure
-
-Each entry sets the first sequential number that will be issued for a given document type on this issuer. Useful when migrating from another system and you need continuity.
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `documentType` | string | Yes | Document type code, e.g. `"01"` |
-| `sequential` | integer | Yes | Next sequential number to issue (≥ 1) |
-
-```json
-{
-  "initialSequentials": [
-    { "documentType": "01", "sequential": 500 }
-  ]
-}
-```
-
-### `verificationRedirectUrl` behaviour
-
-When set, the verification email contains a link to your frontend page:
-
-```
-https://app.comprobify.com/verify?token=<64-char-hex>
-```
-
-Your frontend page should call `GET /v1/verify-email/check?token=<token>` on page load to show whether the link is still valid (safe to call repeatedly, including by email link-scanners), then `POST /v1/verify-email` with `{ "token": "<token>" }` only in response to an explicit user action (e.g. a "Verify my email" button) — see [Verify Email](./verify-email.md).
-
-When omitted, the link goes directly to the API's legacy consuming endpoint:
-
-```
-https://api.comprobify.com/v1/verify-email?token=<64-char-hex>
-```
-
-**Validation:** in production the URL must use `https`. In other environments, `http` is also accepted.
-
-## Response
-
-### 201 Created — new registration
-
-```json
-{
-  "ok": true,
-  "tenant": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "email": "you@company.com",
-    "subscriptionTier": "FREE",
-    "status": "PENDING_VERIFICATION",
-    "documentQuota": 100,
-    "documentCount": 0,
-    "createdAt": "2026-04-30T00:00:00.000Z",
-    "agreementAcceptedAt": "2026-06-28T12:00:00.000Z",
-    "agreementVersion": "2026-06-28"
-  },
-  "issuer": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "ruc": "1712345678001",
-    "businessName": "My Company S.A.",
-    "tradeName": null,
-    "branchCode": "001",
-    "issuePointCode": "001",
-    "certFingerprint": "SHA256:...",
-    "certExpiry": "2027-01-01T00:00:00.000Z"
-  },
-  "apiKey": "abc123..."
-}
-```
-
-## Errors
-
-| Status | Code | When |
-|---|---|---|
-| `400` | `VALIDATION_FAILED` | Missing or invalid fields, or missing P12 file |
-| `400` | `BAD_REQUEST` | P12 file is corrupt or the certificate password is wrong |
-| `400` | `INVALID_FILE_UPLOAD` | Logo file exceeds 500 KB |
-| `409` | `CONFLICT` | RUC already registered under a different email, or the email already has an account — use [`POST /v1/recover`](recover.md) to regain access |
-| `429` | `TOO_MANY_REQUESTS` | Rate limit exceeded |
-
-## Notes
-
-- The tenant starts in `PENDING_VERIFICATION` status. A verification email is sent immediately (fire-and-forget).
-- Unverified tenants can use sandbox but cannot promote to production.
-- The verification token expires after the configured TTL (default 24 hours). Use `POST /v1/resend-verification` to issue a fresh one.
-- This endpoint is for new accounts only — if the email is already registered, the request is rejected with `409 CONFLICT` regardless of account status. If you lost your API key, use [`POST /v1/recover`](recover.md) instead.
-- Registration does **not** accept any legal document — it only creates the account. Personalized TERMS/PRIVACY/DPA instances for the tenant are generated shortly after in the background (`PENDING` status, not yet accepted). Explicit acceptance is a separate, later step: use `GET /v1/tenants/agreements` to see what's pending and `POST /v1/tenants/agreements` to accept — required before promoting to production. See [Agreement Acceptance](agreement-acceptance.md).
+- [Recover Account](recover.md) — also frontend-only, for the same reason
+- [Verify Email](verify-email.md) — the one piece of the account-creation flow that stays public
