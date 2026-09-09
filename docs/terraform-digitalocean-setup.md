@@ -439,13 +439,13 @@ Deliberately does **not** set up the app's `docker-compose.yml` or secrets — o
 **Where it landed: open SSH, with defense moved to the identity/privilege layer instead of the network layer.** The reasoning: key-only auth already means brute-forcing in is not possible regardless of who can reach port 22 — the real value IP-restriction adds on top of that is (a) less scanning noise reaching sshd at all, and (b) protection against a hypothetical unpatched sshd vulnerability being reachable from anywhere. `unattended-upgrades` already mitigates (b) by keeping sshd itself patched automatically, and the layers below more than compensate for (a):
 
 - **No root login at all** (`PermitRootLogin no`) — SSH never grants a root shell directly, full stop.
-- **A single unprivileged deploy user**, `cpfydeploy9x` (deliberately not a guessable name like `deploy`/`admin`/`ubuntu`) — the only account SSH will accept (`AllowUsers`). It's a member of the `docker` group (enough to run `docker`/`docker compose` without elevation) and **has no sudo access at all** — not "sudo for a narrow set of commands," genuinely none. A compromised key gets an attacker a low-privilege shell with no built-in path to root.
+- **A single unprivileged deploy user per environment** — `cpfydeploy9x` on staging, `cpfydeploy4c7a` on production (deliberately not a guessable name like `deploy`/`admin`/`ubuntu`, and deliberately a distinct value per environment — same per-environment isolation already applied to SSH keys, DO/Cloudflare tokens, DB creds, `ENCRYPTION_KEY`, and `ADMIN_SECRET`; knowledge of one environment's username reveals nothing about the other's) — the only account SSH will accept (`AllowUsers`). It's a member of the `docker` group (enough to run `docker`/`docker compose` without elevation) and **has no sudo access at all** — not "sudo for a narrow set of commands," genuinely none. A compromised key gets an attacker a low-privilege shell with no built-in path to root.
 - **`MaxAuthTries 3` / `LoginGraceTime 30`** — caps how many auth attempts a single connection gets and how long an unauthenticated connection can be held open, reducing the cost of scanning noise.
 - **`fail2ban`** — as before, bans an IP outright after repeated failed attempts.
 
 **If you genuinely need root** (inspecting/editing system config, debugging something `docker`-group access can't reach) — DigitalOcean's browser-based Droplet Console (Droplet → Access → Launch Droplet Console) gives a real root shell through DO's own infrastructure, entirely independent of sshd and everything above. It was always the documented emergency fallback for lockout scenarios; it's now also the *normal* path for anything requiring true root, not just a last resort.
 
-**What this changes for you day to day:** personal SSH access is now `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@<ip>` (swap in `comprobify_deploy_production` for that environment), not `root@<ip>` — `sudo` won't work from this account, so use the Console for anything that genuinely needs it. The CD workflow's `username:` fields changed to match.
+**What this changes for you day to day:** personal SSH access is now `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@<ip>` for staging, `ssh -i ~/.ssh/comprobify_deploy_production cpfydeploy4c7a@<ip>` for production — both the key **and** the username swap per environment — not `root@<ip>`, and `sudo` won't work from either account, so use the Console for anything that genuinely needs it. Each environment's CD workflow's `username:` fields are set to match its own `deploy_username` (`terraform/environments/<env>/terraform.tfvars`).
 
 ---
 
@@ -472,6 +472,8 @@ services:
       - ./caddy:/etc/caddy
       - caddy_data:/data
       - caddy_config:/config
+    environment:
+      - PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
     depends_on:
       - api
 
@@ -534,12 +536,14 @@ volumes:
     }
 }
 
-api-staging.comprobify.com {
+{$PUBLIC_DOMAIN} {
     reverse_proxy api:8080 {
         header_up X-Real-Client-IP {client_ip}
     }
 }
 ```
+
+One Caddyfile for both environments — `{$PUBLIC_DOMAIN}` is Caddy's own native env-var substitution (resolved from the `caddy` container's process environment, not Compose-file interpolation), fed by the `environment:` block above. `PUBLIC_DOMAIN` is written into `.env` per environment (`api-staging.comprobify.com` / `api.comprobify.com`) by each deploy workflow, same as `APP_ENV`/`APP_BASE_URL`. A dedicated GitHub Environment Variable rather than reusing `APP_BASE_URL` deliberately — that value carries a `https://` scheme prefix, and a scheme-prefixed Caddy site address disables Caddy's automatic HTTP listener/redirect for that site, a real behavior change from the bare-hostname address this already relied on.
 
 Caddy requests its own Let's Encrypt certificate automatically on first request (no config needed) — this works fine sitting behind Cloudflare's proxy since Cloudflare forwards the ACME HTTP-01 challenge through on port 80, which the firewall already allows from Cloudflare's IP ranges.
 
@@ -563,7 +567,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `DB_SSL_CA` | **Yes** | Staging's DB is DigitalOcean Managed Postgres, which signs with a private CA — required or connections fail with `SELF_SIGNED_CERT_IN_CHAIN`. See `docs/deployment.md`'s env var table for the exact single-line format the deploy workflow's heredoc needs. |
 | `ENCRYPTION_KEY` | **Yes** | No default |
 | `ADMIN_SECRET` | **Yes** | No default |
-| `INTERNAL_SERVICE_SECRET` | No | Shared secret with `comprobify-web`'s BFF for forwarding the real visitor IP (`src/middleware/trusted-forwarded-ip.js`). Absent means the feature is inactive — no functional loss until `comprobify-web`'s own side is built (see its `NEXT_STEPS.md`). When set, must match the value configured in `comprobify-web`'s own environment exactly. |
+| `INTERNAL_SERVICE_SECRET` | **Yes** | Required at startup as of #208/ADR-035 — the API refuses to boot without it. Proves a request to `POST /v1/register`/`/recover`/`/resend-verification`/the consuming `POST /v1/verify-email` genuinely came from `comprobify-web`'s own server-side BFF (`403 INTERNAL_SERVICE_ONLY` otherwise); registration is no longer callable directly. Also lets that same BFF forward the real visitor IP (`src/middleware/trusted-forwarded-ip.js`). Must match the value configured in `comprobify-web`'s own environment exactly — a mismatch (not just an absence) locks out every registration/recovery attempt. |
 | `EMAIL_FROM` | **Yes** | No default, and email is enabled by default (`EMAIL_PROVIDER` defaults to `mailgun`) |
 | `EMAIL_FROM_DOCUMENTS` | No | Falls back to `EMAIL_FROM` when unset — a legitimate, often-desired default (same sender for everything). Only set if you want document emails from a different address. |
 | `MAILGUN_API_KEY` | **Yes** | No default, required while email is enabled |
@@ -578,7 +582,7 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `RABBITMQ_URL` | **Yes** | No default |
 | `REDIS_URL` | No — set directly in the deploy workflow's heredoc, not a GitHub Secret/Variable | Backs the rate limiters' shared store (`src/services/redis.service.js`); value is deterministic (`redis://redis:6379`, the `redis` service's Compose-internal DNS name) and identical across environments, so there's nothing to configure per-environment. Absent means the limiters silently fall back to the in-memory store post-deploy — see `src/middleware/rate-limit.js` |
 | `PORT` | No | Default `8080` already matches the Dockerfile's `EXPOSE` |
-| `DOCS_BASE_URL` | No | Default `''` just omits the docs link from error responses — harmless; set it once you have a docs site |
+| `DOCS_BASE_URL` | **Yes** | `docs.comprobify.com` (Cloudflare Pages, shared across environments) is now live with a real `/errors/*` section matching exactly the path `error-handler.js` builds (`${DOCS_BASE_URL}/errors/{slug}`) — the earlier "set it once you have a docs site" deferral no longer applies. Default `''` still just omits the docs link from every RFC 7807 `type` field (falls back to a non-resolving relative `/problems/{slug}` placeholder) rather than erroring, so this isn't a hard boot requirement like `INTERNAL_SERVICE_SECRET` — just no longer correct to leave unset. |
 | `VERIFICATION_TOKEN_TTL_HOURS` | No | Default `24` is fine |
 | `EMAIL_PROVIDER` | No | Default `mailgun` is the only supported provider today |
 | `SRI_TEST_BASE_URL` / `SRI_PROD_BASE_URL` | No | Defaults are the real, correct SRI endpoint URLs |
@@ -590,9 +594,10 @@ Full reference — every var the app reads, whether it needs to be set explicitl
 | `PENDING_EFFECTS_MAX_ATTEMPTS` | No | Default `5` is fine |
 | `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` | No — but the card-payment endpoints are dead without them | Both unset means `POST /v1/payments/:id/payphone-session` returns `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and only SPI bank transfer works; billing is otherwise unaffected, which is the intended degradation. Staging and production need **different** values — a Payphone application is bound to its registered domain, so the staging store's credentials will not authorise a production charge. |
 | `AGREEMENTS_ENABLED` | No | Unset (or any value other than the exact string `false`) keeps legal documents enabled. Unlike `IVA_RATE` below, an empty value from an unset GitHub Variable is **safe** here — `'' !== 'false'` evaluates to enabled, so the acceptance gate fails closed rather than open. Set it to `false` only to launch without Terms/Privacy/DPA. |
+| `SRI_MOCK_MODE` | No | Default `false` (real SRI calls) is correct for normal operation on every environment, including staging. Set to `true` only as a deliberate, temporary edit to the droplet's own `.env` when you want to generate demo tenants/documents on staging without depending on SRI's test environment — not something to wire into the deploy pipeline's baseline `.env`, since it should never be a persistent setting. Structurally inert when `APP_ENV=production` even if left set by mistake. |
 | `IVA_RATE` | **No — must actually be omitted, not set to an empty value** | Default `0.15` is Ecuador's current correct rate, but this one reads via `!== undefined` instead of `||`, so a *present-but-empty* value (what an unset GitHub Variable renders as, if referenced in the heredoc at all) produces `parseFloat('')` = `NaN` and silently corrupts every tax/pricing calculation. Leaving the variable out of GitHub entirely — so it's genuinely absent from the environment, not empty — is the only safe way to get the correct default. Only add it if you need to override the actual rate. |
 
-If you already created a GitHub Secret/Variable for anything in the "No" rows while we were still figuring this out (`QUEUE_RECONCILE_EFFECT_STALE_MINUTES`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE`, `DOCS_BASE_URL`), it's safe to delete those now — they're unused by the trimmed `.env` heredoc below and won't be referenced by anything.
+If you already created a GitHub Secret/Variable for anything in the "No" rows while we were still figuring this out (`QUEUE_RECONCILE_EFFECT_STALE_MINUTES`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE`), it's safe to delete those now — they're unused by the trimmed `.env` heredoc below and won't be referenced by anything. `DOCS_BASE_URL` is no longer in this category — see its own row above.
 
 Split, for the "Yes" rows only:
 
@@ -603,7 +608,9 @@ Split, for the "Yes" rows only:
 | `DB_HOST` / `DB_PORT` / `DB_NAME` / `DB_USER` / `DB_PASSWORD` (kept together as one group for simplicity, even though a couple of them aren't sensitive alone) | `EMAIL_FROM`, `MAILGUN_DOMAIN` |
 | `MAILGUN_API_KEY` | `BANK_TRANSFER_BANK_NAME` / `ACCOUNT_TYPE` / `ACCOUNT_NUMBER` / `ACCOUNT_HOLDER` / `IDENTIFICATION` — `deployment.md` already calls these "Display text only, not a secret" |
 | `MAILGUN_WEBHOOK_SIGNING_KEY` | `ADMIN_NOTIFICATION_EMAIL`, `OPERATOR_NAME`, `OPERATOR_RUC`, `OPERATOR_EMAIL`, `OPERATOR_ADDRESS` — an email address and public business-registry identity info, not credentials |
+| `INTERNAL_SERVICE_SECRET` (a bearer-style credential that gates account creation/recovery) | — |
 | | `BETTERSTACK_INGESTING_HOST` — just a hostname, not sensitive on its own (unlike the source token above, which is) |
+| | `DOCS_BASE_URL` — a public URL (`https://docs.comprobify.com`), not sensitive |
 | `PAYPHONE_TOKEN` (a bearer credential that can capture charges) | `AGREEMENTS_ENABLED` — a feature flag, not a secret. Leave it unset to keep legal documents enabled; set it to exactly `false` to run without them |
 | `PAYPHONE_STORE_ID` (not sensitive alone, but kept beside the token so the pair is configured together) | — |
 | `RABBITMQ_URL` (embeds credentials) | — |
@@ -612,7 +619,7 @@ Split, for the "Yes" rows only:
 
 Both stores are scoped per GitHub Environment (`staging`/`production`) — one place per environment, two tabs (Secrets / Variables) within it.
 
-On every deploy, the CD workflow's SSH step writes the full set into `/opt/comprobify/.env` on the droplet — overwritten each run, so the file always reflects whatever's currently in GitHub:
+On every deploy, the CD workflow's SSH step writes the full set into `/opt/comprobify/.env` on the droplet — overwritten each run, so the file always reflects whatever's currently in GitHub. Shown below is `deploy-staging.yml`'s actual content; `deploy-production.yml` mirrors it exactly except `username: cpfydeploy4c7a` (its own `deploy_username`, not staging's `cpfydeploy9x`) and `environment: production` in place of `environment: staging`:
 
 ```yaml
       - uses: appleboy/scp-action@v0.1.7
@@ -634,6 +641,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             APP_ENV=${{ vars.APP_ENV }}
             APP_BASE_URL=${{ vars.APP_BASE_URL }}
             API_BASE_URL=${{ vars.APP_BASE_URL }}
+            PUBLIC_DOMAIN=${{ vars.PUBLIC_DOMAIN }}
             DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=${{ secrets.DB_PORT }}
             DB_NAME=${{ secrets.DB_NAME }}
@@ -654,6 +662,7 @@ On every deploy, the CD workflow's SSH step writes the full set into `/opt/compr
             SENTRY_RELEASE=${{ github.sha }}
             BETTERSTACK_SOURCE_TOKEN=${{ secrets.BETTERSTACK_SOURCE_TOKEN }}
             BETTERSTACK_INGESTING_HOST=${{ vars.BETTERSTACK_INGESTING_HOST }}
+            DOCS_BASE_URL=${{ vars.DOCS_BASE_URL }}
             BANK_TRANSFER_BANK_NAME=${{ vars.BANK_TRANSFER_BANK_NAME }}
             BANK_TRANSFER_ACCOUNT_TYPE=${{ vars.BANK_TRANSFER_ACCOUNT_TYPE }}
             BANK_TRANSFER_ACCOUNT_NUMBER=${{ vars.BANK_TRANSFER_ACCOUNT_NUMBER }}
@@ -691,7 +700,9 @@ Rotation, for either kind: update the value in the GitHub Environment, then trig
 
 ## Scheduled jobs
 
-The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — see `deployment.md`'s "Scheduled jobs" section for what each one actually does) previously ran as Render Cron Job services. They now run via a system `cron.d` file, written to the droplet by cloud-init:
+The 5 admin jobs (notifications, subscriptions, quota, queue-reconciliation, payphone-reconciliation — see `deployment.md`'s "Scheduled jobs" section for what each one actually does) previously ran as Render Cron Job services. They now run via a system `cron.d` file, written to the droplet by cloud-init:
+
+`cloud-init.yaml.tftpl` templates every occurrence via `${deploy_username}`, so each environment's actual `/etc/cron.d/comprobify-jobs` file gets its own value baked in at first boot — shown below is staging's rendered output (`cpfydeploy9x`); production's reads `cpfydeploy4c7a` in each of the four leftmost username fields instead, nothing else different:
 
 ```
 # terraform/modules/droplet/cloud-init.yaml.tftpl -> /etc/cron.d/comprobify-jobs
@@ -704,13 +715,13 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 
 **Why `docker compose exec` instead of installing Node on the droplet:** `scripts/run-admin-job.js` has zero npm dependencies — just Node's built-in `fetch` — so rather than installing Node system-wide on the bare host (one more thing to patch and keep current), the cron entries just run it *inside* the already-running `api` container, reusing the exact deployed script version. This also means it automatically picks up `ADMIN_SECRET` from that container's own `.env` — nothing extra to configure. The only env var this needs that the app itself doesn't is `API_BASE_URL` (distinct name from `APP_BASE_URL`, same value) — see the env var reference table above.
 
-**Runs as `cpfydeploy9x`, not root** — consistent with everything else in "SSH access model" above; this account's `docker` group membership is sufficient, no elevated privileges needed.
+**Runs as that environment's deploy user (`cpfydeploy9x` on staging, `cpfydeploy4c7a` on production), not root** — consistent with everything else in "SSH access model" above; this account's `docker` group membership is sufficient, no elevated privileges needed.
 
 **Harmless if it fires before the first deploy or during a redeploy** — `docker compose exec` just fails (no `api` container to exec into yet, or briefly mid-restart), logged and ignored; the next scheduled run tries again.
 
 **Logs to a plain file per job under `/opt/comprobify/logs/`, not `logger`/syslog — this was a deliberate design decision, not an oversight.** An earlier version piped each job's output through `logger -t comprobify-cron-<name>`, monitorable via `journalctl -t comprobify-cron-<name>`. That stopped being viable once root SSH was fully disabled (see "SSH access model" above): reading the systemd journal requires either root or membership in the `systemd-journal` group, and this box's `AllowUsers` only ever admits the unprivileged deploy user — granting that group would mean either re-enabling some form of elevated access (defeating the point) or recreating the droplet just to add a group, for a monitoring nicety. Plain files sidestep the permission question entirely: each job's `{ date -Is; ...; } >> /opt/comprobify/logs/cron-<name>.log 2>&1` (the `date -Is` prefix stands in for `journalctl`'s own timestamp column, so a run is still correlatable to a time window) writes as the deploy user, who already owns `/opt/comprobify/logs` (see `runcmd`'s `chown`). Rotated weekly via `/etc/logrotate.d/comprobify-cron` (`rotate 4`, `compress`) so the two 5-minute-cadence jobs can't grow unbounded; `create 0644 ${deploy_username} ${deploy_username}` re-creates each file owned by the deploy user after rotation, so the next run can still write to it without root.
 
-**Monitoring** (as the deploy user, over SSH — see "SSH access model" above): `tail -100 /opt/comprobify/logs/cron-quota.log` (for example) shows just that job's runs; `tail -f` to follow live. All four at once, most-recent-first: `tail -n 50 /opt/comprobify/logs/cron-*.log`.
+**Monitoring** (as the deploy user, over SSH — see "SSH access model" above): `tail -100 /opt/comprobify/logs/cron-quota.log` (for example) shows just that job's runs; `tail -f` to follow live. All five at once, most-recent-first: `tail -n 50 /opt/comprobify/logs/cron-*.log`.
 
 **If the schedule itself needs to change:** edit `cloud-init.yaml.tftpl`, then recreate the droplet (`user_data` only applies at first boot, same constraint as everything else in cloud-init — see "Day-2 operations" below). Not something you'd expect to do often.
 
@@ -734,7 +745,7 @@ The 4 admin jobs (notifications, subscriptions, quota, queue-reconciliation — 
 6. `terraform init` — downloads providers, connects to the remote state backend. If this fails with a `403 InvalidClientTokenId` / "AWS account ID not previously found" error, see the `skip_requesting_account_id` note under "Remote state" above — that's a backend config issue, not a credentials problem.
 7. `terraform plan` — review what will be created. Nothing exists yet, so expect a full "create" plan for the droplet, firewall, SSH key, DNS record, and Project. **Read this output before typing yes** — it's the one moment you see exactly what's about to happen.
 8. `terraform apply`, confirm with `yes`. Takes roughly a minute; droplet boots, cloud-init hardens it.
-9. Verify: `terraform output` shows both `droplet_ip` (ephemeral) and `reserved_ip` (stable — use this one from here on); `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@$(terraform output -raw reserved_ip)` connects (not `root@` — see "SSH access model" above; use `comprobify_deploy_production` when repeating this for production); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
+9. Verify: `terraform output` shows both `droplet_ip` (ephemeral) and `reserved_ip` (stable — use this one from here on); `ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@$(terraform output -raw reserved_ip)` connects (not `root@` — see "SSH access model" above; for production, both the key **and** username swap: `ssh -i ~/.ssh/comprobify_deploy_production cpfydeploy4c7a@$(terraform output -raw reserved_ip)`); `dig api-staging.comprobify.com` resolves through Cloudflare once the record propagates (near-instant, since it's proxied).
 10. Add the CD pipeline's secrets to the GitHub `staging` Environment (`DROPLET_IP` = the Terraform **`reserved_ip`** output — not `droplet_ip`, see "Reserved IP" above — `INFRA_SSH_PRIVATE_KEY` = the private half of the key from step 2, plus every app secret/variable from `deployment.md`'s env var table, split as above). Run the app deploy workflow once (push to `staging`, or `workflow_dispatch`) — it pushes `docker-compose.yml`/`Caddyfile`, writes `.env`, and starts the containers. No manual droplet setup step needed beyond this.
 11. Repeat steps 3–10 for `environments/production` — separate state, separate apply, same module, its own droplet, its own GitHub `production` Environment secrets, its own `comprobify-terraform-production` tokens.
 
@@ -760,11 +771,13 @@ Two workflows, gated by path so neither triggers the other.
 
 Full file lives in the repo. Three more design points worth calling out, all easy to get wrong:
 
-**`DO_TOKEN`/`CLOUDFLARE_TOKEN` live in the `staging-infra` GitHub Environment (Settings → Environments → `staging-infra` → Environment secrets), unprefixed — same convention `deploy-staging.yml` already uses for `DB_HOST`/`ADMIN_SECRET`/etc: one secret name, a different value per Environment, not a name per environment.** The `comprobify-terraform-staging` and `comprobify-terraform-production` credentials (see the Prerequisites table above) are deliberately separate tokens, never shared, so a leaked staging credential can be revoked without touching production — `staging-infra` holds the staging value, and the not-yet-created `production-infra` Environment will hold the production value under the exact same secret names once that job pair exists.
+**`DO_TOKEN`/`CLOUDFLARE_TOKEN` live in each environment's own `<env>-infra` GitHub Environment (Settings → Environments → `staging-infra` / `production-infra` → Environment secrets), unprefixed — same convention `deploy-staging.yml`/`deploy-production.yml` already use for `DB_HOST`/`ADMIN_SECRET`/etc: one secret name, a different value per Environment, not a name per environment.** The `comprobify-terraform-staging` and `comprobify-terraform-production` credentials (see the Prerequisites table above) are deliberately separate tokens, never shared, so a leaked staging credential can be revoked without touching production — `staging-infra` holds the staging value, `production-infra` holds the production value, both under the exact same secret names.
 
-**Both `plan` and `apply` declare `environment: staging-infra`.** GitHub only grants a job access to an Environment's secrets if that job declares it — which also means that Environment's protection rules (like a required reviewer) apply to that job too. Declaring it on both jobs means adding a required reviewer to `staging-infra` later would gate `plan` as well as `apply`: you'd approve *before* seeing the plan's diff, not after reading it. This was a deliberate trade-off in favor of staying consistent with `deploy-staging.yml`'s single-environment shape, rather than introducing a second, plan-only Environment just to keep `plan` ungated.
+**Every `plan-<env>`/`apply-<env>` job declares its own `<env>-infra` Environment.** GitHub only grants a job access to an Environment's secrets if that job declares it — which also means that Environment's protection rules (like a required reviewer) apply to that job too. Declaring it on both `plan` and `apply` means a required reviewer added to an `<env>-infra` Environment gates `plan` as well as `apply`: you approve *before* seeing the plan's diff, not after reading it. This was a deliberate trade-off in favor of staying consistent with `deploy-staging.yml`'s single-environment shape, rather than introducing a second, plan-only Environment just to keep `plan` ungated. `staging-infra` already has a required reviewer configured; add the same to `production-infra` for a deliberate, auditable approval gate before anything touches production infrastructure — separate from whatever Environment `deploy-production.yml` uses for app secrets.
 
 **The Spaces state-backend credentials (`TERRAFORM_SPACES_ACCESS_KEY_ID`/`TERRAFORM_SPACES_SECRET_ACCESS_KEY`) are the one exception and stay as plain repository secrets, not Environment secrets.** Staging and production share one state bucket with different key prefixes (see "Remote state" above) via one Spaces key pair created once — there's only ever one correct value, and every job needs it regardless of which Environment it declares. They keep the `TERRAFORM_` prefix because, as repository secrets, they sit in the same flat Secrets list as `docs.yml`'s unrelated `DOCS_CLOUDFLARE_API_TOKEN`/`DOCS_CLOUDFLARE_ACCOUNT_ID` pair — Environment secrets don't have that collision risk, since they're scoped to their own Environment's page in the GitHub UI, which is why `DO_TOKEN`/`CLOUDFLARE_TOKEN` don't need a prefix.
+
+One workflow, two job pairs — `plan-staging`/`apply-staging` and `plan-production`/`apply-production` — sharing the same trigger below regardless of which environment's directory actually changed (`terraform plan`/`apply` is idempotent, so an unrelated environment's pair just reports "no changes"):
 
 ```yaml
 on:
@@ -781,7 +794,8 @@ on:
         options: [plan, apply, destroy]
 
 jobs:
-  plan:
+  plan-staging:
+    if: vars.STAGING_INFRA_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment: staging-infra
     steps:
@@ -805,9 +819,9 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
 
-  apply:
-    needs: plan
-    if: github.event_name == 'push' || github.event.inputs.action != 'plan'
+  apply-staging:
+    needs: plan-staging
+    if: (github.event_name == 'push' || github.event.inputs.action != 'plan') && vars.STAGING_INFRA_ENABLED == 'true'
     environment: staging-infra
     runs-on: ubuntu-latest
     steps:
@@ -830,21 +844,34 @@ jobs:
           TF_VAR_cloudflare_token: ${{ secrets.CLOUDFLARE_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.TERRAFORM_SPACES_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.TERRAFORM_SPACES_SECRET_ACCESS_KEY }}
+
+  # plan-production / apply-production mirror the pair above exactly, just pointed at
+  # terraform/environments/production and declaring environment: production-infra instead.
 ```
 
 Note every `init` step also needs the Spaces credentials, not just `plan`/`apply` — `init` is what actually connects to the remote state backend. `plan` always runs regardless of `action` (there's no dry-run-only skip on it); `apply` skips only when a manual run explicitly chose `plan` (dry-run) — both the `apply` default and `destroy` fall through to `apply`'s `if`, and its `run:` step picks the actual command.
 
-Production's equivalent pair doesn't exist yet — add it once `terraform/environments/production` does, pointed at that directory, with both jobs declaring `environment: production-infra` and reading the same `DO_TOKEN`/`CLOUDFLARE_TOKEN` names from that Environment (its own distinct values — see above) plus the same shared `TERRAFORM_SPACES_*` repository secrets. Add a required reviewer to `production-infra` for a deliberate, auditable approval gate before anything touches production infrastructure — separate from whatever Environment `deploy-production.yml` ends up using for app secrets.
+**Before the first push that introduces `plan-production`/`apply-production` (or any push to `main` touching `terraform/**` after that): the `production-infra` GitHub Environment must already exist with real `DO_TOKEN`/`CLOUDFLARE_TOKEN` values, and the "Comprobify Production" DigitalOcean Project must already exist** (`main.tf`'s `data "digitalocean_project"` only looks it up by name, never creates it — see "DO Projects" above). Missing either one fails `plan-production` safely — bad/absent credentials, or a lookup that finds nothing, neither of which can touch real infra, since `apply-production` only runs if `plan-production` succeeds — but it's a red check either way, so set both up first.
 
-### App deploy workflow — `.github/workflows/deploy-staging.yml`
+### Toggling staging infra on/off — `STAGING_INFRA_ENABLED`
+
+Once production is live, the plan is to keep only production running continuously — staging's droplet (and its DigitalOcean Managed Postgres cluster, not Terraform-managed, torn down by hand) gets destroyed between uses rather than left running idle, since staging's only ongoing job at that point is validating an infra change before it reaches production, not serving real traffic. `plan-staging`/`apply-staging` are gated on `if: vars.STAGING_INFRA_ENABLED == 'true'` — a plain **repository variable** (Settings → Secrets and variables → Actions → Variables tab, not Environment-scoped, since a job's own `if:` is evaluated before its `environment:` context resolves), not a code change, so flipping it needs no PR. `plan-production`/`apply-production` carry no such gate — production always applies.
+
+The intended cycle: flip `STAGING_INFRA_ENABLED` to `true`, `terraform apply` staging (plus recreate the Postgres cluster and anything else destroyed by hand), push/land the infra change and validate it there, then flip the variable back to `false` — the droplet and DB get destroyed by hand again, but the Terraform code for staging stays in the repo untouched, ready for the next cycle. Since `staging-infra` already has a required reviewer (gating both `plan-staging` and `apply-staging`, same as `production-infra` is meant to once it's set up — see above), that approval step is what actually sequences "validate in staging, then let it apply to production" — a human can approve staging's run, check the result, and only then approve production's, entirely independent of this variable.
+
+A `terraform/**` push that lands while `STAGING_INFRA_ENABLED` is `false` still runs `plan-production`/`apply-production` normally — `plan-staging`/`apply-staging` just show as skipped in the Actions UI, not failed, and the change simply doesn't reach staging until the variable is flipped back on and the workflow re-run (`workflow_dispatch`) against it.
+
+### App deploy workflow — `.github/workflows/deploy-staging.yml` / `deploy-production.yml`
 
 Full file lives in the repo; the shape is checkout → build/push the image to GHCR → SCP the compose files → SSH in (as `cpfydeploy9x`, not root — see "SSH access model" above) to write `.env` and restart containers. No firewall dance needed — SSH is open, so the runner just connects directly, same as the Terraform-managed pieces below it in the module. An earlier version of this workflow briefly added/removed a just-in-time firewall rule per deploy instead of relying on open SSH; see "SSH access model" for why that approach was tried and then abandoned.
 
-The `production` equivalent triggers on push to the `production` branch, matching the same branch/tag/release pipeline documented in `deployment.md`.
+The `production` equivalent triggers on push to the `production` branch, matching the same branch/tag/release pipeline documented in `deployment.md`. Its `username:` fields read `cpfydeploy4c7a`, not staging's `cpfydeploy9x` — see the env var reference table above for the full CD-workflow SSH-step shape both files share.
 
 ---
 
 ## Day-2 operations
+
+**Destroy/Recreate below are deliberately staging-only** — see "Toggling staging infra on/off" above: only staging is meant to be torn down between uses, production runs continuously once live and is never routinely destroyed. **Resize, the SSH-reset troubleshooting, and SSH key rotation are environment-agnostic** and apply equally to production once it exists — swap in `environments/production`, `comprobify_deploy_production`, `cpfydeploy4c7a`, and the `production` GitHub Environment wherever a staging-specific path/key/username appears below (rotation already says this explicitly; the same substitution applies to Resize and Troubleshooting even though they don't repeat it inline).
 
 **Destroy staging once you're done testing for the day/week:**
 ```bash

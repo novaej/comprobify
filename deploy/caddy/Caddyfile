@@ -9,10 +9,10 @@
     }
 }
 
-# Staging only for now. When production is provisioned, this needs to become either a
-# second file (Caddyfile.production, picked by the production deploy workflow) or a
-# {$PUBLIC_DOMAIN} env-substituted single file — revisit before the first production deploy.
-api-staging.comprobify.com {
+# PUBLIC_DOMAIN is written into .env per environment (api-staging.comprobify.com /
+# api.comprobify.com) and passed to this container via docker-compose.yml's caddy
+# service - one file, both environments, no Caddyfile.production needed.
+{$PUBLIC_DOMAIN} {
     # {client_ip} is Caddy's own trusted resolution (via trusted_proxies +
     # client_ip_headers above) - forwarded as a dedicated header so the app can
     # read it directly instead of depending on X-Forwarded-For's automatic

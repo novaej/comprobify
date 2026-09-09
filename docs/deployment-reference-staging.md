@@ -1,6 +1,6 @@
 # Comprobify Deployment Reference (Staging)
 
-Last updated: 2026-08-17
+Last updated: 2026-09-07
 
 This reference describes the staging deployment setup for Comprobify, including infrastructure, required configuration, deployment steps, and post-deployment checks. For the full CI/CD walkthrough, branching model, and env var reference, see `docs/deployment.md`. For the complete Terraform/DigitalOcean mechanics, see `docs/terraform-digitalocean-setup.md`.
 
@@ -15,7 +15,7 @@ This reference describes the staging deployment setup for Comprobify, including 
 - **Redis** (`redis:7-alpine`, self-hosted in the same Compose stack) backs the shared `RedisStore` behind `writeLimiter`/`readLimiter`/`adminLimiter`/`registrationLimiter` (`src/middleware/rate-limit.js`) and `attempt-tracker.service.js`'s repeated-attempt detection — only `api` connects to it, `worker` never rate-limits. No persistence (`--save ""`, disposable short-window counters) and a hard 32MB `--maxmemory` cap. `REDIS_URL` is not a GitHub Secret/Variable — it's hardcoded into the deploy workflow's `.env` heredoc as `redis://redis:6379` (Compose's internal DNS name for the service), identical across environments.
 - **DigitalOcean Managed Postgres** provides the PostgreSQL database, with two schemas: `public` and `sandbox`. The cluster is shared with `comprobify-web` (not comprobify-only) and is not provisioned by this repo's Terraform — it's grouped into the same DO Project as the droplet for dashboard purposes only.
 - **Cloudflare Pages** hosts the VitePress documentation site at `docs.comprobify.com`, project `comprobify-docs`, built via `npm run docs:build` and deployed with Wrangler.
-- Four scheduled admin jobs run via a `cron.d` file (`/etc/cron.d/comprobify-jobs`) written to the droplet by cloud-init at first boot: Notifications every 5 minutes, Subscriptions daily, Quota daily, and Queue Reconciliation every 5 minutes (tightened from hourly since self-hosted cron has no per-invocation cost — see `docs/deployment.md`'s "Scheduled jobs" section). Each entry runs `docker compose exec -T api node scripts/run-admin-job.js <path>` directly inside the running `api` container — no Node install on the bare host, and `ADMIN_SECRET` is picked up automatically from that container's own `.env`.
+- Five scheduled admin jobs run via a `cron.d` file (`/etc/cron.d/comprobify-jobs`) written to the droplet by cloud-init at first boot: Notifications every 5 minutes, Subscriptions daily, Quota daily, Queue Reconciliation every 5 minutes (tightened from hourly since self-hosted cron has no per-invocation cost — see `docs/deployment.md`'s "Scheduled jobs" section), and Payphone Reconciliation every 5 minutes (added with card payments, ADR-028). Each entry runs `docker compose exec -T api node scripts/run-admin-job.js <path>` directly inside the running `api` container — no Node install on the bare host, and `ADMIN_SECRET` is picked up automatically from that container's own `.env`.
 - **CloudAMQP** provides the RabbitMQ broker backing the fully asynchronous document send/authorize pipeline (ADR-019) and, via the `pending_effects` outbox (ADR-022), every other async side effect: notifications, webhook fan-out, subscription hooks, and transactional emails. `POST /:key/send` and `GET /:key/authorize` only queue a message and return 202; the worker container performs the actual SRI call. Three queues back this: `sri.send`, `sri.authorize`, and `app.effects`.
 - The **worker container** (`node workers/worker.js`) is the only process that calls SRI directly. It's a persistent process (not a scheduled job) consuming all three queues on one shared confirm channel.
 - **Mailgun** handles transactional email through the configured `mg.<domain>` setup, with inbound delivery-event webhooks verified via HMAC-SHA256.
@@ -84,7 +84,7 @@ Provisioned by Terraform (`terraform/environments/staging`, using the shared `te
 
 `api` and `worker` run the **same image**, built once per deploy from the repo's `Dockerfile` (`node:20-slim`, `libxml2-utils` installed at build time for `xmllint`), differing only in the container `command`. `api` declares `depends_on: redis: condition: service_healthy`, gated on `redis`'s own `healthcheck` (`redis-cli ping`) — not the plain list form, which only waits for the container to start, not for Redis to actually accept connections; `worker` never connects to it. Both `api` and `worker` also set a `hostname` (`comprobify-api-${APP_ENV}` / `comprobify-worker-${APP_ENV}`) read by `logger.service.js`'s `os.hostname()` call, so log lines are distinguishable across environments once more than staging exists.
 
-Caddy config (`deploy/caddy/Caddyfile` — a directory mount, not a single-file mount, so a redeployed file is actually visible to the running container; see the comment on `caddy`'s `volumes` in `docker-compose.yml`):
+Caddy config (`deploy/caddy/Caddyfile` — a directory mount, not a single-file mount, so a redeployed file is actually visible to the running container; see the comment on `caddy`'s `volumes` in `docker-compose.yml`). The site address is `{$PUBLIC_DOMAIN}` — Caddy's own env-var substitution, fed by the `PUBLIC_DOMAIN` GitHub Environment Variable (see below) — shown below resolved to staging's actual value:
 
 ```
 {
@@ -107,7 +107,7 @@ Caddy obtains/renews its Let's Encrypt certificate automatically on first reques
 
 ## GitHub — Environments and Secrets
 
-Three separate scopes are in play: the `staging` Environment (app deploy secrets/variables, read by `deploy-staging.yml`), the `staging-infra` Environment (Terraform credentials, read by `terraform.yml`), and repository-level secrets (not environment-scoped).
+Four separate scopes are in play: the `staging` Environment (app deploy secrets/variables, read by `deploy-staging.yml`), the `staging-infra` Environment (Terraform credentials, read by `terraform.yml`), repository-level secrets, and repository-level variables (the latter two not environment-scoped).
 
 ### GitHub Environment: `staging` — Secrets
 
@@ -121,7 +121,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `INFRA_SSH_PRIVATE_KEY` | |
 | `ENCRYPTION_KEY` | |
 | `ADMIN_SECRET` | |
-| `INTERNAL_SERVICE_SECRET` | Shared with `comprobify-web`'s BFF (`src/middleware/trusted-forwarded-ip.js`) — must match the value configured on that side exactly. Inactive until `comprobify-web` also sends `X-Internal-Service-Secret`/`X-Forwarded-Visitor-Ip` (see its `NEXT_STEPS.md`) |
+| `INTERNAL_SERVICE_SECRET` | Required at startup as of #208/ADR-035 — gates `POST /v1/register`/`/recover`/`/resend-verification`/the consuming `POST /v1/verify-email` to `comprobify-web`'s own BFF only; also lets it override `req.ip` with the real visitor's IP (`src/middleware/trusted-forwarded-ip.js`). Must match the value configured on the `comprobify-web` side exactly. |
 | `DB_HOST` | |
 | `DB_PORT` | |
 | `DB_NAME` | |
@@ -142,6 +142,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 |---|---|
 | `APP_ENV` | |
 | `APP_BASE_URL` | |
+| `PUBLIC_DOMAIN` | `api-staging.comprobify.com` — bare hostname (no scheme), consumed only by `caddy`'s Caddyfile, not the app itself |
 | `DB_SSL` | |
 | `EMAIL_FROM` | |
 | `EMAIL_FROM_DOCUMENTS` | |
@@ -159,8 +160,9 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `OPERATOR_ADDRESS` | |
 | `AGREEMENTS_ENABLED` | Leave **unset** to keep legal documents enabled (the default). Set to exactly `false` to run without Terms/Privacy/DPA — the public agreement endpoints then behave as if nothing were published and `POST /v1/tenants/promote` is not gated on acceptance. An unset variable renders empty, and `'' !== 'false'`, so this fails **closed** — unlike `IVA_RATE`, an empty value here is safe. |
 | `BETTERSTACK_INGESTING_HOST` | Only needed if the Betterstack source's setup page shows a specific regional ingesting host rather than the shared default — not sensitive, so a Variable rather than a Secret |
+| `DOCS_BASE_URL` | `https://docs.comprobify.com` — the docs site is live and its `/errors/*` section matches the path `error-handler.js` builds; every RFC 7807 error response's `type` field now links there instead of a non-resolving `/problems/{slug}` placeholder |
 
-Not set at all (code-level defaults are correct as-is): `PORT`, `DOCS_BASE_URL`, `VERIFICATION_TOKEN_TTL_HOURS`, `SRI_TEST_BASE_URL`, `SRI_PROD_BASE_URL`, `RATE_LIMIT_WINDOW_MS`, `RABBITMQ_SRI_EXCHANGE`, `QUEUE_RECONCILE_*`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE` (must stay genuinely absent, not empty — see `docs/terraform-digitalocean-setup.md`'s env var reference table). `REDIS_URL` is a separate case — not a GitHub Secret/Variable at all, but not genuinely unset either: it's hardcoded directly into the deploy workflow's heredoc (`redis://redis:6379`, deterministic across environments) — see `docs/terraform-digitalocean-setup.md`'s env var reference table.
+Not set at all (code-level defaults are correct as-is): `PORT`, `VERIFICATION_TOKEN_TTL_HOURS`, `SRI_TEST_BASE_URL`, `SRI_PROD_BASE_URL`, `RATE_LIMIT_WINDOW_MS`, `RABBITMQ_SRI_EXCHANGE`, `QUEUE_RECONCILE_*`, `PENDING_EFFECTS_MAX_ATTEMPTS`, `IVA_RATE` (must stay genuinely absent, not empty — see `docs/terraform-digitalocean-setup.md`'s env var reference table), `SRI_MOCK_MODE` (default `false`/real SRI calls is correct for the deploy pipeline's baseline `.env` — only ever set as a manual, temporary edit on the droplet itself when generating demo data, never wired into GitHub or the heredoc). `REDIS_URL` is a separate case — not a GitHub Secret/Variable at all, but not genuinely unset either: it's hardcoded directly into the deploy workflow's heredoc (`redis://redis:6379`, deterministic across environments) — see `docs/terraform-digitalocean-setup.md`'s env var reference table.
 
 ### GitHub Environment: `staging-infra` — Secrets
 
@@ -180,6 +182,12 @@ Read by `terraform.yml`'s plan/apply jobs only.
 | `DOCS_CLOUDFLARE_ACCOUNT_ID` | |
 | `TERRAFORM_SPACES_ACCESS_KEY_ID` | |
 | `TERRAFORM_SPACES_SECRET_ACCESS_KEY` | |
+
+### Repository variables (not environment-scoped)
+
+| Variable | Value |
+|---|---|
+| `STAGING_INFRA_ENABLED` | `true` — gates `terraform.yml`'s `plan-staging`/`apply-staging` jobs; flip to `false` when staging's droplet is torn down between uses. See `docs/terraform-digitalocean-setup.md`'s "Toggling staging infra on/off". |
 
 ---
 

@@ -15,6 +15,8 @@ services:
       - ./caddy:/etc/caddy
       - caddy_data:/data
       - caddy_config:/config
+    environment:
+      - PUBLIC_DOMAIN=${PUBLIC_DOMAIN}
     depends_on:
       - api
 
