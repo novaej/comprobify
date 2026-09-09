@@ -1,14 +1,23 @@
 name: Deploy Staging
 
+# DISABLED — staging's droplet is destroyed (STAGING_INFRA_ENABLED=false, see
+# terraform.yml/terraform-digitalocean-setup.md's "Toggling staging infra on/off").
+# release-staging.yml keeps fast-forwarding the `staging` branch on every tag push
+# regardless - that's harmless, just git branch bookkeeping - but this workflow would
+# SSH to a DROPLET_IP that no longer resolves to anything, failing every single run
+# until the droplet exists again. Re-enable in the same cycle as flipping
+# STAGING_INFRA_ENABLED back to true and re-provisioning: uncomment the `push` trigger
+# below and remove the `if: false` guard on the `deploy` job.
 on:
-  push:
-    branches: [staging]
+  # push:
+  #   branches: [staging]
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: staging
+    if: false  # remove this line to re-enable
     permissions:
       contents: read
       packages: write
@@ -83,6 +92,7 @@ jobs:
             SENTRY_RELEASE=${{ github.sha }}
             BETTERSTACK_SOURCE_TOKEN=${{ secrets.BETTERSTACK_SOURCE_TOKEN }}
             BETTERSTACK_INGESTING_HOST=${{ vars.BETTERSTACK_INGESTING_HOST }}
+            DOCS_BASE_URL=${{ vars.DOCS_BASE_URL }}
             BANK_TRANSFER_BANK_NAME=${{ vars.BANK_TRANSFER_BANK_NAME }}
             BANK_TRANSFER_ACCOUNT_TYPE=${{ vars.BANK_TRANSFER_ACCOUNT_TYPE }}
             BANK_TRANSFER_ACCOUNT_NUMBER=${{ vars.BANK_TRANSFER_ACCOUNT_NUMBER }}

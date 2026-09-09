@@ -1,31 +1,25 @@
 name: Deploy Production
 
-# DISABLED — the production droplet and secrets do not exist yet (see
-# docs/deployment.md's "Production status"). This mirrors deploy-staging.yml so it's
-# ready to enable once terraform/environments/production is provisioned (it now is - see
-# that directory - but the droplet itself hasn't been terraform apply'd yet).
+# Mirrors deploy-staging.yml — builds the image, pushes it to GHCR, and deploys it to
+# the production droplet over SSH.
 #
 # `username:` below (cpfydeploy4c7a) already matches deploy_username in
 # terraform/environments/production/terraform.tfvars - re-confirm if that value ever
 # changes.
 #
-# To enable:
-#   1. Uncomment the `push` trigger below
-#   2. Remove the `if: false` guard on the `deploy` job
-#   3. Set up the `production` GitHub Environment's Secrets/Variables (same full set as
-#      `staging` — see docs/terraform-digitalocean-setup.md's env var reference table),
-#      including DROPLET_IP and INFRA_SSH_PRIVATE_KEY (same secret names as `staging`'s
-#      Environment — differentiated by which Environment the job declares, not by name)
+# The `production` GitHub Environment's Secrets/Variables must already be set (see
+# docs/deployment-reference-production.md) before this can succeed, including
+# DROPLET_IP and INFRA_SSH_PRIVATE_KEY - and the droplet itself must actually be
+# terraform apply'd, or the SSH steps below have nothing to connect to.
 on:
-  # push:
-  #   branches: [production]
+  push:
+    branches: [production]
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
-    if: false  # remove this line to re-enable
     permissions:
       contents: read
       packages: write
@@ -89,6 +83,7 @@ jobs:
             SENTRY_RELEASE=${{ github.sha }}
             BETTERSTACK_SOURCE_TOKEN=${{ secrets.BETTERSTACK_SOURCE_TOKEN }}
             BETTERSTACK_INGESTING_HOST=${{ vars.BETTERSTACK_INGESTING_HOST }}
+            DOCS_BASE_URL=${{ vars.DOCS_BASE_URL }}
             BANK_TRANSFER_BANK_NAME=${{ vars.BANK_TRANSFER_BANK_NAME }}
             BANK_TRANSFER_ACCOUNT_TYPE=${{ vars.BANK_TRANSFER_ACCOUNT_TYPE }}
             BANK_TRANSFER_ACCOUNT_NUMBER=${{ vars.BANK_TRANSFER_ACCOUNT_NUMBER }}
