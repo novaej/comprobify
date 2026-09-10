@@ -177,7 +177,7 @@ Read by `terraform.yml`'s plan/apply jobs only.
 
 | Secret | Value |
 |---|---|
-| `RELEASE_PUSH_TOKEN` | |
+| `RELEASE_PUSH_TOKEN` | A PAT (not the default `GITHUB_TOKEN`) `release-staging.yml`/`release-production.yml` use to fast-forward `staging`/`production` — one shared value for both, since it's a repository secret, not Environment-scoped. Needed because the default `GITHUB_TOKEN` can't push past a ruleset-protected branch's rules. If fine-grained, it needs **both** `Contents: Read and write` (to push) **and** `Administration: Read and write` (to actually exercise a ruleset bypass — easy to miss, since it looks unrelated to "just pushing code"; a classic PAT doesn't have this gotcha, it inherits the owning account's full bypass rights automatically). Either way, the account that owns the token must itself be listed as a bypass actor on the target branch's ruleset — `staging` currently has no ruleset at all, so this token's exact permissions were never actually tested against one until `production`'s ruleset (see `docs/deployment-reference-production.md`) exposed the gap with a real `GH013` failure. |
 | `DOCS_CLOUDFLARE_API_TOKEN` | |
 | `DOCS_CLOUDFLARE_ACCOUNT_ID` | |
 | `TERRAFORM_SPACES_ACCESS_KEY_ID` | |
@@ -221,21 +221,44 @@ It runs `validateCoreConfig()` at startup — a narrower set than the API's full
 
 The application database user must not be a superuser (or the provider's default admin role, e.g. DO's `doadmin`), because PostgreSQL row-level security is bypassed for superusers.
 
-Run the following SQL via the database's SQL client (DO's control panel console, or `psql` against the cluster's connection string) after creating the cluster.
+Run the following SQL via the database's SQL client (DO's control panel console, or `psql` against the cluster's connection string) after creating the cluster, logged in as **`doadmin`** — never as `comprobify_app` itself. To `GRANT` a privilege, the executing role needs to already hold it (with grant option) or own the object; a freshly created, unprivileged role like `comprobify_app` has nothing to grant, including to itself, and running these as that role fails outright.
 
-**Step 1** — Create the application role and grant baseline access:
+**Step 1** — Create the application role and grant baseline access. Connect to the **real application database first** — `defaultdb` below is a placeholder, substitute the actual database name. This isn't optional: DigitalOcean provisions a database literally named `defaultdb` alongside any custom one you create, so an unsubstituted copy-paste doesn't error, it just silently succeeds against the wrong database:
 
 ```sql
+\c defaultdb  -- replace with the real database name before running anything below
+
 CREATE ROLE comprobify_app LOGIN PASSWORD 'FILL_STRONG_PASSWORD';
-GRANT ALL PRIVILEGES ON DATABASE defaultdb TO comprobify_app;
+GRANT ALL PRIVILEGES ON DATABASE defaultdb TO comprobify_app;  -- same substitution here
 GRANT ALL ON SCHEMA public TO comprobify_app;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO comprobify_app;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO comprobify_app;
 ```
 
-(`defaultdb` is DigitalOcean Managed Postgres's default database name — adjust if the cluster was provisioned with a different one.)
+**If the role already exists** (e.g. created via DO's dashboard "Users & Databases" tab rather than this SQL), skip the `CREATE ROLE` line — running it again fails with `role already exists`, and if executed as one pasted block, most clients stop there and silently never run the `GRANT` lines that follow it.
 
-**Step 2** — After the first deployment, grant access to the `sandbox` schema created by migration 033:
+**Verify in a separate, fresh query execution before moving on — not the same one you just ran:**
+
+```sql
+SELECT current_database();  -- must read the real database name, not defaultdb
+SELECT
+  has_schema_privilege('comprobify_app', 'public', 'USAGE')  AS has_usage,
+  has_schema_privilege('comprobify_app', 'public', 'CREATE') AS has_create;
+-- both must read true
+```
+
+**Running this from a GUI SQL client (DBeaver, TablePlus, pgAdmin, etc.): confirm Auto-commit is ON, or explicitly commit after running the grants.** A real incident (on production, during its first-deploy setup): every check above can read `true` immediately after running the grants and still not have actually happened — with auto-commit off, you're seeing your own uncommitted transaction, which looks identical to a successful, durable change until the session ends and it silently rolls back (a fresh connection, like the deployed container's, never sees it). Checking again in a genuinely separate query execution is what catches this; checking again in the same one doesn't.
+
+**Step 2 — `sandbox` schema, created by migration 033 on the app's first successful startup — is normally a no-op, not a step to actually run.** Migrations always run as the app's own configured `comprobify_app` connection, so whichever role creates a schema owns it, and owners already hold every privilege on what they own — no explicit grant needed. Confirmed directly on production's real database: `comprobify_app` already had `USAGE`/`CREATE` both `true` on `sandbox` with zero grants run, owner shown as `comprobify_app` itself. This is genuinely different from `public` above, which is owned by the database/cluster, not by `comprobify_app` — that one needs the explicit `doadmin` grant, `sandbox` doesn't. Verify rather than assume, since a future change to how migrations connect could invalidate this:
+
+```sql
+SELECT
+  has_schema_privilege('comprobify_app', 'sandbox', 'USAGE')  AS has_usage,
+  has_schema_privilege('comprobify_app', 'sandbox', 'CREATE') AS has_create,
+  (SELECT nspowner::regrole::text FROM pg_namespace WHERE nspname = 'sandbox') AS owner;
+```
+
+Only if that comes back with anything other than `true, true, comprobify_app`, fall back to granting it explicitly as `doadmin` (same database-name-substitution and auto-commit cautions as step 1 apply):
 
 ```sql
 GRANT ALL ON SCHEMA sandbox TO comprobify_app;
