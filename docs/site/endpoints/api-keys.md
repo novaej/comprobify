@@ -26,7 +26,7 @@ Cada llave lleva un arreglo `scopes`. Una solicitud solo se permite si los scope
 | `issuers:read` | Todos los `GET` bajo `/v1/issuers` (listar, obtener, tipos de comprobante, secuenciales). |
 | `issuers:write` | Todos los `POST`/`PATCH`/`DELETE` bajo `/v1/issuers` (creación de sucursales, actualizaciones, logo, renovación de certificado, tipos de comprobante, secuenciales). |
 | `keys:manage` | Toda esta ruta `/v1/keys`. |
-| `billing:manage` | `/v1/subscriptions` y `/v1/payments` completos. |
+| `billing:manage` | `GET /v1/subscriptions/me`, `GET /v1/payments/:id/proofs` y `GET /v1/payments/:id/proofs/:proofId` — los únicos tres endpoints de `/v1/subscriptions`/`/v1/payments` que una llave puede llamar directamente. Cualquier otro endpoint de esas dos rutas (iniciar una suscripción, cambiar de plan/usuarios adicionales, cancelar, enviar o eliminar comprobante, pagos con tarjeta) solo puede llamarlo la propia aplicación web de Comprobify — ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md). |
 | `webhooks:manage` | `/v1/webhooks` completo. |
 | `tenant:manage` | `PATCH /v1/tenants/language` y `POST /v1/tenants/agreements`. |
 | `tenant:promote` | Solo `POST /v1/tenants/promote` — separado de `tenant:manage` porque emite/revoca todas las llaves del tenant y cambia de sandbox a producción de forma irreversible. |

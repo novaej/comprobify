@@ -5,6 +5,7 @@ const controller = require('../controllers/payment.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
+const requireInternalService = require('../middleware/require-internal-service');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireNotPastDue = require('../middleware/require-past-due');
 const requireScope = require('../middleware/require-scope');
@@ -68,24 +69,31 @@ const handleProofUpload = (req, res, next) => {
   });
 };
 
+// Every mutation below additionally requires requireInternalService (ADR-035
+// extension, mirrors subscriptions.routes.js) — comprobify-web's own BFF must
+// be the caller, on top of (not instead of) the normal tenant-API-key
+// authenticate + billing:manage chain above.
+
 // Cancel a still-PENDING payment (wrong tier/seat count, never submitted
 // proof) — see subscription.service.js's cancelPayment.
-router.delete('/:id', writeLimiter, requireNotSuspended, requireNotPastDue, idParam, validateRequest, asyncHandler(controller.cancelPayment));
+router.delete('/:id', writeLimiter, requireInternalService, requireNotSuspended, requireNotPastDue, idParam, validateRequest, asyncHandler(controller.cancelPayment));
 
 // A SUSPENDED tenant may still view/download proof files already submitted —
-// relevant precisely when the suspension itself is payment-related.
+// relevant precisely when the suspension itself is payment-related. These
+// two reads stay reachable with just the tenant's own API key — no
+// requireInternalService — same split as GET /v1/subscriptions/me.
 router.get('/:id/proofs', readLimiter, idParam, validateRequest, asyncHandler(controller.listProofs));
 router.get('/:id/proofs/:proofId', readLimiter, idAndProofIdParams, validateRequest, asyncHandler(controller.downloadProof));
 // PATCH /:id/proof is deliberately NOT gated by requireNotPastDue (still
 // gated by requireNotSuspended) — submitting payment proof is the other half
 // of the self-service recovery path for a PAST_DUE tenant. See
 // docs/adr/025-past-due-tenant-status.md.
-router.patch('/:id/proof', writeLimiter, requireNotSuspended, handleProofUpload, submitProofFields, validateRequest, asyncHandler(controller.submitProof));
-router.delete('/:id/proofs/:proofId', writeLimiter, requireNotSuspended, requireNotPastDue, idAndProofIdParams, validateRequest, asyncHandler(controller.deleteProof));
+router.patch('/:id/proof', writeLimiter, requireInternalService, requireNotSuspended, handleProofUpload, submitProofFields, validateRequest, asyncHandler(controller.submitProof));
+router.delete('/:id/proofs/:proofId', writeLimiter, requireInternalService, requireNotSuspended, requireNotPastDue, idAndProofIdParams, validateRequest, asyncHandler(controller.deleteProof));
 
 // Card payments (ADR-028), also exempt from requireNotPastDue. '/payphone/confirm'
 // must precede the '/:id/...' routes or UUID validation rejects it.
-router.post('/payphone/confirm', writeLimiter, requireNotSuspended, confirmPayphoneFields, validateRequest, asyncHandler(controller.confirmPayphone));
-router.post('/:id/payphone-session', writeLimiter, requireNotSuspended, idParam, validateRequest, asyncHandler(controller.createPayphoneSession));
+router.post('/payphone/confirm', writeLimiter, requireInternalService, requireNotSuspended, confirmPayphoneFields, validateRequest, asyncHandler(controller.confirmPayphone));
+router.post('/:id/payphone-session', writeLimiter, requireInternalService, requireNotSuspended, idParam, validateRequest, asyncHandler(controller.createPayphoneSession));
 
 module.exports = router;

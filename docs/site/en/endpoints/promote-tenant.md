@@ -40,7 +40,7 @@ All fields are optional. An empty body `{}` is valid.
 
 Requesting a `tier` here starts the subscription/payment pipeline (same as the admin-driven path) — see [Your subscription & billing](../paying-your-subscription.md) for what happens next. The tier/quota upgrade itself lands as soon as the payment is verified; it does not happen as part of this call.
 
-If the tenant already started a subscription before promoting — via [`POST /v1/subscriptions`](../paying-your-subscription.md), which works while still in sandbox — and it's still in progress by the time this call happens (any status other than `CANCELLED`/`EXPIRED`: `PENDING_PAYMENT` or `ACTIVE`), there's nothing left to select: `tier`/`billingInterval` are ignored entirely, and the response surfaces that existing subscription instead of starting a new one. This is a hard block, not just a courtesy — it prevents a second subscription/payment from being opened while one is already awaiting proof or review.
+If the tenant already started a subscription before promoting — from the Comprobify web app (see [Your subscription & billing](../paying-your-subscription.md)), which works while still in sandbox — and it's still in progress by the time this call happens (any status other than `CANCELLED`/`EXPIRED`: `PENDING_PAYMENT` or `ACTIVE`), there's nothing left to select: `tier`/`billingInterval` are ignored entirely, and the response surfaces that existing subscription instead of starting a new one. This is a hard block, not just a courtesy — it prevents a second subscription/payment from being opened while one is already awaiting proof or review.
 
 ## Response
 

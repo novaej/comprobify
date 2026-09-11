@@ -26,7 +26,7 @@ Every key carries a `scopes` array. A request is only allowed through if the key
 | `issuers:read` | Every `GET` under `/v1/issuers` (list, get, document types, sequentials). |
 | `issuers:write` | Every `POST`/`PATCH`/`DELETE` under `/v1/issuers` (branch creation, updates, logo, certificate renewal, document types, sequentials). |
 | `keys:manage` | This entire `/v1/keys` router. |
-| `billing:manage` | `/v1/subscriptions` and `/v1/payments` in full. |
+| `billing:manage` | `GET /v1/subscriptions/me`, `GET /v1/payments/:id/proofs`, and `GET /v1/payments/:id/proofs/:proofId` — the only three `/v1/subscriptions`/`/v1/payments` endpoints a key can call directly. Every other endpoint in those two routers (starting a subscription, changing tier/seats, cancelling, submitting or deleting proof, card payments) can only be called by the Comprobify web app itself — see [Your subscription & billing](../paying-your-subscription.md). |
 | `webhooks:manage` | `/v1/webhooks` in full. |
 | `tenant:manage` | `PATCH /v1/tenants/language` and `POST /v1/tenants/agreements`. |
 | `tenant:promote` | `POST /v1/tenants/promote` only — split out from `tenant:manage` since it mints/revokes every one of the tenant's keys and flips sandbox→production irreversibly. |
