@@ -655,26 +655,26 @@ See `GETTING_STARTED.md` for the full admin API reference.
 
 ## Production security checklist
 
-- [ ] `APP_ENV=production` set on the production deployment; `APP_ENV=staging` on staging
-- [ ] `DB_SSL=true` with a valid certificate
-- [ ] Database user is **not** a PostgreSQL superuser — Row-Level Security is bypassed unconditionally for superusers
-- [ ] App user has been granted privileges on the `sandbox` schema (see `GETTING_STARTED.md` step 7)
-- [ ] `ENCRYPTION_KEY` is unique per environment — never share between staging and production
-- [ ] `ADMIN_SECRET` is unique per environment and kept behind an internal firewall
-- [ ] `.env` file is not world-readable and never committed
-- [ ] `trust proxy` in `server.js` matches the actual number of reverse proxy hops in front of the app (currently `2`: Cloudflare, then Caddy on the droplet) — required for IP-based rate limiters (`adminLimiter`/`registrationLimiter`) to see the real client IP via `X-Forwarded-For` instead of pooling all traffic into one bucket. Re-verify this number if the proxy chain ever changes.
-- [ ] `helmet()` middleware active — sets standard security headers (`X-Content-Type-Options`, `Strict-Transport-Security`, `X-Frame-Options`, etc.)
-- [ ] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /v1/admin/tenants/:id/promote`
-- [ ] API is behind HTTPS — Caddy on the droplet issues/renews the TLS cert automatically via Let's Encrypt (see `docs/terraform-digitalocean-setup.md`'s "The application stack")
-- [ ] PostgreSQL not exposed on a public port
-- [ ] `xmllint` installed in the container image (`apt install libxml2-utils`, part of the Dockerfile)
-- [ ] `EMAIL_FROM`, `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` set and verified against a real Mailgun domain (not sandbox)
-- [ ] Mailgun sandbox authorized-recipient restriction removed (sandbox only allows pre-approved addresses)
-- [ ] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard for all 4 event types
-- [ ] Webhook endpoint (`/v1/mailgun/webhook`) reachable on the public HTTPS URL
-- [ ] Log aggregation configured — the API logs to stdout
-- [ ] `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` come from **this environment's own Payphone application** — staging in test mode, production in production mode. Nothing in the code can tell a test token from a live one, so pasting production credentials into staging means staging creates **real charges** — or deliberately left unset to keep card payments disabled
-- [ ] `SENTRY_DSN` set on staging and production so unexpected `5xx` errors are reported (left unset locally so development never sends events)
+- [x] `APP_ENV=production` set on the production deployment; `APP_ENV=staging` on staging — confirmed directly (`vars.APP_ENV`)
+- [x] `DB_SSL=true` with a valid certificate — confirmed directly (`vars.DB_SSL`); the app couldn't have connected to DO Managed Postgres at all otherwise
+- [x] Database user is **not** a PostgreSQL superuser — Row-Level Security is bypassed unconditionally for superusers — `comprobify_app` is a plain role, never `doadmin`
+- [x] App user has been granted privileges on the `sandbox` schema (see `GETTING_STARTED.md` step 7) — verified directly on production (`has_usage`/`has_create` both `true`, and it's actually the schema *owner* — see `docs/deployment-reference-production.md`'s DB setup section)
+- [x] `ENCRYPTION_KEY` is unique per environment — never share between staging and production — freshly generated for production, independent of staging's
+- [x] `ADMIN_SECRET` is unique per environment and kept behind an internal firewall — freshly generated for production; "internal firewall" here just means it's never logged/exposed outside the admin auth check itself, which holds
+- [x] `.env` file is not world-readable and never committed — `deploy-production.yml` runs `chmod 600 /opt/comprobify/.env` right after writing it; the file only ever exists on the droplet, never in git
+- [x] `trust proxy` in `server.js` matches the actual number of reverse proxy hops in front of the app (currently `2`: Cloudflare, then Caddy on the droplet) — required for IP-based rate limiters (`adminLimiter`/`registrationLimiter`) to see the real client IP via `X-Forwarded-For` instead of pooling all traffic into one bucket. Re-verify this number if the proxy chain ever changes. — confirmed in code (`src/server.js:19`), same for every environment
+- [x] `helmet()` middleware active — sets standard security headers (`X-Content-Type-Options`, `Strict-Transport-Security`, `X-Frame-Options`, etc.) — confirmed in code (`src/server.js:39`), same for every environment
+- [x] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /v1/admin/tenants/:id/promote` — no tenants promoted yet (`tenants: []`), nothing to violate this yet
+- [x] API is behind HTTPS — Caddy on the droplet issues/renews the TLS cert automatically via Let's Encrypt (see `docs/terraform-digitalocean-setup.md`'s "The application stack") — confirmed, `https://api.comprobify.com/health` resolves with a valid cert
+- [x] PostgreSQL not exposed on a public port — confirmed via DO's Trusted Sources: only the production droplet's IP is allowlisted on the cluster's firewall, so a connection from any other source is refused at the network level before it ever reaches Postgres's TLS/auth negotiation
+- [x] `xmllint` installed in the container image (`apt install libxml2-utils`, part of the Dockerfile) — confirmed directly via SSH (`xmllint: using libxml version 20914`)
+- [x] `EMAIL_FROM`, `MAILGUN_API_KEY`, `MAILGUN_DOMAIN` set and verified against a real Mailgun domain (not sandbox) — all present on the `production` Environment; `mg.comprobify.com` is the same already-verified domain staging uses
+- [x] Mailgun sandbox authorized-recipient restriction removed (sandbox only allows pre-approved addresses)
+- [x] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard for all 4 event types
+- [x] Webhook endpoint (`/v1/mailgun/webhook`) reachable on the public HTTPS URL — confirmed directly, a test POST returns `401` (signature rejection), not `404`
+- [x] Log aggregation configured — the API logs to stdout — `BETTERSTACK_SOURCE_TOKEN` is also set on `production`, shipping structured logs to Betterstack same as staging
+- [x] `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` come from **this environment's own Payphone application** — staging in test mode, production in production mode. Nothing in the code can tell a test token from a live one, so pasting production credentials into staging means staging creates **real charges** — or deliberately left unset to keep card payments disabled — deliberately unset for production (blocked on legal entity registration for Payphone's own KYC), a supported launch state
+- [x] `SENTRY_DSN` set on staging and production so unexpected `5xx` errors are reported (left unset locally so development never sends events) — confirmed present on `production`
 
 ### Rotating secrets (e.g. after a suspected compromise)
 
