@@ -76,13 +76,14 @@ async function getNext(issuerId, branchCode, issuePointCode, documentType, clien
  * @param {number} startingValue - The first sequential that getNext() will return
  */
 async function initialize(issuerId, branchCode, issuePointCode, documentType, startingValue, sandbox = false) {
-  const table = sandbox ? 'sandbox.sequential_numbers' : 'sequential_numbers';
-  await db.query(
-    `INSERT INTO ${table} (issuer_id, branch_code, issue_point_code, document_type, current_value)
+  await db.queryAsIssuer(
+    issuerId,
+    `INSERT INTO sequential_numbers (issuer_id, branch_code, issue_point_code, document_type, current_value)
      VALUES ($1, $2, $3, $4, $5)
      ON CONFLICT (issuer_id, branch_code, issue_point_code, document_type)
      DO UPDATE SET current_value = $5, updated_at = NOW()`,
-    [issuerId, branchCode, issuePointCode, documentType, startingValue - 1]
+    [issuerId, branchCode, issuePointCode, documentType, startingValue - 1],
+    sandbox
   );
 }
 

@@ -74,7 +74,7 @@ describe('TenantAgreementService', () => {
 
       expect(agreementService.substitutePlaceholders).toHaveBeenCalledWith('raw markdown', {
         cliente: { razonSocial: 'ACME S.A.', ruc: '1712345678001', email: 'billing@acme.com' },
-      });
+      }, { escapeValues: true });
       expect(tenantAgreementModel.create).toHaveBeenCalledWith({
         tenantId: '00000000-0000-0000-0000-000000000005',
         documentType: 'TERMS',
@@ -95,7 +95,8 @@ describe('TenantAgreementService', () => {
 
       expect(agreementService.substitutePlaceholders).toHaveBeenCalledWith(
         'raw markdown',
-        expect.objectContaining({ cliente: { razonSocial: '', ruc: '', email: '' } })
+        expect.objectContaining({ cliente: { razonSocial: '', ruc: '', email: '' } }),
+        { escapeValues: true }
       );
     });
 

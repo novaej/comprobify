@@ -2,6 +2,8 @@ const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 const requireMatchingEnvironment = require('./require-matching-environment');
+const attemptTrackerService = require('../services/attempt-tracker.service');
+const AttemptEventTypes = require('../constants/attempt-event-types');
 
 /**
  * Resolves the target issuer for the request from the X-Issuer-Id header.
@@ -37,6 +39,10 @@ const resolveIssuer = async (req, _res, next) => {
   }
 
   if (issuer.tenant_id !== req.tenant.id) {
+    // A key repeatedly sending an X-Issuer-Id belonging to a DIFFERENT
+    // tenant is one of the clearest signs of a compromised/leaked key being
+    // probed against other tenants' data.
+    await attemptTrackerService.recordEvent(AttemptEventTypes.ISSUER_FORBIDDEN, req.apiKey.id);
     return next(new AppError('Issuer does not belong to this tenant', 403, ErrorCodes.ISSUER_FORBIDDEN));
   }
 
