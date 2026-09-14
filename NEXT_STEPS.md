@@ -87,7 +87,6 @@ Full findings and resolution history: `docs/security-audit-2026-09-12.md`. This 
 - Trivy image scanning is wired into both deploy workflows but deliberately informational only (`exit-code: '0'`) — a real scan already found HIGH/CRITICAL findings in `node:20-slim` (bundled `node-tar` CVEs) and `caddy:2-alpine` (Go-stdlib CVEs). Someone should triage that baseline and flip it to blocking once it's clean or the remaining findings are explicitly accepted.
 - Whether a dedicated secrets manager is warranted as the tenant base grows (the droplet's single flat `.env` file is an accepted trade-off for now, not a live gap).
 - Confirming DO Managed Postgres's own native backup/retention settings on the cluster, as a second layer alongside SnapShooter (lower priority now that real backup coverage exists either way).
-- The new `.github/workflows/ci.yml` (unit tests + production-dependency `npm audit`) needs to actually fire once on a real PR to confirm its check name (`Test and audit`) matches what got registered as a required status check on the `main` branch ruleset before trusting that it's really blocking merges.
 
 **Effort:** individually small, just need scheduling — no open policy decisions blocking any of them. The `security-review` skill can cover incremental "review this branch's diff" work along the way.
 
