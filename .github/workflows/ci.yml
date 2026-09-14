@@ -27,6 +27,13 @@ jobs:
           node-version: 20
           cache: npm
 
+      # xml-validator.service.js shells out to the real xmllint CLI (see
+      # CLAUDE.md's XSD validation entry) - the Dockerfile installs this via
+      # apt-get for the deployed image, but a bare ubuntu-latest runner
+      # doesn't have it, so tests exercising real XSD validation fail with no
+      # useful error otherwise. Same package the Dockerfile installs.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxml2-utils
+
       - run: npm ci
 
       - name: Run unit tests
