@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-09-14
+
+### Security
+- **Subscription/payment mutation routes now additionally require `X-Internal-Service-Secret`, the same internal-service gate account creation already used.** `POST /v1/subscriptions`, `.../change-tier`, `.../seats`, `DELETE /v1/subscriptions`, `DELETE /v1/payments/:id`, `PATCH /v1/payments/:id/proof`, `DELETE /v1/payments/:id/proofs/:proofId`, and both Payphone endpoints (`POST /v1/payments/:id/payphone-session`, `.../payphone/confirm`) can no longer be driven by a tenant's own directly-held API key from outside comprobify-web — Comprobify wants every subscription/payment change to flow through its own checkout/proof-upload UX, the same product reasoning ADR-035 already applied to account creation. This is a **breaking change** for any integrator that was calling these mutation routes directly. The 3 read endpoints (`GET /v1/subscriptions/me`, `GET /v1/payments/:id/proofs`, `.../proofs/:proofId`) are unaffected — a tenant's own key still works for those. See ADR-035's addendum.
+- **`scripts/rotate-encryption-key.js` no longer accepts either encryption key via a CLI flag or environment variable.** Both used to land in shell history and the process list on the droplet — the incident-response tool for a suspected key compromise was leaving a trace of the very secret it exists to rotate. It now prompts for both keys interactively with hidden input.
+- **CI now runs the unit test suite and `npm audit --omit=dev --audit-level=high` as required checks on every PR/push to `main`** — previously no workflow ran the test suite at all. Dependabot is configured for both the `npm` and `github-actions` ecosystems (grouped weekly updates, majors excluded from grouping), and GitHub's secret scanning + push protection are enabled.
+- **Third-party GitHub Actions that handle production secrets (`appleboy/ssh-action`/`scp-action`, `hashicorp/setup-terraform`, `cloudflare/wrangler-action`) are now pinned to commit SHAs instead of mutable version tags** — a compromised maintainer account re-pointing a tag could previously have exfiltrated every production secret with no diff in this repo to catch it in review.
+- **Docker base images (`node:20-slim`, `caddy:2-alpine`, `redis:7-alpine`) are now pinned by digest, with Trivy vulnerability scanning wired into both deploy workflows.** Currently informational-only pending triage of the existing upstream CVE baseline — see `docs/security-audit-2026-09-12.md`.
+
+### Docs
+- **Documented the production database disaster-recovery procedure**, including a validated manual restore path (SnapShooter's own automated restore is unreliable against this schema — documented why) and DigitalOcean Managed Postgres's own native backup layer as a second, complementary line of defense. See `docs/guides/database-backups.md`.
+
 ## [0.17.0] — 2026-09-09
 
 ### Added
