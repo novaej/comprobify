@@ -17,7 +17,16 @@
  * format ever changes, this file and its test need a matching update.
  *
  * Usage:
- *   OLD_ENCRYPTION_KEY=... NEW_ENCRYPTION_KEY=... node scripts/rotate-encryption-key.js [--dry-run]
+ *   node scripts/rotate-encryption-key.js [--dry-run]
+ *   (prompts for OLD_ENCRYPTION_KEY / NEW_ENCRYPTION_KEY interactively, input hidden)
+ *
+ * Deliberately does NOT accept the keys as env vars or CLI args - this is the
+ * incident-response tool for a suspected key compromise, so it must never be
+ * the thing that leaks the *new* key via shell history or `ps` output during
+ * the exact moment an attacker with residual access might be watching either.
+ * Needs a real interactive terminal (the prompt uses stdin raw mode) - see
+ * docs/guides/encryption-key-rotation.md for the `docker compose exec -it`
+ * invocation this requires (not `-T`, which disables the TTY the prompt needs).
  *
  * --dry-run: runs the exact same transaction (decrypt with OLD_ENCRYPTION_KEY,
  * re-encrypt with NEW_ENCRYPTION_KEY, round-trip verify) but rolls back
@@ -82,10 +91,65 @@ function decryptWithKey(ciphertext, key) {
   return decrypted;
 }
 
+// Key codes compared numerically (charCodeAt), not as string literals, to
+// avoid any ambiguity editing/rendering raw control characters in source.
+const KEY_ENTER = 13;
+const KEY_CTRL_C = 3;
+const KEY_CTRL_D = 4;
+const KEY_BACKSPACE = 127;
+const KEY_BACKSPACE_ALT = 8;
+
+// Reads one line from stdin with input hidden entirely (not even masked with
+// `*` - simplest to get right, and there's no need to let anyone looking at
+// the screen even see the key's length). Requires a real TTY: raw mode has
+// nothing to attach to otherwise, which is exactly what `docker compose exec
+// -T` (no pseudo-terminal) would hit - fails fast with a clear message
+// instead of hanging.
+function promptHidden(question) {
+  return new Promise((resolve, reject) => {
+    if (!process.stdin.isTTY) {
+      reject(new Error(
+        `Cannot prompt for "${question.trim()}" - stdin is not an interactive terminal. ` +
+        'Run this from a real terminal, or via `docker compose exec -it` (not -T).'
+      ));
+      return;
+    }
+
+    process.stdout.write(question);
+    process.stdin.resume();
+    process.stdin.setRawMode(true);
+    process.stdin.setEncoding('utf8');
+
+    let input = '';
+    const cleanup = () => {
+      process.stdin.setRawMode(false);
+      process.stdin.pause();
+      process.stdin.removeListener('data', onData);
+    };
+    const onData = (char) => {
+      const code = char.charCodeAt(0);
+      if (code === KEY_ENTER || code === KEY_CTRL_D) {
+        cleanup();
+        process.stdout.write('\n');
+        resolve(input);
+      } else if (code === KEY_CTRL_C) {
+        cleanup();
+        process.stdout.write('\n');
+        process.exit(1);
+      } else if (code === KEY_BACKSPACE || code === KEY_BACKSPACE_ALT) {
+        input = input.slice(0, -1);
+      } else {
+        input += char;
+      }
+    };
+    process.stdin.on('data', onData);
+  });
+}
+
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
-  const oldKeyHex = process.env.OLD_ENCRYPTION_KEY;
-  const newKeyHex = process.env.NEW_ENCRYPTION_KEY;
+  const oldKeyHex = await promptHidden('OLD_ENCRYPTION_KEY: ');
+  const newKeyHex = await promptHidden('NEW_ENCRYPTION_KEY: ');
 
   if (oldKeyHex && newKeyHex && oldKeyHex === newKeyHex) {
     throw new Error('OLD_ENCRYPTION_KEY and NEW_ENCRYPTION_KEY must differ');

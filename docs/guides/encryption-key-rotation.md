@@ -14,6 +14,8 @@ Runs the whole rotation as one transaction: `SELECT ... FOR UPDATE` on every `is
 
 `--dry-run` runs that identical transaction but `ROLLBACK`s instead of `COMMIT`s at the end — real DB read, real decrypt/re-encrypt/verify against real data, zero writes. Always run this before a real rotation.
 
+**The script prompts for both keys interactively, with input hidden — it deliberately does not accept `OLD_ENCRYPTION_KEY`/`NEW_ENCRYPTION_KEY` as env vars or CLI arguments.** This is the incident-response tool for a suspected key compromise, so it must never be the thing that leaks the *new* key via shell history or `ps` output during the exact moment an attacker with residual access might be watching either — see "Why the interactive prompt" below for the full reasoning. This needs a real interactive terminal (the prompt uses stdin raw mode) — running it non-interactively (piped/redirected stdin, or `docker compose exec -T`) fails fast with a clear error instead of hanging.
+
 ---
 
 Test against a copy of real data before ever rotating for real — see `docs/guides/database-backups.md` for getting an importable dump from staging or production.
@@ -22,12 +24,14 @@ Test against a copy of real data before ever rotating for real — see `docs/gui
 
 ```bash
 # Always dry-run first
-OLD_ENCRYPTION_KEY=<current key> NEW_ENCRYPTION_KEY=<new key> \
-  node scripts/rotate-encryption-key.js --dry-run
+node scripts/rotate-encryption-key.js --dry-run
+# OLD_ENCRYPTION_KEY: <type it, hidden>
+# NEW_ENCRYPTION_KEY: <type it, hidden>
 
 # Then for real
-OLD_ENCRYPTION_KEY=<current key> NEW_ENCRYPTION_KEY=<new key> \
-  node scripts/rotate-encryption-key.js
+node scripts/rotate-encryption-key.js
+# OLD_ENCRYPTION_KEY: <type it, hidden>
+# NEW_ENCRYPTION_KEY: <type it, hidden>
 
 # Then immediately update ENCRYPTION_KEY (e.g. in .env) — don't leave a gap
 ```
@@ -43,23 +47,31 @@ Needs the same `DB_*` env vars the app itself uses.
 
 ## On staging/production
 
-The droplet's Postgres isn't publicly reachable (see `docs/deployment.md`'s production security checklist), so this has to run *from* the droplet, inside the already-running `api` container — same reasoning as `scripts/run-admin-job.js`'s `docker compose exec` pattern:
+The droplet's Postgres isn't publicly reachable (see `docs/deployment.md`'s production security checklist), so this has to run *from* the droplet, inside the already-running `api` container — same reasoning as `scripts/run-admin-job.js`'s `docker compose exec` pattern.
+
+**Use `-it`, not `-T`** — the script's interactive prompt needs a real pseudo-terminal to read hidden input from; `-T` disables that and the script will fail fast with a clear error instead of hanging:
 
 ```bash
 ssh -i ~/.ssh/comprobify_deploy_staging cpfydeploy9x@<droplet-ip>   # swap in production's key/user for that environment
 cd /opt/comprobify
 
-docker compose exec -T -e OLD_ENCRYPTION_KEY=<current> -e NEW_ENCRYPTION_KEY=<new> \
-  api node scripts/rotate-encryption-key.js --dry-run
+docker compose exec -it api node scripts/rotate-encryption-key.js --dry-run
+# OLD_ENCRYPTION_KEY: <type it, hidden>
+# NEW_ENCRYPTION_KEY: <type it, hidden>
 
 # then, if that looks right:
-docker compose exec -T -e OLD_ENCRYPTION_KEY=<current> -e NEW_ENCRYPTION_KEY=<new> \
-  api node scripts/rotate-encryption-key.js
+docker compose exec -it api node scripts/rotate-encryption-key.js
+# OLD_ENCRYPTION_KEY: <type it, hidden>
+# NEW_ENCRYPTION_KEY: <type it, hidden>
 ```
 
 Then immediately update `ENCRYPTION_KEY` in the `staging`/`production` GitHub Environment and trigger a redeploy — every issuer's signing is broken in the gap between the script committing and the app restarting with the new key, so don't let that gap sit open.
 
-**Known gap:** typing the keys directly in that SSH session lands them in shell history and the droplet's process list. Acceptable for now given how rarely this runs, but worth revisiting (e.g. a stdin prompt instead of env vars) before this is ever run against a real suspected compromise rather than a test.
+### Why the interactive prompt
+
+This script exists specifically for incident response to a *suspected key compromise* — which means whoever's in there may already have residual access to this exact droplet (a backdoor, a lingering shell) and could be watching `ps`/reading shell history in real time while you run it. The old key being readable that way isn't new information to them (they're already assumed to have it, however they got in) — what actually matters is the *new* key, the one meant to lock them back out. Typing either key as `-e KEY=value` (a prior version of this doc) or any other CLI-argument/env-var form leaves it sitting in both the shell's history file and the process list (`ps aux`) for anyone with access to that same droplet to read — including, in this scenario, the new key you're trying to establish. Prompting for it interactively with hidden input means neither key ever appears in a command line or gets echoed anywhere — only whoever's physically watching the screen at the moment of typing sees it.
+
+This is a different, narrower problem than `/opt/comprobify/.env` sitting on the droplet in plaintext (a separate, already-accepted trade-off — see `docs/deployment.md`'s "Rotating secrets" and `NEXT_STEPS.md`'s secrets-manager item). After a successful rotation, the new key does land in `.env` the same way the old one did, which is fine and expected — normal operation, not an incident. The point of the prompt is only to avoid an *additional*, avoidable leak of the new key during the narrow window of the rotation itself.
 
 ---
 
