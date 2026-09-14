@@ -142,6 +142,22 @@ Test this procedure against production only when there's genuinely nothing to lo
 
 ---
 
+## DigitalOcean's own automated backups (a separate, native layer)
+
+Independent of SnapShooter: DO Managed Postgres clusters get continuous automated backups (base backup + WAL archiving — point-in-time recovery, not fixed daily snapshot files) built into the product itself, no setup required. There's no snapshot-browsing UI for this the way there is for droplets — the only entry point is the cluster's **Actions → Restore from backup**, which picks a point in time within the retention window (observed retention: back to ~5 days) and **always creates a brand-new cluster** from it, never an in-place restore. The new cluster comes back with everything the physical backup captured — roles, grants, RLS/FORCE RLS settings, extensions — reconstructed exactly as they were at that point, unlike the manual SnapShooter-dump restore above, which has to carefully recreate grants on an already-existing target schema.
+
+**Same region as the live cluster** (no region picker appeared during a real test of this flow) — this is what makes it a *complementary* layer to SnapShooter, not a replacement: it recovers from data corruption, a bad migration, or an accidental `DROP`/`DELETE` far faster and more completely than the manual dump/restore path, but it does **not** protect against a regional DigitalOcean outage the way SnapShooter's separate-region storage does. Keep both.
+
+**Using it for a real disaster (not yet tested end-to-end — treat this as the plan, verify each step live if it's ever actually needed):**
+
+1. Trigger **Restore from backup** on the cluster, picking the point in time just before whatever went wrong. This provisions a new cluster (new host, likely same port/`DB_NAME`) — expect it to take some minutes to come up, same as provisioning any new Managed Database.
+2. Add the droplet's IP (or re-add it, if it's not already covered) to the **new** cluster's Trusted Sources — a restored cluster's Trusted Sources list is not confirmed to carry over from the original; verify this rather than assume it, the first time this is actually exercised.
+3. Update `DB_HOST` (and `DB_PORT`/`DB_SSL_CA` if either changed) in the `staging`/`production` GitHub Environment's Secrets/Variables, then trigger a deploy so the droplet's `.env` picks up the new connection details — same mechanism `docs/deployment.md`'s "Rotating secrets" section already documents for any other credential rotation.
+4. Verify the same way step 5 of the manual restore above does: `docker compose ps`/`logs`, `GET /health`, and a real authenticated admin-API call — not just that the containers are up.
+5. Decide what happens to the old cluster once the new one is confirmed healthy — keep it briefly for forensics on what went wrong, then destroy it (a second live cluster is a second cluster's worth of billing).
+
+---
+
 ## Alternative: dump from the droplet instead
 
 If you'd rather not touch Trusted Sources at all (e.g. a dynamic IP that changes often, making step 1/6 annoying to repeat), the droplet's reserved IP is already trusted — SSH in and run `pg_dump` there instead, via a throwaway container since the droplet has Docker but no Postgres client tools installed. Same `doadmin`-not-`comprobify_app` reasoning as step 2 applies here too:

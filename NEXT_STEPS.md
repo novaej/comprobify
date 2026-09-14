@@ -84,9 +84,7 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 Full findings and resolution history: `docs/security-audit-2026-09-12.md`. This was an in-house pass, not a professional pentest — still worth deciding whether an external pentest is warranted before real tenant data is at stake.
 
 **Still open:**
-- Trivy image scanning is wired into both deploy workflows but deliberately informational only (`exit-code: '0'`) — a real scan already found HIGH/CRITICAL findings in `node:20-slim` (bundled `node-tar` CVEs) and `caddy:2-alpine` (Go-stdlib CVEs). Someone should triage that baseline and flip it to blocking once it's clean or the remaining findings are explicitly accepted.
-- Whether a dedicated secrets manager is warranted as the tenant base grows (the droplet's single flat `.env` file is an accepted trade-off for now, not a live gap).
-- Confirming DO Managed Postgres's own native backup/retention settings on the cluster, as a second layer alongside SnapShooter (lower priority now that real backup coverage exists either way).
+- `appleboy/scp-action` was bumped 0.1.7 → 1.0.0 (PR #216, 2026-09-14) — reviewed as input-compatible but still a major-version rewrite of the action that writes the droplet's `.env` (every production secret). Neither `deploy-production.yml` nor `deploy-staging.yml` has actually run since that merge (last production deploy: 2026-09-10; last staging deploy: 2026-08-16) — watch the next real run of either workflow to confirm the SCP step still behaves as expected before assuming it's fine.
 
 **Effort:** individually small, just need scheduling — no open policy decisions blocking any of them. The `security-review` skill can cover incremental "review this branch's diff" work along the way.
 
