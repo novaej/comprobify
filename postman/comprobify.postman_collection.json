@@ -1,2424 +1,2152 @@
 {
-  "info": {
-    "name": "Comprobify API \u2014 Public",
-    "description": "Comprobify developer API \u2014 self-service registration through full document lifecycle. Run in order:\n1. List Current Documents \u2192 captures agreement_version\n2. Register \u2192 captures api_key, issuer_id, tenant_id\n3. Verify Email (set verification_token manually from email)\n4. Get Current Tenant \u2192 confirm active\n5. Agreement Acceptance Status\n6. Create Invoice \u2192 captures access_key\n7. Send to SRI / Check Authorization\n8. Subscribe / Promote to Production",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "variable": [
-    {
-      "key": "base_url",
-      "value": "https://your-api-url",
-      "description": "Base URL of the API (no trailing slash)",
-      "type": "string"
-    },
-    {
-      "key": "api_key",
-      "value": "",
-      "description": "Bearer API key issued for the tenant (from Register or POST /v1/keys)",
-      "type": "string"
-    },
-    {
-      "key": "access_key",
-      "value": "",
-      "description": "49-digit SRI access key \u2014 copy from Create Invoice response",
-      "type": "string"
-    },
-    {
-      "key": "issuer_id",
-      "value": "",
-      "description": "Issuer ID \u2014 copy from List Issuers or Create Branch response. Used as X-Issuer-Id header on document requests.",
-      "type": "string"
-    },
-    {
-      "key": "api_key_id",
-      "value": "",
-      "description": "API key ID \u2014 copy from List Keys response (used for revocation)",
-      "type": "string"
-    },
-    {
-      "key": "tenant_id",
-      "value": "",
-      "description": "Tenant ID \u2014 copy from Create Tenant (admin) response",
-      "type": "string"
-    },
-    {
-      "key": "notification_id",
-      "value": "",
-      "description": "Notification ID \u2014 copy from List Notifications response (used for Mark as Read)",
-      "type": "string"
-    },
-    {
-      "key": "webhook_id",
-      "value": "",
-      "description": "Webhook endpoint ID \u2014 copy from Register Webhook response",
-      "type": "string"
-    },
-    {
-      "key": "subscription_id",
-      "value": "",
-      "description": "Subscription ID \u2014 copy from Promote to Production response (if a paid tier was requested)",
-      "type": "string"
-    },
-    {
-      "key": "payment_id",
-      "value": "",
-      "description": "Payment ID \u2014 copy from Promote to Production response (if a paid tier was requested)",
-      "type": "string"
-    },
-    {
-      "key": "agreement_version",
-      "value": "",
-      "description": "Version string of the currently published TERMS document \u2014 captured from GET /v1/agreements",
-      "type": "string"
-    },
-    {
-      "key": "admin_secret",
-      "value": "",
-      "description": "ADMIN_SECRET env var value \u2014 required for all /v1/admin/* requests",
-      "type": "string"
-    },
-    {
-      "key": "verification_token",
-      "value": "",
-      "description": "Email verification token \u2014 copy from the verification email link (?token=...)",
-      "type": "string"
-    },
-    {
-      "key": "proof_id",
-      "value": ""
-    }
-  ],
-  "item": [
-    {
-      "name": "Agreements",
-      "item": [
-        {
-          "name": "List Current Documents",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "if (r.ok && r.documents) {",
-                  "  const terms = r.documents.find(d => d.documentType === 'TERMS');",
-                  "  if (terms) { pm.collectionVariables.set('agreement_version', terms.version); console.log('agreement_version set to', terms.version); }",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/agreements",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "agreements"
-              ]
-            },
-            "description": "Public. Returns current version of each document type. Captures agreement_version for use in Register and Accept Agreements.\n\nReturns an empty list when the deployment runs with AGREEMENTS_ENABLED=false, and GET /v1/agreements/:type then returns 404 AGREEMENT_NOT_FOUND. That is a deliberate configuration, not an outage."
-          }
-        },
-        {
-          "name": "Get Document (TERMS)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/agreements/TERMS",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "agreements",
-                "TERMS"
-              ]
-            },
-            "description": "Returns rendered HTML. Change path segment to PRIVACY or DPA for the other documents."
-          }
-        },
-        {
-          "name": "Get Document (PRIVACY)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/agreements/PRIVACY",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "agreements",
-                "PRIVACY"
-              ]
-            }
-          }
-        },
-        {
-          "name": "Get Document (DPA)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/agreements/DPA",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "agreements",
-                "DPA"
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Registration",
-      "description": "Public registration and email verification endpoints. No authentication required.",
-      "item": [
-        {
-          "name": "Register",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/register",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "register"
-              ]
-            },
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "email",
-                  "value": "your@email.com",
-                  "type": "text"
-                },
-                {
-                  "key": "ruc",
-                  "value": "1712345678001",
-                  "type": "text"
-                },
-                {
-                  "key": "businessName",
-                  "value": "My Company S.A.",
-                  "type": "text"
-                },
-                {
-                  "key": "tradeName",
-                  "value": "",
-                  "description": "Optional trade name",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "mainAddress",
-                  "value": "",
-                  "description": "Optional main (fiscal) address",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "branchCode",
-                  "value": "001",
-                  "type": "text"
-                },
-                {
-                  "key": "issuePointCode",
-                  "value": "001",
-                  "type": "text"
-                },
-                {
-                  "key": "emissionType",
-                  "value": "1",
-                  "type": "text"
-                },
-                {
-                  "key": "requiredAccounting",
-                  "value": "false",
-                  "type": "text"
-                },
-                {
-                  "key": "certPassword",
-                  "value": "",
-                  "type": "text"
-                },
-                {
-                  "key": "cert",
-                  "type": "file",
-                  "src": ""
-                },
-                {
-                  "key": "logo",
-                  "type": "file",
-                  "description": "Optional company logo for RIDE PDFs. PNG recommended (transparent background). Max 500 KB. Recommended: 600x170 px, landscape (~3.5:1 ratio).",
-                  "disabled": true
-                },
-                {
-                  "key": "specialTaxpayer",
-                  "value": "",
-                  "description": "Optional special taxpayer resolution number",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "branchAddress",
-                  "value": "",
-                  "description": "Optional branch address",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "documentTypes",
-                  "value": "[\"01\"]",
-                  "description": "Optional. Document type codes to enable (default: [\"01\"])",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "initialSequentials",
-                  "value": "[{\"documentType\": \"01\", \"sequential\": 1}]",
-                  "description": "Optional. Starting sequential numbers per document type. Any type not listed defaults to 1.",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "language",
-                  "value": "es",
-                  "description": "Optional. Email language: es (default) or en.",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "verificationRedirectUrl",
-                  "value": "",
-                  "description": "Optional. Frontend URL for the email verification link. Token appended as ?token=<token>. https required in production.",
-                  "type": "text",
-                  "disabled": true
-                }
-              ]
-            },
-            "description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` \u2014 it is shown only once. Copy it into the `api_key` collection variable.\n\nThis endpoint is for new accounts only. If the email already exists, it rejects with 409 CONFLICT regardless of account status \u2014 use \"Recover Account\" instead if you lost your API key.\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 201', () => pm.expect(pm.response.code).to.equal(201));",
-                  "pm.test('ok', () => pm.expect(r.ok).to.be.true);",
-                  "if (r.apiKey) { pm.collectionVariables.set('api_key', r.apiKey); console.log('api_key saved'); }",
-                  "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
-                  "if (r.issuer?.id) pm.collectionVariables.set('issuer_id', String(r.issuer.id));"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Recover Account",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/recover",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "recover"
-              ]
-            },
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "email",
-                  "value": "your@email.com",
-                  "type": "text"
-                },
-                {
-                  "key": "certPassword",
-                  "value": "",
-                  "type": "text"
-                },
-                {
-                  "key": "cert",
-                  "type": "file",
-                  "src": ""
-                }
-              ]
-            },
-            "description": "Recovers access to an existing account when the API key was lost. Requires the same P12 certificate used at registration \u2014 the API key is only revoked and replaced when the uploaded certificate matches the one on file.\n\nAlways returns 200 with the same generic response shape unless the certificate genuinely matches an existing account (anti-enumeration \u2014 a nonexistent email, an account with no issuer, and a mismatched certificate are all indistinguishable). On a real match, the key for the account's actual current environment (sandbox or production) is revoked and reissued immediately, returned in `apiKey`.\n\nAs extra validation, the account is also moved back to PENDING_VERIFICATION and a fresh verification email is sent \u2014 a certificate match alone no longer keeps full ACTIVE-gated privileges (branch creation, promotion, subscriptions, minting more named keys). The reissued key works immediately for sandbox document creation regardless. Click the emailed link (GET /v1/verify-email) to reactivate."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.expect(pm.response.code).to.equal(200));",
-                  "pm.test('ok', () => pm.expect(r.ok).to.be.true);",
-                  "if (r.apiKey) { pm.collectionVariables.set('api_key', r.apiKey); console.log('api_key saved (recovered)'); }",
-                  "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
-                  "if (r.issuer?.id) pm.collectionVariables.set('issuer_id', String(r.issuer.id));"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Check Verify Email Token",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/verify-email/check?token={{verification_token}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "verify-email",
-                "check"
-              ],
-              "query": [
-                {
-                  "key": "token",
-                  "value": "{{verification_token}}"
-                }
-              ]
-            },
-            "description": "Read-only check of whether a verification token is still valid \u2014 does not activate the tenant. Safe to call repeatedly, including by email link-scanners that prefetch links. Returns { valid, email } or { valid: false }."
-          }
-        },
-        {
-          "name": "Verify Email",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/verify-email?token={{verification_token}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "verify-email"
-              ],
-              "query": [
-                {
-                  "key": "token",
-                  "value": "{{verification_token}}"
-                }
-              ]
-            },
-            "description": "Legacy combined check-and-consume endpoint, kept for backward compatibility (this is what the verification email links to directly when no verificationRedirectUrl was set). Prefer Check Verify Email Token + Confirm Verify Email for new integrations \u2014 see those requests."
-          }
-        },
-        {
-          "name": "Confirm Verify Email",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"token\": \"{{verification_token}}\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/verify-email",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "verify-email"
-              ]
-            },
-            "description": "Activates the tenant using the verification token. POST-only so an automated link-scanner GET prefetch cannot trigger it \u2014 call this only in response to an explicit user action. Required before promoting to production."
-          }
-        },
-        {
-          "name": "Resend Verification Email",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/resend-verification",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "resend-verification"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"your@email.com\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Resends the verification email. Generates a fresh token (invalidating the previous one) and resets the expiry.\n\nTwo rate limits apply:\n- IP-based: shared with POST /v1/register \u2014 5 requests per hour per IP.\n- Per-account cooldown: 60 seconds between resends for the same email. Returns 429 if not elapsed.\n\nReturns the same generic message whether or not the email exists (no enumeration)."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Tenants",
-      "description": "Tenant settings and lifecycle management. Require a Bearer API key.",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{api_key}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "Get Current Tenant",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/me",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "me"
-              ]
-            },
-            "description": "Resolves the tenant owning the authenticated API key (id, email, subscriptionTier, status, suspensionReasonCode, documentCount, documentQuota, sandbox). Useful for a third-party app that only has an API key and needs to discover its tenant UUID."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
-                  "if (r.tenant?.agreementVersion) console.log('Last accepted agreement version:', r.tenant.agreementVersion);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Update Preferred Language",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/language",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "language"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"language\": \"en\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Updates the preferred language for the authenticated tenant. Used for all outgoing emails. Supported values: `es` (Spanish, default), `en` (English)."
-          }
-        },
-        {
-          "name": "Promote to Production",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/promote",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "promote"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"initialSequentials\": [\n    { \"issuerId\": \"00000000-0000-0000-0000-000000000001\", \"documentType\": \"01\", \"sequential\": 1 }\n  ],\n  \"tier\": \"STARTER\",\n  \"billingInterval\": \"MONTHLY\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Promotes the entire tenant (all branches) from sandbox to production. This is **one-way** \u2014 cannot be reversed.\n\nAll active sandbox API keys are revoked automatically. The response includes one new production key per revoked sandbox key (same label). **Store all tokens immediately \u2014 they are shown only once.**\n\n`initialSequentials` is optional. If omitted, all active document types on all issuers start at sequential 1. Pass `issuerId` + `documentType` + `sequential` for each combination you want to pre-seed.\n\nRequires the tenant's email to be verified (status ACTIVE).\n\n**`tier` and `billingInterval` are optional.** Omit them (or pass `tier` as absent) to stay on FREE in production \u2014 promotion never waits on payment. If a paid tier is requested, this also kicks off the subscription pipeline (same as Admin's Create Subscription) and the response includes `subscription`, `payment`, and `bankTransfer` alongside `apiKeys`. The tier/quota upgrade itself lands as soon as the payment is verified \u2014 see Submit Payment Proof and Admin > Review Payment."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "if (r.apiKeys?.length) {",
-                  "  pm.collectionVariables.set('api_key', r.apiKeys[0].apiKey);",
-                  "  console.log('PRODUCTION API KEYS (store immediately):');",
-                  "  r.apiKeys.forEach(k => console.log(' ', k.label, ':', k.apiKey));",
-                  "}",
-                  "if (r.subscription?.id) pm.collectionVariables.set('subscription_id', String(r.subscription.id));",
-                  "if (r.payment?.id) pm.collectionVariables.set('payment_id', String(r.payment.id));"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Agreement Acceptance Status",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "if (r.ok) {",
-                  "  pm.test('needsAcceptance is boolean', () => pm.expect(typeof r.agreements.needsAcceptance).to.equal('boolean'));",
-                  "  if (r.agreements.needsAcceptance) console.log('Re-acceptance needed for:', r.agreements.outdated.map(d => d.documentType));",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/agreements",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "agreements"
-              ]
-            },
-            "description": "Check if any document was republished since the tenant last accepted. Use outdated[].url to show updated content.\n\nagreementsEnabled: false means the operator switched legal documents off for this deployment — hasPublishedAgreements is then false too, nothing is generated, and promotion is not gated on acceptance. Hide the legal-documents UI on that signal rather than rendering links that 404."
-          }
-        },
-        {
-          "name": "Accept Agreements",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('ok', () => pm.expect(r.ok).to.be.true);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{api_key}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/agreements",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "agreements"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\"termsVersion\":\"{{agreement_version}}\"}"
-            },
-            "description": "Record re-acceptance of all currently published documents. Use when agreements returns needsAcceptance: true.\n\nNo-op when AGREEMENTS_ENABLED=false: there is nothing published to accept, and the termsVersion check is skipped."
-          }
-        },
-        {
-          "name": "List Tenant Agreements",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "if (r.ok) {",
-                  "  const pending = r.documents.filter(d => d.status === 'PENDING');",
-                  "  if (pending.length) console.log('PENDING documents:', pending.map(d => d.documentType).join(', '));",
-                  "  const accepted = r.documents.filter(d => d.status === 'ACCEPTED');",
-                  "  console.log('ACCEPTED:', accepted.map(d => d.documentType + ' v' + d.templateVersion).join(', '));",
-                  "}"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/agreements/history",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "agreements"
-              ]
-            },
-            "description": "Lists all personalized document instances for this tenant across all versions. status: PENDING (not yet accepted) or ACCEPTED."
-          }
-        },
-        {
-          "name": "View Agreement (TERMS)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/agreements/TERMS",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "agreements",
-                "TERMS"
-              ]
-            },
-            "description": "Returns the tenant's personalized Terms of Service as HTML \u2014 their businessName and RUC substituted in, with the disclaimer notice prepended. Also try /PRIVACY and /DPA. Check response headers: X-Document-Status, X-Template-Version, X-Accepted-At."
-          }
-        },
-        {
-          "name": "View Agreement (PRIVACY)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/agreements/PRIVACY",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "agreements",
-                "PRIVACY"
-              ]
-            },
-            "description": "Returns the tenant's personalized Privacy Policy as HTML."
-          }
-        },
-        {
-          "name": "View Agreement (DPA)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{api_key}}"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/agreements/DPA",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "agreements",
-                "DPA"
-              ]
-            },
-            "description": "DPA with the tenant's own businessName and RUC in the intro paragraph. Verify the substitution is correct before accepting."
-          }
-        },
-        {
-          "name": "Get Tenant Events",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/events",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "events"
-              ]
-            },
-            "description": "Full tenant-level audit trail (email verification, subscription, payment, and tier/billing-interval change lifecycle events), chronological (oldest first). This is the one place that shows the sequence of changes to a subscription over time \u2014 e.g. that it started as monthly GROWTH and later changed to yearly STARTER \u2014 not just its current state (see Get My Subscriptions / Get Current Tenant for that)."
-          }
-        },
-        {
-          "name": "Retry All Failed Documents",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/tenants/retry-failed-documents",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "tenants",
-                "retry-failed-documents"
-              ]
-            },
-            "description": "Bulk variant of Retry Send/Authorize (under Documents) \u2014 recovers every stuck document for the tenant in one call, no X-Issuer-Id needed, covers all issuers/branches at once. Best-effort per document: one failing to re-queue doesn't stop the rest.\n\nResponse is { retried: <count>, effects: [<the reset rows>] } \u2014 retried: 0 is a valid response meaning nothing needed recovery."
-          }
-        }
-      ]
-    },
-    {
-      "name": "API Keys",
-      "description": "Tenant-facing API key management. Mint named keys for each integration, list them, and revoke leaked or unused ones. Require a Bearer API key.",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{api_key}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "List Keys",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/keys",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "keys"
-              ]
-            },
-            "description": "Returns every active key for the tenant. The plaintext token is **never** returned \u2014 only labels, environments, ids, creation dates, and usage stats.\n\n`lastUsedAt` (null if never used) and `requestCount` (lifetime, not windowed) update on every request the key successfully authenticates.\n\nCopy a key's `id` into the `api_key_id` variable to use it with Revoke Key."
-          }
-        },
-        {
-          "name": "Mint Key",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/keys",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "keys"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"label\": \"dashboard-readonly\",\n  \"environment\": \"sandbox\",\n  \"scopes\": [\"documents:read\"]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Creates a new tenant-scoped API key. The plaintext token is shown **once** in the response \u2014 store it immediately.\n\n`label` (optional, max 100 chars) \u2014 a human-readable name for the integration, e.g. `frontend-prod`, `erp`, `mobile-app`.\n\n`environment` \u2014 `\"sandbox\"` (default) or `\"production\"`. Production keys can only be minted after the tenant has been promoted to production.\n\n`scopes` (optional array) \u2014 one or more of `documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`. Omitting it does NOT default to full access \u2014 it clones the requesting key's own scopes (privilege containment: a key can never mint one broader than itself). Every key still defaults to all 9 scopes when it has no prior key to inherit from (e.g. the very first key at registration).\n\nWhen used on a document request, the key's environment must match the targeted issuer's environment \u2014 otherwise the request is rejected with 401."
-          }
-        },
-        {
-          "name": "Revoke Key",
-          "request": {
-            "method": "DELETE",
-            "url": {
-              "raw": "{{base_url}}/v1/keys/{{api_key_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "keys",
-                "{{api_key_id}}"
-              ]
-            },
-            "description": "Marks the key as inactive. The key stops working immediately and cannot be used to authenticate any future request.\n\nYou cannot revoke the key you are currently using to make this request \u2014 use a different key, or contact admin support."
-          }
-        },
-        {
-          "name": "Get Key Usage",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/keys/{{api_key_id}}/usage?days=30",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "keys",
-                "{{api_key_id}}",
-                "usage"
-              ],
-              "query": [
-                {
-                  "key": "days",
-                  "value": "30",
-                  "description": "1-365, defaults to 30"
-                }
-              ]
-            },
-            "description": "Returns a zero-filled daily series of authenticated requests for this key \u2014 ready to feed a chart directly. Works for an already-revoked key too (ownership, not active status, gates access)."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Issuers",
-      "description": "Issuer (branch / issue point) management. Require a Bearer API key.",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{api_key}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "List Issuers",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/issuers",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers"
-              ]
-            },
-            "description": "Returns all active issuers (branches / issue points) belonging to the authenticated tenant.\n\nCopy an issuer's `id` into the `issuer_id` collection variable to use it as `X-Issuer-Id` on document requests."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "if (r.ok && r.issuers?.length) { pm.collectionVariables.set('issuer_id', String(r.issuers[0].id)); console.log('issuer_id set to', r.issuers[0].id); }"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Get Issuer",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}"
-              ]
-            },
-            "description": "Returns profile information for a single issuer owned by the authenticated tenant: RUC, business name, trade name, branch/issue point codes, and certificate expiry/fingerprint."
-          }
-        },
-        {
-          "name": "Upload Issuer Logo",
-          "request": {
-            "method": "PATCH",
-            "header": [],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "logo",
-                  "type": "file",
-                  "description": "Company logo (PNG, JPEG, or GIF; max 500 KB)"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/logo",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}",
-                "logo"
-              ]
-            },
-            "description": "Uploads or replaces the company logo for an issuer. The logo is stored in the database and rendered in the top-left corner of every RIDE PDF generated for that issuer, including PDFs sent as email attachments. Accepted formats: PNG, JPEG, GIF. Max size: 500 KB."
-          }
-        },
-        {
-          "name": "Renew Certificate",
-          "request": {
-            "method": "PATCH",
-            "header": [],
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "cert",
-                  "type": "file",
-                  "src": "",
-                  "description": "P12/PFX certificate file from an authorized Ecuadorian CA (BANCO CENTRAL or SECURITY DATA)"
-                },
-                {
-                  "key": "certPassword",
-                  "value": "",
-                  "type": "text",
-                  "description": "Optional. Password protecting the P12 file, if any.",
-                  "disabled": true
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/certificate",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}",
-                "certificate"
-              ]
-            },
-            "description": "Replaces the P12 certificate (private key + X.509 cert) for an issuer \u2014 e.g. when it has expired. Does not affect already-signed documents, since each signed invoice embeds its own copy of the certificate inside the XML signature; only future signing operations use the new certificate."
-          }
-        },
-        {
-          "name": "Create Branch",
-          "request": {
-            "method": "POST",
-            "url": {
-              "raw": "{{base_url}}/v1/issuers",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers"
-              ]
-            },
-            "body": {
-              "mode": "formdata",
-              "formdata": [
-                {
-                  "key": "branchCode",
-                  "value": "002",
-                  "type": "text"
-                },
-                {
-                  "key": "issuePointCode",
-                  "value": "001",
-                  "type": "text"
-                },
-                {
-                  "key": "branchAddress",
-                  "value": "Av. 6 de Diciembre 123",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "documentTypes",
-                  "value": "[\"01\"]",
-                  "description": "Optional. Document type codes to enable (default: [\"01\"])",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "sourceIssuerId",
-                  "value": "{{issuer_id}}",
-                  "description": "Optional. UUID of the issuer to inherit cert/profile from. Defaults to the tenant's first existing issuer. Ignored if a cert file is uploaded.",
-                  "type": "text",
-                  "disabled": true
-                },
-                {
-                  "key": "cert",
-                  "type": "file",
-                  "src": "",
-                  "disabled": true,
-                  "description": "Optional \u2014 leave blank to reuse the calling issuer certificate"
-                },
-                {
-                  "key": "certPassword",
-                  "value": "",
-                  "type": "text",
-                  "disabled": true
-                }
-              ]
-            },
-            "description": "Creates a new branch or issue point for the tenant. Inherits RUC, business name, and certificate from an existing issuer of the tenant.\n\n**No new API key is minted** \u2014 your existing tenant key already covers every branch via the `X-Issuer-Id` header. New branches inherit the tenant's current environment (sandbox or production).\n\nThe cert file and certPassword fields are optional \u2014 only provide them if the new branch needs a different certificate.\n\nTier limits apply: FREE allows 1 branch / 1 issue point, STARTER 3 / 2, GROWTH 10 / 5, BUSINESS unlimited."
-          }
-        },
-        {
-          "name": "List Document Types",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/document-types",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}",
-                "document-types"
-              ]
-            },
-            "description": "Returns the active document types enabled for the specified issuer."
-          }
-        },
-        {
-          "name": "Add Document Type",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/document-types",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}",
-                "document-types"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"documentType\": \"01\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Enables a document type for the specified issuer. If the type was previously removed, it is reactivated. Returns the full updated list of active document types."
-          }
-        },
-        {
-          "name": "Remove Document Type",
-          "request": {
-            "method": "DELETE",
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/document-types/01",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}",
-                "document-types",
-                "01"
-              ]
-            },
-            "description": "Disables a document type for the specified issuer. The last active type cannot be removed."
-          }
-        },
-        {
-          "name": "Update Issuer",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"tradeName\": \"ACME Express\",\n  \"branchAddress\": \"Av. Amazonas 456\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Edits the trade name and/or branch address for an existing issuer. At least one field is required. businessName, mainAddress, and ruc cannot be edited here."
-          }
-        },
-        {
-          "name": "Remove Issuer",
-          "request": {
-            "method": "DELETE",
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}"
-              ]
-            },
-            "description": "Soft-deletes an issuer (active = false). Rejected with LAST_ISSUER_CANNOT_BE_REMOVED if it's the tenant's only active issuer, or ISSUER_HAS_DOCUMENTS if it has ever issued a document."
-          }
-        },
-        {
-          "name": "Get Sequentials",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/sequentials",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}",
-                "sequentials"
-              ]
-            },
-            "description": "Returns the current and next sequential number per active document type, broken out by sandbox/production environment."
-          }
-        },
-        {
-          "name": "Set Next Sequential",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/sequentials/01",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}",
-                "sequentials",
-                "01"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"environment\": \"production\",\n  \"nextSequential\": 200\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Manually sets the next sequential number for one document type in one environment. Locks the counter row with SELECT ... FOR UPDATE so it cannot race a concurrent POST /v1/documents call. nextSequential must exceed the current counter value."
-          }
-        },
-        {
-          "name": "Activate Issuer",
-          "request": {
-            "method": "PATCH",
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/activate",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}",
-                "activate"
-              ]
-            },
-            "description": "Reactivates a soft-deleted issuer. Re-checks the tenant's plan branch/issue-point limits the same way Create Branch does, so deactivate-then-reactivate cannot be used to exceed plan caps."
-          }
-        },
-        {
-          "name": "Set Can Issue",
-          "request": {
-            "method": "PATCH",
-            "url": {
-              "raw": "{{base_url}}/v1/issuers/{{issuer_id}}/can-issue",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "issuers",
-                "{{issuer_id}}",
-                "can-issue"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"canIssue\": false\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Pauses or resumes new document creation on an issuer without deactivating it. Existing documents (RIDE, XML, email) and read endpoints keep working while paused; POST /v1/documents and POST /:accessKey/rebuild return 403 ISSUER_ISSUING_PAUSED."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Documents",
-      "description": "Document lifecycle endpoints. All requests require a Bearer API key and the `X-Issuer-Id` header identifying the issuing branch.",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{api_key}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "Create Invoice",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              },
-              {
-                "key": "Idempotency-Key",
-                "value": "{{$guid}}",
-                "description": "Optional \u2014 unique per intended invoice. Reuse on retries to avoid duplicates."
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"documentType\": \"01\",\n  \"issueDate\": \"05/04/2026\",\n  \"buyer\": {\n    \"idType\": \"05\",\n    \"id\": \"1234567890\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"address\": \"Av. Amazonas 123\"\n  },\n  \"items\": [\n    {\n      \"mainCode\": \"PROD-001\",\n      \"auxiliaryCode\": \"AUX-001\",\n      \"description\": \"Web development service\",\n      \"quantity\": \"1.00\",\n      \"unitPrice\": \"100.00\",\n      \"discount\": \"0.00\",\n      \"taxes\": [\n        {\n          \"code\": \"2\",\n          \"rateCode\": \"2\",\n          \"rate\": \"15.00\",\n          \"taxableBase\": \"100.00\",\n          \"taxAmount\": \"15.00\"\n        }\n      ]\n    }\n  ],\n  \"payments\": [\n    {\n      \"method\": \"01\",\n      \"total\": \"115.00\",\n      \"term\": 30,\n      \"termUnit\": \"dias\"\n    }\n  ],\n  \"additionalInfo\": [\n    { \"name\": \"Contract\", \"value\": \"CTR-2026-001\" }\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Creates, XSD-validates, and signs a new electronic invoice. Returns the document with status `SIGNED`.\n\nAfter a successful response, copy the `accessKey` value into the `access_key` collection variable.\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use. Get the id from `GET /v1/issuers`.\n\nThe `Idempotency-Key` header makes creation idempotent \u2014 generate it once per intended invoice and reuse on retries."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
-                  "if (r.document?.accessKey) { pm.collectionVariables.set('access_key', r.document.accessKey); console.log('access_key saved'); }"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Create Credit Note",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers). Must have document type 04 enabled."
-              },
-              {
-                "key": "Idempotency-Key",
-                "value": "{{$guid}}",
-                "description": "Optional \u2014 unique per intended credit note. Reuse on retries to avoid duplicates."
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"documentType\": \"04\",\n  \"issueDate\": \"05/04/2026\",\n  \"buyer\": {\n    \"idType\": \"05\",\n    \"id\": \"1234567890\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"address\": \"Av. Amazonas 123\"\n  },\n  \"originalDocument\": {\n    \"documentType\": \"01\",\n    \"number\": \"001-001-000000027\",\n    \"issueDate\": \"03/04/2026\"\n  },\n  \"motivo\": \"Devolucion de mercaderia por defecto de fabricacion\",\n  \"items\": [\n    {\n      \"mainCode\": \"PROD-001\",\n      \"auxiliaryCode\": \"AUX-001\",\n      \"description\": \"Web development service\",\n      \"quantity\": \"1.00\",\n      \"unitPrice\": \"100.00\",\n      \"discount\": \"0.00\",\n      \"taxes\": [\n        {\n          \"code\": \"2\",\n          \"rateCode\": \"2\",\n          \"rate\": \"15.00\",\n          \"taxableBase\": \"100.00\",\n          \"taxAmount\": \"15.00\"\n        }\n      ]\n    }\n  ],\n  \"additionalInfo\": [\n    { \"name\": \"Contract\", \"value\": \"CTR-2026-001\" }\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Creates, XSD-validates, and signs a new credit note referencing a previously authorized invoice. Returns the document with status `SIGNED`.\n\nUnlike Create Invoice, this body has no `payments` block and instead requires `originalDocument` (the invoice being credited \u2014 its document type, number, and issue date) plus a `motivo` (reason for the credit note).\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use \u2014 the issuer must have document type `04` enabled first (see Add Document Type).\n\nThe `Idempotency-Key` header makes creation idempotent \u2014 generate it once per intended credit note and reuse on retries."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
-                  "if (r.document?.accessKey) pm.collectionVariables.set('access_key', r.document.accessKey);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "List Documents",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents?page=1&limit=10",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents"
-              ],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "1",
-                  "description": "Page number (default: 1)",
-                  "disabled": true
-                },
-                {
-                  "key": "limit",
-                  "value": "10",
-                  "description": "Results per page, 1-100 (default: 10)",
-                  "disabled": true
-                },
-                {
-                  "key": "status",
-                  "value": "AUTHORIZED",
-                  "description": "Filter by status: SIGNED, RECEIVED, RETURNED, AUTHORIZED, NOT_AUTHORIZED",
-                  "disabled": true
-                },
-                {
-                  "key": "documentType",
-                  "value": "01",
-                  "description": "Filter by document type code (e.g., 01)",
-                  "disabled": true
-                },
-                {
-                  "key": "from",
-                  "value": "01/01/2026",
-                  "description": "Filter by issue date >= DD/MM/YYYY",
-                  "disabled": true
-                },
-                {
-                  "key": "to",
-                  "value": "31/12/2026",
-                  "description": "Filter by issue date <= DD/MM/YYYY",
-                  "disabled": true
-                },
-                {
-                  "key": "sequential",
-                  "value": "000000001",
-                  "description": "Filter by sequential, contains match against the zero-padded 9-digit value (case-insensitive)",
-                  "disabled": true
-                },
-                {
-                  "key": "buyerName",
-                  "value": "ACME",
-                  "description": "Filter by buyer name, contains match (case-insensitive)",
-                  "disabled": true
-                },
-                {
-                  "key": "sortBy",
-                  "value": "issueDate",
-                  "description": "Sort by: sequential, buyerName, issueDate, status. Defaults to created_at DESC when omitted.",
-                  "disabled": true
-                },
-                {
-                  "key": "sortDir",
-                  "value": "desc",
-                  "description": "Sort direction: asc, desc. Defaults to desc when sortBy is given without sortDir.",
-                  "disabled": true
-                }
-              ]
-            },
-            "description": "Lists documents for the specified issuer with optional filtering, sorting, and pagination. Defaults to creation date (newest first) when no sortBy is given."
-          }
-        },
-        {
-          "name": "Document Stats",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/stats",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "stats"
-              ]
-            },
-            "description": "Returns a per-type document breakdown for the current month plus an all-time needs-attention count, for dashboard summaries."
-          }
-        },
-        {
-          "name": "Get Document",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}"
-              ]
-            },
-            "description": "Retrieves document metadata by access key. Does not call the SRI \u2014 use Check Authorization for status updates.\n\nWhile status is PENDING_SEND or RECEIVED, the response may include a `dispatch` field ({ status, attemptCount, lastError }) reporting the in-flight SRI_SEND/SRI_AUTHORIZE effect's own state \u2014 PENDING/DISPATCHED means it's still auto-retrying (reconciliation spaces attempts 5 minutes apart), FAILED means all 5 automatic attempts are exhausted and Retry Send/Authorize is now needed. Absent once the document reaches a settled status."
-          }
-        },
-        {
-          "name": "Send to SRI",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/send",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "send"
-              ]
-            },
-            "description": "Queues the signed XML for submission to the SRI reception service \u2014 this is asynchronous, it does not call SRI in-request. Returns 202 with the document in PENDING_SEND status. A standalone worker process (workers/worker.js) picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` or `RETURNED`. Poll Get Document or Get Events to observe that transition."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 202', () => pm.response.to.have.status(202));",
-                  "pm.test('Document status is PENDING_SEND', () => pm.expect(r.document?.status).to.eql('PENDING_SEND'));"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Retry Send/Authorize",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/send/retry",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "send",
-                "retry"
-              ]
-            },
-            "description": "Recovers a document whose asynchronous SRI dispatch (send or authorization check) exhausted its 5 automatic attempts and got stuck. Resets the attempt counter and re-queues it immediately, without waiting for the next Queue Reconciliation sweep. Works whether the document is stuck in PENDING_SEND or RECEIVED \u2014 automatically detects which of the two attempts failed.\n\nReturns 409 NOTHING_TO_RETRY if there's no FAILED send/authorize attempt for this document (already in progress, already completed, or never failed)."
-          }
-        },
-        {
-          "name": "Check Authorization",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/authorize",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "authorize"
-              ]
-            },
-            "description": "Queues an authorization check \u2014 this is asynchronous, it does not query SRI in-request. Returns 202 immediately; `status` in the response is still `RECEIVED`. A standalone worker process picks up the queued job and calls SRI; the document eventually moves to `AUTHORIZED` (an email with the RIDE PDF and XML is sent to the buyer, and a DOCUMENT_AUTHORIZED notification/webhook fires) or `NOT_AUTHORIZED`. A periodic reconciliation job also queues this check automatically for any RECEIVED document past a short delay, whether or not this endpoint is ever called."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "if (r.document?.status) console.log('Document status:', r.document.status);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "Rebuild Invoice",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/rebuild",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "rebuild"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"documentType\": \"01\",\n  \"buyer\": {\n    \"idType\": \"05\",\n    \"id\": \"1234567890\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"address\": \"Av. Amazonas 123\"\n  },\n  \"items\": [\n    {\n      \"mainCode\": \"PROD-001\",\n      \"description\": \"Web development service (corrected)\",\n      \"quantity\": \"1.00\",\n      \"unitPrice\": \"100.00\",\n      \"discount\": \"0.00\",\n      \"taxes\": [\n        {\n          \"code\": \"2\",\n          \"rateCode\": \"2\",\n          \"rate\": \"15.00\",\n          \"taxableBase\": \"100.00\",\n          \"taxAmount\": \"15.00\"\n        }\n      ]\n    }\n  ],\n  \"payments\": [\n    {\n      \"method\": \"01\",\n      \"total\": \"115.00\"\n    }\n  ]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Corrects and re-signs a document in `RETURNED` or `NOT_AUTHORIZED` status. Keeps the original `accessKey`, `sequential`, and `issueDate`. Send again after rebuilding."
-          }
-        },
-        {
-          "name": "Void Document",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/void",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "void"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"confirmedSriVoid\": true,\n  \"reason\": \"Duplicate invoice \u2014 customer already received the original 001-001-000000010\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Marks an AUTHORIZED document as VOIDED. SRI has no SOAP service to cancel an already-authorized document \u2014 that cancellation happens on SRI's own portal. This endpoint only synchronizes the local record after you have already voided the document there; confirmedSriVoid: true is a required attestation of that. Irreversible \u2014 VOIDED is a terminal status."
-          }
-        },
-        {
-          "name": "Get RIDE PDF",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/ride",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "ride"
-              ]
-            },
-            "description": "Downloads the RIDE PDF for an `AUTHORIZED` document. Returns `application/pdf`."
-          }
-        },
-        {
-          "name": "Get XML",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/xml",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "xml"
-              ]
-            },
-            "description": "Downloads the authorization XML for an `AUTHORIZED` document, or the signed XML for earlier statuses. Returns `application/xml`."
-          }
-        },
-        {
-          "name": "Get Events",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/events",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "events"
-              ]
-            },
-            "description": "Returns the full audit trail for the document \u2014 every lifecycle transition, SRI call, and email event."
-          }
-        },
-        {
-          "name": "Get SRI Responses",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/sri-responses",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "sri-responses"
-              ]
-            },
-            "description": "Returns the raw SRI reception/authorization call outcomes recorded for this document (operationType, status, messages, createdAt), newest first. The raw SOAP response body is not included."
-          }
-        },
-        {
-          "name": "Get Credit Notes",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/credit-notes",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "credit-notes"
-              ]
-            },
-            "description": "Returns the sum of all AUTHORIZED credit notes already issued against this document (use the original invoice's access key, not a credit note's own key), plus the remaining balance. Only AUTHORIZED credit notes count \u2014 pending or rejected ones are excluded."
-          }
-        },
-        {
-          "name": "Retry Single Email",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/{{access_key}}/email-retry",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "{{access_key}}",
-                "email-retry"
-              ],
-              "query": [
-                {
-                  "key": "force",
-                  "value": "true",
-                  "description": "Set to true to resend an email that was already successfully delivered",
-                  "disabled": true
-                }
-              ]
-            },
-            "description": "Retries the authorization email for a single document. Document must be `AUTHORIZED` with `email_status` of `PENDING` or `FAILED`. Add `?force=true` to resend an already-delivered email."
-          }
-        },
-        {
-          "name": "Retry Emails (batch)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "UUID of the issuing branch (from GET /v1/issuers)"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/documents/email-retry",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "documents",
-                "email-retry"
-              ]
-            },
-            "description": "Retries all `PENDING` and `FAILED` authorization emails across all documents for the specified issuer. Maximum 100 per call."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Catalogs",
-      "description": "Reference data for SRI-defined codes. Use these to build valid invoice requests. Require a Bearer API key.",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{api_key}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "ID Types",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/catalogs/id-types",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "catalogs",
-                "id-types"
-              ]
-            },
-            "description": "Returns buyer identification types (e.g. 04 = RUC, 05 = C\u00e9dula, 06 = Pasaporte). Use the `code` as `buyer.idType` on invoice creation."
-          }
-        },
-        {
-          "name": "Payment Methods",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/catalogs/payment-methods",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "catalogs",
-                "payment-methods"
-              ]
-            },
-            "description": "Returns SRI payment method codes. Use the `code` as `payments[].method` on invoice creation."
-          }
-        },
-        {
-          "name": "Term Units",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/catalogs/term-units",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "catalogs",
-                "term-units"
-              ]
-            },
-            "description": "Returns accepted SRI payment term units (e.g. dias, meses). Use the `code` as `payments[].termUnit` (with `payments[].term`) when sending invoices a plazos."
-          }
-        },
-        {
-          "name": "Tax Types",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/catalogs/tax-types",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "catalogs",
-                "tax-types"
-              ]
-            },
-            "description": "Returns SRI tax type codes (e.g. 2 = IVA, 3 = ICE, 5 = IRBPNR). Use the `code` as `taxes[].code` on invoice items."
-          }
-        },
-        {
-          "name": "Tax Rates",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/v1/catalogs/tax-rates",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "catalogs",
-                "tax-rates"
-              ]
-            },
-            "description": "Returns tax rate codes grouped by tax type. Use `taxCode` as `taxes[].code` and `rateCode` as `taxes[].rateCode` on invoice items."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Notifications",
-      "description": "Tenant-level alerts. Both read and unread are returned; use `readAt` to decide what to show. Use `?sinceId=<id>` for efficient catch-up polling \u2014 pass the highest id seen on the last request to receive only new notifications.\n\nAll requests require a Bearer API key.",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{api_key}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "List Notifications",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Issuer-Id",
-                "value": "{{issuer_id}}",
-                "description": "Optional \u2014 filter to a specific issuer's notifications plus tenant-level ones. Omit for all-tenant view.",
-                "disabled": true
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/notifications",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "notifications"
-              ],
-              "query": [
-                {
-                  "key": "sinceId",
-                  "value": "0",
-                  "description": "Optional \u2014 return only notifications with id > sinceId. Store the highest id seen and pass it on the next poll to catch up efficiently.",
-                  "disabled": true
-                }
-              ]
-            },
-            "description": "Returns active (unexpired) notifications for the tenant, newest first. Both read and unread are included.\n\n**Polling pattern:** call on a schedule (e.g. every 60 s). Use `?sinceId=<id>` to retrieve only notifications created after your last poll \u2014 store the highest `id` you've seen and pass it on the next request.\n\nOptional `X-Issuer-Id` header restricts results to a specific issuer's notifications plus tenant-level ones (`issuerId: null`). Omit it for an all-tenant view."
-          }
-        },
-        {
-          "name": "Mark as Read",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/notifications/{{notification_id}}/read",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "notifications",
-                "{{notification_id}}",
-                "read"
-              ]
-            },
-            "description": "Marks a notification as read at the tenant level. Call this only when every user with access to the notification has acknowledged it on the frontend side. After this call, the notification no longer contributes to `unreadCount` on future polls.\n\nCopy a notification `id` from the List Notifications response into the `notification_id` variable."
-          }
-        },
-        {
-          "name": "Get Preferences",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/notifications/preferences",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "notifications",
-                "preferences"
-              ]
-            },
-            "description": "Returns the full notification preference list for the tenant \u2014 one entry per notification type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model)."
-          }
-        },
-        {
-          "name": "Update Preferences",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/notifications/preferences",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "notifications",
-                "preferences"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "[\n  { \"type\": \"PAYMENT_VERIFIED\", \"channel\": \"EMAIL\", \"enabled\": false },\n  { \"type\": \"DOCUMENT_AUTHORIZED\", \"channel\": \"IN_APP\", \"enabled\": true }\n]",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Bulk-upsert notification preferences for the tenant. Send only the types you want to change \u2014 unmentioned types are unchanged.\n\nWhen `enabled` is `false` for a type, no new notifications of that type are created. Existing unread notifications remain and can still be marked as read.\n\nValid types: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Webhooks",
-      "description": "Register HTTPS callback URLs to receive event notifications in near-real time. When a notification is created or updated, the API immediately POSTs a signed payload to every subscribed active endpoint.\n\n**Secret handling:** the signing secret is returned only at registration. Store it immediately \u2014 it cannot be retrieved later. If lost, deregister and re-register the endpoint.\n\n**Tier limits:** FREE: 1 endpoint, STARTER: 2, GROWTH: 5, BUSINESS: 10.\n\nAll requests require a Bearer API key.",
-      "auth": {
-        "type": "bearer",
-        "bearer": [
-          {
-            "key": "token",
-            "value": "{{api_key}}",
-            "type": "string"
-          }
-        ]
-      },
-      "item": [
-        {
-          "name": "Register Webhook",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/webhooks",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "webhooks"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"url\": \"https://app.example.com/v1/comprobify/events\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\", \"CERT_EXPIRING\", \"CERT_EXPIRED\"]\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Registers a new webhook endpoint and returns the signing `secret` \u2014 **shown only once**. Store it immediately; it is used to verify `X-Comprobify-Signature` on incoming webhook requests.\n\n`url` must be a valid HTTPS URL.\n\n`eventTypes` is optional. Omit it or pass `[]` to subscribe to **all** event types. Valid values: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`.\n\nCopy the returned `id` into the `webhook_id` collection variable."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const r = pm.response.json();",
-                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
-                  "if (r.endpoint?.id) pm.collectionVariables.set('webhook_id', String(r.endpoint.id));",
-                  "if (r.endpoint?.secret) console.log('Webhook secret (shown once):', r.endpoint.secret);"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ]
-        },
-        {
-          "name": "List Webhooks",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/webhooks",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "webhooks"
-              ]
-            },
-            "description": "Returns all active webhook endpoints for the tenant. Signing secrets are never included in list responses."
-          }
-        },
-        {
-          "name": "Update Webhook",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{base_url}}/v1/webhooks/{{webhook_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "webhooks",
-                "{{webhook_id}}"
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"url\": \"https://app.example.com/v1/comprobify/events-v2\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\"],\n  \"active\": true\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "description": "Updates a webhook endpoint's URL, event subscriptions, or active flag. All fields are optional \u2014 send only what you want to change.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
-          }
-        },
-        {
-          "name": "Deregister Webhook",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/v1/webhooks/{{webhook_id}}",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "v1",
-                "webhooks",
-                "{{webhook_id}}"
-              ]
-            },
-            "description": "Soft-deletes a webhook endpoint (`active = false`). The endpoint stops receiving deliveries immediately. Past delivery records are preserved for audit purposes.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
-          }
-        }
-      ]
-    },
-    {
-      "name": "Health",
-      "description": "Monitoring endpoint. No authentication required.",
-      "item": [
-        {
-          "name": "Health Check",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/health",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "health"
-              ]
-            },
-            "description": "Returns `{ status: \"ok\", uptime }` (200) when the database is reachable, or `{ status: \"error\", uptime }` (503) when it is not. Use for load balancer health checks and container liveness probes."
-          }
-        }
-      ]
-    }
-  ]
+	"info": {
+		"name": "Comprobify API — Public",
+		"description": "Comprobify developer API — self-service registration through full document lifecycle. Run in order:\n1. List Current Documents → captures agreement_version\n2. Register → captures api_key, issuer_id, tenant_id\n3. Verify Email (set verification_token manually from email)\n4. Get Current Tenant → confirm active\n5. Agreement Acceptance Status\n6. Create Invoice → captures access_key\n7. Send to SRI / Check Authorization\n8. Subscribe / Promote to Production",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://your-api-url",
+			"description": "Base URL of the API (no trailing slash)",
+			"type": "string"
+		},
+		{
+			"key": "api_key",
+			"value": "",
+			"description": "Bearer API key issued for the tenant (from Register or POST /v1/keys)",
+			"type": "string"
+		},
+		{
+			"key": "access_key",
+			"value": "",
+			"description": "49-digit SRI access key — copy from Create Invoice response",
+			"type": "string"
+		},
+		{
+			"key": "issuer_id",
+			"value": "",
+			"description": "Issuer ID — copy from List Issuers or Create Branch response. Used as X-Issuer-Id header on document requests.",
+			"type": "string"
+		},
+		{
+			"key": "api_key_id",
+			"value": "",
+			"description": "API key ID — copy from List Keys response (used for revocation)",
+			"type": "string"
+		},
+		{
+			"key": "notification_id",
+			"value": "",
+			"description": "Notification ID — copy from List Notifications response (used for Mark as Read)",
+			"type": "string"
+		},
+		{
+			"key": "webhook_id",
+			"value": "",
+			"description": "Webhook endpoint ID — copy from Register Webhook response",
+			"type": "string"
+		},
+		{
+			"key": "subscription_id",
+			"value": "",
+			"description": "Subscription ID — copy from Promote to Production response (if a paid tier was requested)",
+			"type": "string"
+		},
+		{
+			"key": "payment_id",
+			"value": "",
+			"description": "Payment ID — copy from Promote to Production response (if a paid tier was requested)",
+			"type": "string"
+		},
+		{
+			"key": "agreement_version",
+			"value": "",
+			"description": "Version string of the currently published TERMS document — captured from GET /v1/agreements",
+			"type": "string"
+		},
+		{
+			"key": "verification_token",
+			"value": "",
+			"description": "Email verification token — copy from the verification email link (?token=...)",
+			"type": "string"
+		},
+		{
+			"key": "proof_id",
+			"value": ""
+		}
+	],
+	"item": [
+		{
+			"name": "Agreements",
+			"item": [
+				{
+					"name": "List Current Documents",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"if (r.ok && r.documents) {",
+									"  const terms = r.documents.find(d => d.documentType === 'TERMS');",
+									"  if (terms) { pm.collectionVariables.set('agreement_version', terms.version); console.log('agreement_version set to', terms.version); }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/agreements",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"agreements"
+							]
+						},
+						"description": "Public. Returns current version of each document type. Captures agreement_version for use in Register and Accept Agreements.\n\nReturns an empty list when the deployment runs with AGREEMENTS_ENABLED=false, and GET /v1/agreements/:type then returns 404 AGREEMENT_NOT_FOUND. That is a deliberate configuration, not an outage."
+					}
+				},
+				{
+					"name": "Get Document (TERMS)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/agreements/TERMS",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"agreements",
+								"TERMS"
+							]
+						},
+						"description": "Returns rendered HTML. Change path segment to PRIVACY or DPA for the other documents."
+					}
+				},
+				{
+					"name": "Get Document (PRIVACY)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/agreements/PRIVACY",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"agreements",
+								"PRIVACY"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Document (DPA)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/agreements/DPA",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"agreements",
+								"DPA"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Tiers",
+			"item": [
+				{
+					"name": "Get Tiers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/tiers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tiers"
+							]
+						},
+						"description": "Public, no authentication required. Returns the full tier catalog (FREE/SOLO/LITE/STARTER/GROWTH/BUSINESS/ENTERPRISE) — quota, monthly and yearly price (plus any upcoming published-but-not-yet-effective price), overage rate, document types, branch/webhook/API-key limits, rate limits, limitScopes (API- vs WEB-enforced), the extra-seat add-on price, and reservedForFrontend — for a pricing page to render without hardcoding the same numbers a second time."
+					}
+				}
+			]
+		},
+		{
+			"name": "Registration",
+			"description": "Register/Recover/Resend-verification/Confirm-verify-email are frontend-only as of ADR-035 — only comprobify-web's own server-side BFF can call them (X-Internal-Service-Secret required), so they're intentionally not in this public collection. See the internal collection's Registration folder if you need them for comprobify-web's own development. This non-consuming check is the one exception — safe for any caller, including automated email link-scanners, since it never creates or activates anything.",
+			"item": [
+				{
+					"name": "Check Verify Email Token",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/verify-email/check?token={{verification_token}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"verify-email",
+								"check"
+							],
+							"query": [
+								{
+									"key": "token",
+									"value": "{{verification_token}}"
+								}
+							]
+						},
+						"description": "Read-only check of whether a verification token is still valid — does not activate the tenant. Safe to call repeatedly, including by email link-scanners that prefetch links. Returns { valid, email } or { valid: false }."
+					}
+				}
+			]
+		},
+		{
+			"name": "Tenants",
+			"description": "Tenant settings and lifecycle management. Require a Bearer API key.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{api_key}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "Get Current Tenant",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"me"
+							]
+						},
+						"description": "Resolves the tenant owning the authenticated API key (id, email, subscriptionTier, status, suspensionReasonCode, documentCount, documentQuota, sandbox). Useful for a third-party app that only has an API key and needs to discover its tenant UUID."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
+									"if (r.tenant?.agreementVersion) console.log('Last accepted agreement version:', r.tenant.agreementVersion);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Update Preferred Language",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/language",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"language"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"language\": \"en\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Updates the preferred language for the authenticated tenant. Used for all outgoing emails. Supported values: `es` (Spanish, default), `en` (English)."
+					}
+				},
+				{
+					"name": "Get Tenant Events",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/events",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"events"
+							]
+						},
+						"description": "Full tenant-level audit trail (email verification, subscription, payment, and tier/billing-interval change lifecycle events), chronological (oldest first). This is the one place that shows the sequence of changes to a subscription over time — e.g. that it started as monthly GROWTH and later changed to yearly STARTER — not just its current state (see Get My Subscriptions / Get Current Tenant for that)."
+					}
+				},
+				{
+					"name": "Agreement Acceptance Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"if (r.ok) {",
+									"  pm.test('needsAcceptance is boolean', () => pm.expect(typeof r.agreements.needsAcceptance).to.equal('boolean'));",
+									"  if (r.agreements.needsAcceptance) console.log('Re-acceptance needed for:', r.agreements.outdated.map(d => d.documentType));",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/agreements",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"agreements"
+							]
+						},
+						"description": "Check if any document was republished since the tenant last accepted. Use outdated[].url to show updated content.\n\nagreementsEnabled: false means the operator switched legal documents off for this deployment — hasPublishedAgreements is then false too, nothing is generated, and promotion is not gated on acceptance. Hide the legal-documents UI on that signal rather than rendering links that 404."
+					}
+				},
+				{
+					"name": "Accept Agreements",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"pm.test('ok', () => pm.expect(r.ok).to.be.true);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/agreements",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"agreements"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\"termsVersion\":\"{{agreement_version}}\"}"
+						},
+						"description": "Record re-acceptance of all currently published documents. Use when agreements returns needsAcceptance: true.\n\nNo-op when AGREEMENTS_ENABLED=false: there is nothing published to accept, and the termsVersion check is skipped."
+					}
+				},
+				{
+					"name": "List Tenant Agreements",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"if (r.ok) {",
+									"  const pending = r.documents.filter(d => d.status === 'PENDING');",
+									"  if (pending.length) console.log('PENDING documents:', pending.map(d => d.documentType).join(', '));",
+									"  const accepted = r.documents.filter(d => d.status === 'ACCEPTED');",
+									"  console.log('ACCEPTED:', accepted.map(d => d.documentType + ' v' + d.templateVersion).join(', '));",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/agreements/history",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"agreements"
+							]
+						},
+						"description": "Lists all personalized document instances for this tenant across all versions. status: PENDING (not yet accepted) or ACCEPTED."
+					}
+				},
+				{
+					"name": "View Agreement (TERMS)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/agreements/TERMS",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"agreements",
+								"TERMS"
+							]
+						},
+						"description": "Returns the tenant's personalized Terms of Service as HTML — their businessName and RUC substituted in, with the disclaimer notice prepended. Also try /PRIVACY and /DPA. Check response headers: X-Document-Status, X-Template-Version, X-Accepted-At."
+					}
+				},
+				{
+					"name": "View Agreement (PRIVACY)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/agreements/PRIVACY",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"agreements",
+								"PRIVACY"
+							]
+						},
+						"description": "Returns the tenant's personalized Privacy Policy as HTML."
+					}
+				},
+				{
+					"name": "View Agreement (DPA)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{api_key}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/agreements/DPA",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"agreements",
+								"DPA"
+							]
+						},
+						"description": "DPA with the tenant's own businessName and RUC in the intro paragraph. Verify the substitution is correct before accepting."
+					}
+				},
+				{
+					"name": "Promote to Production",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/promote",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"promote"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"initialSequentials\": [\n    { \"issuerId\": \"00000000-0000-0000-0000-000000000001\", \"documentType\": \"01\", \"sequential\": 1 }\n  ],\n  \"tier\": \"STARTER\",\n  \"billingInterval\": \"MONTHLY\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Promotes the entire tenant (all branches) from sandbox to production. This is **one-way** — cannot be reversed.\n\nAll active sandbox API keys are revoked automatically. The response includes one new production key per revoked sandbox key (same label). **Store all tokens immediately — they are shown only once.**\n\n`initialSequentials` is optional. If omitted, all active document types on all issuers start at sequential 1. Pass `issuerId` + `documentType` + `sequential` for each combination you want to pre-seed.\n\nRequires the tenant's email to be verified (status ACTIVE).\n\n**`tier` and `billingInterval` are optional.** Omit them (or pass `tier` as absent) to stay on FREE in production — promotion never waits on payment. If a paid tier is requested, this also kicks off the subscription pipeline (same as Admin's Create Subscription) and the response includes `subscription`, `payment`, and `bankTransfer` alongside `apiKeys`. The tier/quota upgrade itself lands as soon as the payment is verified — see Submit Payment Proof and Admin > Review Payment."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"if (r.apiKeys?.length) {",
+									"  pm.collectionVariables.set('api_key', r.apiKeys[0].apiKey);",
+									"  console.log('PRODUCTION API KEYS (store immediately):');",
+									"  r.apiKeys.forEach(k => console.log(' ', k.label, ':', k.apiKey));",
+									"}",
+									"if (r.subscription?.id) pm.collectionVariables.set('subscription_id', String(r.subscription.id));",
+									"if (r.payment?.id) pm.collectionVariables.set('payment_id', String(r.payment.id));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Retry All Failed Documents",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/tenants/retry-failed-documents",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"tenants",
+								"retry-failed-documents"
+							]
+						},
+						"description": "Bulk variant of Retry Send/Authorize (under Documents) — recovers every stuck document for the tenant in one call, no X-Issuer-Id needed, covers all issuers/branches at once. Best-effort per document: one failing to re-queue doesn't stop the rest.\n\nResponse is { retried: <count>, effects: [<the reset rows>] } — retried: 0 is a valid response meaning nothing needed recovery."
+					}
+				}
+			]
+		},
+		{
+			"name": "API Keys",
+			"description": "Tenant-facing API key management. Mint named keys for each integration, list them, and revoke leaked or unused ones. Require a Bearer API key.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{api_key}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "List Keys",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/keys",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"keys"
+							]
+						},
+						"description": "Returns every active key for the tenant. The plaintext token is **never** returned — only labels, environments, ids, creation dates, and usage stats.\n\n`lastUsedAt` (null if never used) and `requestCount` (lifetime, not windowed) update on every request the key successfully authenticates.\n\nCopy a key's `id` into the `api_key_id` variable to use it with Revoke Key."
+					}
+				},
+				{
+					"name": "Mint Key",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/keys",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"keys"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"label\": \"dashboard-readonly\",\n  \"environment\": \"sandbox\",\n  \"scopes\": [\"documents:read\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Creates a new tenant-scoped API key. The plaintext token is shown **once** in the response — store it immediately.\n\n`label` (optional, max 100 chars) — a human-readable name for the integration, e.g. `frontend-prod`, `erp`, `mobile-app`.\n\n`environment` — `\"sandbox\"` (default) or `\"production\"`. Production keys can only be minted after the tenant has been promoted to production.\n\n`scopes` (optional array) — one or more of `documents:write`, `documents:read`, `issuers:read`, `issuers:write`, `keys:manage`, `billing:manage`, `webhooks:manage`, `tenant:manage`, `tenant:promote`. Omitting it does NOT default to full access — it clones the requesting key's own scopes (privilege containment: a key can never mint one broader than itself). Every key still defaults to all 9 scopes when it has no prior key to inherit from (e.g. the very first key at registration).\n\nWhen used on a document request, the key's environment must match the targeted issuer's environment — otherwise the request is rejected with 401."
+					}
+				},
+				{
+					"name": "Revoke Key",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/v1/keys/{{api_key_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"keys",
+								"{{api_key_id}}"
+							]
+						},
+						"description": "Marks the key as inactive. The key stops working immediately and cannot be used to authenticate any future request.\n\nYou cannot revoke the key you are currently using to make this request — use a different key, or contact admin support."
+					}
+				},
+				{
+					"name": "Get Key Usage",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/keys/{{api_key_id}}/usage?days=30",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"keys",
+								"{{api_key_id}}",
+								"usage"
+							],
+							"query": [
+								{
+									"key": "days",
+									"value": "30",
+									"description": "1-365, defaults to 30"
+								}
+							]
+						},
+						"description": "Returns a zero-filled daily series of authenticated requests for this key — ready to feed a chart directly. Works for an already-revoked key too (ownership, not active status, gates access)."
+					}
+				}
+			]
+		},
+		{
+			"name": "Issuers",
+			"description": "Issuer (branch / issue point) management. Require a Bearer API key.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{api_key}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "List Issuers",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/issuers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers"
+							]
+						},
+						"description": "Returns all active issuers (branches / issue points) belonging to the authenticated tenant.\n\nCopy an issuer's `id` into the `issuer_id` collection variable to use it as `X-Issuer-Id` on document requests."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"if (r.ok && r.issuers?.length) { pm.collectionVariables.set('issuer_id', String(r.issuers[0].id)); console.log('issuer_id set to', r.issuers[0].id); }"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Issuer",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}"
+							]
+						},
+						"description": "Returns profile information for a single issuer owned by the authenticated tenant: RUC, business name, trade name, branch/issue point codes, and certificate expiry/fingerprint."
+					}
+				},
+				{
+					"name": "Create Branch",
+					"request": {
+						"method": "POST",
+						"url": {
+							"raw": "{{base_url}}/v1/issuers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers"
+							]
+						},
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "branchCode",
+									"value": "002",
+									"type": "text"
+								},
+								{
+									"key": "issuePointCode",
+									"value": "001",
+									"type": "text"
+								},
+								{
+									"key": "branchAddress",
+									"value": "Av. 6 de Diciembre 123",
+									"type": "text",
+									"disabled": true
+								},
+								{
+									"key": "documentTypes",
+									"value": "[\"01\"]",
+									"description": "Optional. Document type codes to enable (default: [\"01\"])",
+									"type": "text",
+									"disabled": true
+								},
+								{
+									"key": "sourceIssuerId",
+									"value": "{{issuer_id}}",
+									"description": "Optional. UUID of the issuer to inherit cert/profile from. Defaults to the tenant's first existing issuer. Ignored if a cert file is uploaded.",
+									"type": "text",
+									"disabled": true
+								},
+								{
+									"key": "cert",
+									"type": "file",
+									"src": "",
+									"disabled": true,
+									"description": "Optional — leave blank to reuse the calling issuer certificate"
+								},
+								{
+									"key": "certPassword",
+									"value": "",
+									"type": "text",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Creates a new branch or issue point for the tenant. Inherits RUC, business name, and certificate from an existing issuer of the tenant.\n\n**No new API key is minted** — your existing tenant key already covers every branch via the `X-Issuer-Id` header. New branches inherit the tenant's current environment (sandbox or production).\n\nThe cert file and certPassword fields are optional — only provide them if the new branch needs a different certificate.\n\nTier limits apply: FREE allows 1 branch / 1 issue point, STARTER 3 / 2, GROWTH 10 / 5, BUSINESS unlimited."
+					}
+				},
+				{
+					"name": "Update Issuer",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tradeName\": \"ACME Express\",\n  \"branchAddress\": \"Av. Amazonas 456\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Edits the trade name and/or branch address for an existing issuer. At least one field is required. businessName, mainAddress, and ruc cannot be edited here."
+					}
+				},
+				{
+					"name": "Remove Issuer",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}"
+							]
+						},
+						"description": "Soft-deletes an issuer (active = false). Rejected with LAST_ISSUER_CANNOT_BE_REMOVED if it's the tenant's only active issuer, or ISSUER_HAS_DOCUMENTS if it has ever issued a document."
+					}
+				},
+				{
+					"name": "Activate Issuer",
+					"request": {
+						"method": "PATCH",
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}/activate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}",
+								"activate"
+							]
+						},
+						"description": "Reactivates a soft-deleted issuer. Re-checks the tenant's plan branch/issue-point limits the same way Create Branch does, so deactivate-then-reactivate cannot be used to exceed plan caps."
+					}
+				},
+				{
+					"name": "Set Can Issue",
+					"request": {
+						"method": "PATCH",
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}/can-issue",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}",
+								"can-issue"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"canIssue\": false\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Pauses or resumes new document creation on an issuer without deactivating it. Existing documents (RIDE, XML, email) and read endpoints keep working while paused; POST /v1/documents and POST /:accessKey/rebuild return 403 ISSUER_ISSUING_PAUSED."
+					}
+				},
+				{
+					"name": "Upload Issuer Logo",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "logo",
+									"type": "file",
+									"description": "Company logo (PNG, JPEG, or GIF; max 500 KB)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}/logo",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}",
+								"logo"
+							]
+						},
+						"description": "Uploads or replaces the company logo for an issuer. The logo is stored in the database and rendered in the top-left corner of every RIDE PDF generated for that issuer, including PDFs sent as email attachments. Accepted formats: PNG, JPEG, GIF. Max size: 500 KB."
+					}
+				},
+				{
+					"name": "Renew Certificate",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "cert",
+									"type": "file",
+									"src": "",
+									"description": "P12/PFX certificate file from an authorized Ecuadorian CA (BANCO CENTRAL or SECURITY DATA)"
+								},
+								{
+									"key": "certPassword",
+									"value": "",
+									"type": "text",
+									"description": "Optional. Password protecting the P12 file, if any.",
+									"disabled": true
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}/certificate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}",
+								"certificate"
+							]
+						},
+						"description": "Replaces the P12 certificate (private key + X.509 cert) for an issuer — e.g. when it has expired. Does not affect already-signed documents, since each signed invoice embeds its own copy of the certificate inside the XML signature; only future signing operations use the new certificate."
+					}
+				},
+				{
+					"name": "List Document Types",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}/document-types",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}",
+								"document-types"
+							]
+						},
+						"description": "Returns the active document types enabled for the specified issuer."
+					}
+				},
+				{
+					"name": "Add Document Type",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}/document-types",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}",
+								"document-types"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"documentType\": \"01\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Enables a document type for the specified issuer. If the type was previously removed, it is reactivated. Returns the full updated list of active document types."
+					}
+				},
+				{
+					"name": "Remove Document Type",
+					"request": {
+						"method": "DELETE",
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}/document-types/01",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}",
+								"document-types",
+								"01"
+							]
+						},
+						"description": "Disables a document type for the specified issuer. The last active type cannot be removed."
+					}
+				},
+				{
+					"name": "Get Sequentials",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}/sequentials",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}",
+								"sequentials"
+							]
+						},
+						"description": "Returns the current and next sequential number per active document type, broken out by sandbox/production environment."
+					}
+				},
+				{
+					"name": "Set Next Sequential",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/issuers/{{issuer_id}}/sequentials/01",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"issuers",
+								"{{issuer_id}}",
+								"sequentials",
+								"01"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"environment\": \"production\",\n  \"nextSequential\": 200\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Manually sets the next sequential number for one document type in one environment. Locks the counter row with SELECT ... FOR UPDATE so it cannot race a concurrent POST /v1/documents call. nextSequential must exceed the current counter value."
+					}
+				}
+			]
+		},
+		{
+			"name": "Documents",
+			"description": "Document lifecycle endpoints. All requests require a Bearer API key and the `X-Issuer-Id` header identifying the issuing branch.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{api_key}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "Create Invoice",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{$guid}}",
+								"description": "Optional — unique per intended invoice. Reuse on retries to avoid duplicates."
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"documentType\": \"01\",\n  \"issueDate\": \"05/04/2026\",\n  \"buyer\": {\n    \"idType\": \"05\",\n    \"id\": \"1234567890\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"address\": \"Av. Amazonas 123\"\n  },\n  \"items\": [\n    {\n      \"mainCode\": \"PROD-001\",\n      \"auxiliaryCode\": \"AUX-001\",\n      \"description\": \"Web development service\",\n      \"quantity\": \"1.00\",\n      \"unitPrice\": \"100.00\",\n      \"discount\": \"0.00\",\n      \"taxes\": [\n        {\n          \"code\": \"2\",\n          \"rateCode\": \"2\",\n          \"rate\": \"15.00\",\n          \"taxableBase\": \"100.00\",\n          \"taxAmount\": \"15.00\"\n        }\n      ]\n    }\n  ],\n  \"payments\": [\n    {\n      \"method\": \"01\",\n      \"total\": \"115.00\",\n      \"term\": 30,\n      \"termUnit\": \"dias\"\n    }\n  ],\n  \"additionalInfo\": [\n    { \"name\": \"Contract\", \"value\": \"CTR-2026-001\" }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Creates, XSD-validates, and signs a new electronic invoice. Returns the document with status `SIGNED`.\n\nAfter a successful response, copy the `accessKey` value into the `access_key` collection variable.\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use. Get the id from `GET /v1/issuers`.\n\nThe `Idempotency-Key` header makes creation idempotent — generate it once per intended invoice and reuse on retries."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 201', () => pm.response.to.have.status(201));",
+									"if (r.document?.accessKey) { pm.collectionVariables.set('access_key', r.document.accessKey); console.log('access_key saved'); }"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Create Credit Note",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers). Must have document type 04 enabled."
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{$guid}}",
+								"description": "Optional — unique per intended credit note. Reuse on retries to avoid duplicates."
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"documentType\": \"04\",\n  \"issueDate\": \"05/04/2026\",\n  \"buyer\": {\n    \"idType\": \"05\",\n    \"id\": \"1234567890\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"address\": \"Av. Amazonas 123\"\n  },\n  \"originalDocument\": {\n    \"documentType\": \"01\",\n    \"number\": \"001-001-000000027\",\n    \"issueDate\": \"03/04/2026\"\n  },\n  \"motivo\": \"Devolucion de mercaderia por defecto de fabricacion\",\n  \"items\": [\n    {\n      \"mainCode\": \"PROD-001\",\n      \"auxiliaryCode\": \"AUX-001\",\n      \"description\": \"Web development service\",\n      \"quantity\": \"1.00\",\n      \"unitPrice\": \"100.00\",\n      \"discount\": \"0.00\",\n      \"taxes\": [\n        {\n          \"code\": \"2\",\n          \"rateCode\": \"2\",\n          \"rate\": \"15.00\",\n          \"taxableBase\": \"100.00\",\n          \"taxAmount\": \"15.00\"\n        }\n      ]\n    }\n  ],\n  \"additionalInfo\": [\n    { \"name\": \"Contract\", \"value\": \"CTR-2026-001\" }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Creates, XSD-validates, and signs a new credit note referencing a previously authorized invoice. Returns the document with status `SIGNED`.\n\nUnlike Create Invoice, this body has no `payments` block and instead requires `originalDocument` (the invoice being credited — its document type, number, and issue date) plus a `motivo` (reason for the credit note).\n\nThe `X-Issuer-Id` header identifies which branch and certificate to use — the issuer must have document type `04` enabled first (see Add Document Type).\n\nThe `Idempotency-Key` header makes creation idempotent — generate it once per intended credit note and reuse on retries."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 201', () => pm.response.to.have.status(201));",
+									"if (r.document?.accessKey) pm.collectionVariables.set('access_key', r.document.accessKey);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "List Documents",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents?page=1&limit=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Page number (default: 1)",
+									"disabled": true
+								},
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Results per page, 1-100 (default: 10)",
+									"disabled": true
+								},
+								{
+									"key": "status",
+									"value": "AUTHORIZED",
+									"description": "Filter by status: SIGNED, RECEIVED, RETURNED, AUTHORIZED, NOT_AUTHORIZED",
+									"disabled": true
+								},
+								{
+									"key": "documentType",
+									"value": "01",
+									"description": "Filter by document type code (e.g., 01)",
+									"disabled": true
+								},
+								{
+									"key": "from",
+									"value": "01/01/2026",
+									"description": "Filter by issue date >= DD/MM/YYYY",
+									"disabled": true
+								},
+								{
+									"key": "to",
+									"value": "31/12/2026",
+									"description": "Filter by issue date <= DD/MM/YYYY",
+									"disabled": true
+								},
+								{
+									"key": "sequential",
+									"value": "000000001",
+									"description": "Filter by sequential, contains match against the zero-padded 9-digit value (case-insensitive)",
+									"disabled": true
+								},
+								{
+									"key": "buyerName",
+									"value": "ACME",
+									"description": "Filter by buyer name, contains match (case-insensitive)",
+									"disabled": true
+								},
+								{
+									"key": "sortBy",
+									"value": "issueDate",
+									"description": "Sort by: sequential, buyerName, issueDate, status. Defaults to created_at DESC when omitted.",
+									"disabled": true
+								},
+								{
+									"key": "sortDir",
+									"value": "desc",
+									"description": "Sort direction: asc, desc. Defaults to desc when sortBy is given without sortDir.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Lists documents for the specified issuer with optional filtering, sorting, and pagination. Defaults to creation date (newest first) when no sortBy is given."
+					}
+				},
+				{
+					"name": "Document Stats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"stats"
+							]
+						},
+						"description": "Returns a per-type document breakdown for the current month plus an all-time needs-attention count, for dashboard summaries."
+					}
+				},
+				{
+					"name": "Get Document",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}"
+							]
+						},
+						"description": "Retrieves document metadata by access key. Does not call the SRI — use Check Authorization for status updates.\n\nWhile status is PENDING_SEND or RECEIVED, the response may include a `dispatch` field ({ status, attemptCount, lastError }) reporting the in-flight SRI_SEND/SRI_AUTHORIZE effect's own state — PENDING/DISPATCHED means it's still auto-retrying (reconciliation spaces attempts 5 minutes apart), FAILED means all 5 automatic attempts are exhausted and Retry Send/Authorize is now needed. Absent once the document reaches a settled status."
+					}
+				},
+				{
+					"name": "Send to SRI",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/send",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"send"
+							]
+						},
+						"description": "Queues the signed XML for submission to the SRI reception service — this is asynchronous, it does not call SRI in-request. Returns 202 with the document in PENDING_SEND status. A standalone worker process (workers/worker.js) picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` or `RETURNED`. Poll Get Document or Get Events to observe that transition."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 202', () => pm.response.to.have.status(202));",
+									"pm.test('Document status is PENDING_SEND', () => pm.expect(r.document?.status).to.eql('PENDING_SEND'));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Retry Send/Authorize",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/send/retry",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"send",
+								"retry"
+							]
+						},
+						"description": "Recovers a document whose asynchronous SRI dispatch (send or authorization check) exhausted its 5 automatic attempts and got stuck. Resets the attempt counter and re-queues it immediately, without waiting for the next Queue Reconciliation sweep. Works whether the document is stuck in PENDING_SEND or RECEIVED — automatically detects which of the two attempts failed.\n\nReturns 409 NOTHING_TO_RETRY if there's no FAILED send/authorize attempt for this document (already in progress, already completed, or never failed)."
+					}
+				},
+				{
+					"name": "Check Authorization",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/authorize",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"authorize"
+							]
+						},
+						"description": "Queues an authorization check — this is asynchronous, it does not query SRI in-request. Returns 202 immediately; `status` in the response is still `RECEIVED`. A standalone worker process picks up the queued job and calls SRI; the document eventually moves to `AUTHORIZED` (an email with the RIDE PDF and XML is sent to the buyer, and a DOCUMENT_AUTHORIZED notification/webhook fires) or `NOT_AUTHORIZED`. A periodic reconciliation job also queues this check automatically for any RECEIVED document past a short delay, whether or not this endpoint is ever called."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"if (r.document?.status) console.log('Document status:', r.document.status);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Rebuild Invoice",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/rebuild",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"rebuild"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"documentType\": \"01\",\n  \"buyer\": {\n    \"idType\": \"05\",\n    \"id\": \"1234567890\",\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"address\": \"Av. Amazonas 123\"\n  },\n  \"items\": [\n    {\n      \"mainCode\": \"PROD-001\",\n      \"description\": \"Web development service (corrected)\",\n      \"quantity\": \"1.00\",\n      \"unitPrice\": \"100.00\",\n      \"discount\": \"0.00\",\n      \"taxes\": [\n        {\n          \"code\": \"2\",\n          \"rateCode\": \"2\",\n          \"rate\": \"15.00\",\n          \"taxableBase\": \"100.00\",\n          \"taxAmount\": \"15.00\"\n        }\n      ]\n    }\n  ],\n  \"payments\": [\n    {\n      \"method\": \"01\",\n      \"total\": \"115.00\"\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Corrects and re-signs a document in `RETURNED` or `NOT_AUTHORIZED` status. Keeps the original `accessKey`, `sequential`, and `issueDate`. Send again after rebuilding."
+					}
+				},
+				{
+					"name": "Void Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/void",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"void"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"confirmedSriVoid\": true,\n  \"reason\": \"Duplicate invoice — customer already received the original 001-001-000000010\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Marks an AUTHORIZED document as VOIDED. SRI has no SOAP service to cancel an already-authorized document — that cancellation happens on SRI's own portal. This endpoint only synchronizes the local record after you have already voided the document there; confirmedSriVoid: true is a required attestation of that. Irreversible — VOIDED is a terminal status."
+					}
+				},
+				{
+					"name": "Get RIDE PDF",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/ride",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"ride"
+							]
+						},
+						"description": "Downloads the RIDE PDF for an `AUTHORIZED` document. Returns `application/pdf`."
+					}
+				},
+				{
+					"name": "Get XML",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/xml",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"xml"
+							]
+						},
+						"description": "Downloads the authorization XML for an `AUTHORIZED` document, or the signed XML for earlier statuses. Returns `application/xml`."
+					}
+				},
+				{
+					"name": "Get Events",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/events",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"events"
+							]
+						},
+						"description": "Returns the full audit trail for the document — every lifecycle transition, SRI call, and email event."
+					}
+				},
+				{
+					"name": "Get SRI Responses",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/sri-responses",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"sri-responses"
+							]
+						},
+						"description": "Returns the raw SRI reception/authorization call outcomes recorded for this document (operationType, status, messages, createdAt), newest first. The raw SOAP response body is not included."
+					}
+				},
+				{
+					"name": "Get Credit Notes",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/credit-notes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"credit-notes"
+							]
+						},
+						"description": "Returns the sum of all AUTHORIZED credit notes already issued against this document (use the original invoice's access key, not a credit note's own key), plus the remaining balance. Only AUTHORIZED credit notes count — pending or rejected ones are excluded."
+					}
+				},
+				{
+					"name": "Retry Single Email",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/{{access_key}}/email-retry",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"{{access_key}}",
+								"email-retry"
+							],
+							"query": [
+								{
+									"key": "force",
+									"value": "true",
+									"description": "Set to true to resend an email that was already successfully delivered",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Retries the authorization email for a single document. Document must be `AUTHORIZED` with `email_status` of `PENDING` or `FAILED`. Add `?force=true` to resend an already-delivered email."
+					}
+				},
+				{
+					"name": "Retry Emails (batch)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "UUID of the issuing branch (from GET /v1/issuers)"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/documents/email-retry",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"documents",
+								"email-retry"
+							]
+						},
+						"description": "Retries all `PENDING` and `FAILED` authorization emails across all documents for the specified issuer. Maximum 100 per call."
+					}
+				}
+			]
+		},
+		{
+			"name": "Catalogs",
+			"description": "Reference data for SRI-defined codes. Use these to build valid invoice requests. Require a Bearer API key.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{api_key}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "ID Types",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/catalogs/id-types",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"catalogs",
+								"id-types"
+							]
+						},
+						"description": "Returns buyer identification types (e.g. 04 = RUC, 05 = Cédula, 06 = Pasaporte). Use the `code` as `buyer.idType` on invoice creation."
+					}
+				},
+				{
+					"name": "Payment Methods",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/catalogs/payment-methods",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"catalogs",
+								"payment-methods"
+							]
+						},
+						"description": "Returns SRI payment method codes. Use the `code` as `payments[].method` on invoice creation."
+					}
+				},
+				{
+					"name": "Term Units",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/catalogs/term-units",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"catalogs",
+								"term-units"
+							]
+						},
+						"description": "Returns accepted SRI payment term units (e.g. dias, meses). Use the `code` as `payments[].termUnit` (with `payments[].term`) when sending invoices a plazos."
+					}
+				},
+				{
+					"name": "Tax Types",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/catalogs/tax-types",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"catalogs",
+								"tax-types"
+							]
+						},
+						"description": "Returns SRI tax type codes (e.g. 2 = IVA, 3 = ICE, 5 = IRBPNR). Use the `code` as `taxes[].code` on invoice items."
+					}
+				},
+				{
+					"name": "Tax Rates",
+					"request": {
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/v1/catalogs/tax-rates",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"catalogs",
+								"tax-rates"
+							]
+						},
+						"description": "Returns tax rate codes grouped by tax type. Use `taxCode` as `taxes[].code` and `rateCode` as `taxes[].rateCode` on invoice items."
+					}
+				}
+			]
+		},
+		{
+			"name": "Notifications",
+			"description": "Tenant-level alerts. Both read and unread are returned; use `readAt` to decide what to show. Use `?sinceId=<id>` for efficient catch-up polling — pass the highest id seen on the last request to receive only new notifications.\n\nAll requests require a Bearer API key.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{api_key}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "List Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Issuer-Id",
+								"value": "{{issuer_id}}",
+								"description": "Optional — filter to a specific issuer's notifications plus tenant-level ones. Omit for all-tenant view.",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/notifications",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"notifications"
+							],
+							"query": [
+								{
+									"key": "sinceId",
+									"value": "0",
+									"description": "Optional — return only notifications with id > sinceId. Store the highest id seen and pass it on the next poll to catch up efficiently.",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Returns active (unexpired) notifications for the tenant, newest first. Both read and unread are included.\n\n**Polling pattern:** call on a schedule (e.g. every 60 s). Use `?sinceId=<id>` to retrieve only notifications created after your last poll — store the highest `id` you've seen and pass it on the next request.\n\nOptional `X-Issuer-Id` header restricts results to a specific issuer's notifications plus tenant-level ones (`issuerId: null`). Omit it for an all-tenant view."
+					}
+				},
+				{
+					"name": "Mark as Read",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/notifications/{{notification_id}}/read",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"notifications",
+								"{{notification_id}}",
+								"read"
+							]
+						},
+						"description": "Marks a notification as read at the tenant level. Call this only when every user with access to the notification has acknowledged it on the frontend side. After this call, the notification no longer contributes to `unreadCount` on future polls.\n\nCopy a notification `id` from the List Notifications response into the `notification_id` variable."
+					}
+				},
+				{
+					"name": "Get Preferences",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/notifications/preferences",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"notifications",
+								"preferences"
+							]
+						},
+						"description": "Returns the full notification preference list for the tenant — one entry per notification type. Types the tenant has never explicitly configured default to `enabled: true` (opt-out model)."
+					}
+				},
+				{
+					"name": "Update Preferences",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/notifications/preferences",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"notifications",
+								"preferences"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "[\n  { \"type\": \"PAYMENT_VERIFIED\", \"channel\": \"EMAIL\", \"enabled\": false },\n  { \"type\": \"DOCUMENT_AUTHORIZED\", \"channel\": \"IN_APP\", \"enabled\": true }\n]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Bulk-upsert notification preferences for the tenant. Send only the types you want to change — unmentioned types are unchanged.\n\nWhen `enabled` is `false` for a type, no new notifications of that type are created. Existing unread notifications remain and can still be marked as read.\n\nValid types: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`."
+					}
+				}
+			]
+		},
+		{
+			"name": "Webhooks",
+			"description": "Register HTTPS callback URLs to receive event notifications in near-real time. When a notification is created or updated, the API immediately POSTs a signed payload to every subscribed active endpoint.\n\n**Secret handling:** the signing secret is returned only at registration. Store it immediately — it cannot be retrieved later. If lost, deregister and re-register the endpoint.\n\n**Tier limits:** FREE: 1 endpoint, STARTER: 2, GROWTH: 5, BUSINESS: 10.\n\nAll requests require a Bearer API key.",
+			"auth": {
+				"type": "bearer",
+				"bearer": [
+					{
+						"key": "token",
+						"value": "{{api_key}}",
+						"type": "string"
+					}
+				]
+			},
+			"item": [
+				{
+					"name": "Register Webhook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/webhooks",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"webhooks"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://app.example.com/v1/comprobify/events\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\", \"CERT_EXPIRING\", \"CERT_EXPIRED\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Registers a new webhook endpoint and returns the signing `secret` — **shown only once**. Store it immediately; it is used to verify `X-Comprobify-Signature` on incoming webhook requests.\n\n`url` must be a valid HTTPS URL.\n\n`eventTypes` is optional. Omit it or pass `[]` to subscribe to **all** event types. Valid values: `DOCUMENT_AUTHORIZED`, `CERT_EXPIRING`, `CERT_EXPIRED`, `SRI_SUBMISSION_FAILED`, `EMAIL_DELIVERY_FAILED`, `QUOTA_WARNING`.\n\nCopy the returned `id` into the `webhook_id` collection variable."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 201', () => pm.response.to.have.status(201));",
+									"if (r.endpoint?.id) pm.collectionVariables.set('webhook_id', String(r.endpoint.id));",
+									"if (r.endpoint?.secret) console.log('Webhook secret (shown once):', r.endpoint.secret);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "List Webhooks",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/webhooks",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"webhooks"
+							]
+						},
+						"description": "Returns all active webhook endpoints for the tenant. Signing secrets are never included in list responses."
+					}
+				},
+				{
+					"name": "Update Webhook",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/webhooks/{{webhook_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"webhooks",
+								"{{webhook_id}}"
+							]
+						},
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://app.example.com/v1/comprobify/events-v2\",\n  \"eventTypes\": [\"DOCUMENT_AUTHORIZED\"],\n  \"active\": true\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"description": "Updates a webhook endpoint's URL, event subscriptions, or active flag. All fields are optional — send only what you want to change.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
+					}
+				},
+				{
+					"name": "Deregister Webhook",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/v1/webhooks/{{webhook_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"webhooks",
+								"{{webhook_id}}"
+							]
+						},
+						"description": "Soft-deletes a webhook endpoint (`active = false`). The endpoint stops receiving deliveries immediately. Past delivery records are preserved for audit purposes.\n\nCopy an endpoint `id` from the List Webhooks response into the `webhook_id` variable."
+					}
+				}
+			]
+		},
+		{
+			"name": "Health",
+			"description": "Monitoring endpoint. No authentication required.",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Returns `{ status: \"ok\", uptime }` (200) when the database is reachable, or `{ status: \"error\", uptime }` (503) when it is not. Use for load balancer health checks and container liveness probes."
+					}
+				}
+			]
+		}
+	]
 }

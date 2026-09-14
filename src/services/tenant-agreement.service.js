@@ -22,7 +22,8 @@ async function generateForTenant(tenantId, issuer = null) {
     const values = buildValues(resolvedIssuer);
     const rendered = agreementService.substitutePlaceholders(
       template.content_markdown,
-      values
+      values,
+      { escapeValues: true }
     );
 
     const row = await tenantAgreementModel.create({

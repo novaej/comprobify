@@ -2,7 +2,7 @@
 
 Last updated: 2026-09-09
 
-**Status: NOT YET LIVE.** No production droplet has been provisioned yet — `terraform apply` for `terraform/environments/production` hasn't run. The `production`/`production-infra` GitHub Environments, their secrets/variables, and the `release-production.yml`/`deploy-production.yml` triggers are all already set up and enabled; the remaining gap is purely the infrastructure itself (droplet, DB cluster, DNS record) and the deployment-specific credentials that depend on it existing (`DROPLET_IP`, Payphone's production application). This document describes the **target configuration** for the production deployment — infrastructure, required configuration, deployment steps, and post-deployment checks. See `docs/production-readiness-checklist.md` for exactly what's done versus still pending. For the full CI/CD walkthrough, branching model, and env var reference, see `docs/deployment.md`. For the complete Terraform/DigitalOcean mechanics, see `docs/terraform-digitalocean-setup.md`.
+**Status: infrastructure is live, application isn't deployed yet.** The droplet, Cloudflare DNS record, DO Managed Postgres cluster, and a dedicated CloudAMQP instance are all provisioned; the `production`/`production-infra` GitHub Environments, their secrets/variables, and the `release-production.yml`/`deploy-production.yml` triggers are all set up and enabled. What hasn't happened yet is the first real deploy — no tagged release has been published to production, so the droplet is up but not yet running the application. See `docs/production-readiness-checklist.md` for exactly what's done versus still pending (notably: `sandbox` schema grants, which need that first deploy to run migration 033 first). For the full CI/CD walkthrough, branching model, and env var reference, see `docs/deployment.md`. For the complete Terraform/DigitalOcean mechanics, see `docs/terraform-digitalocean-setup.md`.
 
 ## Architecture
 
@@ -13,10 +13,10 @@ Last updated: 2026-09-09
 - **Docker Compose** (`deploy/docker-compose.yml`, pushed to the droplet on every deploy) runs four containers: `caddy` (reverse proxy, the only container with ports exposed to the internet), `api` (`node app.js`), `worker` (`node workers/worker.js`), and `redis` — `api` and `worker` share the same image, differing only in `command`.
 - **Caddy** terminates TLS, automatically obtaining and renewing a Let's Encrypt certificate for `api.comprobify.com`, and reverse-proxies to the `api` container internally.
 - **Redis** (`redis:7-alpine`, self-hosted in the same Compose stack, its own instance on this droplet) backs the shared `RedisStore` behind `writeLimiter`/`readLimiter`/`adminLimiter`/`registrationLimiter` (`src/middleware/rate-limit.js`) and `attempt-tracker.service.js`'s repeated-attempt detection — only `api` connects to it, `worker` never rate-limits. No persistence (`--save ""`, disposable short-window counters) and a hard 32MB `--maxmemory` cap. `REDIS_URL` is not a GitHub Secret/Variable — it's hardcoded into the deploy workflow's `.env` heredoc as `redis://redis:6379` (Compose's internal DNS name for the service).
-- **DigitalOcean Managed Postgres** provides the PostgreSQL database on its **own dedicated cluster** — two schemas, `public` and `sandbox`. This cluster may in turn be shared with `comprobify-web`'s own production database if/when that's provisioned, grouped into the same DO Project as this droplet for dashboard purposes only. **Not yet provisioned.**
+- **DigitalOcean Managed Postgres** provides the PostgreSQL database on its **own dedicated cluster**, provisioned and grouped into the same DO Project as this droplet — two schemas, `public` and `sandbox`. This cluster may in turn be shared with `comprobify-web`'s own production database if/when that's provisioned. The non-superuser app role exists with `public` schema privileges granted; `sandbox` privileges are still pending, since that schema is only created by migration 033 the first time the `api` container actually starts against this database.
 - **Cloudflare Pages** hosts the VitePress documentation site at `docs.comprobify.com`, project `comprobify-docs`, built via `npm run docs:build` and deployed with Wrangler — a single resource that serves error-code documentation regardless of which environment's API a reader arrived from.
 - Five scheduled admin jobs run via a `cron.d` file (`/etc/cron.d/comprobify-jobs`) written to the droplet by cloud-init at first boot: Notifications every 5 minutes, Subscriptions daily, Quota daily, Queue Reconciliation every 5 minutes, and Payphone Reconciliation every 5 minutes. Each entry runs `docker compose exec -T api node scripts/run-admin-job.js <path>` directly inside the running `api` container — no Node install on the bare host, and `ADMIN_SECRET` is picked up automatically from that container's own `.env`.
-- **CloudAMQP** provides the RabbitMQ broker backing the fully asynchronous document send/authorize pipeline and, via the `pending_effects` outbox, every other async side effect: notifications, webhook fan-out, subscription hooks, and transactional emails. `POST /:key/send` and `GET /:key/authorize` only queue a message and return 202; the worker container performs the actual SRI call. Three queues back this: `sri.send`, `sri.authorize`, and `app.effects`. **Not yet provisioned** — this needs its own instance/vhost, since CloudAMQP's free tier provisions exactly one vhost per instance with no multi-environment isolation, and every other credential in this system (SSH keys, Cloudflare tokens, DB creds, `ENCRYPTION_KEY`, `ADMIN_SECRET`, Payphone credentials) is kept strictly separate per environment. Whether that means a second free-tier instance or a paid plan isn't decided yet — resolve this before `RABBITMQ_URL` is set on the `production` GitHub Environment.
+- **CloudAMQP** provides the RabbitMQ broker backing the fully asynchronous document send/authorize pipeline and, via the `pending_effects` outbox, every other async side effect: notifications, webhook fan-out, subscription hooks, and transactional emails. `POST /:key/send` and `GET /:key/authorize` only queue a message and return 202; the worker container performs the actual SRI call. Three queues back this: `sri.send`, `sri.authorize`, and `app.effects`. Production has its **own dedicated instance/vhost**, separate from staging's — CloudAMQP's free tier provisions exactly one vhost per instance with no multi-environment isolation, so this couldn't simply be a second vhost on an existing instance, and every other credential in this system (SSH keys, Cloudflare tokens, DB creds, `ENCRYPTION_KEY`, `ADMIN_SECRET`, Payphone credentials) is kept strictly separate per environment the same way.
 - The **worker container** (`node workers/worker.js`) is the only process that calls SRI directly. It's a persistent process (not a scheduled job) consuming all three queues on one shared confirm channel.
 - **Mailgun** handles transactional email through the `mg.comprobify.com` sending domain, with inbound delivery-event webhooks verified via HMAC-SHA256. This domain isn't environment-specific; what production needs of its own is a separate webhook registration (see below) and removing whatever sandbox-recipient restriction currently limits sends.
 - **Sentry** provides error monitoring, reporting into the same Sentry **project** every environment uses, distinguished only by the `environment` tag (`production`, derived from `APP_ENV`) — `SENTRY_DSN` is the same value everywhere, just set as its own independent secret on this Environment. Only 5xx responses are reported. The worker container also reports to Sentry (it requires `instrument.js` too).
@@ -31,16 +31,16 @@ Last updated: 2026-09-09
 | Compute (API + worker + proxy + Redis) | DigitalOcean Droplet | `comprobify-production` — `s-1vcpu-1gb`, region `nyc1`, Ubuntu 24.04 (revisit sizing once real production traffic volume is known) |
 | Infrastructure-as-code | Terraform | `terraform/environments/production`, state in DO Spaces bucket `comprobify-terraform-state`, key prefix `production/` |
 | Container registry | GHCR | `ghcr.io/novaej/comprobify` |
-| Database | DigitalOcean Managed Database | **Not yet provisioned** — own dedicated cluster, `public` + `sandbox` schemas, non-superuser app role required for RLS |
-| Message broker | CloudAMQP | **Not yet provisioned** — needs its own instance/vhost (see Architecture above) |
+| Database | DigitalOcean Managed Database | Own dedicated cluster, `public` + `sandbox` schemas, non-superuser app role with `public` grants done — `sandbox` grants pending the first deploy |
+| Message broker | CloudAMQP | Own dedicated instance/vhost, separate from staging's |
 | Docs site | Cloudflare Pages | `comprobify-docs` — a shared resource, not tied to this environment |
 | Scheduled jobs | `cron.d` on the droplet | `/etc/cron.d/comprobify-jobs`, written by cloud-init — five jobs (see schedule table below) |
 | Email | Mailgun | Domain: `mg.comprobify.com` |
 | Error monitoring | Sentry | `comprobify` — `environment=production` tag |
 | DNS / proxy | Cloudflare | Domain: `comprobify.com` — `api.comprobify.com` → droplet's reserved IP (A record, proxied, Terraform-managed) |
-| App CI/CD | GitHub Actions | `comprobify` repo — `release-production.yml`, `deploy-production.yml` (both enabled; will fail on their first real run until the droplet is provisioned) |
+| App CI/CD | GitHub Actions | `comprobify` repo — `release-production.yml`, `deploy-production.yml` (both enabled; the droplet is up, ready for the first real trigger) |
 | Infra CI/CD | GitHub Actions | `comprobify` repo — `terraform.yml`'s `plan-production`/`apply-production` job pair |
-| DO Project | DigitalOcean (dashboard) | `Comprobify Production` — **not yet created**; looked up by name in Terraform, never created by it |
+| DO Project | DigitalOcean (dashboard) | `Comprobify Production` — created; looked up by name in Terraform, never created by it |
 
 ---
 
@@ -57,7 +57,7 @@ Provisioned by Terraform (`terraform/environments/production`, using the shared 
 | Deploy user | `cpfydeploy4c7a` (unprivileged — docker group only, no sudo, no root SSH login) |
 | Firewall | 80/443 restricted to Cloudflare's published IPv4 ranges; 22 open to `0.0.0.0/0` (defense layered at the identity level instead — see `docs/terraform-digitalocean-setup.md`'s "SSH access model") |
 | Provisioning | cloud-init on first boot only — installs Docker Engine + Compose plugin, hardens sshd, enables fail2ban and unattended-upgrades, writes the `cron.d` schedule |
-| DigitalOcean Project | `Comprobify Production` — **not yet created** in the DO dashboard; `terraform apply` will fail the project-lookup step until it exists |
+| DigitalOcean Project | `Comprobify Production` — created in the DO dashboard |
 
 ### Terraform state backend
 
@@ -106,7 +106,7 @@ Caddy obtains/renews its Let's Encrypt certificate automatically on first reques
 
 ## GitHub — Environments and Secrets
 
-Four separate scopes are in play: the `production` Environment (app deploy secrets/variables, read by `deploy-production.yml`), the `production-infra` Environment (Terraform credentials, read by `terraform.yml`), repository-level secrets, and repository-level variables (the latter two not environment-scoped). Both Environments are set up with their required-reviewer rules and most values in place — the exceptions are `DROPLET_IP` (nothing to point at until the droplet is provisioned) and `PAYPHONE_TOKEN`/`PAYPHONE_STORE_ID` (deliberately deferred, see below).
+Four separate scopes are in play: the `production` Environment (app deploy secrets/variables, read by `deploy-production.yml`), the `production-infra` Environment (Terraform credentials, read by `terraform.yml`), repository-level secrets, and repository-level variables (the latter two not environment-scoped). Both Environments exist with their values in place — the only exception is `PAYPHONE_TOKEN`/`PAYPHONE_STORE_ID` (deliberately deferred, see below). **Neither Environment has a required-reviewer rule configured yet** — `protection_rules` is confirmed empty on both via the API despite the org now being on a paid plan that should support it (private-repo orgs need GitHub Team or above); this is an open, unresolved gap, not a documentation lag. Until it's fixed, `plan`/`apply` for both environments run fully unattended the moment their trigger fires.
 
 ### GitHub Environment: `production` — Secrets
 
@@ -116,7 +116,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 
 | Secret | Value |
 |---|---|
-| `DROPLET_IP` | Set once the droplet is provisioned — the Terraform **`reserved_ip`** output, not `droplet_ip` |
+| `DROPLET_IP` | Set — the Terraform **`reserved_ip`** output, not `droplet_ip` |
 | `INFRA_SSH_PRIVATE_KEY` | The private half of `comprobify_deploy_production` |
 | `ENCRYPTION_KEY` | A freshly generated value — never the same value any other environment uses |
 | `ADMIN_SECRET` | A freshly generated value — never the same value any other environment uses |
@@ -157,7 +157,7 @@ Not a GitHub Secret, but also written into this same `.env` by the workflow itse
 | `OPERATOR_RUC` | **Set.** Read unconditionally on every document build — `base.builder.js`'s `buildAdditionalInfo()` writes it into every document's `RUC Proveedor` field, required by SRI Resolution NAC-DGERCGC26-00000027 for third-party invoicing providers. Nothing to do with the agreements feature, and not deferred the way `NAME`/`EMAIL`/`ADDRESS` are — `base.builder.js`'s own comment notes this can be the operator's own persona natural RUC, not necessarily a newly incorporated entity. |
 | `OPERATOR_EMAIL` | **Not set** — see `OPERATOR_NAME` above. |
 | `OPERATOR_ADDRESS` | **Not set** — see `OPERATOR_NAME` above. |
-| `AGREEMENTS_ENABLED` | **Undecided** (checklist item 28). Leaving unset keeps legal documents enabled (requires TERMS/PRIVACY/DPA published, or `POST /v1/tenants/promote` 403s) — but that requires `OPERATOR_NAME`/`OPERATOR_EMAIL`/`OPERATOR_ADDRESS` above to be set first, or agreement generation/publishing substitutes empty strings into the `{{operador.*}}` tokens. Setting it to exactly `false` launches without Terms/Privacy/DPA and needs none of those three. |
+| `AGREEMENTS_ENABLED` | **Set to `false`** (checklist item 28) — launches without Terms/Privacy/DPA rather than blocking on publishing/reviewing them first. Revisit once the legal documents are ready to go live; re-enabling later needs comprobify-web's re-acceptance prompt shipped first (publishing at that point would 403 every existing tenant's promotion until they re-accept). While it stays `false`, `OPERATOR_NAME`/`OPERATOR_EMAIL`/`OPERATOR_ADDRESS` above stay correctly unnecessary too. |
 | `BETTERSTACK_INGESTING_HOST` | Only needed if the Betterstack source's setup page shows a specific regional ingesting host rather than the shared default |
 | `DOCS_BASE_URL` | `https://docs.comprobify.com` — the same value as every environment; a shared docs site, not independently generated |
 
@@ -178,7 +178,7 @@ Read by `terraform.yml`'s `plan-production`/`apply-production` jobs only.
 
 | Secret | Value |
 |---|---|
-| `RELEASE_PUSH_TOKEN` | |
+| `RELEASE_PUSH_TOKEN` | A PAT (not the default `GITHUB_TOKEN`) `release-production.yml`/`release-staging.yml` use to fast-forward `production`/`staging` — one shared value for both, since it's a repository secret, not Environment-scoped. Real incident: `production`'s branch ruleset (`bypass_actors` scoped to one specific user) rejected the default `GITHUB_TOKEN`'s push with `GH013` on the very first real trigger — `release-production.yml` was simply missing the `token:` input `release-staging.yml` had always had (fixed in #212). Once added, it *still* failed the same way — the existing token was a fine-grained PAT with only `Contents: Read and write`, missing the `Administration: Read and write` permission a fine-grained PAT specifically needs to exercise a ruleset bypass (a classic PAT doesn't have this gotcha — it inherits the owning account's full bypass rights automatically). Whichever type you use, the account that owns the token must itself be listed as a bypass actor on the ruleset (`gh api repos/novaej/comprobify/rulesets/<id>` shows the current list). |
 | `DOCS_CLOUDFLARE_API_TOKEN` | |
 | `DOCS_CLOUDFLARE_ACCOUNT_ID` | |
 | `TERRAFORM_SPACES_ACCESS_KEY_ID` | One Spaces key pair, shared across every environment's Terraform state — isolation comes from the state key prefix, not separate credentials |
@@ -216,23 +216,46 @@ It runs `validateCoreConfig()` at startup — a narrower set than the API's full
 
 ## DigitalOcean Managed Postgres — Database setup
 
-**Not yet provisioned.** The application database user must not be a superuser (or the provider's default admin role, e.g. DO's `doadmin`), because PostgreSQL row-level security is bypassed for superusers.
+**Provisioned and working — both steps done.** The application database user must not be a superuser (or the provider's default admin role, e.g. DO's `doadmin`), because PostgreSQL row-level security is bypassed for superusers.
 
-Once the cluster exists, run the following SQL via its SQL client (DO's control panel console, or `psql` against the cluster's connection string).
+Run the following SQL via the cluster's SQL client (DO's control panel console, or `psql` against the cluster's connection string), logged in as **`doadmin`** — never as `comprobify_app` itself. To `GRANT` a privilege, the executing role needs to already hold it (with grant option) or own the object; a freshly created, unprivileged role like `comprobify_app` has nothing to grant, including to itself, and running these as that role fails outright.
 
-**Step 1** — Create the application role and grant baseline access:
+**Step 1** — Create the application role and grant baseline access. Connect to the **real application database first** — `defaultdb` below is a placeholder, substitute the actual database name (e.g. `comprobify_production_db`). This isn't optional: DigitalOcean provisions a database literally named `defaultdb` alongside any custom one you create, so an unsubstituted copy-paste doesn't error, it just silently succeeds against the wrong database:
 
 ```sql
+\c defaultdb  -- replace with the real database name before running anything below
+
 CREATE ROLE comprobify_app LOGIN PASSWORD 'FILL_STRONG_PASSWORD';
-GRANT ALL PRIVILEGES ON DATABASE defaultdb TO comprobify_app;
+GRANT ALL PRIVILEGES ON DATABASE defaultdb TO comprobify_app;  -- same substitution here
 GRANT ALL ON SCHEMA public TO comprobify_app;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO comprobify_app;
 ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO comprobify_app;
 ```
 
-(`defaultdb` is DigitalOcean Managed Postgres's default database name — adjust if the cluster was provisioned with a different one.)
+**If the role already exists** (e.g. created via DO's dashboard "Users & Databases" tab rather than this SQL), skip the `CREATE ROLE` line — running it again fails with `role already exists`, and if executed as one pasted block, most clients stop there and silently never run the `GRANT` lines that follow it.
 
-**Step 2** — After the first deployment, grant access to the `sandbox` schema created by migration 033:
+**Verify in a separate, fresh query execution before moving on — not the same one you just ran:**
+
+```sql
+SELECT current_database();  -- must read the real database name, not defaultdb
+SELECT
+  has_schema_privilege('comprobify_app', 'public', 'USAGE')  AS has_usage,
+  has_schema_privilege('comprobify_app', 'public', 'CREATE') AS has_create;
+-- both must read true
+```
+
+**Running this from a GUI SQL client (DBeaver, TablePlus, pgAdmin, etc.): confirm Auto-commit is ON, or explicitly commit after running the grants.** A real incident: every check above can read `true` immediately after running the grants and still not have actually happened — with auto-commit off, you're seeing your own uncommitted transaction, which looks identical to a successful, durable change until the session ends and it silently rolls back (a fresh connection, like the deployed container's, never sees it). Checking again in a genuinely separate query execution is what catches this; checking again in the same one doesn't.
+
+**Step 2 — `sandbox` schema, created by migration 033 on the app's first successful startup — is normally a no-op, not a step to actually run.** Migrations always run as the app's own configured `comprobify_app` connection, so whichever role creates a schema owns it, and owners already hold every privilege on what they own — no explicit grant needed. Confirmed directly on the real production database: `comprobify_app` already had `USAGE`/`CREATE` both `true` on `sandbox` with zero grants run, owner shown as `comprobify_app` itself. This is genuinely different from `public` above, which is owned by the database/cluster, not by `comprobify_app` — that one needs the explicit `doadmin` grant, `sandbox` doesn't. Verify rather than assume, since a future change to how migrations connect could invalidate this:
+
+```sql
+SELECT
+  has_schema_privilege('comprobify_app', 'sandbox', 'USAGE')  AS has_usage,
+  has_schema_privilege('comprobify_app', 'sandbox', 'CREATE') AS has_create,
+  (SELECT nspowner::regrole::text FROM pg_namespace WHERE nspname = 'sandbox') AS owner;
+```
+
+Only if that comes back with anything other than `true, true, comprobify_app`, fall back to granting it explicitly as `doadmin` (same database-name-substitution and auto-commit cautions as step 1 apply):
 
 ```sql
 GRANT ALL ON SCHEMA sandbox TO comprobify_app;
@@ -246,9 +269,9 @@ If this cluster ends up shared with `comprobify-web`'s own production database, 
 
 ## CloudAMQP — RabbitMQ setup
 
-**Not yet provisioned.** Needs its own instance/vhost, separate from every other environment's broker — CloudAMQP's free tier provisions exactly one vhost per instance with no multi-environment isolation, so this can't simply be a second vhost added to an existing free-tier instance. Whether that means a second free-tier instance or a paid plan isn't decided yet.
+**Provisioned** — its own dedicated instance/vhost, separate from every other environment's broker, since CloudAMQP's free tier provisions exactly one vhost per instance with no multi-environment isolation.
 
-Once provisioned, the connection shape: both the `api` container (publisher) and the `worker` container (consumer) connect using the same `RABBITMQ_URL`, with connections named via `clientProperties.connection_name` (`comprobify-api` / `comprobify-worker`) so they're distinguishable in CloudAMQP's Connections tab. Three queues are declared (`src/services/queue.service.js`'s `QUEUES`): `sri.send`, `sri.authorize`, `app.effects`.
+The connection shape: both the `api` container (publisher) and the `worker` container (consumer) connect using the same `RABBITMQ_URL`, with connections named via `clientProperties.connection_name` (`comprobify-api` / `comprobify-worker`) so they're distinguishable in CloudAMQP's Connections tab. Three queues are declared (`src/services/queue.service.js`'s `QUEUES`): `sri.send`, `sri.authorize`, `app.effects`.
 
 ---
 
@@ -317,7 +340,7 @@ Docker, fail2ban, unattended-upgrades, and cron are installed on the droplet its
 
 **Break-glass path:** `release-production.yml` also accepts a manual `workflow_dispatch` to promote a tag straight to production without a published Release — documented as the emergency-only hotfix path in `docs/deployment.md`, bypassing staging validation.
 
-Both workflows are enabled — `release-production.yml` triggers on a published GitHub Release, `deploy-production.yml` on a push to `production`. Until the droplet is provisioned, a real trigger will run and fail at the SSH step (nothing to connect to) — that's expected, not a sign anything is misconfigured.
+Both workflows are enabled — `release-production.yml` triggers on a published GitHub Release, `deploy-production.yml` on a push to `production`. The droplet exists and `DROPLET_IP`/`INFRA_SSH_PRIVATE_KEY` are set, so the next real trigger should be able to reach it and deploy.
 
 ---
 

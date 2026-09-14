@@ -7,7 +7,7 @@ const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const ErrorCodes = require('../constants/error-codes');
 const config = require('../config');
-const { substitute } = require('../utils/template-placeholders');
+const { substitute, substituteHtml } = require('../utils/template-placeholders');
 
 const markdownRenderer = new MarkdownIt();
 
@@ -148,8 +148,21 @@ async function listCurrent() {
 // implementation in src/utils/template-placeholders.js (also used by
 // notification-email-template.service.js) — kept exported under this name
 // since callers throughout the codebase already import it as such.
-function substitutePlaceholders(markdown, values = {}) {
-  return substitute(markdown, values);
+//
+// escapeValues: true HTML-escapes each interpolated value (via substituteHtml,
+// same as notification-email-template.service.js's HTML path) before it's
+// woven into the markdown source. Since this runs BEFORE markdown-it ever
+// sees the text, this only protects against html:true ever being enabled on
+// the renderer later — markdown-it's current html:false default already
+// blocks real HTML/script injection from a value on its own, verified
+// empirically that entity-escaping a value here doesn't get double-encoded
+// on render. Used for tenant-controlled values (cliente.* — see
+// tenant-agreement.service.js's generateForTenant, the one call site that
+// bakes an attacker-reachable value, the tenant's own business_name/ruc,
+// into a stored document) but not for operador.*/soporte.* — those are
+// admin-entered at publish time, not tenant-controlled.
+function substitutePlaceholders(markdown, values = {}, { escapeValues = false } = {}) {
+  return escapeValues ? substituteHtml(markdown, values) : substitute(markdown, values);
 }
 
 // Markdown is the only thing ever stored — HTML is rendered on demand, never

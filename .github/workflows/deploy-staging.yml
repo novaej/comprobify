@@ -31,10 +31,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image
-        run: |
-          docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
-          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+      - name: Build image
+        run: docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
+
+      # Informational only for now (exit-code 0) — see deploy-production.yml's
+      # matching step for why (docs/security-audit-2026-09-12.md #5).
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '0'
+
+      - name: Push image
+        run: docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
 
       # username here must match `deploy_username` in
       # terraform/environments/staging/terraform.tfvars - this is the unprivileged user
@@ -43,7 +54,7 @@ jobs:
       # and terraform-digitalocean-setup.md's "SSH access model" for why) - defense is
       # key-only auth + this privilege separation + fail2ban, not IP restriction.
       - name: Copy compose files to droplet
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         with:
           host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x
@@ -58,7 +69,7 @@ jobs:
       # cloud-init.yaml.tftpl and terraform-digitalocean-setup.md's "Scheduled jobs"
       # section. Not used by the app itself.
       - name: Write env and restart containers
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         with:
           host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy9x

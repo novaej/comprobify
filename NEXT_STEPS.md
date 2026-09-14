@@ -79,25 +79,14 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ## 5. Full Security Audit — CI/CD, Deployment, and Application
 
-**Priority: High — should happen before real production tenant data is flowing, not treated as a someday item.**
+**Priority: Medium — the two most urgent original findings (DB disaster recovery, the encryption-key rotation tool's shell-history leak) are resolved; what remains is lower-stakes.**
 
-Everything security-related so far has been reviewed piecemeal, as individual features shipped (RLS, rate limiting, attempt tracking, RFC 7807 error codes, etc. — see CLAUDE.md's various entries and ADR-012/ADR-026). Nobody has done one holistic pass looking for gaps *between* those individually-reviewed pieces. Two halves, both needed:
+Full findings and resolution history: `docs/security-audit-2026-09-12.md`. This was an in-house pass, not a professional pentest — still worth deciding whether an external pentest is warranted before real tenant data is at stake.
 
-**CI/CD and deployment processes:**
-- GitHub Actions: third-party actions (`appleboy/ssh-action`, `appleboy/scp-action`, `hashicorp/setup-terraform`, `docker/login-action`, etc.) pinned to a version tag, not a commit SHA — check whether that's an acceptable risk or worth tightening; confirm no workflow step ever echoes/logs a secret value even indirectly
-- `production-infra` GitHub Environment must get its required-reviewer rule added *before* any real `DO_TOKEN`/`CLOUDFLARE_TOKEN` secrets land in it (see `docs/production-readiness-checklist.md`) — verify this ordering actually happened, don't assume
-- The droplet's `/opt/comprobify/.env` is a single flat file holding every secret the app uses — anyone who gets shell access as the deploy user gets all of them at once. Acceptable trade-off for the current scale (see the "is having the values there secure?" discussion this came out of), but worth revisiting whether a dedicated secrets manager (Vault, DO's own secret injection, etc.) is warranted as the tenant base grows
-- `scripts/rotate-encryption-key.js`'s documented gap: `OLD_ENCRYPTION_KEY`/`NEW_ENCRYPTION_KEY` typed on the SSH command line land in shell history and the droplet's process list — fix before this is ever run against a real suspected compromise (see `docs/guides/encryption-key-rotation.md`)
-- Docker base images (`node:20-slim`, `caddy:2-alpine`, `redis:7-alpine`) — no vulnerability scanning (Trivy/Grype/Dependabot) currently wired into any workflow; images aren't pinned to a digest, just a tag
-- SSH open to `0.0.0.0/0` on the droplet is a deliberate, documented trade-off (see `docs/terraform-digitalocean-setup.md`'s "SSH access model") — re-confirm the layered defenses (key-only auth, no root, fail2ban, unprivileged deploy user) are still sufficient rather than assuming the original reasoning still holds
-- `npm audit` / Dependabot / Snyk (or similar) isn't currently run anywhere in CI — dependency vulnerabilities could ship unnoticed
+**Still open:**
+- Trivy image scanning is wired into both deploy workflows but deliberately informational only (`exit-code: '0'`) — a real scan already found HIGH/CRITICAL findings in `node:20-slim` (bundled `node-tar` CVEs) and `caddy:2-alpine` (Go-stdlib CVEs). Someone should triage that baseline and flip it to blocking once it's clean or the remaining findings are explicitly accepted.
+- Whether a dedicated secrets manager is warranted as the tenant base grows (the droplet's single flat `.env` file is an accepted trade-off for now, not a live gap).
+- Confirming DO Managed Postgres's own native backup/retention settings on the cluster, as a second layer alongside SnapShooter (lower priority now that real backup coverage exists either way).
 
-**Application:**
-- Standard OWASP-class review: confirm no exceptions exist to the parameterized-SQL-only rule (CLAUDE.md #2), check for XSS in any user-controlled content that reaches HTML (agreement pages, RIDE PDFs, email templates), re-verify RLS has no bypass path beyond the documented `db.query()`-exempt code paths (webhook, admin API, health check)
-- Scope-escalation and privilege-boundary edge cases in the API key scope system (`src/constants/api-key-scopes.js`, `api-key.service.js`'s containment check)
-- Whether `attempt-tracker.service.js`'s detection coverage (currently 4 event types) should extend to other sensitive endpoints
-- Encryption-at-rest scope: only `issuers.encrypted_private_key` is encrypted today — review whether other stored PII (buyer data, RUCs) needs the same treatment or whether DB-level encryption-at-rest (DO Managed Postgres's own disk encryption) is judged sufficient for those
-- Webhook signature verification correctness end-to-end (Mailgun HMAC) — not just that it exists, but that it's actually enforced on every code path that claims to require it
-
-**Effort:** Large — this is genuinely a full audit, not a quick pass. Consider whether external/professional pentest is warranted before real tenant data is at stake, versus doing the first pass in-house and hiring out a follow-up. The `security-review` skill can cover incremental "review this branch's diff" work along the way, but isn't a substitute for the holistic pass this item describes.
+**Effort:** individually small, just need scheduling — no open policy decisions blocking any of them. The `security-review` skill can cover incremental "review this branch's diff" work along the way.
 

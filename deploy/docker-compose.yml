@@ -1,6 +1,9 @@
 services:
   caddy:
-    image: caddy:2-alpine
+    # Pinned by digest, not just the `2-alpine` tag - see the Dockerfile's own
+    # FROM line comment for why. Resolve a fresh digest via
+    # `docker buildx imagetools inspect caddy:2-alpine` before bumping this.
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     restart: unless-stopped
     ports:
       - "80:80"
@@ -63,7 +66,10 @@ services:
   # disposable short-window state, not data worth surviving a restart, and
   # this is a 1GB droplet already budgeted for api+worker.
   redis:
-    image: redis:7-alpine
+    # Pinned by digest, not just the `7-alpine` tag - see the Dockerfile's own
+    # FROM line comment for why. Resolve a fresh digest via
+    # `docker buildx imagetools inspect redis:7-alpine` before bumping this.
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
     restart: unless-stopped
     command: redis-server --maxmemory 32mb --maxmemory-policy allkeys-lru --save ""
     expose:

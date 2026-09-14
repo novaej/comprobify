@@ -40,7 +40,7 @@ Todos los campos son opcionales. Un cuerpo vacío `{}` es válido.
 
 Solicitar un `tier` aquí inicia el pipeline de suscripción/pago (igual que el flujo dirigido por el administrador) — ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md) para lo que sucede después. La mejora de plan/cuota en sí se aplica en cuanto el pago se verifica; no ocurre como parte de esta llamada.
 
-Si el tenant ya inició una suscripción antes de promoverse — vía [`POST /v1/subscriptions`](../paying-your-subscription.md), lo cual funciona incluso en sandbox — y todavía está en curso al momento de esta llamada (cualquier estado distinto de `CANCELLED`/`EXPIRED`: `PENDING_PAYMENT` o `ACTIVE`), no queda nada por seleccionar: `tier`/`billingInterval` se ignoran por completo, y la respuesta muestra esa suscripción existente en lugar de iniciar una nueva. Este es un bloqueo estricto, no solo una cortesía — evita que se abra una segunda suscripción/pago mientras una ya está esperando comprobante o revisión.
+Si el tenant ya inició una suscripción antes de promoverse — desde la aplicación web de Comprobify (ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md)), lo cual funciona incluso en sandbox — y todavía está en curso al momento de esta llamada (cualquier estado distinto de `CANCELLED`/`EXPIRED`: `PENDING_PAYMENT` o `ACTIVE`), no queda nada por seleccionar: `tier`/`billingInterval` se ignoran por completo, y la respuesta muestra esa suscripción existente en lugar de iniciar una nueva. Este es un bloqueo estricto, no solo una cortesía — evita que se abra una segunda suscripción/pago mientras una ya está esperando comprobante o revisión.
 
 ## Respuesta
 
