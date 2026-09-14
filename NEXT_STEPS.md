@@ -83,12 +83,14 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 **Status (2026-09-14):** first in-house holistic pass complete — full findings and resolution history live in `docs/security-audit-2026-09-12.md`, not duplicated here. Most of the original scoping list below has already been investigated and either fixed or confirmed clean; what's left is the genuinely open work. This was an in-house pass, not a professional pentest — still worth deciding whether an external pentest is warranted before real tenant data is at stake.
 
+**Resolved 2026-09-14:** the production database now has real disaster-recovery coverage — scheduled automated backups via SnapShooter (separate region from the cluster) plus a validated, documented manual restore procedure (`docs/guides/database-backups.md`'s "Restoring to the same cluster" section). SnapShooter's own automated restore turned out to be reproducibly broken against this schema and shouldn't be used for actual recovery — see the audit doc's #2 for the full incident. This also unblocks half of the rotation-script item below (a real backup/restore path now exists as a rollback safety net).
+
 **Still open:**
-- **No real disaster-recovery/backup process for the production database** — only a manual local-dump guide exists, DB cluster is unmanaged by Terraform, no documented retention, no tested restore. Currently the single highest-priority item. (Owner is looking into DO Managed Postgres backup options and will report back.)
-- `scripts/rotate-encryption-key.js` — the incident-response tool for a suspected key compromise — still takes both keys via `-e KEY=value` on the command line, landing them in shell history/process list. Needs a redesign decision (stdin prompt vs. short-lived file); partly blocked on the backup item above.
+- `scripts/rotate-encryption-key.js` — the incident-response tool for a suspected key compromise — still takes both keys via `-e KEY=value` on the command line, landing them in shell history/process list. Needs a redesign decision (stdin prompt vs. short-lived file).
 - No Docker image digest pinning (`node:20-slim`, `caddy:2-alpine`, `redis:7-alpine`) or vulnerability scanning (Trivy/Grype) in CI.
 - No `npm audit` step, `.github/dependabot.yml`, or auto security updates in CI — passive Dependabot alerts are on, nothing acts on them.
 - Whether a dedicated secrets manager is warranted as the tenant base grows (the droplet's single flat `.env` file is an accepted trade-off for now, not a live gap).
+- Confirming DO Managed Postgres's own native backup/retention settings on the cluster, as a second layer alongside SnapShooter (lower priority now that real backup coverage exists either way).
 
-**Effort:** the remaining items are individually small; the backup/DR item needs a policy decision before it's implementable, everything else just needs scheduling. The `security-review` skill can cover incremental "review this branch's diff" work along the way.
+**Effort:** the remaining items are individually small and just need scheduling — no more open policy decisions blocking any of them except the rotation-script redesign choice. The `security-review` skill can cover incremental "review this branch's diff" work along the way.
 

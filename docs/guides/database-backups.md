@@ -1,6 +1,6 @@
-# Database Backups — Getting an Importable Dump from Staging/Production
+# Database Backups and Restores
 
-How to pull a `pg_dump` from staging or production's DigitalOcean Managed Postgres cluster and import it somewhere else (most likely your local `comprobify_local` database) — e.g. to test `scripts/rotate-encryption-key.js` against realistic data, per `docs/guides/encryption-key-rotation.md`'s recommendation to test against a copy of production data before ever rotating for real.
+Two directions covered here: pulling a `pg_dump` from staging or production's DigitalOcean Managed Postgres cluster to use somewhere else (most likely your local `comprobify_local` database — e.g. to test `scripts/rotate-encryption-key.js` against realistic data, per `docs/guides/encryption-key-rotation.md`), and the reverse — restoring a backup **back into the same cluster**, the actual disaster-recovery scenario. See "Restoring to the same cluster" below for the second one; everything through step 6 covers the first.
 
 ---
 
@@ -22,7 +22,7 @@ This is a real, if temporary, widening of who can reach the database directly �
 
 ## 2. Get the connection details — use `doadmin`, not `comprobify_app`
 
-**Don't dump as `comprobify_app`, the app's own role.** `db/migrations/031_row_level_security.sql` sets `FORCE ROW LEVEL SECURITY` on `documents`/`sequential_numbers`/`api_keys`/`document_line_items`/`document_events` — deliberately, so RLS applies even to the table owner, closing the usual "owners bypass RLS" loophole (see `CLAUDE.md`'s "Row-Level Security" entry). `comprobify_app` owns those tables, so `pg_dump` connecting as it hits that same enforcement and refuses to `COPY` the data out (`ERROR: query would be affected by row-level security policy`).
+**Don't dump as `comprobify_app`, the app's own role.** `db/migrations/031_row_level_security.sql` sets `FORCE ROW LEVEL SECURITY` on `documents`/`sequential_numbers`/`document_line_items`/`document_events` — deliberately, so RLS applies even to the table owner, closing the usual "owners bypass RLS" loophole (see `CLAUDE.md`'s "Row-Level Security" entry). `api_keys` was originally in this list too, but RLS was dropped from it in migration 042 (authentication happens before any issuer context can be set, so RLS never made sense there — `api_keys` is filtered by `tenant_id` at the application layer instead). `comprobify_app` owns the 4 remaining tables, so `pg_dump` connecting as it hits that same enforcement and refuses to `COPY` the data out (`ERROR: query would be affected by row-level security policy`).
 
 `pg_dump`'s own error HINT suggests `ALTER TABLE ... NO FORCE ROW LEVEL SECURITY` — **do not do this.** `comprobify_app` is the exact role the live running app uses for every real request. Disabling FORCE RLS on the owner doesn't just unblock your dump, it silently disables tenant isolation for real production/staging traffic until someone remembers to turn it back on — not an acceptable trade-off for a one-off backup, even briefly, on a live system.
 
@@ -65,6 +65,80 @@ rm ./backup.dump
 ```
 
 And remove your IP from the cluster's Trusted Sources again (DO dashboard → the cluster → Settings) — don't leave direct access open past this session, especially for production.
+
+---
+
+## Restoring to the same cluster (disaster recovery)
+
+Everything above pulls a copy **out** for local testing. This is the other direction — putting a backup **back** into the live cluster, the actual recovery scenario (data corruption, a bad migration, or validating a scheduled-backup product actually works).
+
+### Don't trust a third-party tool's automated "Restore" button against this schema
+
+We use [SnapShooter](https://snapshooter.com) for scheduled, automated backups (DO's own backup product, storing to a separate-region destination — see the production readiness checklist). Its backup step works fine. Its **restore** step reproducibly does not, against this specific schema: across two separate attempts (one against an already-populated target, one against a freshly-migrated empty one — ruling out a stale-lock or leftover-object explanation), its "remove all tables before restoring" cleanup step consistently left the `sandbox` schema, its 5 mirrored tables (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `sri_responses` — the exact set that exists identically in both `public` and `sandbox`, per CLAUDE.md's "Sandbox PostgreSQL schema" entry), and their functions/triggers untouched, while correctly dropping everything else. The subsequent restore then collided with those survivors (`ERROR: relation "documents" already exists`, `ERROR: multiple primary keys for table "X" are not allowed`, etc.) and still reported `Restore Success` despite dozens of errors. Root cause not confirmed (likely something in how the tool enumerates/qualifies table names against a schema that deliberately duplicates the same table names across two schemas), but the practical conclusion holds regardless: **use SnapShooter (or any similar tool) only for taking the scheduled backup. Do the actual restore manually**, below.
+
+### The manual restore procedure (validated against real production data)
+
+1. Stop the worker container so it can't touch the database mid-restore (`api` can stay up — health checks will just fail/error for the duration, harmless with no live traffic depending on it):
+   ```bash
+   cd /opt/comprobify
+   docker compose stop worker
+   ```
+
+2. Get the backup file — download the `.sql.gz` from wherever it's stored (SnapShooter's dashboard, etc.). It's a plain-text `pg_dump`, not the custom `-F c` format this doc's own step 4 produces, so it restores via `psql`, not `pg_restore`.
+
+3. As `doadmin`, wipe the target completely. This is necessary even though the dump carries its own object definitions — a plain-text dump has no `--clean` equivalent (unlike `pg_restore --clean --if-exists` in step 5 above), so it only ever `CREATE`s, never `DROP`s first:
+   ```sql
+   DROP SCHEMA IF EXISTS sandbox CASCADE;
+   DROP SCHEMA public CASCADE;
+   CREATE SCHEMA public;
+   GRANT ALL ON SCHEMA public TO comprobify_app;
+   ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO comprobify_app;
+   ALTER DEFAULT PRIVILEGES GRANT ALL ON SEQUENCES TO comprobify_app;
+   ```
+   Run the `GRANT`s every time, not just when something fails — a real incident: restoring into a freshly-recreated `public` schema with no grant yet applied produced a wall of `ERROR: permission denied for schema public` on roughly half the objects (the dump's own embedded ownership/privilege statements don't take effect until they're reached later in the script, so anything created before that point needs the schema-level grant already in place).
+
+4. Load the dump with `-v ON_ERROR_STOP=1`, so a genuine problem halts the restore immediately with one clear error instead of silently continuing past it and leaving a confusing mix of successes and failures to untangle afterward:
+   ```bash
+   gunzip -c comprobify_production_db.sql.gz | psql -v ON_ERROR_STOP=1 "postgresql://doadmin:<doadmin password>@<DB_HOST>:<DB_PORT>/<DB_NAME>?sslmode=require"
+   ```
+
+5. Bring the app back up and verify:
+   ```bash
+   docker compose restart api worker
+   docker compose ps                        # all 4 containers Up
+   docker compose logs api --tail 50         # clean startup, no crash loop
+   docker compose logs worker --tail 50
+   curl -s https://api.comprobify.com/health # {"status":"ok",...}
+   ```
+   Then confirm the database is actually reachable through real app code, not just that the process is alive:
+   ```bash
+   docker compose exec -T api node -e "
+   fetch('http://localhost:8080/v1/admin/tenants', { headers: { Authorization: 'Bearer ' + process.env.ADMIN_SECRET } })
+     .then(r => r.json()).then(j => console.log(JSON.stringify(j)))
+   "
+   ```
+
+6. Re-verify privileges landed exactly as expected — the dump carries its own `REVOKE`/`GRANT`/`ALTER DEFAULT PRIVILEGES` statements (whatever the source database's privilege state was at backup time), so confirm rather than assume nothing drifted:
+   ```sql
+   SELECT rolname, rolsuper, rolcreatedb, rolcreaterole FROM pg_roles WHERE rolname = 'comprobify_app';
+   -- all three must read false
+
+   SELECT nspname, nspowner::regrole::text AS owner FROM pg_namespace WHERE nspname IN ('public', 'sandbox');
+   -- public -> doadmin, sandbox -> comprobify_app
+
+   SELECT schemaname, tablename, tableowner FROM pg_tables
+   WHERE schemaname IN ('public', 'sandbox') AND tableowner <> 'comprobify_app';
+   -- must return zero rows — every table should be comprobify_app-owned, none doadmin-owned
+
+   SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class
+   WHERE relname IN ('documents','document_line_items','document_events','sequential_numbers')
+     AND relnamespace = 'public'::regnamespace;
+   -- both columns true for all 4 rows
+   ```
+
+### Testing the restore, versus actually recovering from something
+
+Test this procedure against production only when there's genuinely nothing to lose (e.g. pre-launch, no real tenant data yet) — it drops and rebuilds the schema from scratch. Once real tenant data is flowing, validate a restore against a scratch logical database on the same cluster instead (`CREATE DATABASE comprobify_restore_test;` as `doadmin`, same host/port/credentials, different `DATABASE` in the connection string), never against the live database.
 
 ---
 
