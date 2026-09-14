@@ -79,19 +79,15 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ## 5. Full Security Audit — CI/CD, Deployment, and Application
 
-**Priority: High — should happen before real production tenant data is flowing, not treated as a someday item.**
+**Priority: Medium — the two most urgent original findings (DB disaster recovery, the encryption-key rotation tool's shell-history leak) are resolved; what remains is lower-stakes.**
 
-**Status (2026-09-14):** first in-house holistic pass complete — full findings and resolution history live in `docs/security-audit-2026-09-12.md`, not duplicated here. Most of the original scoping list below has already been investigated and either fixed or confirmed clean; what's left is the genuinely open work. This was an in-house pass, not a professional pentest — still worth deciding whether an external pentest is warranted before real tenant data is at stake.
-
-**Resolved 2026-09-14:**
-- The production database now has real disaster-recovery coverage — scheduled automated backups via SnapShooter (separate region from the cluster) plus a validated, documented manual restore procedure (`docs/guides/database-backups.md`'s "Restoring to the same cluster" section). SnapShooter's own automated restore turned out to be reproducibly broken against this schema and shouldn't be used for actual recovery — see the audit doc's #2 for the full incident.
-- `scripts/rotate-encryption-key.js` no longer accepts the keys as env vars/CLI args at all — it prompts interactively with hidden input, so the new key never touches shell history or `ps` output during an actual incident. `docs/guides/encryption-key-rotation.md` updated to match (including switching the droplet invocation to `docker compose exec -it`, required for the prompt to work).
-- `node:20-slim`/`caddy:2-alpine`/`redis:7-alpine` are now pinned by digest (`Dockerfile`, `deploy/docker-compose.yml`), and both deploy workflows scan the built image with Trivy between build and push. **The scan is informational only for now (`exit-code: '0'`)** — a real run already surfaced HIGH/CRITICAL findings in `node:20-slim` (bundled `node-tar` CVEs) and `caddy:2-alpine` (Go-stdlib CVEs); making it block deploys immediately, before anyone's reviewed whether those are actually exploitable here, would have broken the next deploy with no warning. Someone should triage that baseline and flip `exit-code` to `'1'` once it's clean or the remaining findings are explicitly accepted.
+Full findings and resolution history: `docs/security-audit-2026-09-12.md`. This was an in-house pass, not a professional pentest — still worth deciding whether an external pentest is warranted before real tenant data is at stake.
 
 **Still open:**
 - No `npm audit` step, `.github/dependabot.yml`, or auto security updates in CI — passive Dependabot alerts are on, nothing acts on them.
+- Trivy image scanning is wired into both deploy workflows but deliberately informational only (`exit-code: '0'`) — a real scan already found HIGH/CRITICAL findings in `node:20-slim` (bundled `node-tar` CVEs) and `caddy:2-alpine` (Go-stdlib CVEs). Someone should triage that baseline and flip it to blocking once it's clean or the remaining findings are explicitly accepted.
 - Whether a dedicated secrets manager is warranted as the tenant base grows (the droplet's single flat `.env` file is an accepted trade-off for now, not a live gap).
 - Confirming DO Managed Postgres's own native backup/retention settings on the cluster, as a second layer alongside SnapShooter (lower priority now that real backup coverage exists either way).
 
-**Effort:** the remaining items are individually small and just need scheduling — no more open policy decisions blocking any of them. The `security-review` skill can cover incremental "review this branch's diff" work along the way.
+**Effort:** individually small, just need scheduling — no open policy decisions blocking any of them. The `security-review` skill can cover incremental "review this branch's diff" work along the way.
 
