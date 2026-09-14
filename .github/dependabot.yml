@@ -9,18 +9,23 @@ updates:
     schedule:
       interval: "weekly"
     groups:
-      # Everything but the two runtime-critical, deliberately-pinned-
-      # elsewhere packages gets grouped into one PR a week instead of a
-      # dozen - most of these updates are routine and don't need individual
-      # review. pg/express get their own ungrouped PRs since a breaking
-      # change there is exactly the kind of thing that needs a dedicated,
-      # readable diff and its own review, not buried in a bundle.
+      # Only minor/patch bumps get grouped - a major version can carry real
+      # breaking changes (found the hard way: mailgun.js 12->14 and
+      # markdown-it 14->15 both landed in this group before this restriction
+      # existed) and deserves its own reviewable PR regardless of which
+      # package it is, not buried in a dozen-package bundle. pg/express are
+      # excluded from the group entirely, major or not - both are load-
+      # bearing enough (raw SQL throughout, the whole HTTP framework) to
+      # always get individual attention.
       routine:
         patterns:
           - "*"
         exclude-patterns:
           - "pg"
           - "express"
+        update-types:
+          - "minor"
+          - "patch"
 
   # GitHub Actions versions - keeps the SHA-pinned third-party actions
   # (appleboy/*, hashicorp/setup-terraform, cloudflare/wrangler-action,
@@ -32,3 +37,18 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # Same reasoning as npm's routine group above. appleboy/* (ssh-action,
+      # scp-action) handle the actual production deploy's SSH/SCP steps -
+      # excluded from the group entirely (regardless of bump size) since a
+      # behavior change there wouldn't surface until a real deploy runs,
+      # not in CI. See docs/security-audit-2026-09-12.md's scp-action
+      # 0.1.7->1.0.0 review for why this needed calling out specifically.
+      routine:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "appleboy/*"
+        update-types:
+          - "minor"
+          - "patch"
