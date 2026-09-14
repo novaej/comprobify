@@ -1,0 +1,40 @@
+name: CI
+
+# Runs the unit test suite and an npm audit against production dependencies
+# on every PR and push to main. Required as a status check on the main
+# branch ruleset, so a PR can't merge with a failing test or a newly
+# introduced vulnerable production dependency.
+#
+# Deliberately npm run test:unit, not the bare `npm test`/`jest` - Jest's
+# default testMatch picks up tests/integration/**/*.test.js too, which needs
+# a live Postgres connection this workflow doesn't provision. See CLAUDE.md's
+# Commands section: "npm run test:unit  # unit tests only (no DB required)".
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test and audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      # Production dependencies only - dev-only tooling (currently
+      # vitepress's own vite/esbuild pin, see docs/security-audit-2026-09-12.md
+      # #6) can carry findings with no fix available yet upstream, which
+      # would make this gate permanently red for something nobody can act on.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

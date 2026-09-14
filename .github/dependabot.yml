@@ -1,0 +1,34 @@
+version: 2
+updates:
+  # npm dependencies (package.json). Weekly, not daily - this is a small
+  # team, and a PR flood on every minor bump isn't actionable. Security
+  # updates land separately/immediately via the repo's own
+  # dependabot_security_updates setting, regardless of this schedule.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      # Everything but the two runtime-critical, deliberately-pinned-
+      # elsewhere packages gets grouped into one PR a week instead of a
+      # dozen - most of these updates are routine and don't need individual
+      # review. pg/express get their own ungrouped PRs since a breaking
+      # change there is exactly the kind of thing that needs a dedicated,
+      # readable diff and its own review, not buried in a bundle.
+      routine:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "pg"
+          - "express"
+
+  # GitHub Actions versions - keeps the SHA-pinned third-party actions
+  # (appleboy/*, hashicorp/setup-terraform, cloudflare/wrangler-action,
+  # aquasecurity/trivy-action - see docs/security-audit-2026-09-12.md #4/#5)
+  # current without anyone having to manually re-resolve a digest. Dependabot
+  # understands the `@<sha> # vX.Y.Z` comment convention used throughout this
+  # repo's workflows and bumps both together.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
