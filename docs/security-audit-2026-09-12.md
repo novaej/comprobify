@@ -150,14 +150,4 @@ SQL injection (no exceptions to the parameterized-query rule found, including dy
 
 ## Next steps
 
-This was an in-house pass, not a professional pentest. Per `NEXT_STEPS.md` #5's own framing, consider whether an external pentest is warranted before real tenant data is at stake — this document is a reasonable basis for scoping one (it already covers the areas a pentest would start from) but doesn't replace one.
-
-**Fixed 2026-09-12:** #4 (SHA-pinned the 4 third-party actions), #7 (RLS bypass in `sequential.service.js`), #8 (attempt-tracker wiring for `INSUFFICIENT_SCOPE`/`ISSUER_FORBIDDEN`), #10 (agreement markdown `escapeValues`), #11 (`verify-email.js` `escapeHtml`). All 1095 unit tests pass after these changes.
-
-**Fixed 2026-09-14:** #1 (required-reviewer rule now live on `production-infra`/`staging-infra`, via making the repo public — a separate deliberate decision, verified clean of any leaked secret in git history first).
-
-**Still open, needs your input:**
-- **#2** — needs a backup/retention policy decision (what DO Managed Postgres backup settings are actually active, what retention window, and a real tested restore). **This is now the single most urgent open item.**
-- **#3** — needs a decision on redesigning `rotate-encryption-key.js`'s key-input mechanism (stdin prompt vs. short-lived file) and is partly blocked on #2.
-- **#5, #6** — Docker image scanning/pinning and `npm audit`/Dependabot config; no design decision needed, just scheduling the work.
-- **#9, #12–16** — low/informational, no urgency.
+This was an in-house pass, not a professional pentest — consider whether an external pentest is warranted before real tenant data is at stake; this document is a reasonable basis for scoping one but doesn't replace one. See `NEXT_STEPS.md` #5 for the live, current list of what's still open (kept there rather than duplicated here, so there's one place to check status) — the resolution details for each fixed item stay above, in the priority table and its per-item sections, as the permanent record.
