@@ -515,15 +515,23 @@ No functional changes. Internal-only update since 0.18.1 (production-readiness c
 
 ---
 
-## [3.0.0] — 2026-03-01
+## Pre-versioning history (informal numbering, predates git tags)
 
-### Breaking Changes
+These entries predate the project's git-tag-backed semver, which starts at
+`v0.1.0` (tagged 2026-06-12). They use a since-abandoned informal numbering
+scheme and were never real git tags — kept here for historical record only.
+Not to be confused with the real `0.1.0`–`1.0.0` releases above, which are
+each backed by an actual git tag.
+
+### [3.0.0] — 2026-03-01
+
+#### Breaking Changes
 
 - **`documentType` is now required** on `POST /api/documents` — no silent default. Callers that previously omitted this field and relied on the implicit `'01'` default will receive a `400` validation error.
 - **API routes renamed** from `/api/invoices/*` to `/api/documents/*`. All client integrations must update their base path.
 - **`cert_path` and `cert_password_enc` columns removed** from `issuers` (migration 028). The database schema must be migrated before upgrading. These are replaced by `encrypted_private_key`, `certificate_pem`, `cert_fingerprint`, and `cert_expiry`.
 
-### Added
+#### Added
 
 - **Admin API** — `POST /api/admin/issuers`, `GET /api/admin/issuers`, `POST /api/admin/issuers/:id/api-keys`, `DELETE /api/admin/api-keys/:id` protected by `ADMIN_SECRET` (constant-time comparison). Replaces the dev seeder for issuer provisioning.
 - **PEM-in-database certificate storage** — P12 uploaded via the admin API is parsed in-process; private key PEM is AES-256-GCM encrypted and stored in `issuers.encrypted_private_key`; certificate PEM stored plaintext in `issuers.certificate_pem`. No filesystem certificate files required.
@@ -541,7 +549,7 @@ No functional changes. Internal-only update since 0.18.1 (production-readiness c
 - `multer` dependency (memory storage, P12 never written to disk).
 - Migrations 019–028.
 
-### Changed
+#### Changed
 
 - `helpers/signer.js` signature changed from `sign(certPath, password, xml)` to `sign(privateKeyPem, certPem, xml)` — no longer reads any file from disk.
 - `signing.service.js` now decrypts `issuer.encrypted_private_key` (private key PEM) instead of `issuer.cert_password_enc` (cert password).
@@ -551,7 +559,7 @@ No functional changes. Internal-only update since 0.18.1 (production-readiness c
 - `issuers` unique constraint changed from `(ruc)` to `(ruc, branch_code, issue_point_code)`.
 - `document-rebuild.service.js` now reads `document.document_type` from the stored record instead of hardcoding `'01'`.
 
-### Removed
+#### Removed
 
 - `cert_path`, `cert_password_enc` columns from `issuers`.
 - `db/seeders/dev-issuer.js` and `seed:dev` npm script.
@@ -559,9 +567,9 @@ No functional changes. Internal-only update since 0.18.1 (production-readiness c
 
 ---
 
-## [2.2.0] — 2026-02-28
+### [2.2.0] — 2026-02-28
 
-### Added
+#### Added
 - **RIDE PDF generator** — `GET /api/invoices/:accessKey/ride` returns `application/pdf` for any `AUTHORIZED` document; returns `400` for any other status
 - `helpers/ride-builder.js` — PDFKit A4 renderer with two-column issuer/document header (logo, RUC, FACTURA, No., auth number, AMBIENTE, EMISIÓN, ESTADO: AUTORIZADO, barcode, access key), buyer info section, 10-column line items table (Cod. Principal, Cod. Auxiliar, Cantidad, Descripción, Detalle Adicional, Precio Unitario, Subsidio, Precio sin Subsidio, Descuento, Precio Total), and bottom section with Información Adicional + Forma de pago (left) and full SRI tax breakdown (right)
 - `src/services/ride.service.js` — orchestrates document load, issuer load, and catalog label resolution before calling the builder
@@ -569,28 +577,28 @@ No functional changes. Internal-only update since 0.18.1 (production-readiness c
 - Migration `018` — nullable `logo_path VARCHAR(500)` column on `issuers`
 - `pdfkit` and `bwip-js` (both MIT) added as runtime dependencies
 
-### Fixed
+#### Fixed
 - Tax subtotal rows correctly separated by SRI rate code: `'0'`=0%, `'6'`=No objeto de IVA, `'7'`=Exento de IVA — never merged despite all having `rate=0` in the catalog
 - Row heights in the bottom section pre-measured with `doc.heightOfString()` so long wrapping values (Información Adicional, payment method labels) never overflow their boxes
 
-### Changed
+#### Changed
 - Replaced `libxmljs2` (end-of-life) with `xmllint` system CLI for XSD validation — zero npm footprint, actively maintained by OS
 - Updated all dependencies to latest secure versions within current major versions (Express 4.22.1, node-forge 1.3.3, dotenv 16.6.1)
 - Resolved 10 npm audit vulnerabilities (6 high, 1 moderate, 3 low) → 0 remaining
 
-### Removed
+#### Removed
 - Deleted legacy pre-refactor files: old `controllers/`, `routes/`, `models/server.js`, `cert/certs.js`, `db/catalogos.js`, flat-file JSON stores
 - Removed unused helper aggregator and `manejo-data.js`
 
-### Renamed
+#### Renamed
 - `helpers/firmar.js` → `helpers/signer.js`
 - `helpers/generar-clave-acceso.js` → `helpers/access-key-generator.js` (all Spanish identifiers translated to English)
 
 ---
 
-## [2.1.0] — 2026-02-27
+### [2.1.0] — 2026-02-27
 
-### Added
+#### Added
 - **Audit trail** — `document_events` table logs every lifecycle transition (CREATED, SENT, STATUS_CHANGED, ERROR) with from/to status and detail JSON
 - **Structured line items** — `invoice_details` table persists each invoice item for future reporting without re-parsing XML
 - **Client catalogue** — `clients` table upserted on every invoice creation, building a buyer record over time
@@ -600,15 +608,15 @@ No functional changes. Internal-only update since 0.18.1 (production-readiness c
 - **Retry logic** — Both SRI SOAP calls retry up to 3 times with exponential backoff (1 s → 2 s → 4 s) on network failures
 - `NEXT_STEPS.md` documenting deferred features
 
-### Changed
+#### Changed
 - `document.service.js` orchestrates line item persistence, audit events, and buyer upsert on every `create()` call
 - SRI network errors now log an `ERROR` audit event before re-throwing
 
 ---
 
-## [2.0.0] — 2026-02-26
+### [2.0.0] — 2026-02-26
 
-### Added
+#### Added
 - Full layered architecture: Route → Validator → Controller → Service → Model
 - PostgreSQL persistence replacing flat JSON files — tables: `issuers`, `documents`, `sequential_numbers`, `sri_responses`
 - `SELECT FOR UPDATE` row-level locking for concurrency-safe sequential number generation
@@ -626,16 +634,16 @@ No functional changes. Internal-only update since 0.18.1 (production-readiness c
 - SQL migration runner (`npm run migrate`)
 - `CLAUDE.md` with project guidance for AI coding assistants
 
-### Removed
+#### Removed
 - Flat-file JSON sequential number storage
 - Hardcoded invoice data in controllers
 - Single-file architecture (old `models/server.js`)
 
 ---
 
-## [1.0.0] — 2025
+### [1.0.0] — 2025
 
-### Added
+#### Added
 - Initial proof-of-concept: generate and sign a factura electrónica XML
 - XAdES-BES signing via `node-forge` (`helpers/signer.js`)
 - 49-digit SRI access key generation with Module 11 check digit (`helpers/access-key-generator.js`)
