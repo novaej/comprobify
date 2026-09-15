@@ -1,4 +1,17 @@
 import { defineConfig } from 'vitepress'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+
+// Read straight from package.json at build time rather than hardcoding, so
+// the footer can never drift from what actually ships — every release bump
+// (chore/release PR, see CLAUDE.md's "Releasing" section) rebuilds the docs
+// site (docs.yml's paths trigger includes package.json for exactly this
+// reason) and picks the new version up automatically.
+const __dirname = dirname(fileURLToPath(import.meta.url))
+const { version: apiVersion } = JSON.parse(
+  readFileSync(resolve(__dirname, '../../../package.json'), 'utf8')
+)
 
 // Sidebar/nav structure is identical in both languages — only labels and
 // link prefixes differ. Keep them as functions so a future endpoint only
@@ -291,7 +304,7 @@ export default defineConfig({
         ],
         sidebar: enSidebar(),
         footer: {
-          message: 'Comprobify API Documentation',
+          message: `Comprobify API Documentation — API v${apiVersion}`,
         },
       },
     },
@@ -312,7 +325,7 @@ export default defineConfig({
     ],
 
     footer: {
-      message: 'Documentación de la API de Comprobify',
+      message: `Documentación de la API de Comprobify — API v${apiVersion}`,
     },
   },
 })

@@ -7,6 +7,11 @@ on:
       - 'docs/site/**'
       - '.cloudflare/pages.toml'
       - '.github/workflows/docs.yml'
+      # The footer displays the API version read live from package.json at
+      # build time (see .vitepress/config.mjs) - without this, a version-bump
+      # release PR (which never touches docs/site/**) would leave the
+      # deployed docs site showing a stale version indefinitely.
+      - 'package.json'
   workflow_dispatch:
 
 concurrency:
