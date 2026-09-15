@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.18.2] — 2026-09-15
+
+No functional changes. Internal-only update since 0.18.1 (production-readiness checklist tracking).
+
 ## [0.18.1] — 2026-09-15
 
 ### Security
