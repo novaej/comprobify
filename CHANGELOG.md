@@ -9,6 +9,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.18.1] — 2026-09-15
+
+### Security
+- **`GITHUB_TOKEN` is no longer inlined directly into the droplet's deploy script.** Both `deploy-production.yml`/`deploy-staging.yml` used to embed `${{ secrets.GITHUB_TOKEN }}` as a literal value in the SSH script text used to `docker login` on the droplet, landing it on the box's process list for an instant. Now passed through `appleboy/ssh-action`'s `envs:` mechanism instead, and both workflows run `docker logout ghcr.io` immediately after pulling so the credential no longer persists in `~/.docker/config.json` between deploys.
+
+### Changed
+- **Every outgoing email gets a `[STAGING] ` subject prefix when `APP_ENV=staging`**, in addition to the existing body banner — a staging email used to be indistinguishable from a real one in an inbox list without opening it. Mirrors comprobify-web's own `applyStagingMarker`. No effect on production.
+
+### Docs
+- **DigitalOcean's own native cluster backups (continuous WAL/point-in-time recovery, restore-to-new-cluster) are now the primary documented DB disaster-recovery mechanism.** SnapShooter is marked legacy and scheduled for removal — its free tier only allows a single backup slot per database, which never provided real retention. See `docs/guides/database-backups.md`.
+- **The docs site footer now shows the current API version**, read live from `package.json` at build time so it can never drift from what actually ships.
+
 ## [0.18.0] — 2026-09-14
 
 ### Security
