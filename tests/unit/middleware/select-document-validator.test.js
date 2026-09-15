@@ -20,7 +20,7 @@ async function dispatch(body) {
 
 const validInvoiceBody = {
   documentType: '01',
-  issueDate: moment().format('DD/MM/YYYY'),
+  issueDate: moment().utcOffset(-5).format('DD/MM/YYYY'),
   buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
   items: [{
     mainCode: '001', description: 'SERVICE', quantity: '1.000000', unitPrice: '100.000000', discount: '0.00',
@@ -31,7 +31,7 @@ const validInvoiceBody = {
 
 const validCreditNoteBody = {
   documentType: '04',
-  issueDate: moment().format('DD/MM/YYYY'),
+  issueDate: moment().utcOffset(-5).format('DD/MM/YYYY'),
   buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
   originalDocument: { documentType: '01', number: '001-001-000000027', issueDate: '03/04/2026' },
   motivo: 'Devolución de mercadería',

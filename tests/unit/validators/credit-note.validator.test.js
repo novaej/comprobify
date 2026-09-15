@@ -25,7 +25,7 @@ async function runValidation(body) {
 describe('Credit Note Validator', () => {
   const validBody = {
     documentType: '04',
-    issueDate: moment().format('DD/MM/YYYY'),
+    issueDate: moment().utcOffset(-5).format('DD/MM/YYYY'),
     buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
     originalDocument: { documentType: '01', number: '001-001-000000027', issueDate: '03/04/2026' },
     motivo: 'Devolución de mercadería',

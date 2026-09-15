@@ -26,7 +26,7 @@ async function runValidation(body) {
 describe('Invoice Validator', () => {
   const validBody = {
     documentType: '01',
-    issueDate: moment().format('DD/MM/YYYY'),
+    issueDate: moment().utcOffset(-5).format('DD/MM/YYYY'),
     buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
     items: [{
       mainCode: '001',
