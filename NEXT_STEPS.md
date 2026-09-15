@@ -79,12 +79,9 @@ The monthly-quota-reset prerequisite this item used to require is already built 
 
 ## 5. Full Security Audit — CI/CD, Deployment, and Application
 
-**Priority: Medium — the two most urgent original findings (DB disaster recovery, the encryption-key rotation tool's shell-history leak) are resolved; what remains is lower-stakes.**
+**Priority: Low — every High/Medium finding is resolved; what remains is a handful of Low/Informational items.**
 
-Full findings and resolution history: `docs/security-audit-2026-09-12.md`. This was an in-house pass, not a professional pentest — still worth deciding whether an external pentest is warranted before real tenant data is at stake.
+Full findings and resolution history: `docs/security-audit-2026-09-12.md`. Still open there: **#13** (Terraform state bucket's private ACL/encryption is a manual dashboard step with no drift detection) — Low priority, no urgency. **#14–16** are Informational notes, not action items. This was an in-house pass, not a professional pentest — still worth deciding whether an external pentest is warranted before real tenant data is at stake.
 
-**Still open:**
-- `appleboy/scp-action` was bumped 0.1.7 → 1.0.0 (PR #216, 2026-09-14) — reviewed as input-compatible but still a major-version rewrite of the action that writes the droplet's `.env` (every production secret). Neither `deploy-production.yml` nor `deploy-staging.yml` has actually run since that merge (last production deploy: 2026-09-10; last staging deploy: 2026-08-16) — watch the next real run of either workflow to confirm the SCP step still behaves as expected before assuming it's fine.
-
-**Effort:** individually small, just need scheduling — no open policy decisions blocking any of them. The `security-review` skill can cover incremental "review this branch's diff" work along the way.
+**Effort:** individually small, no open policy decisions blocking any of them. The `security-review` skill can cover incremental "review this branch's diff" work along the way.
 

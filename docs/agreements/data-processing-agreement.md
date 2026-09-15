@@ -50,6 +50,7 @@ El Responsable autoriza el uso de los siguientes subencargados, ya en operación
 | DigitalOcean | Alojamiento de la interfaz web del Servicio (comprobify-web) | Solo clientes que utilizan la interfaz web |
 | Mailgun | Envío de correos transaccionales | Todos los clientes |
 | Sentry | Monitoreo y diagnóstico de errores | Todos los clientes |
+| Betterstack | Plataforma de registro (logging) para monitoreo operativo y diagnóstico de errores | Todos los clientes |
 | CloudAMQP | Enrutamiento de mensajes para el procesamiento asíncrono de comprobantes electrónicos (identificadores del comprobante únicamente, sin datos del comprador) | Todos los clientes |
 | SRI | Recepción obligatoria de comprobantes electrónicos conforme a la normativa ecuatoriana | Todos los clientes |
 

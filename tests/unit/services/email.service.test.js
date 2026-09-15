@@ -225,15 +225,27 @@ describe('EmailService', () => {
       config.appEnv = 'production';
     });
 
-    test('does not alter text/html when appEnv is production', async () => {
+    test('does not alter subject/text/html when appEnv is production', async () => {
       config.appEnv = 'production';
       const tenant = { id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' };
 
       await emailService.sendNotificationEmail(tenant, { subject: 'Subscription expired', text: 'text body', html: '<p>html body</p>' });
 
       expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
+        subject: 'Subscription expired',
         text: 'text body',
         html: '<p>html body</p>',
+      }));
+    });
+
+    test('prefixes the subject with [STAGING] when appEnv is staging', async () => {
+      config.appEnv = 'staging';
+      const tenant = { id: '00000000-0000-0000-0000-000000000020', email: 'tenant@example.com', preferred_language: 'es' };
+
+      await emailService.sendNotificationEmail(tenant, { subject: 'Subscription expired', text: 'text body', html: '<p>html body</p>' });
+
+      expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
+        subject: '[STAGING] Subscription expired',
       }));
     });
 

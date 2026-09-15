@@ -70,13 +70,35 @@ And remove your IP from the cluster's Trusted Sources again (DO dashboard → th
 
 ## Restoring to the same cluster (disaster recovery)
 
-Everything above pulls a copy **out** for local testing. This is the other direction — putting a backup **back** into the live cluster, the actual recovery scenario (data corruption, a bad migration, or validating a scheduled-backup product actually works).
+Everything above pulls a copy **out** for local testing. This is the other direction — putting a backup **back**, the actual recovery scenario (data corruption, a bad migration, or an accidental `DROP`/`DELETE`).
 
-### Don't trust a third-party tool's automated "Restore" button against this schema
+**DigitalOcean's own native backups on the cluster are the main recovery mechanism** — see "DigitalOcean's own automated backups" below; that's the first thing to reach for. SnapShooter (below that) is legacy and scheduled for removal — keep reading only if it's still active in your environment or you're doing the removal.
 
-We use [SnapShooter](https://snapshooter.com) for scheduled, automated backups (DO's own backup product, storing to a separate-region destination — see the production readiness checklist). Its backup step works fine. Its **restore** step reproducibly does not, against this specific schema: across two separate attempts (one against an already-populated target, one against a freshly-migrated empty one — ruling out a stale-lock or leftover-object explanation), its "remove all tables before restoring" cleanup step consistently left the `sandbox` schema, its 5 mirrored tables (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `sri_responses` — the exact set that exists identically in both `public` and `sandbox`, per CLAUDE.md's "Sandbox PostgreSQL schema" entry), and their functions/triggers untouched, while correctly dropping everything else. The subsequent restore then collided with those survivors (`ERROR: relation "documents" already exists`, `ERROR: multiple primary keys for table "X" are not allowed`, etc.) and still reported `Restore Success` despite dozens of errors. Root cause not confirmed (likely something in how the tool enumerates/qualifies table names against a schema that deliberately duplicates the same table names across two schemas), but the practical conclusion holds regardless: **use SnapShooter (or any similar tool) only for taking the scheduled backup. Do the actual restore manually**, below.
+## DigitalOcean's own automated backups (the main recovery mechanism)
 
-### The manual restore procedure (validated against real production data)
+DO Managed Postgres clusters get continuous automated backups (base backup + WAL archiving — point-in-time recovery, not fixed daily snapshot files) built into the product itself, no setup required. There's no snapshot-browsing UI for this the way there is for droplets — the only entry point is the cluster's **Actions → Restore from backup**, which picks a point in time within the retention window (observed retention: back to ~5 days) and **always creates a brand-new cluster** from it, never an in-place restore. The new cluster comes back with everything the physical backup captured — roles, grants, RLS/FORCE RLS settings, extensions — reconstructed exactly as they were at that point, no manual grant-recreation needed the way the SnapShooter-dump restore below requires.
+
+**Same region as the live cluster** (no region picker appeared during a real test of this flow) — this does **not** protect against a full regional DigitalOcean outage. Accepted trade-off now that SnapShooter (the cross-region layer) is being phased out — see below for why.
+
+**Using it for a real disaster (not yet tested end-to-end — treat this as the plan, verify each step live if it's ever actually needed):**
+
+1. Trigger **Restore from backup** on the cluster, picking the point in time just before whatever went wrong. This provisions a new cluster (new host, likely same port/`DB_NAME`) — expect it to take some minutes to come up, same as provisioning any new Managed Database.
+2. Add the droplet's IP (or re-add it, if it's not already covered) to the **new** cluster's Trusted Sources — a restored cluster's Trusted Sources list is not confirmed to carry over from the original; verify this rather than assume it, the first time this is actually exercised.
+3. Update `DB_HOST` (and `DB_PORT`/`DB_SSL_CA` if either changed) in the `staging`/`production` GitHub Environment's Secrets/Variables, then trigger a deploy so the droplet's `.env` picks up the new connection details — same mechanism `docs/deployment.md`'s "Rotating secrets" section already documents for any other credential rotation.
+4. Verify: `docker compose ps`/`logs`, `GET /health`, and a real authenticated admin-API call — not just that the containers are up (see step 5 of the manual restore procedure below for the exact commands).
+5. Decide what happens to the old cluster once the new one is confirmed healthy — keep it briefly for forensics on what went wrong, then destroy it (a second live cluster is a second cluster's worth of billing).
+
+---
+
+## SnapShooter (legacy — scheduled for removal)
+
+We previously used [SnapShooter](https://snapshooter.com) for scheduled, automated backups to a separate-region destination. **It's being decommissioned**: its free tier only allows a single backup slot per database — no rolling retention, no point-in-time history, just whatever the one most recent backup happens to be — which isn't a real backup strategy on its own, and DO's own native backups (above) already cover the same ground with actual retention and no separate product to manage. SnapShooter will be deleted once nothing still depends on it; until then, the rest of this section stays as the historical record of why its restore path specifically should never be trusted.
+
+### Don't trust SnapShooter's automated "Restore" button against this schema
+
+Its backup step worked fine. Its **restore** step reproducibly did not, against this specific schema: across two separate attempts (one against an already-populated target, one against a freshly-migrated empty one — ruling out a stale-lock or leftover-object explanation), its "remove all tables before restoring" cleanup step consistently left the `sandbox` schema, its 5 mirrored tables (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `sri_responses` — the exact set that exists identically in both `public` and `sandbox`, per CLAUDE.md's "Sandbox PostgreSQL schema" entry), and their functions/triggers untouched, while correctly dropping everything else. The subsequent restore then collided with those survivors (`ERROR: relation "documents" already exists`, `ERROR: multiple primary keys for table "X" are not allowed`, etc.) and still reported `Restore Success` despite dozens of errors. Root cause not confirmed (likely something in how the tool enumerates/qualifies table names against a schema that deliberately duplicates the same table names across two schemas) — moot now given the decommission above, but the manual procedure below remains the only validated way to restore from a SnapShooter-produced `.sql.gz` for as long as one might still exist.
+
+### The manual SnapShooter-dump restore procedure (validated against real production data)
 
 1. Stop the worker container so it can't touch the database mid-restore (`api` can stay up — health checks will just fail/error for the duration, harmless with no live traffic depending on it):
    ```bash
@@ -136,25 +158,9 @@ We use [SnapShooter](https://snapshooter.com) for scheduled, automated backups (
    -- both columns true for all 4 rows
    ```
 
-### Testing the restore, versus actually recovering from something
+### Testing a restore, versus actually recovering from something
 
-Test this procedure against production only when there's genuinely nothing to lose (e.g. pre-launch, no real tenant data yet) — it drops and rebuilds the schema from scratch. Once real tenant data is flowing, validate a restore against a scratch logical database on the same cluster instead (`CREATE DATABASE comprobify_restore_test;` as `doadmin`, same host/port/credentials, different `DATABASE` in the connection string), never against the live database.
-
----
-
-## DigitalOcean's own automated backups (a separate, native layer)
-
-Independent of SnapShooter: DO Managed Postgres clusters get continuous automated backups (base backup + WAL archiving — point-in-time recovery, not fixed daily snapshot files) built into the product itself, no setup required. There's no snapshot-browsing UI for this the way there is for droplets — the only entry point is the cluster's **Actions → Restore from backup**, which picks a point in time within the retention window (observed retention: back to ~5 days) and **always creates a brand-new cluster** from it, never an in-place restore. The new cluster comes back with everything the physical backup captured — roles, grants, RLS/FORCE RLS settings, extensions — reconstructed exactly as they were at that point, unlike the manual SnapShooter-dump restore above, which has to carefully recreate grants on an already-existing target schema.
-
-**Same region as the live cluster** (no region picker appeared during a real test of this flow) — this is what makes it a *complementary* layer to SnapShooter, not a replacement: it recovers from data corruption, a bad migration, or an accidental `DROP`/`DELETE` far faster and more completely than the manual dump/restore path, but it does **not** protect against a regional DigitalOcean outage the way SnapShooter's separate-region storage does. Keep both.
-
-**Using it for a real disaster (not yet tested end-to-end — treat this as the plan, verify each step live if it's ever actually needed):**
-
-1. Trigger **Restore from backup** on the cluster, picking the point in time just before whatever went wrong. This provisions a new cluster (new host, likely same port/`DB_NAME`) — expect it to take some minutes to come up, same as provisioning any new Managed Database.
-2. Add the droplet's IP (or re-add it, if it's not already covered) to the **new** cluster's Trusted Sources — a restored cluster's Trusted Sources list is not confirmed to carry over from the original; verify this rather than assume it, the first time this is actually exercised.
-3. Update `DB_HOST` (and `DB_PORT`/`DB_SSL_CA` if either changed) in the `staging`/`production` GitHub Environment's Secrets/Variables, then trigger a deploy so the droplet's `.env` picks up the new connection details — same mechanism `docs/deployment.md`'s "Rotating secrets" section already documents for any other credential rotation.
-4. Verify the same way step 5 of the manual restore above does: `docker compose ps`/`logs`, `GET /health`, and a real authenticated admin-API call — not just that the containers are up.
-5. Decide what happens to the old cluster once the new one is confirmed healthy — keep it briefly for forensics on what went wrong, then destroy it (a second live cluster is a second cluster's worth of billing).
+Test the manual SnapShooter-dump procedure against production only when there's genuinely nothing to lose (e.g. pre-launch, no real tenant data yet) — it drops and rebuilds the schema from scratch. Once real tenant data is flowing, validate against a scratch logical database on the same cluster instead (`CREATE DATABASE comprobify_restore_test;` as `doadmin`, same host/port/credentials, different `DATABASE` in the connection string), never against the live database. The DO-native restore-to-new-cluster path above doesn't have this problem — it never touches the live cluster at all, so it's inherently safe to test any time.
 
 ---
 

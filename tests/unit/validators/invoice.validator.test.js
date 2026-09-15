@@ -26,7 +26,7 @@ async function runValidation(body) {
 describe('Invoice Validator', () => {
   const validBody = {
     documentType: '01',
-    issueDate: moment().format('DD/MM/YYYY'),
+    issueDate: moment().utcOffset(-5).format('DD/MM/YYYY'),
     buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'ADDRESS', email: 'buyer@example.com' },
     items: [{
       mainCode: '001',
@@ -71,14 +71,14 @@ describe('Invoice Validator', () => {
   });
 
   test('rejects past issueDate', async () => {
-    const yesterday = moment().subtract(1, 'day').format('DD/MM/YYYY');
+    const yesterday = moment().utcOffset(-5).subtract(1, 'day').format('DD/MM/YYYY');
     const result = await runValidation({ ...validBody, issueDate: yesterday });
     expect(result.isEmpty()).toBe(false);
     expect(result.array().some(e => e.path === 'issueDate')).toBe(true);
   });
 
   test('rejects future issueDate', async () => {
-    const tomorrow = moment().add(1, 'day').format('DD/MM/YYYY');
+    const tomorrow = moment().utcOffset(-5).add(1, 'day').format('DD/MM/YYYY');
     const result = await runValidation({ ...validBody, issueDate: tomorrow });
     expect(result.isEmpty()).toBe(false);
     expect(result.array().some(e => e.path === 'issueDate')).toBe(true);

@@ -65,10 +65,13 @@ jobs:
 
       - name: Write env and restart containers
         uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.DROPLET_IP }}
           username: cpfydeploy4c7a
           key: ${{ secrets.INFRA_SSH_PRIVATE_KEY }}
+          envs: GHCR_TOKEN
           script: |
             cat > /opt/comprobify/.env <<'EOF'
             APP_ENV=${{ vars.APP_ENV }}
@@ -122,8 +125,9 @@ jobs:
             chmod 600 /opt/comprobify/.env
             cd /opt/comprobify
             export IMAGE_TAG=${{ github.sha }}
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull
+            docker logout ghcr.io
             docker compose up -d
             # docker compose up -d only recreates a container when the service
             # definition itself changes (image tag, env, volumes list) - Caddyfile

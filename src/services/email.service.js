@@ -19,11 +19,15 @@ function stagingBannerText(language) {
     : 'ENTORNO DE PRUEBAS — este mensaje fue generado por un sistema de staging y no refleja una transacción real.';
 }
 
-function applyStagingBanner({ text, html }, language = 'es') {
-  if (config.appEnv !== 'staging') return { text, html };
+function applyStagingBanner({ subject, text, html }, language = 'es') {
+  if (config.appEnv !== 'staging') return { subject, text, html };
   const banner = stagingBannerText(language);
   const bannerHtml = `<div style="background:#fff3cd;border:1px solid #ffeeba;color:#856404;padding:10px 16px;margin-bottom:16px;border-radius:4px;font-weight:bold;">${banner}</div>`;
   return {
+    // Visible in an inbox list without opening the message — mirrors
+    // comprobify-web's own applyStagingMarker (src/lib/mailgun.ts), which was
+    // itself built to match this function's body banner.
+    subject: `[STAGING] ${subject}`,
     text: `${banner}\n\n${text}`,
     // Templates aren't consistent about wrapping in a full <html><body> — some
     // are body fragments (verify-email.js), some are full documents
@@ -55,8 +59,7 @@ async function sendInvoiceAuthorized(document) {
 
   const language = tenant.preferred_language || 'es';
   const rendered = invoiceAuthorizedTemplate.render(document, issuer, language);
-  const { subject } = rendered;
-  const { text, html } = applyStagingBanner(rendered, language);
+  const { subject, text, html } = applyStagingBanner(rendered, language);
   const provider = emailFactory.getProvider();
 
   const from = `${issuer.business_name} via Comprobify <${config.email.fromDocuments}>`;
@@ -84,8 +87,7 @@ async function sendInvoiceAuthorized(document) {
 async function sendVerificationEmail(email, token, redirectUrl, language = 'es') {
   const verificationUrl = `${redirectUrl}?token=${token}`;
   const rendered = verifyEmailTemplate.render(verificationUrl, config.verificationTokenTtlHours, language);
-  const { subject } = rendered;
-  const { text, html } = applyStagingBanner(rendered, language);
+  const { subject, text, html } = applyStagingBanner(rendered, language);
   const provider = emailFactory.getProvider();
 
   const { messageId } = await provider.send({
@@ -116,8 +118,7 @@ async function sendPaymentProofSubmitted(payment, subscription, tenant, referenc
   }
 
   const rendered = paymentProofSubmittedTemplate.render(payment, subscription, tenant, referenceNumber);
-  const { subject } = rendered;
-  const { text, html } = applyStagingBanner(rendered, 'en');
+  const { subject, text, html } = applyStagingBanner(rendered, 'en');
   const provider = emailFactory.getProvider();
 
   await provider.send({
@@ -145,8 +146,7 @@ async function sendPaymentVerifiedOperator(payment, subscription, tenant) {
   }
 
   const rendered = paymentVerifiedOperatorTemplate.render(payment, subscription, tenant);
-  const { subject } = rendered;
-  const { text, html } = applyStagingBanner(rendered, 'en');
+  const { subject, text, html } = applyStagingBanner(rendered, 'en');
   const provider = emailFactory.getProvider();
 
   await provider.send({
@@ -177,8 +177,7 @@ async function sendPaymentVerifiedOperator(payment, subscription, tenant) {
  */
 async function sendNotificationEmail(tenant, rendered) {
   const language = tenant.preferred_language || 'es';
-  const { subject } = rendered;
-  const { text, html } = applyStagingBanner(rendered, language);
+  const { subject, text, html } = applyStagingBanner(rendered, language);
   const provider = emailFactory.getProvider();
 
   await provider.send({
