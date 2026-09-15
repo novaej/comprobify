@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-09-15
+
+**Production launch.** Every item on `docs/production-readiness-checklist.md` is now checked off: the first real tenant has been onboarded via comprobify-web and promoted to production, a real invoice has been authorized against SRI's actual production endpoint, and a real card payment has been verified end-to-end against Payphone's live (non-sandbox) endpoint. The full security audit (`docs/security-audit-2026-09-12.md`) is complete — every High and Medium finding resolved, only a handful of Low/Informational items remain.
+
+No functional changes since 0.18.2 beyond checking off that last checklist item. The version bump marks a commitment, not a feature: from here, a breaking change to the public API is a major-version event, not something that can ride along in a minor or patch release the way it could pre-1.0.
+
+**Known gap, not a blocker:** only 2 of SRI's ~6 document types are implemented today (facturas and notas de crédito). The remaining types (retention vouchers, debit notes, purchase settlements, guías de remisión) are tracked in `NEXT_STEPS.md` as planned 1.x additions, not a 1.0 requirement.
+
 ## [0.18.2] — 2026-09-15
 
 No functional changes. Internal-only update since 0.18.1 (production-readiness checklist tracking).
