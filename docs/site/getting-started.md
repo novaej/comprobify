@@ -268,8 +268,8 @@ Los precios listados son la tarifa **sin IVA** (el "precio de etiqueta") — el 
 | Plan | Precio/mes (+ IVA) | Precio/año (+ IVA) | Cuota de comprobantes **(cifra mensual base)** | Tipos de comprobante | Sucursales máx. | Puntos de emisión máx. por sucursal | Endpoints de webhook máx.¹ | Llaves API máx.¹ | Límite de escritura |
 |---|---|---|---|---|---|---|---|---|---|
 | Free | $0 | — (solo mensual) | 5 | Factura (`01`) | 1 | 1 | 0 | 0 | 10 req/min |
-| Solo | — (solo anual) | $25 (+IVA $28.75) | 15 | Factura (`01`) | 1 | 1 | 0 | 0 | 15 req/min |
-| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 0 | 0 | 30 req/min |
+| Solo | — (solo anual) | $45 (+IVA $51.75) | 20 | Factura (`01`) | 1 | 1 | 0 | 0 | 15 req/min |
+| Lite | $12 (+IVA $13.80) | $120 (+IVA $138) | 50 | Factura (`01`) | 1 | 1 | 0 | 0 | 30 req/min |
 | Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 5 | 60 req/min |
 | Growth | $90 (+IVA $103.50) | $900 (+IVA $1,035) | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 10 | 120 req/min |
 | Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Ilimitado | Ilimitado | 10 | 20 | 300 req/min |
