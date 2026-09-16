@@ -268,8 +268,8 @@ Listed prices are the **tax-exclusive** rate (the "sticker price") — IVA (curr
 | Tier | Price/mo (+ IVA) | Price/yr (+ IVA) | Document quota **(monthly base figure)** | Document types | Max branches | Max issue points per branch | Max webhook endpoints¹ | Max API keys¹ | Write limit |
 |---|---|---|---|---|---|---|---|---|---|
 | Free | $0 | — (monthly only) | 5 | Factura (`01`) | 1 | 1 | 0 | 0 | 10 req/min |
-| Solo | — (yearly only) | $25 (+IVA $28.75) | 15 | Factura (`01`) | 1 | 1 | 0 | 0 | 15 req/min |
-| Lite | $8 (+IVA $9.20) | $80 (+IVA $92) | 50 | Factura (`01`) | 1 | 1 | 0 | 0 | 30 req/min |
+| Solo | — (yearly only) | $45 (+IVA $51.75) | 20 | Factura (`01`) | 1 | 1 | 0 | 0 | 15 req/min |
+| Lite | $12 (+IVA $13.80) | $120 (+IVA $138) | 50 | Factura (`01`) | 1 | 1 | 0 | 0 | 30 req/min |
 | Starter | $20 (+IVA $23) | $200 (+IVA $230) | 200 | Factura (`01`) | 3 | 2 | 2 | 5 | 60 req/min |
 | Growth | $90 (+IVA $103.50) | $900 (+IVA $1,035) | 1,000 | Factura, Nota de Crédito (`01`, `04`) | 10 | 5 | 5 | 10 | 120 req/min |
 | Business | $230 (+IVA $264.50) | $2,300 (+IVA $2,645) | 4,000 | Factura, Nota de Crédito (`01`, `04`) | Unlimited | Unlimited | 10 | 20 | 300 req/min |

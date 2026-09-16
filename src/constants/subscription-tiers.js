@@ -68,7 +68,7 @@ const TIERS = {
   // a STARTER+ upsell, not a volume-tier feature. Same for API keys/webhooks
   // (maxApiKeys/maxWebhookEndpoints: 0) — see the note on FREE above.
   SOLO: {
-    documentQuota:           15,
+    documentQuota:           20,
     maxBranches:             1,
     maxIssuePointsPerBranch: 1,
     maxWebhookEndpoints:     0,
@@ -77,8 +77,8 @@ const TIERS = {
     writeRateLimit:          15,
     readRateLimit:           90,
     // Yearly-only — a small monthly recurring charge carries payment-
-    // processing and support overhead disproportionate to its size; the
-    // $25/yr annual commitment is the only way to buy SOLO. See
+    // processing and support overhead disproportionate to its size; an
+    // annual commitment is the only way to buy SOLO. See
     // requestTierChange/createSubscription's billingIntervals check.
     billingIntervals:        ['YEARLY'],
     allowedDocumentTypes:    ['01'],

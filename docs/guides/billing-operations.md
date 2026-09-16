@@ -219,7 +219,7 @@ remainingFraction = (current_period_end - requestedAt) / (current_period_end - c
 
 Two things catch people out:
 
-- It's the **price difference** that's prorated, not the new tier's full sticker price. On the same day a subscription starts, `remainingFraction` is close to `1`, so the charge lands close to the *full* difference between the two tiers — e.g. LITE ($8/mo) → STARTER ($20/mo) minutes after signup prorates to something like `(20 - 8) × 0.996 ≈ 11.95`, not "$20 minus a small proration" and not "$20 minus $8." That's expected, not a bug.
+- It's the **price difference** that's prorated, not the new tier's full sticker price. On the same day a subscription starts, `remainingFraction` is close to `1`, so the charge lands close to the *full* difference between the two tiers — e.g. LITE ($12/mo) → STARTER ($20/mo) minutes after signup prorates to something like `(20 - 12) × 0.996 ≈ 7.97`, not "$20 minus a small proration" and not "$20 minus $12." That's expected, not a bug.
 - Both `toTierPrice` and `fromTierPrice` resolve to whatever was `PUBLISHED` and effective **as of the moment the upgrade was requested** (`payments.created_at`) — not necessarily what the tenant originally paid for the old tier, if a price changed in between (see "Price history + 30-day change notice" in CLAUDE.md).
 
 To check a specific payment, fill in `<PAYMENT_ID>` and the tier the tenant was upgrading *from* (check `tenant_events` for the `TIER_CHANGE_REQUESTED` row around the same timestamp — `payments` itself only stores `target_tier`, the tier being upgraded *to*):
@@ -273,7 +273,7 @@ SELECT p.id AS payment_id, s.tenant_id, p.purpose, p.status,
     WHEN p.status = 'VERIFIED' AND q.document_quota IS DISTINCT FROM
          CASE WHEN t.subscription_tier = 'ENTERPRISE' THEN NULL ELSE
            (CASE t.subscription_tier
-              WHEN 'FREE' THEN 5 WHEN 'SOLO' THEN 15 WHEN 'LITE' THEN 50
+              WHEN 'FREE' THEN 5 WHEN 'SOLO' THEN 20 WHEN 'LITE' THEN 50
               WHEN 'STARTER' THEN 200 WHEN 'GROWTH' THEN 1000 WHEN 'BUSINESS' THEN 4000 END)
            * (CASE WHEN s.billing_interval = 'YEARLY' AND t.subscription_tier <> 'FREE' THEN 12 ELSE 1 END)
          END                                              THEN 'quota cap does not match tier/interval'

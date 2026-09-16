@@ -56,9 +56,9 @@ ALTER TABLE tier_prices
 -- subscription.service.js's assertBillingIntervalAllowed(). A MONTHLY row
 -- here would just be dead data nothing can ever resolve a purchase against.
 INSERT INTO tier_prices (tier, billing_interval, price_usd, status, effective_at, published_at) VALUES
-  ('SOLO',       'YEARLY',  25,    'PUBLISHED', NOW(), NOW()),
-  ('LITE',       'MONTHLY', 8,     'PUBLISHED', NOW(), NOW()),
-  ('LITE',       'YEARLY',  80,    'PUBLISHED', NOW(), NOW()),
+  ('SOLO',       'YEARLY',  45,    'PUBLISHED', NOW(), NOW()),
+  ('LITE',       'MONTHLY', 12,    'PUBLISHED', NOW(), NOW()),
+  ('LITE',       'YEARLY',  120,   'PUBLISHED', NOW(), NOW()),
   ('ENTERPRISE', 'MONTHLY', 450,   'PUBLISHED', NOW(), NOW()),
   ('ENTERPRISE', 'YEARLY',  4500,  'PUBLISHED', NOW(), NOW());
 
