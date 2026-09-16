@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-09-16
+
+Raises SOLO and LITE entry-tier prices: SOLO $25/yr → $45/yr (document quota 15 → 20/mo), LITE $8/mo → $12/mo ($80/yr → $120/yr). Competitor research showed the real Ecuadorian e-invoicing market floor sits around $84–91/yr, well above these tiers' original launch prices, which also weren't covering their own share of fixed infrastructure costs at realistic volume (see `docs/infrastructure-costs.md`'s breakeven analysis). The corresponding `tier_prices` rows are published separately via the admin DRAFT → PUBLISH flow (ADR-023) — this release covers the quota change, migration/doc consistency, and public pricing pages.
+
 ## [1.0.0] — 2026-09-15
 
 **Production launch.** Every item on `docs/production-readiness-checklist.md` is now checked off: the first real tenant has been onboarded via comprobify-web and promoted to production, a real invoice has been authorized against SRI's actual production endpoint, and a real card payment has been verified end-to-end against Payphone's live (non-sandbox) endpoint. The full security audit (`docs/security-audit-2026-09-12.md`) is complete — every High and Medium finding resolved, only a handful of Low/Informational items remain.
