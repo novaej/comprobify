@@ -29,7 +29,7 @@
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-59" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d6b656;" value="&lt;b&gt;Cloudflare DNS&lt;/b&gt;&lt;br/&gt;api-staging.comprobify.com&lt;br/&gt;A record to DO droplet, proxy on" vertex="1">
           <mxGeometry height="85" width="210" x="300" y="185" as="geometry" />
         </mxCell>
-        <mxCell id="iyyHeRbHeA1ESX64Fu_m-60" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;DigitalOcean Droplet&lt;/b&gt;&lt;br&gt;Caddy (TLS, reverse proxy) → api container&lt;br&gt;Docker Compose · Branch: staging *" vertex="1">
+        <mxCell id="iyyHeRbHeA1ESX64Fu_m-60" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;DigitalOcean Droplet&lt;/b&gt;&lt;br&gt;Caddy (TLS, reverse proxy) → api container&lt;br&gt;Docker Compose · deploys from main *" vertex="1">
           <mxGeometry height="85" width="230" x="590" y="185" as="geometry" />
         </mxCell>
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-61" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;DigitalOcean Managed Postgres&lt;/b&gt;&lt;br/&gt;PostgreSQL 16&lt;br/&gt;schemas: public + sandbox&lt;br/&gt;shared cluster w/ comprobify-web" vertex="1">
@@ -53,10 +53,10 @@
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-66" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="&lt;b&gt;Developer&lt;/b&gt;" vertex="1">
           <mxGeometry height="60" width="120" x="70" y="575" as="geometry" />
         </mxCell>
-        <mxCell id="iyyHeRbHeA1ESX64Fu_m-67" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#24292e;" value="&lt;b&gt;GitHub&lt;/b&gt;&lt;br/&gt;comprobify repo&lt;br/&gt;branches: main / staging" vertex="1">
+        <mxCell id="iyyHeRbHeA1ESX64Fu_m-67" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#24292e;" value="&lt;b&gt;GitHub&lt;/b&gt;&lt;br/&gt;comprobify repo&lt;br/&gt;branches: main" vertex="1">
           <mxGeometry height="80" width="170" x="270" y="560" as="geometry" />
         </mxCell>
-        <mxCell id="iyyHeRbHeA1ESX64Fu_m-68" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#24292e;align=left;spacingLeft=10;fontSize=10;" value="&lt;b&gt;GitHub Actions&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;release-staging.yml — tag vX.Y.Z  →  fast-forward staging branch&lt;br/&gt;deploy-staging.yml — push to staging  →  build+push GHCR, SSH deploy&lt;br/&gt;docs.yml — push to main  →  wrangler deploy to Cloudflare Pages" vertex="1">
+        <mxCell id="iyyHeRbHeA1ESX64Fu_m-68" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#24292e;align=left;spacingLeft=10;fontSize=10;" value="&lt;b&gt;GitHub Actions&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;deploy-staging.yml — push to main  →  build+push GHCR, SSH deploy&lt;br/&gt;docs.yml — push to main  →  wrangler deploy to Cloudflare Pages" vertex="1">
           <mxGeometry height="110" width="320" x="520" y="535" as="geometry" />
         </mxCell>
         <mxCell id="render-cron-node" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;" value="&lt;b&gt;Droplet cron.d *&lt;/b&gt;&lt;br/&gt;docker compose exec into api container&lt;br/&gt;/v1/admin/jobs/notifications (5 min)&lt;br/&gt;/v1/admin/jobs/subscriptions (daily)&lt;br/&gt;/v1/admin/jobs/quota (daily)&lt;br/&gt;/v1/admin/jobs/queue-reconciliation (5 min)&lt;br/&gt;/v1/admin/jobs/payphone-reconciliation (5 min)" vertex="1">
@@ -159,7 +159,7 @@
             <mxPoint x="1185" y="523" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="iyyHeRbHeA1ESX64Fu_m-76" edge="1" parent="1" source="iyyHeRbHeA1ESX64Fu_m-66" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="iyyHeRbHeA1ESX64Fu_m-67" value="git push / tag vX.Y.Z">
+        <mxCell id="iyyHeRbHeA1ESX64Fu_m-76" edge="1" parent="1" source="iyyHeRbHeA1ESX64Fu_m-66" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="iyyHeRbHeA1ESX64Fu_m-67" value="git push (main)">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="iyyHeRbHeA1ESX64Fu_m-77" edge="1" parent="1" source="iyyHeRbHeA1ESX64Fu_m-67" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="iyyHeRbHeA1ESX64Fu_m-68" value="triggers">

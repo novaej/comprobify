@@ -407,7 +407,7 @@ Every commit on `main` is a merged PR (often squash-merged, so the SHA on `main`
 
 The tag still tracks `package.json`'s version — there's just a merge step between bumping it and tagging it, because the squash-merge changes the commit SHA.
 
-Pushing the tag triggers `release-staging.yml`, which fast-forwards `staging` to it — the tag is treated as an **immutable** "build this" snapshot. Never push a follow-up commit to `main` that changes the version after a tag is created; that would leave the tagged commit's `package.json` permanently out of sync with its own tag name, and would race with `staging` already having been fast-forwarded to it. If `package.json`'s version and the latest git tag ever drift apart, fix it with a manual one-off sync commit (`chore:`), then resume this sequence for every release after that.
+Pushing the tag doesn't trigger any deploy by itself — staging tracks `main` continuously and directly (every merge auto-deploys via `deploy-staging.yml`, no tag involved), so by the time you tag a commit it's typically already been running on staging for a while. The tag is purely a naming/versioning marker: it records "this commit is vX.Y.Z," treated as an **immutable** snapshot. The only thing that acts on a tag is *publishing a GitHub Release from it*, which fast-forwards `production` — see the "Branching strategy" section of `docs/deployment.md`. Never push a follow-up commit to `main` that changes the version after a tag is created; that would leave the tagged commit's `package.json` permanently out of sync with its own tag name. If `package.json`'s version and the latest git tag ever drift apart, fix it with a manual one-off sync commit (`chore:`), then resume this sequence for every release after that.
 
 ---
 

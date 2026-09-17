@@ -6,40 +6,46 @@ Staging was originally hosted on Render; it now runs on DigitalOcean droplets pr
 
 ## Branching strategy
 
-Two long-lived branches map to deployed environments. They are **automation-owned** — promoted forward by tags and GitHub Releases, never by direct or manual merges. Feature/fix branches are always cut from `main` and merged back via pull request.
+`main` deploys to staging continuously — every merge, no tag or manual step involved.
+`production` is the one **automation-owned** long-lived branch — it only moves forward
+via a deliberate promotion (a published GitHub Release), never by direct or manual
+merges. Feature/fix branches are always cut from `main` and merged back via pull
+request.
 
 ```
-  feature/xyz     chore/release            main                                   staging                  production
-      │                 │                   │                                       │                          │
-      │  PR + merge     │                   │                                       │                          │
-      │────────────────────────────────────▶│                                       │                          │
-      │                 │  npm version bump │                                       │                          │
-      │                 │  + PR + merge     │                                       │                          │
-      │                 │──────────────────▶│                                       │                          │
-      │                 │                   │  git tag vX.Y.Z + push (merge commit) │                          │
-      │                 │                   │── release-staging.yml (ff-merge) ────▶│── deploy-staging.yml ───▶ comprobify-staging
-      │                 │                   │                                       │                          │
-      │                 │                   │  publish GitHub Release from the tag  │                          │
-      │                 │                   │── release-production.yml (ff-merge) ──┼─────────────────────────▶│── deploy-production.yml ──▶ comprobify-production
-      │                 │                   │                                                                   │
-  hotfix/xyz            │                   │                                                                   │
-      │  branch off `production`, PR into the hotfix branch, bump version + PR there too,                      │
-      │  tag vX.Y.Z+1 → same pipeline (or emergency workflow_dispatch to skip staging)                         │
-      │  → cherry-pick the merged fix back into `main`                                                         │
-      │─────────────────────────────────────────────────────────────────────────────────────────────────────▶ │
+  feature/xyz     chore/release            main                                   production
+      │                 │                   │                                          │
+      │  PR + merge     │                   │                                          │
+      │────────────────────────────────────▶│                                          │
+      │                 │                   │── deploy-staging.yml ──────────────────▶ comprobify-staging
+      │                 │                   │   (every push to main)                   │
+      │                 │  npm version bump │                                          │
+      │                 │  + PR + merge     │                                          │
+      │                 │──────────────────▶│                                          │
+      │                 │                   │  git tag vX.Y.Z + push (naming only —    │
+      │                 │                   │  nothing automated reacts to the tag)    │
+      │                 │                   │                                          │
+      │                 │                   │  publish GitHub Release from the tag     │
+      │                 │                   │── release-production.yml (ff-merge) ────▶│── deploy-production.yml ──▶ comprobify-production
+      │                 │                   │                                          │
+  hotfix/xyz            │                   │                                          │
+      │  branch off `production`, PR into the hotfix branch, bump version + PR there too,│
+      │  tag vX.Y.Z+1 → same pipeline (or emergency workflow_dispatch to skip the wait)  │
+      │  → cherry-pick the merged fix back into `main`                                   │
+      │─────────────────────────────────────────────────────────────────────────────────▶│
 ```
 
 | Branch | Environment | Promoted by |
 |--------|-------------|-------------|
-| `main` | — (trunk; CI only, no deploy) | PR merge |
-| `staging` | Staging (DigitalOcean droplet, formerly Render) | `release-staging.yml` — fast-forwarded on tag push `vX.Y.Z` |
-| `production` | Production (DigitalOcean, planned) — *not yet provisioned, pipeline disabled* | `release-production.yml` — fast-forwarded when a GitHub Release is published |
+| `main` | Staging (DigitalOcean droplet, formerly Render) — deploys directly, continuously | `deploy-staging.yml` — triggered on every push to `main` |
+| `production` | Production (DigitalOcean) — live since 2026-09-15 | `release-production.yml` — fast-forwarded when a GitHub Release is published |
 
 **Rules:**
 - All development happens in feature/fix branches off `main`, merged via PR (1 approval required)
-- `staging` and `production` are **automation-owned** — never push to them directly; they only move forward via fast-forward merges performed by the release workflows. Branch protection should restrict pushes to the automation
-- A **tag** (`vX.Y.Z`, semantic versioning) means *"build this, validate it in staging."* Pushing it triggers `release-staging.yml`, which fast-forwards `staging` and (via the existing push trigger) kicks off `deploy-staging.yml`
-- A **published GitHub Release**, created from a tag already validated in staging, means *"staging confirmed it, ship to production."* Publishing it is the deliberate, auditable approval gate between staging and production — no extra tooling needed
+- `main` deploys to staging automatically on every merge — there is no separate "release to staging" step, and staging always reflects whatever is currently on `main`
+- `production` is **automation-owned** — never push to it directly; it only moves forward via a fast-forward merge performed by `release-production.yml`. Branch protection should restrict pushes to the automation
+- A **tag** (`vX.Y.Z`, semantic versioning) is a naming/versioning marker on a `main` commit — it records "this is what v1.1.0 is," but pushing it doesn't trigger any deploy by itself
+- A **published GitHub Release**, created from a tag, means *"ship this to production."* Publishing it is the deliberate, auditable approval gate — and the only thing that actually triggers a production deploy
 - **Hotfixes** branch from the current `production` ref (not `main`, which may carry unreleased work), flow through a PR + tag through the same pipeline (or an emergency `workflow_dispatch` that skips straight to production), and **must be cherry-picked back into `main`** afterwards so the fix survives the next regular release
 
 ---
@@ -66,7 +72,11 @@ git checkout main && git pull origin main
 git branch -d feature/my-feature
 ```
 
-### Release to staging
+### Staging
+
+No manual step — every merge to `main` deploys to staging automatically via `deploy-staging.yml`. There's nothing to "release" to staging; it's always running whatever is currently on `main`.
+
+### Cut a release candidate
 
 Every commit on `main` is a merged (often squashed) PR, so `npm version`'s built-in commit+tag step can't run directly on `main` — it would push straight to `main` with no review, and the tag would point at a commit review never saw. Bump the version through a normal PR first, then tag the result. Full rationale in the "Releasing" section of `../CLAUDE.md`.
 
@@ -92,11 +102,11 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-`release-staging.yml` fast-forwards `staging` to `vX.Y.Z` and pushes it, which triggers `deploy-staging.yml` automatically. Use semantic versioning (`vMAJOR.MINOR.PATCH`) so it's obvious at a glance whether a tag is a feature release (`v1.5.0`) or a hotfix (`v1.4.1`). The tag is treated as an **immutable** "build this" snapshot — never push a follow-up commit to `main` that changes the version after a tag is created.
+Pushing the tag doesn't trigger any automation by itself — it's just a name for a commit that's already been running on staging as part of `main`. Use semantic versioning (`vMAJOR.MINOR.PATCH`) so it's obvious at a glance whether a tag is a feature release (`v1.5.0`) or a hotfix (`v1.4.1`). The tag is treated as an **immutable** "this is version X.Y.Z" snapshot — never push a follow-up commit to `main` that changes the version after a tag is created.
 
 ### Promote to production
 
-Once the tag has been validated in staging, promotion is a single deliberate action — **publishing a GitHub Release from that tag**:
+Promotion is a single deliberate action — **publishing a GitHub Release from the tag**:
 
 1. GitHub UI → **Releases → Draft a new release**
 2. Choose the existing tag (e.g. `v1.4.0`) — do not create a new one
@@ -105,7 +115,7 @@ Once the tag has been validated in staging, promotion is a single deliberate act
 
 `release-production.yml` then fast-forwards `production` to that commit and triggers `deploy-production.yml`.
 
-> **Currently disabled** — the production droplet, `production` branch, and secrets don't exist yet. See "Production status" below for what's needed to enable this.
+> **Live since 2026-09-15.** See "Production status" below.
 
 ### Hotfix flow
 
@@ -134,7 +144,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-From here, either run it through the normal tag → staging → release → production pipeline (safer, still validated), or — for true emergencies — trigger `release-production.yml` manually via `workflow_dispatch` to skip straight to production (documented as the "break-glass" path; bypasses staging validation).
+From here, either publish a Release from the tag through the normal pipeline (the fix has already been running on staging as part of `main`), or — for true emergencies — trigger `release-production.yml` manually via `workflow_dispatch` to skip straight to production (documented as the "break-glass" path).
 
 **Don't skip this step:** cherry-pick the merged fix commit back into `main` so it isn't silently lost or reverted on the next regular release.
 
@@ -153,23 +163,20 @@ git push origin main
 
 | File | Trigger | Effect |
 |------|---------|--------|
-| `.github/workflows/release-staging.yml` | Push of tag `vX.Y.Z` | Fast-forwards `staging` to the tagged commit and pushes it |
-| `.github/workflows/deploy-staging.yml` | Push to `staging` | Builds the image, pushes to GHCR, deploys to the staging droplet over SSH — see `docs/terraform-digitalocean-setup.md` |
-| `.github/workflows/release-production.yml` | *(disabled)* GitHub Release published | Fast-forwards `production` to the released commit and pushes it |
-| `.github/workflows/deploy-production.yml` | *(disabled)* Push to `production` | Mirrors `deploy-staging.yml` once production is provisioned |
+| `.github/workflows/deploy-staging.yml` | Push to `main` | Builds the image, pushes to GHCR, deploys to the staging droplet over SSH — see `docs/terraform-digitalocean-setup.md` |
+| `.github/workflows/release-production.yml` | GitHub Release published | Fast-forwards `production` to the released commit and pushes it |
+| `.github/workflows/deploy-production.yml` | Push to `production` | Mirrors `deploy-staging.yml`, deploying to the production droplet |
 
-### Pipeline stages (staging)
+### Pipeline stages
 
-1. **Tag pushed** (`vX.Y.Z`) — `release-staging.yml` checks out the tag and fast-forward-merges `staging` to it, then pushes
-2. **Push to `staging`** — `deploy-staging.yml` builds the Docker image, pushes it to GHCR, then deploys it to the staging droplet over SSH (pulls the image, writes `.env` from GitHub Secrets/Variables, restarts the containers)
+1. **Staging** — push to `main` (any merged PR) → `deploy-staging.yml` builds the Docker image, pushes it to GHCR, then deploys it to the staging droplet over SSH (pulls the image, writes `.env` from GitHub Secrets/Variables, restarts the containers)
+2. **Production** — publish a GitHub Release from a tag → `release-production.yml` fast-forwards `production` → push to `production` triggers `deploy-production.yml`, which mirrors the staging deploy step against the production droplet
 
 Migrations run automatically at startup — `app.js` calls `migrate()` before the server begins accepting requests. Full mechanics (the droplet, the compose stack, exactly how the deploy step works) are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
 
 ### Production status
 
-**Partially provisioned, still disabled.** The `production` branch, `terraform/environments/production`, and the `plan-production`/`apply-production` job pair in `terraform.yml` already exist and are written — production is no longer purely hypothetical. `release-production.yml` and `deploy-production.yml` are also both fully written (the latter mirrors `deploy-staging.yml` exactly, nothing left to rewrite), but both stay behind an `if: false` guard with their real triggers commented out, and the production droplet itself has never been `terraform apply`'d — no database, domain, or GitHub Environment secrets exist yet either. Production is deliberately on standby until the remaining setup steps are done.
-
-`docs/production-readiness-checklist.md` is the authoritative, actively-maintained list of exactly what's done versus still pending — don't rely on a step list here, since one already drifted out of sync with reality once. `docs/deployment-reference-production.md` is the target-configuration reference (mirrors `docs/deployment-reference-staging.md`'s structure) for every concrete value — droplet name, deploy user, GitHub Environment names, DB/broker setup, DNS record — once each piece is ready to provision.
+**Live since 2026-09-15.** `docs/deployment-reference-production.md` is the target-configuration reference (mirrors `docs/deployment-reference-staging.md`'s structure) for every concrete value — droplet name, deploy user, GitHub Environment names, DB/broker setup, DNS record.
 
 ---
 
@@ -313,7 +320,7 @@ Reference table (schedule matches the Render Cron Job days except Queue Reconcil
 | Queue reconciliation | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
 | Payphone reconciliation | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/payphone-reconciliation` |
 
-Production's schedule doesn't exist yet — it gets the same 5 entries on its own droplet once production is provisioned (see "Production status" above).
+Production runs the same 5 entries on its own droplet, templated by the same `cloud-init.yaml.tftpl`.
 
 > The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
 
@@ -386,7 +393,7 @@ Restart-on-crash is handled by Docker Compose's `restart: unless-stopped` policy
 
 ### 1. Branches
 
-Only `staging` exists today (already created). `production` is created when the production environment is provisioned (see "Production status" above):
+`main` and `production` both exist. Staging deploys directly from `main`, no separate branch needed. `production` was created the same way any new environment branch would be:
 
 ```bash
 git checkout main
@@ -404,31 +411,31 @@ git checkout main
 - ✅ Dismiss stale pull request approvals when new commits are pushed
 - ✅ Do not allow bypassing the above settings
 
-### 3. Protect `staging` and `production` (Settings → Branches → Add rule, one for each)
+### 3. Protect `production` (Settings → Branches → Add rule)
 
-Both branches are **automation-owned** — they only move forward via fast-forward pushes from `release-staging.yml` / `release-production.yml`. Restrict direct human pushes so the fast-forward invariant can't be broken by a stray commit:
+`production` is **automation-owned** — it only moves forward via fast-forward pushes from `release-production.yml`. Restrict direct human pushes so the fast-forward invariant can't be broken by a stray commit:
 
-- **Branch name pattern:** `staging` (repeat for `production`)
+- **Branch name pattern:** `production`
 - ✅ Restrict who can push — limit to the automation (e.g. a bot account / `GITHUB_TOKEN` with appropriate permissions, or repository admins only as a fallback)
 - ✅ Do not allow force pushes
 
 ### 4. Add secrets/variables (Settings → Secrets and variables → Actions)
 
-Per-environment, scoped to the matching GitHub Environment (`staging` now, `production` once provisioned) — the full set (`DROPLET_IP`, `INFRA_SSH_PRIVATE_KEY`, every app credential/config value, split between Secrets and Variables) is documented in `docs/terraform-digitalocean-setup.md`'s env var reference table rather than duplicated here.
+Per-environment, scoped to the matching GitHub Environment (`staging` and `production` both set up) — the full set (`DROPLET_IP`, `INFRA_SSH_PRIVATE_KEY`, every app credential/config value, split between Secrets and Variables) is documented in `docs/terraform-digitalocean-setup.md`'s env var reference table rather than duplicated here.
 
-Note `release-staging.yml` / `release-production.yml` don't need extra secrets — they push to branches using the workflow's own `contents: write` permission.
+Note `release-production.yml` doesn't need extra secrets — it pushes to `production` using the workflow's own `contents: write` permission.
 
 ### 5. DigitalOcean
 
-- Staging droplet already exists, provisioned via Terraform and deployed to by `deploy-staging.yml` over SSH — see `docs/terraform-digitalocean-setup.md`
-- When ready: provision the production droplet (`terraform/environments/production`) + a production DigitalOcean Managed Postgres database, with independent env vars and secrets from staging — see "Production status" above
+- Both the staging and production droplets are provisioned via Terraform and deployed to by their respective `deploy-*.yml` workflow over SSH — see `docs/terraform-digitalocean-setup.md`
+- Production has its own DigitalOcean Managed Postgres database, with independent env vars and secrets from staging
 - Migrations run automatically at startup via `app.js` — no separate deploy step needed
 
 ---
 
 ## First deploy checklist
 
-Run through this after every new environment is provisioned (staging done, repeat for production). Steps are in order.
+Run through this after every new environment is provisioned (staging and production both done — repeat for any future environment). Steps are in order.
 
 ### 1. Database user
 - [ ] Create a dedicated non-superuser role via the database's SQL client (staging: DigitalOcean Managed Postgres, shared with `comprobify-web` — never use the provider's default admin role, e.g. DO's `doadmin`, as the app user; it bypasses RLS):
@@ -485,7 +492,8 @@ curl https://api.comprobify.com/v1/admin/tenants \
 - [ ] `xmllint` available — attempt a document creation and check `docker compose logs api` for XSD validation errors. Check directly via `docker compose exec api which xmllint`. If missing, a Dockerfile change installing `libxml2-utils` is needed.
 
 ### 8. Pipeline smoke test
-- [ ] Push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) and confirm `Release to Staging` workflow runs and fast-forwards the `staging` branch, then `Deploy Staging` fires automatically
+- [ ] **Staging:** merge a PR to `main` and confirm `Deploy Staging` fires automatically
+- [ ] **Production:** publish a GitHub Release from an existing tag and confirm `Release to Production` fast-forwards `production`, then `Deploy Production` fires automatically
 
 ### 9. Notification email templates
 `notification_email_templates` (migration 079, ADR-024 Phase C) is **not seeded automatically** by any migration — the source content in `docs/email-templates/*.txt` only reaches the DB once an admin explicitly publishes it via `POST /v1/admin/notification-email-templates`. A freshly migrated environment creates `notifications` rows and fans out webhooks fine, but every email-capable type silently fails at send time (`NOTIFICATION_DISPATCH` retries with `Notification email template not found`, eventually flips to `FAILED` after `PENDING_EFFECTS_MAX_ATTEMPTS`, default 5) until this step is done. This bit staging for real — see `project_notification_email_templates_unpublished` incident notes.
@@ -664,7 +672,7 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [x] `.env` file is not world-readable and never committed — `deploy-production.yml` runs `chmod 600 /opt/comprobify/.env` right after writing it; the file only ever exists on the droplet, never in git
 - [x] `trust proxy` in `server.js` matches the actual number of reverse proxy hops in front of the app (currently `2`: Cloudflare, then Caddy on the droplet) — required for IP-based rate limiters (`adminLimiter`/`registrationLimiter`) to see the real client IP via `X-Forwarded-For` instead of pooling all traffic into one bucket. Re-verify this number if the proxy chain ever changes. — confirmed in code (`src/server.js:19`), same for every environment
 - [x] `helmet()` middleware active — sets standard security headers (`X-Content-Type-Options`, `Strict-Transport-Security`, `X-Frame-Options`, etc.) — confirmed in code (`src/server.js:39`), same for every environment
-- [x] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /v1/admin/tenants/:id/promote` — no tenants promoted yet (`tenants: []`), nothing to violate this yet
+- [x] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /v1/admin/tenants/:id/promote` — real tenants have been promoted since launch, all via this path
 - [x] API is behind HTTPS — Caddy on the droplet issues/renews the TLS cert automatically via Let's Encrypt (see `docs/terraform-digitalocean-setup.md`'s "The application stack") — confirmed, `https://api.comprobify.com/health` resolves with a valid cert
 - [x] PostgreSQL not exposed on a public port — confirmed via DO's Trusted Sources: only the production droplet's IP is allowlisted on the cluster's firewall, so a connection from any other source is refused at the network level before it ever reaches Postgres's TLS/auth negotiation
 - [x] `xmllint` installed in the container image (`apt install libxml2-utils`, part of the Dockerfile) — confirmed directly via SSH (`xmllint: using libxml version 20914`)
@@ -673,7 +681,7 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [x] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard for all 4 event types
 - [x] Webhook endpoint (`/v1/mailgun/webhook`) reachable on the public HTTPS URL — confirmed directly, a test POST returns `401` (signature rejection), not `404`
 - [x] Log aggregation configured — the API logs to stdout — `BETTERSTACK_SOURCE_TOKEN` is also set on `production`, shipping structured logs to Betterstack same as staging
-- [x] `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` come from **this environment's own Payphone application** — staging in test mode, production in production mode. Nothing in the code can tell a test token from a live one, so pasting production credentials into staging means staging creates **real charges** — or deliberately left unset to keep card payments disabled — deliberately unset for production (blocked on legal entity registration for Payphone's own KYC), a supported launch state
+- [x] `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` come from **this environment's own Payphone application** — staging in test mode, production in production mode. Nothing in the code can tell a test token from a live one, so pasting production credentials into staging means staging creates **real charges**. Production's own application is set up (KYC'd against the registered legal entity, registered against comprobify-web's actual production domain), and a real card payment has been verified end-to-end against Payphone's live endpoint
 - [x] `SENTRY_DSN` set on staging and production so unexpected `5xx` errors are reported (left unset locally so development never sends events) — confirmed present on `production`
 
 ### Rotating secrets (e.g. after a suspected compromise)
