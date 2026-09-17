@@ -83,4 +83,4 @@ Reasoning and a build plan for bundling Comprobify's invoicing into a separate p
 Index of Architecture Decision Records — the significant design choices made during development, their context, and the alternatives that were considered. Start here to understand *why* the system is built the way it is, not just how.
 
 ### `deployment.md`
-Branching strategy and git flow (feature → main → staging → prod), CI/CD pipeline, environment variables, `xmllint` system dependency, database migration strategy, SRI environment switching, security checklist, and log monitoring.
+Branching strategy and git flow (feature branches → `main`, which deploys to staging continuously; a tag + published GitHub Release promotes to `production`), CI/CD pipeline, environment variables, `xmllint` system dependency, database migration strategy, SRI environment switching, security checklist, and log monitoring.

@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Operational note: staging now deploys directly from `main` on every push instead of requiring a version tag.** `release-staging.yml` (which fast-forwarded a separate `staging` branch on tag push) is removed; `deploy-staging.yml` triggers on push to `main` instead. Tags are now reserved exclusively for naming a production release candidate — publishing a GitHub Release from a tag remains the only thing that promotes to production, unchanged. `docs/production-readiness-checklist.md` is also removed (every item was checked off, production has been live since 2026-09-15) and the deployment docs' stale "not yet provisioned" language for production is corrected. No API-facing behavior changes.
+
 ## [1.0.1] — 2026-09-16
 
 Raises SOLO and LITE entry-tier prices: SOLO $25/yr → $45/yr (document quota 15 → 20/mo), LITE $8/mo → $12/mo ($80/yr → $120/yr). Competitor research showed the real Ecuadorian e-invoicing market floor sits around $84–91/yr, well above these tiers' original launch prices, which also weren't covering their own share of fixed infrastructure costs at realistic volume (see `docs/infrastructure-costs.md`'s breakeven analysis). The corresponding `tier_prices` rows are published separately via the admin DRAFT → PUBLISH flow (ADR-023) — this release covers the quota change, migration/doc consistency, and public pricing pages.
