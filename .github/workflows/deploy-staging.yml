@@ -2,15 +2,15 @@ name: Deploy Staging
 
 # DISABLED — staging's droplet is destroyed (STAGING_INFRA_ENABLED=false, see
 # terraform.yml/terraform-digitalocean-setup.md's "Toggling staging infra on/off").
-# release-staging.yml keeps fast-forwarding the `staging` branch on every tag push
-# regardless - that's harmless, just git branch bookkeeping - but this workflow would
-# SSH to a DROPLET_IP that no longer resolves to anything, failing every single run
-# until the droplet exists again. Re-enable in the same cycle as flipping
-# STAGING_INFRA_ENABLED back to true and re-provisioning: uncomment the `push` trigger
-# below and remove the `if: false` guard on the `deploy` job.
+# Triggers directly off push to `main` — no intermediate `staging` branch or tag,
+# staging just continuously tracks main. This workflow would SSH to a DROPLET_IP
+# that no longer resolves to anything, failing every single run until the droplet
+# exists again. Re-enable in the same cycle as flipping STAGING_INFRA_ENABLED back
+# to true and re-provisioning: uncomment the `push` trigger below and remove the
+# `if: false` guard on the `deploy` job.
 on:
   # push:
-  #   branches: [staging]
+  #   branches: [main]
   workflow_dispatch:
 
 jobs:

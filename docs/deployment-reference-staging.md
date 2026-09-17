@@ -8,7 +8,7 @@ This reference describes the staging deployment setup for Comprobify, including 
 
 - **Terraform** provisions the infrastructure: one DigitalOcean droplet (`comprobify-staging`), its firewall, a dedicated SSH key, and a Cloudflare DNS record. State is stored remotely in a DigitalOcean Spaces bucket (`comprobify-terraform-state`). A push to `main` touching `terraform/**` runs `terraform plan`/`apply` via `.github/workflows/terraform.yml`; this pipeline never triggers, and is never triggered by, the application deploy pipeline.
 - **DigitalOcean** hosts the droplet itself — a plain Ubuntu 24.04 image (not a Marketplace image), with Docker installed and SSH hardened by cloud-init on first boot. A DigitalOcean Cloud Firewall restricts ports 80/443 to Cloudflare's published IP ranges; port 22 is open to the internet, with defense layered at the identity level instead: key-only auth, no root login, an unprivileged deploy user with no sudo, and fail2ban.
-- **GitHub Actions** manages application CI/CD: a `vX.Y.Z` tag push runs `release-staging.yml`, which fast-forwards the `staging` branch to the tag; the resulting push to `staging` triggers `deploy-staging.yml`, which builds the Docker image, pushes it to GHCR, and deploys it to the droplet over SSH. Docs publishing is a separate workflow, `docs.yml`, deploying from `main` on changes under `docs/site/**`.
+- **GitHub Actions** manages application CI/CD: every push to `main` (any merged PR) triggers `deploy-staging.yml` directly, which builds the Docker image, pushes it to GHCR, and deploys it to the droplet over SSH — no intermediate branch or tag. Docs publishing is a separate workflow, `docs.yml`, deploying from `main` on changes under `docs/site/**`.
 - **GHCR** (GitHub Container Registry) stores the built image at `ghcr.io/novaej/comprobify`, tagged with the deploying commit SHA.
 - **Docker Compose** (`deploy/docker-compose.yml`, pushed to the droplet on every deploy) runs four containers: `caddy` (reverse proxy, the only container with ports exposed to the internet), `api` (`node app.js`), `worker` (`node workers/worker.js`), and `redis` — `api` and `worker` share the same image, differing only in `command`.
 - **Caddy** terminates TLS, automatically obtaining and renewing a Let's Encrypt certificate for `api-staging.comprobify.com`, and reverse-proxies to the `api` container internally.
@@ -39,7 +39,7 @@ This reference describes the staging deployment setup for Comprobify, including 
 | Email | Mailgun | Domain: `mg.comprobify.com` |
 | Error monitoring | Sentry | `comprobify` — `environment=staging` tag |
 | DNS / proxy | Cloudflare | Domain: `comprobify.com` — `api-staging.comprobify.com` → droplet IP (A record, proxied, Terraform-managed) |
-| App CI/CD | GitHub Actions | `comprobify` repo — `release-staging.yml`, `deploy-staging.yml` |
+| App CI/CD | GitHub Actions | `comprobify` repo — `deploy-staging.yml` |
 | Infra CI/CD | GitHub Actions | `comprobify` repo — `terraform.yml` |
 | DO Project | DigitalOcean (dashboard) | `Comprobify Staging` — groups this droplet, `comprobify-web-staging`'s own droplet, and the Managed Database together (organizational only, not a security boundary) |
 
@@ -177,7 +177,7 @@ Read by `terraform.yml`'s plan/apply jobs only.
 
 | Secret | Value |
 |---|---|
-| `RELEASE_PUSH_TOKEN` | A PAT (not the default `GITHUB_TOKEN`) `release-staging.yml`/`release-production.yml` use to fast-forward `staging`/`production` — one shared value for both, since it's a repository secret, not Environment-scoped. Needed because the default `GITHUB_TOKEN` can't push past a ruleset-protected branch's rules. If fine-grained, it needs **both** `Contents: Read and write` (to push) **and** `Administration: Read and write` (to actually exercise a ruleset bypass — easy to miss, since it looks unrelated to "just pushing code"; a classic PAT doesn't have this gotcha, it inherits the owning account's full bypass rights automatically). Either way, the account that owns the token must itself be listed as a bypass actor on the target branch's ruleset — `staging` currently has no ruleset at all, so this token's exact permissions were never actually tested against one until `production`'s ruleset (see `docs/deployment-reference-production.md`) exposed the gap with a real `GH013` failure. |
+| `RELEASE_PUSH_TOKEN` | A PAT (not the default `GITHUB_TOKEN`) `release-production.yml` uses to fast-forward `production` — a repository secret, not Environment-scoped, though staging has no equivalent step to share it with any more (staging deploys directly off `main`, no fast-forward involved). Needed because the default `GITHUB_TOKEN` can't push past a ruleset-protected branch's rules. If fine-grained, it needs **both** `Contents: Read and write` (to push) **and** `Administration: Read and write` (to actually exercise a ruleset bypass — easy to miss, since it looks unrelated to "just pushing code"; a classic PAT doesn't have this gotcha, it inherits the owning account's full bypass rights automatically). Either way, the account that owns the token must itself be listed as a bypass actor on the target branch's ruleset — see `docs/deployment-reference-production.md` for `production`'s ruleset, which is what actually exercises this token today. |
 | `DOCS_CLOUDFLARE_API_TOKEN` | |
 | `DOCS_CLOUDFLARE_ACCOUNT_ID` | |
 | `TERRAFORM_SPACES_ACCESS_KEY_ID` | |
@@ -352,12 +352,11 @@ Docker, fail2ban, unattended-upgrades, and cron are installed on the droplet its
 
 ## Deployment flow
 
-1. Create and push a release tag: `git tag vX.Y.Z && git push origin vX.Y.Z`
-2. `release-staging.yml` fast-forwards the `staging` branch to the tag and pushes it.
-3. The push to `staging` triggers `deploy-staging.yml`, which builds the Docker image and pushes it to `ghcr.io/novaej/comprobify:<commit-sha>`.
-4. `deploy-staging.yml` copies `deploy/docker-compose.yml` and `deploy/caddy/Caddyfile` to `/opt/comprobify` on the droplet over SCP, then SSHes in (as `cpfydeploy9x`) to write `/opt/comprobify/.env` from the `staging` Environment's Secrets/Variables and run `docker compose pull && docker compose up -d`.
-5. Migrations run automatically inside the `api` container at startup — `app.js` calls `migrate()` before the server begins accepting requests. No separate migration step in the deploy workflow.
-6. The scheduled jobs and worker deploy as part of the same Compose stack — there's no separate deploy path for them; they update whenever `api`/`worker` do.
+1. A PR merges into `main`.
+2. The push to `main` triggers `deploy-staging.yml` directly, which builds the Docker image and pushes it to `ghcr.io/novaej/comprobify:<commit-sha>`.
+3. `deploy-staging.yml` copies `deploy/docker-compose.yml` and `deploy/caddy/Caddyfile` to `/opt/comprobify` on the droplet over SCP, then SSHes in (as `cpfydeploy9x`) to write `/opt/comprobify/.env` from the `staging` Environment's Secrets/Variables and run `docker compose pull && docker compose up -d`.
+4. Migrations run automatically inside the `api` container at startup — `app.js` calls `migrate()` before the server begins accepting requests. No separate migration step in the deploy workflow.
+5. The scheduled jobs and worker deploy as part of the same Compose stack — there's no separate deploy path for them; they update whenever `api`/`worker` do.
 
 ---
 

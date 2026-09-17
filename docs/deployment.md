@@ -6,40 +6,46 @@ Staging was originally hosted on Render; it now runs on DigitalOcean droplets pr
 
 ## Branching strategy
 
-Two long-lived branches map to deployed environments. They are **automation-owned** — promoted forward by tags and GitHub Releases, never by direct or manual merges. Feature/fix branches are always cut from `main` and merged back via pull request.
+`main` deploys to staging continuously — every merge, no tag or manual step involved.
+`production` is the one **automation-owned** long-lived branch — it only moves forward
+via a deliberate promotion (a published GitHub Release), never by direct or manual
+merges. Feature/fix branches are always cut from `main` and merged back via pull
+request.
 
 ```
-  feature/xyz     chore/release            main                                   staging                  production
-      │                 │                   │                                       │                          │
-      │  PR + merge     │                   │                                       │                          │
-      │────────────────────────────────────▶│                                       │                          │
-      │                 │  npm version bump │                                       │                          │
-      │                 │  + PR + merge     │                                       │                          │
-      │                 │──────────────────▶│                                       │                          │
-      │                 │                   │  git tag vX.Y.Z + push (merge commit) │                          │
-      │                 │                   │── release-staging.yml (ff-merge) ────▶│── deploy-staging.yml ───▶ comprobify-staging
-      │                 │                   │                                       │                          │
-      │                 │                   │  publish GitHub Release from the tag  │                          │
-      │                 │                   │── release-production.yml (ff-merge) ──┼─────────────────────────▶│── deploy-production.yml ──▶ comprobify-production
-      │                 │                   │                                                                   │
-  hotfix/xyz            │                   │                                                                   │
-      │  branch off `production`, PR into the hotfix branch, bump version + PR there too,                      │
-      │  tag vX.Y.Z+1 → same pipeline (or emergency workflow_dispatch to skip staging)                         │
-      │  → cherry-pick the merged fix back into `main`                                                         │
-      │─────────────────────────────────────────────────────────────────────────────────────────────────────▶ │
+  feature/xyz     chore/release            main                                   production
+      │                 │                   │                                          │
+      │  PR + merge     │                   │                                          │
+      │────────────────────────────────────▶│                                          │
+      │                 │                   │── deploy-staging.yml ──────────────────▶ comprobify-staging
+      │                 │                   │   (every push to main)                   │
+      │                 │  npm version bump │                                          │
+      │                 │  + PR + merge     │                                          │
+      │                 │──────────────────▶│                                          │
+      │                 │                   │  git tag vX.Y.Z + push (naming only —    │
+      │                 │                   │  nothing automated reacts to the tag)    │
+      │                 │                   │                                          │
+      │                 │                   │  publish GitHub Release from the tag     │
+      │                 │                   │── release-production.yml (ff-merge) ────▶│── deploy-production.yml ──▶ comprobify-production
+      │                 │                   │                                          │
+  hotfix/xyz            │                   │                                          │
+      │  branch off `production`, PR into the hotfix branch, bump version + PR there too,│
+      │  tag vX.Y.Z+1 → same pipeline (or emergency workflow_dispatch to skip the wait)  │
+      │  → cherry-pick the merged fix back into `main`                                   │
+      │─────────────────────────────────────────────────────────────────────────────────▶│
 ```
 
 | Branch | Environment | Promoted by |
 |--------|-------------|-------------|
-| `main` | — (trunk; CI only, no deploy) | PR merge |
-| `staging` | Staging (DigitalOcean droplet, formerly Render) | `release-staging.yml` — fast-forwarded on tag push `vX.Y.Z` |
+| `main` | Staging (DigitalOcean droplet, formerly Render) — deploys directly, continuously | `deploy-staging.yml` — triggered on every push to `main` |
 | `production` | Production (DigitalOcean, planned) — *not yet provisioned, pipeline disabled* | `release-production.yml` — fast-forwarded when a GitHub Release is published |
 
 **Rules:**
 - All development happens in feature/fix branches off `main`, merged via PR (1 approval required)
-- `staging` and `production` are **automation-owned** — never push to them directly; they only move forward via fast-forward merges performed by the release workflows. Branch protection should restrict pushes to the automation
-- A **tag** (`vX.Y.Z`, semantic versioning) means *"build this, validate it in staging."* Pushing it triggers `release-staging.yml`, which fast-forwards `staging` and (via the existing push trigger) kicks off `deploy-staging.yml`
-- A **published GitHub Release**, created from a tag already validated in staging, means *"staging confirmed it, ship to production."* Publishing it is the deliberate, auditable approval gate between staging and production — no extra tooling needed
+- `main` deploys to staging automatically on every merge — there is no separate "release to staging" step, and staging always reflects whatever is currently on `main`
+- `production` is **automation-owned** — never push to it directly; it only moves forward via a fast-forward merge performed by `release-production.yml`. Branch protection should restrict pushes to the automation
+- A **tag** (`vX.Y.Z`, semantic versioning) is a naming/versioning marker on a `main` commit — it records "this is what v1.1.0 is," but pushing it doesn't trigger any deploy by itself
+- A **published GitHub Release**, created from a tag, means *"ship this to production."* Publishing it is the deliberate, auditable approval gate — and the only thing that actually triggers a production deploy
 - **Hotfixes** branch from the current `production` ref (not `main`, which may carry unreleased work), flow through a PR + tag through the same pipeline (or an emergency `workflow_dispatch` that skips straight to production), and **must be cherry-picked back into `main`** afterwards so the fix survives the next regular release
 
 ---
@@ -66,7 +72,11 @@ git checkout main && git pull origin main
 git branch -d feature/my-feature
 ```
 
-### Release to staging
+### Staging
+
+No manual step — every merge to `main` deploys to staging automatically via `deploy-staging.yml`. There's nothing to "release" to staging; it's always running whatever is currently on `main`.
+
+### Cut a release candidate
 
 Every commit on `main` is a merged (often squashed) PR, so `npm version`'s built-in commit+tag step can't run directly on `main` — it would push straight to `main` with no review, and the tag would point at a commit review never saw. Bump the version through a normal PR first, then tag the result. Full rationale in the "Releasing" section of `../CLAUDE.md`.
 
@@ -92,11 +102,11 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-`release-staging.yml` fast-forwards `staging` to `vX.Y.Z` and pushes it, which triggers `deploy-staging.yml` automatically. Use semantic versioning (`vMAJOR.MINOR.PATCH`) so it's obvious at a glance whether a tag is a feature release (`v1.5.0`) or a hotfix (`v1.4.1`). The tag is treated as an **immutable** "build this" snapshot — never push a follow-up commit to `main` that changes the version after a tag is created.
+Pushing the tag doesn't trigger any automation by itself — it's just a name for a commit that's already been running on staging as part of `main`. Use semantic versioning (`vMAJOR.MINOR.PATCH`) so it's obvious at a glance whether a tag is a feature release (`v1.5.0`) or a hotfix (`v1.4.1`). The tag is treated as an **immutable** "this is version X.Y.Z" snapshot — never push a follow-up commit to `main` that changes the version after a tag is created.
 
 ### Promote to production
 
-Once the tag has been validated in staging, promotion is a single deliberate action — **publishing a GitHub Release from that tag**:
+Promotion is a single deliberate action — **publishing a GitHub Release from the tag**:
 
 1. GitHub UI → **Releases → Draft a new release**
 2. Choose the existing tag (e.g. `v1.4.0`) — do not create a new one
@@ -134,7 +144,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-From here, either run it through the normal tag → staging → release → production pipeline (safer, still validated), or — for true emergencies — trigger `release-production.yml` manually via `workflow_dispatch` to skip straight to production (documented as the "break-glass" path; bypasses staging validation).
+From here, either publish a Release from the tag through the normal pipeline (the fix has already been running on staging as part of `main`), or — for true emergencies — trigger `release-production.yml` manually via `workflow_dispatch` to skip straight to production (documented as the "break-glass" path).
 
 **Don't skip this step:** cherry-pick the merged fix commit back into `main` so it isn't silently lost or reverted on the next regular release.
 
@@ -153,15 +163,13 @@ git push origin main
 
 | File | Trigger | Effect |
 |------|---------|--------|
-| `.github/workflows/release-staging.yml` | Push of tag `vX.Y.Z` | Fast-forwards `staging` to the tagged commit and pushes it |
-| `.github/workflows/deploy-staging.yml` | Push to `staging` | Builds the image, pushes to GHCR, deploys to the staging droplet over SSH — see `docs/terraform-digitalocean-setup.md` |
+| `.github/workflows/deploy-staging.yml` | Push to `main` | Builds the image, pushes to GHCR, deploys to the staging droplet over SSH — see `docs/terraform-digitalocean-setup.md` |
 | `.github/workflows/release-production.yml` | *(disabled)* GitHub Release published | Fast-forwards `production` to the released commit and pushes it |
 | `.github/workflows/deploy-production.yml` | *(disabled)* Push to `production` | Mirrors `deploy-staging.yml` once production is provisioned |
 
 ### Pipeline stages (staging)
 
-1. **Tag pushed** (`vX.Y.Z`) — `release-staging.yml` checks out the tag and fast-forward-merges `staging` to it, then pushes
-2. **Push to `staging`** — `deploy-staging.yml` builds the Docker image, pushes it to GHCR, then deploys it to the staging droplet over SSH (pulls the image, writes `.env` from GitHub Secrets/Variables, restarts the containers)
+1. **Push to `main`** (any merged PR) — `deploy-staging.yml` builds the Docker image, pushes it to GHCR, then deploys it to the staging droplet over SSH (pulls the image, writes `.env` from GitHub Secrets/Variables, restarts the containers)
 
 Migrations run automatically at startup — `app.js` calls `migrate()` before the server begins accepting requests. Full mechanics (the droplet, the compose stack, exactly how the deploy step works) are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
 
@@ -386,7 +394,7 @@ Restart-on-crash is handled by Docker Compose's `restart: unless-stopped` policy
 
 ### 1. Branches
 
-Only `staging` exists today (already created). `production` is created when the production environment is provisioned (see "Production status" above):
+Only `main` exists today — staging deploys directly from it, no separate branch needed. `production` is created when the production environment is provisioned (see "Production status" above):
 
 ```bash
 git checkout main
@@ -404,11 +412,11 @@ git checkout main
 - ✅ Dismiss stale pull request approvals when new commits are pushed
 - ✅ Do not allow bypassing the above settings
 
-### 3. Protect `staging` and `production` (Settings → Branches → Add rule, one for each)
+### 3. Protect `production` (Settings → Branches → Add rule)
 
-Both branches are **automation-owned** — they only move forward via fast-forward pushes from `release-staging.yml` / `release-production.yml`. Restrict direct human pushes so the fast-forward invariant can't be broken by a stray commit:
+`production` is **automation-owned** — it only moves forward via fast-forward pushes from `release-production.yml`. Restrict direct human pushes so the fast-forward invariant can't be broken by a stray commit:
 
-- **Branch name pattern:** `staging` (repeat for `production`)
+- **Branch name pattern:** `production`
 - ✅ Restrict who can push — limit to the automation (e.g. a bot account / `GITHUB_TOKEN` with appropriate permissions, or repository admins only as a fallback)
 - ✅ Do not allow force pushes
 
@@ -416,7 +424,7 @@ Both branches are **automation-owned** — they only move forward via fast-forwa
 
 Per-environment, scoped to the matching GitHub Environment (`staging` now, `production` once provisioned) — the full set (`DROPLET_IP`, `INFRA_SSH_PRIVATE_KEY`, every app credential/config value, split between Secrets and Variables) is documented in `docs/terraform-digitalocean-setup.md`'s env var reference table rather than duplicated here.
 
-Note `release-staging.yml` / `release-production.yml` don't need extra secrets — they push to branches using the workflow's own `contents: write` permission.
+Note `release-production.yml` doesn't need extra secrets — it pushes to `production` using the workflow's own `contents: write` permission.
 
 ### 5. DigitalOcean
 
@@ -485,7 +493,8 @@ curl https://api.comprobify.com/v1/admin/tenants \
 - [ ] `xmllint` available — attempt a document creation and check `docker compose logs api` for XSD validation errors. Check directly via `docker compose exec api which xmllint`. If missing, a Dockerfile change installing `libxml2-utils` is needed.
 
 ### 8. Pipeline smoke test
-- [ ] Push a tag (`git tag vX.Y.Z && git push origin vX.Y.Z`) and confirm `Release to Staging` workflow runs and fast-forwards the `staging` branch, then `Deploy Staging` fires automatically
+- [ ] **Staging:** merge a PR to `main` and confirm `Deploy Staging` fires automatically
+- [ ] **Production:** publish a GitHub Release from an existing tag and confirm `Release to Production` fast-forwards `production`, then `Deploy Production` fires automatically
 
 ### 9. Notification email templates
 `notification_email_templates` (migration 079, ADR-024 Phase C) is **not seeded automatically** by any migration — the source content in `docs/email-templates/*.txt` only reaches the DB once an admin explicitly publishes it via `POST /v1/admin/notification-email-templates`. A freshly migrated environment creates `notifications` rows and fans out webhooks fine, but every email-capable type silently fails at send time (`NOTIFICATION_DISPATCH` retries with `Notification email template not found`, eventually flips to `FAILED` after `PENDING_EFFECTS_MAX_ATTEMPTS`, default 5) until this step is done. This bit staging for real — see `project_notification_email_templates_unpublished` incident notes.
