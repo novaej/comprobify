@@ -38,7 +38,7 @@ request.
 | Branch | Environment | Promoted by |
 |--------|-------------|-------------|
 | `main` | Staging (DigitalOcean droplet, formerly Render) — deploys directly, continuously | `deploy-staging.yml` — triggered on every push to `main` |
-| `production` | Production (DigitalOcean, planned) — *not yet provisioned, pipeline disabled* | `release-production.yml` — fast-forwarded when a GitHub Release is published |
+| `production` | Production (DigitalOcean) — live since 2026-09-15 | `release-production.yml` — fast-forwarded when a GitHub Release is published |
 
 **Rules:**
 - All development happens in feature/fix branches off `main`, merged via PR (1 approval required)
@@ -115,7 +115,7 @@ Promotion is a single deliberate action — **publishing a GitHub Release from t
 
 `release-production.yml` then fast-forwards `production` to that commit and triggers `deploy-production.yml`.
 
-> **Currently disabled** — the production droplet, `production` branch, and secrets don't exist yet. See "Production status" below for what's needed to enable this.
+> **Live since 2026-09-15.** See "Production status" below.
 
 ### Hotfix flow
 
@@ -164,20 +164,19 @@ git push origin main
 | File | Trigger | Effect |
 |------|---------|--------|
 | `.github/workflows/deploy-staging.yml` | Push to `main` | Builds the image, pushes to GHCR, deploys to the staging droplet over SSH — see `docs/terraform-digitalocean-setup.md` |
-| `.github/workflows/release-production.yml` | *(disabled)* GitHub Release published | Fast-forwards `production` to the released commit and pushes it |
-| `.github/workflows/deploy-production.yml` | *(disabled)* Push to `production` | Mirrors `deploy-staging.yml` once production is provisioned |
+| `.github/workflows/release-production.yml` | GitHub Release published | Fast-forwards `production` to the released commit and pushes it |
+| `.github/workflows/deploy-production.yml` | Push to `production` | Mirrors `deploy-staging.yml`, deploying to the production droplet |
 
-### Pipeline stages (staging)
+### Pipeline stages
 
-1. **Push to `main`** (any merged PR) — `deploy-staging.yml` builds the Docker image, pushes it to GHCR, then deploys it to the staging droplet over SSH (pulls the image, writes `.env` from GitHub Secrets/Variables, restarts the containers)
+1. **Staging** — push to `main` (any merged PR) → `deploy-staging.yml` builds the Docker image, pushes it to GHCR, then deploys it to the staging droplet over SSH (pulls the image, writes `.env` from GitHub Secrets/Variables, restarts the containers)
+2. **Production** — publish a GitHub Release from a tag → `release-production.yml` fast-forwards `production` → push to `production` triggers `deploy-production.yml`, which mirrors the staging deploy step against the production droplet
 
 Migrations run automatically at startup — `app.js` calls `migrate()` before the server begins accepting requests. Full mechanics (the droplet, the compose stack, exactly how the deploy step works) are in `docs/terraform-digitalocean-setup.md`, not duplicated here.
 
 ### Production status
 
-**Partially provisioned, still disabled.** The `production` branch, `terraform/environments/production`, and the `plan-production`/`apply-production` job pair in `terraform.yml` already exist and are written — production is no longer purely hypothetical. `release-production.yml` and `deploy-production.yml` are also both fully written (the latter mirrors `deploy-staging.yml` exactly, nothing left to rewrite), but both stay behind an `if: false` guard with their real triggers commented out, and the production droplet itself has never been `terraform apply`'d — no database, domain, or GitHub Environment secrets exist yet either. Production is deliberately on standby until the remaining setup steps are done.
-
-`docs/production-readiness-checklist.md` is the authoritative, actively-maintained list of exactly what's done versus still pending — don't rely on a step list here, since one already drifted out of sync with reality once. `docs/deployment-reference-production.md` is the target-configuration reference (mirrors `docs/deployment-reference-staging.md`'s structure) for every concrete value — droplet name, deploy user, GitHub Environment names, DB/broker setup, DNS record — once each piece is ready to provision.
+**Live since 2026-09-15.** `docs/deployment-reference-production.md` is the target-configuration reference (mirrors `docs/deployment-reference-staging.md`'s structure) for every concrete value — droplet name, deploy user, GitHub Environment names, DB/broker setup, DNS record.
 
 ---
 
@@ -321,7 +320,7 @@ Reference table (schedule matches the Render Cron Job days except Queue Reconcil
 | Queue reconciliation | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/queue-reconciliation` |
 | Payphone reconciliation | `*/5 * * * *` (every 5 minutes) | `node scripts/run-admin-job.js /v1/admin/jobs/payphone-reconciliation` |
 
-Production's schedule doesn't exist yet — it gets the same 5 entries on its own droplet once production is provisioned (see "Production status" above).
+Production runs the same 5 entries on its own droplet, templated by the same `cloud-init.yaml.tftpl`.
 
 > The `ADMIN_SECRET` for each environment is independent — never use the staging secret against the production endpoint.
 
@@ -394,7 +393,7 @@ Restart-on-crash is handled by Docker Compose's `restart: unless-stopped` policy
 
 ### 1. Branches
 
-Only `main` exists today — staging deploys directly from it, no separate branch needed. `production` is created when the production environment is provisioned (see "Production status" above):
+`main` and `production` both exist. Staging deploys directly from `main`, no separate branch needed. `production` was created the same way any new environment branch would be:
 
 ```bash
 git checkout main
@@ -422,21 +421,21 @@ git checkout main
 
 ### 4. Add secrets/variables (Settings → Secrets and variables → Actions)
 
-Per-environment, scoped to the matching GitHub Environment (`staging` now, `production` once provisioned) — the full set (`DROPLET_IP`, `INFRA_SSH_PRIVATE_KEY`, every app credential/config value, split between Secrets and Variables) is documented in `docs/terraform-digitalocean-setup.md`'s env var reference table rather than duplicated here.
+Per-environment, scoped to the matching GitHub Environment (`staging` and `production` both set up) — the full set (`DROPLET_IP`, `INFRA_SSH_PRIVATE_KEY`, every app credential/config value, split between Secrets and Variables) is documented in `docs/terraform-digitalocean-setup.md`'s env var reference table rather than duplicated here.
 
 Note `release-production.yml` doesn't need extra secrets — it pushes to `production` using the workflow's own `contents: write` permission.
 
 ### 5. DigitalOcean
 
-- Staging droplet already exists, provisioned via Terraform and deployed to by `deploy-staging.yml` over SSH — see `docs/terraform-digitalocean-setup.md`
-- When ready: provision the production droplet (`terraform/environments/production`) + a production DigitalOcean Managed Postgres database, with independent env vars and secrets from staging — see "Production status" above
+- Both the staging and production droplets are provisioned via Terraform and deployed to by their respective `deploy-*.yml` workflow over SSH — see `docs/terraform-digitalocean-setup.md`
+- Production has its own DigitalOcean Managed Postgres database, with independent env vars and secrets from staging
 - Migrations run automatically at startup via `app.js` — no separate deploy step needed
 
 ---
 
 ## First deploy checklist
 
-Run through this after every new environment is provisioned (staging done, repeat for production). Steps are in order.
+Run through this after every new environment is provisioned (staging and production both done — repeat for any future environment). Steps are in order.
 
 ### 1. Database user
 - [ ] Create a dedicated non-superuser role via the database's SQL client (staging: DigitalOcean Managed Postgres, shared with `comprobify-web` — never use the provider's default admin role, e.g. DO's `doadmin`, as the app user; it bypasses RLS):
@@ -673,7 +672,7 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [x] `.env` file is not world-readable and never committed — `deploy-production.yml` runs `chmod 600 /opt/comprobify/.env` right after writing it; the file only ever exists on the droplet, never in git
 - [x] `trust proxy` in `server.js` matches the actual number of reverse proxy hops in front of the app (currently `2`: Cloudflare, then Caddy on the droplet) — required for IP-based rate limiters (`adminLimiter`/`registrationLimiter`) to see the real client IP via `X-Forwarded-For` instead of pooling all traffic into one bucket. Re-verify this number if the proxy chain ever changes. — confirmed in code (`src/server.js:19`), same for every environment
 - [x] `helmet()` middleware active — sets standard security headers (`X-Content-Type-Options`, `Strict-Transport-Security`, `X-Frame-Options`, etc.) — confirmed in code (`src/server.js:39`), same for every environment
-- [x] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /v1/admin/tenants/:id/promote` — no tenants promoted yet (`tenants: []`), nothing to violate this yet
+- [x] Tenants promoted to production (`tenants.sandbox = false`) only on the `APP_ENV=production` deployment — use `POST /v1/admin/tenants/:id/promote` — real tenants have been promoted since launch, all via this path
 - [x] API is behind HTTPS — Caddy on the droplet issues/renews the TLS cert automatically via Let's Encrypt (see `docs/terraform-digitalocean-setup.md`'s "The application stack") — confirmed, `https://api.comprobify.com/health` resolves with a valid cert
 - [x] PostgreSQL not exposed on a public port — confirmed via DO's Trusted Sources: only the production droplet's IP is allowlisted on the cluster's firewall, so a connection from any other source is refused at the network level before it ever reaches Postgres's TLS/auth negotiation
 - [x] `xmllint` installed in the container image (`apt install libxml2-utils`, part of the Dockerfile) — confirmed directly via SSH (`xmllint: using libxml version 20914`)
@@ -682,7 +681,7 @@ See `GETTING_STARTED.md` for the full admin API reference.
 - [x] `MAILGUN_WEBHOOK_SIGNING_KEY` set and webhook URL registered in Mailgun dashboard for all 4 event types
 - [x] Webhook endpoint (`/v1/mailgun/webhook`) reachable on the public HTTPS URL — confirmed directly, a test POST returns `401` (signature rejection), not `404`
 - [x] Log aggregation configured — the API logs to stdout — `BETTERSTACK_SOURCE_TOKEN` is also set on `production`, shipping structured logs to Betterstack same as staging
-- [x] `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` come from **this environment's own Payphone application** — staging in test mode, production in production mode. Nothing in the code can tell a test token from a live one, so pasting production credentials into staging means staging creates **real charges** — or deliberately left unset to keep card payments disabled — deliberately unset for production (blocked on legal entity registration for Payphone's own KYC), a supported launch state
+- [x] `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` come from **this environment's own Payphone application** — staging in test mode, production in production mode. Nothing in the code can tell a test token from a live one, so pasting production credentials into staging means staging creates **real charges**. Production's own application is set up (KYC'd against the registered legal entity, registered against comprobify-web's actual production domain), and a real card payment has been verified end-to-end against Payphone's live endpoint
 - [x] `SENTRY_DSN` set on staging and production so unexpected `5xx` errors are reported (left unset locally so development never sends events) — confirmed present on `production`
 
 ### Rotating secrets (e.g. after a suspected compromise)
