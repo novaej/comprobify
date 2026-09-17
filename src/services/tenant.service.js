@@ -48,7 +48,10 @@ async function acceptAgreements(tenantId, termsVersion, { ip, userAgent } = {}) 
   await tenantModel.updateAgreementAcceptance(tenantId, termsVersion);
 }
 
-async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY') {
+// callerIsReserved: whether the key authenticating THIS request is itself a
+// reserved (comprobify-web-internal) key — see the key-mirroring comment
+// below for why it gates which mirrored keys appear in the response.
+async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY', callerIsReserved = false) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
   if (tenant.status !== TenantStatus.ACTIVE) {
@@ -96,13 +99,30 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
     }
   }
 
-  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId);
+  // Mirrors EVERY sandbox key into production, reserved ones included —
+  // includeReserved: true — so comprobify-web's own production access keeps
+  // working with no separate re-provisioning step, the same as before
+  // reserved keys existed as a concept. What changes is the RESPONSE: a
+  // mirrored reserved key's plaintext is only included when callerIsReserved
+  // is true — i.e. this request was itself authenticated with a reserved key
+  // (in practice, only comprobify-web's master key ever holds tenant:promote
+  // scope on the frontend side; per-role keys don't). That's the same caller
+  // who's about to store it, so it's safe. A self-service key can technically
+  // also hold tenant:promote and call this directly — for that caller,
+  // reserved keys are still mirrored (production access isn't broken), just
+  // never shown, exactly like every other tenant-facing surface.
+  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId, true);
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, 'sandbox');
   const apiKeys = [];
   for (const key of sandboxKeys) {
     const plainToken = crypto.randomBytes(32).toString('hex');
-    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production', scopes: key.scopes });
-    apiKeys.push({ label: key.label, apiKey: plainToken });
+    await apiKeyModel.create({
+      tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production',
+      scopes: key.scopes, isReserved: key.is_reserved,
+    });
+    if (!key.is_reserved || callerIsReserved) {
+      apiKeys.push({ label: key.label, apiKey: plainToken });
+    }
   }
 
   await tenantModel.promote(tenantId);

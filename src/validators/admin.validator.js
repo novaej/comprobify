@@ -1,5 +1,7 @@
 const { body, param, query } = require('express-validator');
 const { TIERS } = require('../constants/subscription-tiers');
+const { ALL_SCOPES } = require('../constants/api-key-scopes');
+const NotificationTypes = require('../constants/notification-types');
 const TenantStatus = require('../constants/tenant-status');
 const RejectionReasons = require('../constants/rejection-reasons');
 const SuspensionReasons = require('../constants/suspension-reasons');
@@ -181,10 +183,64 @@ const createApiKey = [
     .optional()
     .isBoolean()
     .withMessage('revokeExisting must be a boolean'),
+
+  body('scopes')
+    .optional()
+    .isArray({ min: 1 })
+    .withMessage('scopes must be a non-empty array')
+    .bail()
+    .custom((scopes) => scopes.every((s) => ALL_SCOPES.includes(s)))
+    .withMessage(`scopes must only contain: ${ALL_SCOPES.join(', ')}`),
+
+  body('isReserved')
+    .optional()
+    .isBoolean()
+    .withMessage('isReserved must be a boolean'),
+
+  body('replaceKeyId')
+    .optional()
+    .isUUID()
+    .withMessage('replaceKeyId must be a valid UUID'),
+
+  body().custom((value) => {
+    if (value.replaceKeyId && value.revokeExisting) {
+      throw new Error('replaceKeyId and revokeExisting cannot both be set — replaceKeyId targets one key, revokeExisting targets every active key in the environment');
+    }
+    return true;
+  }),
 ];
 
 const revokeApiKey = [
   param('id').isUUID().withMessage('id must be a valid UUID'),
+];
+
+// Webhook endpoints — mirrors createApiKey's shape (isReserved/replaceEndpointId).
+const createWebhookEndpoint = [
+  param('id').isUUID().withMessage('id must be a valid UUID'),
+
+  body('url')
+    .isURL({ protocols: ['https'], require_tld: true, require_protocol: true })
+    .withMessage('url must be a valid HTTPS URL'),
+
+  body('eventTypes')
+    .optional()
+    .isArray()
+    .withMessage('eventTypes must be an array'),
+
+  body('eventTypes.*')
+    .optional()
+    .isIn(Object.values(NotificationTypes))
+    .withMessage('each eventType must be a recognized notification type'),
+
+  body('isReserved')
+    .optional()
+    .isBoolean()
+    .withMessage('isReserved must be a boolean'),
+
+  body('replaceEndpointId')
+    .optional()
+    .isUUID()
+    .withMessage('replaceEndpointId must be a valid UUID'),
 ];
 
 const listApiKeys = [
@@ -412,6 +468,7 @@ const getSeatPrice = [
 module.exports = {
   createTenant, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey,
+  createWebhookEndpoint,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, refundPayment, getPaymentProof, listPaymentProofs, listPayments, publishAgreement,
   getAgreementVersion,

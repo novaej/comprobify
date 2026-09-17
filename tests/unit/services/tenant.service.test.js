@@ -156,6 +156,40 @@ describe('TenantService', () => {
       ]);
     });
 
+    test('mirrors a reserved key into production and includes it in the response when the caller itself authenticated with a reserved key', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
+      apiKeyModel.findActiveByTenantId.mockResolvedValue([
+        { label: 'Initial master key', scopes: ALL_SCOPES, is_reserved: true },
+        { label: 'erp', scopes: ['documents:read'], is_reserved: false },
+      ]);
+
+      const result = await tenantService.promote(1, [], null, 'MONTHLY', /* callerIsReserved */ true);
+
+      expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith(1, true);
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'Initial master key', isReserved: true }));
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'erp', isReserved: false }));
+      expect(result.apiKeys).toEqual([
+        { label: 'Initial master key', apiKey: expect.any(String) },
+        { label: 'erp', apiKey: expect.any(String) },
+      ]);
+    });
+
+    test('mirrors a reserved key into production but hides its plaintext when the caller authenticated with a non-reserved (self-service) key', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
+      apiKeyModel.findActiveByTenantId.mockResolvedValue([
+        { label: 'Initial master key', scopes: ALL_SCOPES, is_reserved: true },
+        { label: 'erp', scopes: ['documents:read'], is_reserved: false },
+      ]);
+
+      const result = await tenantService.promote(1, [], null, 'MONTHLY', /* callerIsReserved */ false);
+
+      // Still mirrored — production access must keep working — just not shown to this caller.
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'Initial master key', isReserved: true }));
+      expect(result.apiKeys).toEqual([
+        { label: 'erp', apiKey: expect.any(String) },
+      ]);
+    });
+
     test('seeds sequentials for every issuer x active document type', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', sandbox: true });
       issuerModel.findAllByTenantId.mockResolvedValue([

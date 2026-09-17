@@ -524,14 +524,14 @@ describe('AdminService', () => {
     test('rejects when the tenant does not exist', async () => {
       tenantModel.findById.mockResolvedValue(null);
 
-      await expect(adminService.createApiKey(1, 'label', 'sandbox')).rejects.toMatchObject({ statusCode: 404 });
+      await expect(adminService.createApiKey(1, { label: 'label', environment: 'sandbox' })).rejects.toMatchObject({ statusCode: 404 });
     });
 
     test('defaults to sandbox when the tenant is still in sandbox and no environment is given', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', undefined);
+      await adminService.createApiKey(1, { label: 'label' });
 
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ environment: 'sandbox' }));
     });
@@ -540,7 +540,7 @@ describe('AdminService', () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: false });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', undefined);
+      await adminService.createApiKey(1, { label: 'label' });
 
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ environment: 'production' }));
     });
@@ -548,7 +548,7 @@ describe('AdminService', () => {
     test('rejects an invalid environment value', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
 
-      await expect(adminService.createApiKey(1, 'label', 'staging')).rejects.toMatchObject({ statusCode: 400 });
+      await expect(adminService.createApiKey(1, { label: 'label', environment: 'staging' })).rejects.toMatchObject({ statusCode: 400 });
       expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
 
@@ -556,7 +556,7 @@ describe('AdminService', () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', 'sandbox', true);
+      await adminService.createApiKey(1, { label: 'label', environment: 'sandbox', revokeExisting: true });
 
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
     });
@@ -565,55 +565,111 @@ describe('AdminService', () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', 'sandbox');
+      await adminService.createApiKey(1, { label: 'label', environment: 'sandbox' });
 
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
     });
 
     test('rejects when the tenant has reached their tier API key limit', async () => {
       tenantModel.findById.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'STARTER',
+      });
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(5); // STARTER's own pool is 5
+
+      await expect(adminService.createApiKey(1, { label: 'label', environment: 'sandbox' }))
+        .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+    });
+
+    test('a FREE tenant is rejected outright — maxApiKeys: 0 is genuinely zero, not 0 + reserved headroom', async () => {
+      tenantModel.findById.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE',
       });
-      apiKeyModel.countActiveByTenantId.mockResolvedValue(5); // FREE: 0 self-service + 5 reserved for the frontend
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(0);
 
-      await expect(adminService.createApiKey(1, 'label', 'sandbox'))
+      await expect(adminService.createApiKey(1, { label: 'label', environment: 'sandbox' }))
         .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
       expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
 
     test('revoke-and-replace succeeds when the post-revoke count is within the tier limit', async () => {
       tenantModel.findById.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE',
+        id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'STARTER',
       });
       apiKeyModel.countActiveByTenantId.mockResolvedValue(0);
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', 'sandbox', true);
+      await adminService.createApiKey(1, { label: 'label', environment: 'sandbox', revokeExisting: true });
 
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
       expect(apiKeyModel.create).toHaveBeenCalled();
     });
 
     test('mints a token whose SHA-256 hash matches what was persisted', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'STARTER' });
       apiKeyModel.create.mockResolvedValue({});
 
-      const token = await adminService.createApiKey('00000000-0000-0000-0000-000000000001', 'frontend', 'sandbox');
+      const token = await adminService.createApiKey('00000000-0000-0000-0000-000000000001', { label: 'frontend', environment: 'sandbox' });
 
       expect(typeof token).toBe('string');
       const expectedHash = crypto.createHash('sha256').update(token).digest('hex');
       expect(apiKeyModel.create).toHaveBeenCalledWith({
-        tenantId: '00000000-0000-0000-0000-000000000001', keyHash: expectedHash, label: 'frontend', environment: 'sandbox', scopes: ALL_SCOPES,
+        tenantId: '00000000-0000-0000-0000-000000000001', keyHash: expectedHash, label: 'frontend', environment: 'sandbox', scopes: ALL_SCOPES, isReserved: undefined,
       });
     });
 
     test('stores a null label when none is given', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'STARTER' });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, undefined, 'sandbox');
+      await adminService.createApiKey(1, { environment: 'sandbox' });
 
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: null }));
+    });
+
+    test('mints a reserved key exempt from the tier limit, gated by the reserved sanity ceiling instead', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(1);
+      apiKeyModel.create.mockResolvedValue({});
+
+      await adminService.createApiKey(1, { label: 'App — Viewer', environment: 'sandbox', isReserved: true, scopes: ['documents:read'] });
+
+      expect(apiKeyModel.countActiveByTenantId).not.toHaveBeenCalled();
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ isReserved: true, scopes: ['documents:read'] }));
+    });
+
+    test('rejects minting a reserved key past the sanity ceiling', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(5);
+
+      await expect(adminService.createApiKey(1, { label: 'App — Viewer', environment: 'sandbox', isReserved: true }))
+        .rejects.toMatchObject({ statusCode: 409, code: 'RESERVED_KEY_LIMIT_REACHED' });
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+    });
+
+    test('replaceKeyId atomically revokes one specific key and mints its replacement, leaving other keys untouched', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(0);
+      apiKeyModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000099', active: true, label: 'Initial master key' });
+
+      await adminService.createApiKey(1, { environment: 'sandbox', isReserved: true, replaceKeyId: '00000000-0000-0000-0000-000000000099' });
+
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(apiKeyModel.revoke).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000099', mockClient);
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ isReserved: true }), mockClient);
+      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+    });
+
+    test('replaceKeyId rejects when the target key does not belong to the tenant, rolling back', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(0);
+      apiKeyModel.findByIdAndTenantId.mockResolvedValue(null);
+
+      await expect(adminService.createApiKey(1, { environment: 'sandbox', isReserved: true, replaceKeyId: '00000000-0000-0000-0000-000000000099' }))
+        .rejects.toMatchObject({ statusCode: 404 });
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
   });
 
@@ -642,7 +698,7 @@ describe('AdminService', () => {
 
       const result = await adminService.listApiKeys('00000000-0000-0000-0000-000000000001');
 
-      expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
+      expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', true);
       expect(result).toEqual([
         expect.objectContaining({
           id: '00000000-0000-0000-0000-000000000017',
@@ -725,6 +781,7 @@ describe('AdminService', () => {
 
       const result = await adminService.promoteTenant(1);
 
+      expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith(1, true);
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
       expect(apiKeyModel.create).toHaveBeenCalledTimes(2);
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'frontend', environment: 'production', scopes: ALL_SCOPES }));
@@ -734,6 +791,20 @@ describe('AdminService', () => {
         { label: 'erp', apiKey: expect.any(String) },
       ]);
       expect(tenantModel.promote).toHaveBeenCalledWith(1);
+    });
+
+    test('mirrors a reserved key into production and always includes it — the admin route is already ADMIN_SECRET-trusted, no caller to hide it from', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
+      issuerModel.findAllByTenantId.mockResolvedValue([]);
+      apiKeyModel.findActiveByTenantId.mockResolvedValue([
+        { label: 'Initial master key', scopes: ALL_SCOPES, is_reserved: true },
+      ]);
+      tenantModel.promote.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: false });
+
+      const result = await adminService.promoteTenant(1);
+
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'Initial master key', isReserved: true }));
+      expect(result.apiKeys).toEqual([{ label: 'Initial master key', apiKey: expect.any(String) }]);
     });
 
     test('returns no apiKeys when the tenant had none active in sandbox', async () => {

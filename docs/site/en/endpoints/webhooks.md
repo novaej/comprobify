@@ -123,7 +123,7 @@ Returns all active endpoints for the tenant (signing secrets are never included)
 }
 ```
 
-`limit.max` is how many active endpoints you can have in total before `POST /v1/webhooks` returns `402 WEBHOOK_ENDPOINT_LIMIT_REACHED`, and `limit.used` is your current count — see [Subscription tiers](../getting-started.md#subscription-tiers). On Free/Solo/Lite `max` may not be zero even though those plans don't sell webhooks via self-service: comprobify reserves a small fixed allowance on every plan for its own web app.
+`limit.max` is how many active endpoints you can have in total before `POST /v1/webhooks` returns `402 WEBHOOK_ENDPOINT_LIMIT_REACHED`, and `limit.used` is your current count — it matches your plan's own maximum exactly (see [Subscription tiers](../getting-started.md#subscription-tiers)). On Free/Solo/Lite `max` is `0`: those plans don't sell webhooks via self-service, and the internal endpoint the web app uses for itself never counts toward this or appears in this listing.
 
 ---
 

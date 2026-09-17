@@ -78,7 +78,7 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
 
 `lastUsedAt` (nullable, `null` si la llave nunca ha autenticado una solicitud) y `requestCount` (contador de por vida, no por ventana — para volumen acotado en el tiempo usa los logs estructurados de solicitudes o una herramienta APM) se actualizan en cada solicitud que esa llave autentica con éxito. `scopes` refleja lo que esa llave tiene permitido hacer actualmente — ver [Scopes](#scopes) arriba.
 
-`limit.max` es cuántas llaves activas puedes tener en total antes de que `POST /v1/keys` devuelva `402 API_KEY_LIMIT_REACHED`, y `limit.used` es tu conteo actual. En Free/Solo/Lite este número no es cero pese a que esos planes no venden llaves adicionales por self-service (ver [Planes de suscripción](../getting-started.md#planes-de-suscripcion)) — comprobify reserva una pequeña cuota fija en cada plan para su propia app web, así que `max` siempre incluye ese margen encima de lo que tu plan vende.
+`limit.max` es cuántas llaves activas puedes tener en total antes de que `POST /v1/keys` devuelva `402 API_KEY_LIMIT_REACHED`, y `limit.used` es tu conteo actual — coincide exactamente con el máximo de tu plan (ver [Planes de suscripción](../getting-started.md#planes-de-suscripcion)). En Free/Solo/Lite `max` es `0`: esos planes no venden llaves adicionales por self-service, y las llaves internas que la aplicación web usa para operar tu panel nunca cuentan aquí ni aparecen en este listado.
 
 ### Errores
 

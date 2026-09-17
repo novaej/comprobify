@@ -83,12 +83,14 @@ const promoteTenant = async (req, res) => {
 // API keys
 const createApiKey = async (req, res) => {
   const tenantId = req.params.id;
-  const apiKey = await adminService.createApiKey(
-    tenantId,
-    req.body.label,
-    req.body.environment,
-    req.body.revokeExisting === true,
-  );
+  const apiKey = await adminService.createApiKey(tenantId, {
+    label: req.body.label,
+    environment: req.body.environment,
+    revokeExisting: req.body.revokeExisting === true,
+    scopes: req.body.scopes,
+    isReserved: req.body.isReserved === true,
+    replaceKeyId: req.body.replaceKeyId,
+  });
   res.status(201).json({ ok: true, apiKey });
 };
 
@@ -106,6 +108,17 @@ const getApiKeyUsage = async (req, res) => {
 const revokeApiKey = async (req, res) => {
   await adminService.revokeApiKey(req.params.id);
   res.json({ ok: true });
+};
+
+const createWebhookEndpoint = async (req, res) => {
+  const tenantId = req.params.id;
+  const result = await adminService.createWebhookEndpoint(tenantId, {
+    url: req.body.url,
+    eventTypes: req.body.eventTypes,
+    isReserved: req.body.isReserved === true,
+    replaceEndpointId: req.body.replaceEndpointId,
+  });
+  res.status(201).json({ ok: true, ...result });
 };
 
 // Subscriptions & payments
@@ -506,6 +519,7 @@ const getDocumentRide = async (req, res) => {
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
   createIssuer, listIssuers, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, runNotificationJobs,
+  createWebhookEndpoint,
   runSubscriptionJobs, runQuotaJobs, runQueueReconciliationJob, runPayphoneReconciliationJob,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments, listPendingInvoices, refundPayment,

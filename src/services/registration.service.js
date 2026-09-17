@@ -168,7 +168,10 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   // must NEVER be gated by effectiveApiKeyLimit()/TIERS[tier].maxApiKeys.
   // FREE/SOLO/LITE have a 0 self-service pool (see ADR-034), but every
   // tenant, regardless of tier, still needs one fully-working key the moment
-  // they register so they can use the API directly with no further setup.
+  // they register. isReserved: true — this key is always claimed internally
+  // by the frontend as its master key (comprobify-web never shows it to the
+  // tenant), never a self-service key, so it must never count against or
+  // appear in the tenant's own self-service budget/listing (migration 102).
   plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId: tenant.id,
@@ -176,6 +179,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
     label: 'Initial master key',
     environment: 'sandbox',
     scopes: ALL_SCOPES,
+    isReserved: true,
   });
 
   // Durably enqueued (see ADR-022/queueVerificationEmail) — doesn't fail
@@ -208,7 +212,12 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
 // real match issues a key synchronously; anything else (unregistered
 // email, no issuer, wrong certificate) returns the identical generic
 // response so none of those cases are distinguishable from one another.
-async function recover(email, p12Buffer, p12Password) {
+// reserved: only comprobify-web ever calls this endpoint (requireInternalService),
+// and it already knows which case it's in before calling — pass true when the
+// tenant is already linked to a local web-app account (the key stays internal,
+// exactly like register()'s master key); omit/false for the "hand this back to
+// a human to link" case, where the plaintext genuinely needs to reach a caller.
+async function recover(email, p12Buffer, p12Password, reserved = false) {
   // Parse the certificate BEFORE any tenant lookup — a corrupt/wrong-password/
   // expired P12 fails identically whether or not the email is registered, so
   // certificate errors never correlate with account existence.
@@ -241,7 +250,10 @@ async function recover(email, p12Buffer, p12Password) {
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenant.id, environment);
   // Same deliberate bypass as register()'s "Initial master key" above — a
   // FREE/SOLO/LITE tenant recovering access must get a working key back even
-  // though their self-service pool is 0.
+  // though their self-service pool is 0. isReserved follows the caller's
+  // `reserved` flag (see the function comment above) rather than being
+  // hardcoded either way — unlike register(), this key isn't always
+  // frontend-internal.
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId: tenant.id,
@@ -249,6 +261,7 @@ async function recover(email, p12Buffer, p12Password) {
     label: 'Recovery key',
     environment,
     scopes: ALL_SCOPES,
+    isReserved: reserved,
   });
 
   // Extra validation: a matching certificate proves possession of the P12,

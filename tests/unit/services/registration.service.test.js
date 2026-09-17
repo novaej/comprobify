@@ -192,6 +192,7 @@ describe('RegistrationService', () => {
         label: 'Initial master key',
         environment: 'sandbox',
         scopes: ALL_SCOPES,
+        isReserved: true, // always claimed internally by the frontend — never a self-service key
       }));
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'VERIFICATION_EMAIL_SEND',
@@ -370,12 +371,23 @@ describe('RegistrationService', () => {
         label: 'Recovery key',
         environment: 'sandbox',
         scopes: ALL_SCOPES,
+        isReserved: false, // default — the plaintext genuinely needs to reach this caller
       }));
       expect(result.environment).toBe('sandbox');
       expect(result.apiKey).toEqual(expect.any(String));
       expect(result.apiKey).toHaveLength(64);
       expect(result.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000001', email: baseFields.email });
       expect(result.issuer).toMatchObject({ id: '00000000-0000-0000-0000-000000000010', ruc: baseFields.ruc });
+    });
+
+    test('matched + reserved: true — the reissued key is tagged reserved, for the already-linked frontend case', async () => {
+      tenantModel.findByEmail.mockResolvedValue({ ...existingTenant, sandbox: true });
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000500' });
+
+      await registrationService.recover(baseFields.email, p12Buffer, p12Password, true);
+
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ isReserved: true }));
     });
 
     test('matched: records a RECOVERY_SUCCESS attempt keyed by tenant id', async () => {

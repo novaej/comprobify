@@ -28,6 +28,7 @@ function formatEndpoint(row) {
     active:     row.active,
     createdAt:  row.created_at,
     updatedAt:  row.updated_at,
+    isReserved: row.is_reserved === true,
   };
 }
 
@@ -63,9 +64,10 @@ async function create(tenantId, subscriptionTier, url, eventTypes = []) {
 }
 
 /**
- * List all active webhook endpoints for a tenant (secrets excluded), plus
- * the same { max, used } limit info `create` enforces (tier's self-service
- * pool + the frontend's reserved endpoints).
+ * List all active, non-reserved webhook endpoints for a tenant (secrets
+ * excluded), plus the same { max, used } limit info `create` enforces —
+ * the tier's own self-service pool only; comprobify-web's own reserved
+ * endpoint is never included or counted here.
  *
  * @param {number} tenantId
  * @param {string} subscriptionTier
@@ -88,7 +90,9 @@ async function list(tenantId, subscriptionTier) {
  */
 async function update(tenantId, endpointId, fields) {
   const existing = await webhookEndpointModel.findByIdAndTenantId(endpointId, tenantId);
-  if (!existing) throw new NotFoundError('Webhook endpoint');
+  // Same reasoning as api-key.service.js#revokeKey — a reserved endpoint
+  // must look nonexistent to a tenant-facing caller.
+  if (!existing || existing.is_reserved) throw new NotFoundError('Webhook endpoint');
 
   const updated = await webhookEndpointModel.update(endpointId, fields);
   return formatEndpoint(updated);
@@ -102,9 +106,9 @@ async function update(tenantId, endpointId, fields) {
  */
 async function deregister(tenantId, endpointId) {
   const existing = await webhookEndpointModel.findByIdAndTenantId(endpointId, tenantId);
-  if (!existing) throw new NotFoundError('Webhook endpoint');
+  if (!existing || existing.is_reserved) throw new NotFoundError('Webhook endpoint');
 
   await webhookEndpointModel.update(endpointId, { active: false });
 }
 
-module.exports = { create, list, update, deregister };
+module.exports = { create, list, update, deregister, formatEndpoint };

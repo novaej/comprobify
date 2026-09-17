@@ -131,6 +131,16 @@ const recover = [
     .optional()
     .isString(),
 
+  // Multipart body — arrives as the string "true"/"false", not a real
+  // boolean (see CLAUDE.md Common Mistake #25). Only comprobify-web ever
+  // calls this endpoint; it passes this when the recovered key should stay
+  // internal (comprobify-web's own master key) rather than be returned for
+  // a human to link.
+  body('reserved')
+    .optional()
+    .isIn(['true', 'false'])
+    .withMessage('reserved must be "true" or "false"'),
+
   body().custom((_, { req }) => {
     if (!req.file) throw new Error('A P12 certificate file is required');
     return true;

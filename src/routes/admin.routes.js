@@ -33,6 +33,10 @@ router.get('/tenants/:id/api-keys',  v.listApiKeys,        validateRequest, asyn
 router.get('/tenants/:id/api-keys/:keyId/usage', v.getApiKeyUsage, validateRequest, asyncHandler(controller.getApiKeyUsage));
 router.delete('/api-keys/:id',       v.revokeApiKey,       validateRequest, asyncHandler(controller.revokeApiKey));
 
+// Webhook endpoints (tenant-scoped) — mints/replaces a reserved (comprobify-web-
+// internal) endpoint or an ordinary one, mirroring the api-keys routes above.
+router.post('/tenants/:id/webhook-endpoints', v.createWebhookEndpoint, validateRequest, asyncHandler(controller.createWebhookEndpoint));
+
 // Subscriptions & payments
 router.post('/tenants/:id/subscriptions',       v.createSubscription, validateRequest, asyncHandler(controller.createSubscription));
 router.get('/tenants/:id/subscriptions',        v.listSubscriptions,  validateRequest, asyncHandler(controller.listSubscriptions));

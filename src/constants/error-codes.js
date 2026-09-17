@@ -80,6 +80,8 @@ const ErrorCodes = Object.freeze({
   SCOPE_ESCALATION_FORBIDDEN: 'SCOPE_ESCALATION_FORBIDDEN',
   /** Tenant has reached the maximum number of active API keys for their plan */
   API_KEY_LIMIT_REACHED: 'API_KEY_LIMIT_REACHED',
+  /** Sanity ceiling on reserved (comprobify-web-internal) keys/endpoints for one tenant — should only ever fire on a minting bug, never real usage */
+  RESERVED_KEY_LIMIT_REACHED: 'RESERVED_KEY_LIMIT_REACHED',
 
   // --- Tenant / plan limits ---
   /** Tenant has reached the maximum number of branches for their plan */

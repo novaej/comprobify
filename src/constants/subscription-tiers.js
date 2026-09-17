@@ -44,10 +44,12 @@ const TIERS = {
     maxBranches:             1,
     maxIssuePointsPerBranch: 1,
     // 0 on FREE/SOLO/LITE, not a small positive number — self-service keys
-    // and webhooks are a STARTER+ feature; every tier still gets a working
-    // API (RESERVED_API_KEYS_FOR_FRONTEND keys always mint regardless of
-    // this value). Bump this back up whenever a tier should sell its own
-    // keys/webhooks again — nothing else needs to change.
+    // and webhooks are a STARTER+ feature, and genuinely 0 on these tiers:
+    // reserved (comprobify-web-internal) keys/endpoints are minted through a
+    // separate, admin/internal-service-gated path (migration 102) that never
+    // touches this value at all, in either direction. Bump this back up
+    // whenever a tier should sell its own keys/webhooks again — nothing else
+    // needs to change.
     maxWebhookEndpoints:     0,
     maxApiKeys:              0,
     maxUsers:                1,
@@ -176,23 +178,29 @@ const TIERS = {
 // BUSINESS:   allowedDocumentTypes: ['01', '03', '04', '05', '06', '07'],
 // ENTERPRISE: allowedDocumentTypes: ['01', '03', '04', '05', '06', '07'],
 
-// Extra API keys / webhook endpoints available on EVERY tier regardless of
-// TIERS[tier].maxApiKeys/maxWebhookEndpoints — reserved for comprobify-web's
-// own internal keys (one per dashboard role — see CLAUDE.md's
-// "Tenant-scoped API key permissions", the driving use case for the scope
-// split) and its own webhook subscription, so those never eat into what a
-// tenant actually purchased. Bump the env var if the frontend ever needs
-// more roles/hooks — every enforcement/exposition call site reads through
-// the two functions below, nothing else needs to change.
+// comprobify-web's own internal keys/endpoints (its master key, one per
+// dashboard role — see CLAUDE.md's "Tenant-scoped API key permissions" — and
+// its own webhook subscription) no longer count against a tenant's own
+// maxApiKeys/maxWebhookEndpoints pool at all — they're minted as `is_reserved`
+// rows (api_keys/webhook_endpoints, migration 102) through admin/internal-
+// service-gated paths only, and are excluded from every tenant-facing count
+// and listing. These two functions used to add reserved headroom on top of
+// the tier's own value; now they're a plain passthrough, kept as functions
+// (not inlined at call sites) so nothing else needs to change if that ever
+// changes again. RESERVED_API_KEYS_FOR_FRONTEND/RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND
+// still exist, but only as a bug/incident-detection sanity ceiling on how
+// many reserved rows a tenant can accumulate — see
+// apiKeyModel.countReservedByTenantId — not a security boundary, since a
+// tenant can never reach the path that mints them.
 const RESERVED_API_KEYS_FOR_FRONTEND = config.reservedApiKeysForFrontend;
 const RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND = config.reservedWebhookEndpointsForFrontend;
 
 function effectiveApiKeyLimit(tier) {
-  return tier.maxApiKeys === null ? null : tier.maxApiKeys + RESERVED_API_KEYS_FOR_FRONTEND;
+  return tier.maxApiKeys;
 }
 
 function effectiveWebhookEndpointLimit(tier) {
-  return tier.maxWebhookEndpoints === null ? null : tier.maxWebhookEndpoints + RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND;
+  return tier.maxWebhookEndpoints;
 }
 
 module.exports = {

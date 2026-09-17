@@ -17,6 +17,7 @@ const promote = async (req, res) => {
     req.body.initialSequentials || [],
     req.body.tier,
     req.body.billingInterval,
+    req.apiKey.isReserved,
   );
   res.json({ ok: true, ...result });
 };

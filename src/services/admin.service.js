@@ -4,6 +4,8 @@ const tenantModel = require('../models/tenant.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const apiKeyService = require('./api-key.service');
+const webhookEndpointModel = require('../models/webhook-endpoint.model');
+const webhookEndpointService = require('./webhook-endpoint.service');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const tenantEventModel = require('../models/tenant-event.model');
 const { formatTenantEvent } = require('../presenters/tenant-event.presenter');
@@ -15,7 +17,10 @@ const certificateService = require('./certificate.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
-const { TIERS, effectiveApiKeyLimit } = require('../constants/subscription-tiers');
+const {
+  TIERS, effectiveApiKeyLimit, RESERVED_API_KEYS_FOR_FRONTEND,
+  effectiveWebhookEndpointLimit, RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND,
+} = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const SuspensionReasons = require('../constants/suspension-reasons');
 const ErrorCodes = require('../constants/error-codes');
@@ -302,7 +307,18 @@ async function listIssuers() {
   return rows.map(formatIssuer);
 }
 
-async function createApiKey(tenantId, label, environment, revokeExistingInEnv = false) {
+// isReserved: mints a comprobify-web-internal key (master or per-role) —
+// exempt from the tenant's own effectiveApiKeyLimit entirely (it never
+// competes for that budget), gated instead by a generous sanity ceiling
+// (RESERVED_API_KEYS_FOR_FRONTEND) meant only to catch a runaway minting
+// bug, never to block real usage.
+//
+// replaceKeyId: atomically revokes that one specific key (verified to
+// belong to tenantId) and mints its replacement, instead of the blanket
+// revokeExisting flag which revokes every active key in the environment —
+// this is what a reserved-key rotation (e.g. suspected compromise) should
+// use, so it doesn't collaterally revoke unrelated self-service keys.
+async function createApiKey(tenantId, { label, environment, revokeExisting, scopes, isReserved, replaceKeyId } = {}) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
 
@@ -313,28 +329,71 @@ async function createApiKey(tenantId, label, environment, revokeExistingInEnv = 
   if (!['sandbox', 'production'].includes(resolvedEnvironment)) {
     throw new AppError(`environment must be 'sandbox' or 'production', got: '${resolvedEnvironment}'`, 400);
   }
-  if (revokeExistingInEnv) {
-    await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, resolvedEnvironment);
-  }
-  const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
-  const maxKeys = effectiveApiKeyLimit(tierConfig);
-  if (maxKeys !== null) {
-    const currentCount = await apiKeyModel.countActiveByTenantId(tenantId);
-    if (currentCount >= maxKeys) {
+
+  const grantedScopes = Array.isArray(scopes) && scopes.length > 0 ? scopes : ALL_SCOPES;
+  const plainToken = crypto.randomBytes(32).toString('hex');
+
+  if (isReserved) {
+    const reservedCount = await apiKeyModel.countReservedByTenantId(tenantId);
+    if (reservedCount >= RESERVED_API_KEYS_FOR_FRONTEND) {
       throw new AppError(
-        `Tenant has reached the API key limit for the ${tenant.subscription_tier} plan (${maxKeys}).`,
-        402,
-        ErrorCodes.API_KEY_LIMIT_REACHED
+        `Tenant already has ${reservedCount} reserved keys — this should not happen under normal use; investigate before minting another.`,
+        409,
+        ErrorCodes.RESERVED_KEY_LIMIT_REACHED
       );
     }
+  } else {
+    const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
+    const maxKeys = effectiveApiKeyLimit(tierConfig);
+    if (maxKeys !== null) {
+      const currentCount = await apiKeyModel.countActiveByTenantId(tenantId);
+      if (currentCount >= maxKeys) {
+        throw new AppError(
+          `Tenant has reached the API key limit for the ${tenant.subscription_tier} plan (${maxKeys}).`,
+          402,
+          ErrorCodes.API_KEY_LIMIT_REACHED
+        );
+      }
+    }
   }
-  const plainToken = crypto.randomBytes(32).toString('hex');
+
+  if (replaceKeyId) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const existing = await apiKeyModel.findByIdAndTenantId(replaceKeyId, tenantId, client);
+      if (!existing || !existing.active) {
+        throw new NotFoundError('API key');
+      }
+      await apiKeyModel.revoke(replaceKeyId, client);
+      await apiKeyModel.create({
+        tenantId,
+        keyHash: sha256Hex(plainToken),
+        label: label || existing.label,
+        environment: resolvedEnvironment,
+        scopes: grantedScopes,
+        isReserved,
+      }, client);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    return plainToken;
+  }
+
+  if (revokeExisting) {
+    await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, resolvedEnvironment);
+  }
   await apiKeyModel.create({
     tenantId,
     keyHash: sha256Hex(plainToken),
     label: label || null,
     environment: resolvedEnvironment,
-    scopes: ALL_SCOPES,
+    scopes: grantedScopes,
+    isReserved,
   });
   return plainToken;
 }
@@ -363,16 +422,21 @@ async function promoteTenant(tenantId, initialSequentials = []) {
     }
   }
 
-  // Revoke all sandbox keys and create matching production keys (same labels).
-  // KEY_MIRRORING: the tenant receives one new production token per sandbox key
-  // that was active at the time of promotion. All tokens are returned in the
-  // response and shown once — store them immediately.
-  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId);
+  // Revoke all sandbox keys and create matching production keys (same
+  // labels), reserved keys included — includeReserved: true. Unlike the
+  // tenant-facing POST /v1/tenants/promote (tenant.service.js#promote),
+  // this route is only ever reachable with ADMIN_SECRET — already the
+  // highest trust boundary in the system — so there's no caller to hide a
+  // reserved key's plaintext from; every mirrored token is returned.
+  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId, true);
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, 'sandbox');
   const apiKeys = [];
   for (const key of sandboxKeys) {
     const plainToken = crypto.randomBytes(32).toString('hex');
-    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production', scopes: key.scopes });
+    await apiKeyModel.create({
+      tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production',
+      scopes: key.scopes, isReserved: key.is_reserved,
+    });
     apiKeys.push({ label: key.label, apiKey: plainToken });
   }
 
@@ -383,7 +447,7 @@ async function promoteTenant(tenantId, initialSequentials = []) {
 async function listApiKeys(tenantId) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
-  const rows = await apiKeyModel.findActiveByTenantId(tenantId);
+  const rows = await apiKeyModel.findActiveByTenantId(tenantId, true);
   return rows.map(apiKeyService.formatKey);
 }
 
@@ -398,6 +462,66 @@ async function revokeApiKey(id) {
   const row = await apiKeyModel.revoke(id);
   if (!row) throw new NotFoundError('API key');
   return row;
+}
+
+// Mirrors createApiKey's shape/reasoning — see its comments for isReserved
+// and replaceEndpointId (this endpoint's equivalent of replaceKeyId).
+async function createWebhookEndpoint(tenantId, { url, eventTypes, isReserved, replaceEndpointId } = {}) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  const secret = crypto.randomBytes(32).toString('hex');
+  const resolvedEventTypes = eventTypes || [];
+
+  if (isReserved) {
+    const reservedCount = await webhookEndpointModel.countReservedByTenantId(tenantId);
+    if (reservedCount >= RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND) {
+      throw new AppError(
+        `Tenant already has ${reservedCount} reserved webhook endpoints — this should not happen under normal use; investigate before registering another.`,
+        409,
+        ErrorCodes.RESERVED_KEY_LIMIT_REACHED
+      );
+    }
+  } else {
+    const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
+    const maxEndpoints = effectiveWebhookEndpointLimit(tierConfig);
+    if (maxEndpoints !== null) {
+      const currentCount = await webhookEndpointModel.countActiveByTenantId(tenantId);
+      if (currentCount >= maxEndpoints) {
+        throw new AppError(
+          `Tenant has reached the webhook endpoint limit for the ${tenant.subscription_tier} plan (${maxEndpoints}).`,
+          402,
+          ErrorCodes.WEBHOOK_ENDPOINT_LIMIT_REACHED
+        );
+      }
+    }
+  }
+
+  if (replaceEndpointId) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const existing = await webhookEndpointModel.findByIdAndTenantId(replaceEndpointId, tenantId, client);
+      if (!existing || !existing.active) {
+        throw new NotFoundError('Webhook endpoint');
+      }
+      await webhookEndpointModel.update(replaceEndpointId, { active: false }, client);
+      const endpoint = await webhookEndpointModel.create(
+        { tenantId, url: url || existing.url, secret, eventTypes: eventTypes || existing.event_types, isReserved },
+        client
+      );
+      await client.query('COMMIT');
+      return { endpoint: webhookEndpointService.formatEndpoint(endpoint), secret };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  const endpoint = await webhookEndpointModel.create({ tenantId, url, secret, eventTypes: resolvedEventTypes, isReserved });
+  return { endpoint: webhookEndpointService.formatEndpoint(endpoint), secret };
 }
 
 async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
@@ -422,4 +546,5 @@ async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
 module.exports = {
   createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, listTenantEvents,
   createIssuer, listIssuers, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, promoteTenant, renewIssuerCertificate,
+  createWebhookEndpoint,
 };

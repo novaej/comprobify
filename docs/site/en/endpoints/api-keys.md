@@ -78,7 +78,7 @@ Returns every active key for the tenant. The plaintext token is **never** return
 
 `lastUsedAt` (nullable, `null` if the key has never authenticated a request) and `requestCount` (lifetime counter, not windowed — for time-boxed volume use the structured request logs or an APM tool) update on every request that key successfully authenticates. `scopes` reflects what that key is currently permitted to do — see [Scopes](#scopes) above.
 
-`limit.max` is how many active keys you can have in total before `POST /v1/keys` returns `402 API_KEY_LIMIT_REACHED`, and `limit.used` is your current count. On Free/Solo/Lite this number isn't zero even though those plans don't sell additional keys via self-service (see [Subscription tiers](../getting-started.md#subscription-tiers)) — comprobify reserves a small fixed allowance on every plan for its own web app, so `max` always includes that headroom on top of what your plan sells.
+`limit.max` is how many active keys you can have in total before `POST /v1/keys` returns `402 API_KEY_LIMIT_REACHED`, and `limit.used` is your current count — it matches your plan's own maximum exactly (see [Subscription tiers](../getting-started.md#subscription-tiers)). On Free/Solo/Lite `max` is `0`: those plans don't sell additional keys via self-service, and the internal keys the web app uses to run your dashboard never count toward this or appear in this listing.
 
 ### Errors
 
