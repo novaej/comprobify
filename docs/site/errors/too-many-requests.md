@@ -26,7 +26,7 @@ Los límites de tasa son escalonados por plan. Los planes de suscripción más a
 1. **Espera y reintenta** — Los límites de tasa se reinician cada minuto.
 2. **Implementa retroceso exponencial** — Cuando recibas un 429, espera 1 s, luego 2 s, luego 4 s, etc. antes de reintentar.
 3. **Optimiza tus solicitudes** — Agrupa cuando sea posible, guarda en caché los resultados de lectura, evita el sondeo (polling) en un ciclo cerrado.
-4. **Mejora tu plan** — Si alcanzas los límites de forma constante, un tier más alto los aumentará.
+4. **Mejora tu plan** — Si alcanzas los límites de forma constante, un plan más alto los aumentará.
 
 ## Ejemplo de lógica de reintento (JavaScript)
 
