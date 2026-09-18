@@ -81,4 +81,3 @@ Ambos endpoints de esta página son de solo lectura, por lo que siguen siendo ac
 - Los documentos se generan en el registro y de forma diferida para cualquier nueva versión de plantilla cuando se llama a este endpoint o a `GET /v1/tenants/agreements` — no se necesita un paso separado para "solicitar" un documento.
 - Ver el documento no cambia su estado. Llama a `POST /v1/tenants/agreements` por separado.
 - Todas las instancias históricas se conservan — aceptar una nueva versión nunca sobrescribe el registro aceptado anterior. `GET /v1/tenants/agreements/history` devuelve el historial completo por tipo, ordenado del más reciente al más antiguo.
-- Para la carga administrativa retroactiva de tenants ya existentes, ver `POST /v1/admin/tenants/:id/agreements`.

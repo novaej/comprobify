@@ -636,28 +636,12 @@ The runner tracks applied migrations in a `migrations` table — already-applied
 
 ## Certificate management
 
-P12 certificates are uploaded via the Admin API (`POST /v1/admin/issuers`). The API extracts the private key and certificate PEM in-process (never written to disk), then stores them in the `issuers` table:
+P12 certificates are uploaded via self-service registration (`POST /v1/register`, gated behind `X-Internal-Service-Secret` — only comprobify-web's BFF calls it, ADR-035) for a tenant's first issuer, or via the tenant's own `POST /v1/issuers` (branch creation, tenant-authenticated) for any issuer after that. There is no admin-gated issuer-provisioning route — an operator cannot create an issuer on a tenant's behalf. The API extracts the private key and certificate PEM in-process (never written to disk), then stores them in the `issuers` table:
 
 - `issuers.encrypted_private_key` — private key PEM encrypted with AES-256-GCM using `ENCRYPTION_KEY`
 - `issuers.certificate_pem` — certificate PEM stored plaintext
 
 The plaintext private key only exists in memory during the request and at signing time. No P12 file or plaintext private key is ever persisted to disk or the database.
-
-To provision a new issuer:
-```bash
-curl -s -X POST https://api.comprobify.com/v1/admin/issuers \
-  -H "Authorization: Bearer $ADMIN_SECRET" \
-  -F "ruc=1700000000001" \
-  -F "businessName=Acme S.A." \
-  -F "branchCode=001" \
-  -F "issuePointCode=001" \
-  -F "environment=2" \
-  -F "emissionType=1" \
-  -F "certPassword=YOUR_P12_PASSWORD" \
-  -F "cert=@/path/to/token.p12" | jq
-```
-
-See `GETTING_STARTED.md` for the full admin API reference.
 
 ---
 

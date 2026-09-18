@@ -44,8 +44,8 @@ GET /v1/tenants/me
 | `extraSeats` | Usuarios adicionales del panel comprados por encima del número incluido en el plan (0 si no hay ninguno, o si no existe una suscripción activa). Comprobify factura esto pero no lo aplica — ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md#usuarios-adicionales). |
 | `pendingExtraSeats` | Un número de usuarios programado para entrar en vigencia al final del periodo de facturación actual (una reducción en curso), o `null` si no hay nada programado. |
 | `sandbox` | `true` si el tenant está en el entorno de pruebas del SRI, `false` si fue promovido a producción. |
-| `agreementAcceptedAt` | Timestamp del evento de aceptación de acuerdos más reciente, o `null` para tenants creados por un administrador. Compáralo con `GET /v1/tenants/agreements` para detectar desactualizaciones. |
-| `agreementVersion` | La versión del documento TERMS que el tenant aceptó por última vez, o `null` para tenants creados por un administrador. |
+| `agreementAcceptedAt` | Timestamp del evento de aceptación de acuerdos más reciente, o `null` si el tenant aún no ha aceptado ninguno. Compáralo con `GET /v1/tenants/agreements` para detectar desactualizaciones. |
+| `agreementVersion` | La versión del documento TERMS que el tenant aceptó por última vez, o `null` si aún no ha aceptado ninguno. |
 
 ## Errores
 

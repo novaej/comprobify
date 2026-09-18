@@ -60,41 +60,6 @@ function formatIssuer(row) {
 
 // --- Tenant management ---
 
-async function createTenant(fields) {
-  const existing = await tenantModel.findByEmail(fields.email);
-  if (existing) {
-    throw new ConflictError(`A tenant with email ${fields.email} already exists`);
-  }
-  const tier = fields.subscriptionTier || 'FREE';
-  if (!TIERS[tier]) {
-    throw new AppError(`Unknown subscription tier: '${tier}'. Valid tiers: ${Object.keys(TIERS).join(', ')}`, 400, ErrorCodes.INVALID_TIER);
-  }
-  // TIERS[tier] || TIERS.FREE, not `?.documentQuota ?? ...` — the latter
-  // would collapse ENTERPRISE's legitimate null (unlimited) cap back down
-  // to FREE's, since `??` treats null and undefined identically. See
-  // tenant-quota.service.js's capForTier() for the same guard.
-  const documentQuota = (TIERS[tier] || TIERS.FREE).documentQuota;
-
-  const client = await db.getClient();
-  let row, quotaRow;
-  try {
-    await client.query('BEGIN');
-    row = await tenantModel.create({
-      email: fields.email,
-      subscriptionTier: tier,
-      status: TenantStatus.ACTIVE,
-    }, client);
-    quotaRow = await tenantQuotaService.initializeForTenant(row.id, documentQuota, client);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-  return formatTenant(row, quotaRow);
-}
-
 async function listTenants() {
   const rows = await tenantModel.findAll();
   const quotaMap = await tenantQuotaService.getCurrentForTenants(rows.map((r) => r.id));
@@ -185,122 +150,6 @@ async function listTenantEvents(id) {
 }
 
 // --- Issuer management ---
-
-async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
-  const tenant = await tenantModel.findById(fields.tenantId);
-  if (!tenant) throw new NotFoundError('Tenant');
-
-  const tierConfig = TIERS[tenant.subscription_tier];
-  const issuePointCount = await tenantModel.countIssuePointsByBranch(tenant.id, fields.branchCode);
-  if (issuePointCount === 0) {
-    if (tierConfig.maxBranches !== null) {
-      const branchCount = await tenantModel.countBranchesByTenantId(tenant.id);
-      if (branchCount >= tierConfig.maxBranches) {
-        throw new AppError(
-          `Tenant has reached the branch limit for the ${tenant.subscription_tier} plan (${tierConfig.maxBranches}).`,
-          402,
-          ErrorCodes.BRANCH_LIMIT_REACHED
-        );
-      }
-    }
-  } else {
-    if (tierConfig.maxIssuePointsPerBranch !== null) {
-      if (issuePointCount >= tierConfig.maxIssuePointsPerBranch) {
-        throw new AppError(
-          `Branch ${fields.branchCode} has reached the issue point limit for the ${tenant.subscription_tier} plan (${tierConfig.maxIssuePointsPerBranch}).`,
-          402,
-          ErrorCodes.ISSUE_POINT_LIMIT_REACHED
-        );
-      }
-    }
-  }
-
-  let encryptedPrivateKey, certificatePem, certFingerprint, certExpiry;
-
-  if (p12Buffer) {
-    const parsed = certificateService.parseCertificate(p12Buffer, p12Password || '');
-    encryptedPrivateKey = cryptoService.encrypt(parsed.privateKeyPem);
-    certificatePem = parsed.certPem;
-    certFingerprint = parsed.certFingerprint;
-    certExpiry = parsed.certExpiry;
-  } else {
-    const source = await issuerModel.findById(sourceIssuerId);
-    if (!source) throw new NotFoundError('Source issuer', ErrorCodes.SOURCE_ISSUER_NOT_FOUND);
-    if (source.ruc !== fields.ruc) {
-      throw new AppError(
-        `RUC mismatch: source issuer RUC (${source.ruc}) does not match the supplied RUC (${fields.ruc}).`,
-        400,
-        ErrorCodes.RUC_MISMATCH
-      );
-    }
-    encryptedPrivateKey = source.encrypted_private_key;
-    certificatePem = source.certificate_pem;
-    certFingerprint = source.cert_fingerprint;
-    certExpiry = source.cert_expiry;
-  }
-
-  let newIssuer;
-  try {
-    newIssuer = await issuerModel.create({
-      tenantId: tenant.id,
-      ruc: fields.ruc,
-      businessName: fields.businessName,
-      tradeName: fields.tradeName || null,
-      mainAddress: fields.mainAddress || null,
-      branchCode: fields.branchCode,
-      issuePointCode: fields.issuePointCode,
-      emissionType: fields.emissionType,
-      requiredAccounting: [true, 'true', '1', 1].includes(fields.requiredAccounting) ? 'SI' : 'NO',
-      specialTaxpayer: fields.specialTaxpayer || null,
-      branchAddress: fields.branchAddress || null,
-      encryptedPrivateKey,
-      certificatePem,
-      certFingerprint,
-      certExpiry,
-    });
-  } catch (err) {
-    if (err.code === '23505') {
-      throw new ConflictError(`Issuer with RUC ${fields.ruc}, branch ${fields.branchCode}, issue point ${fields.issuePointCode} already exists`);
-    }
-    throw err;
-  }
-
-  if (p12Buffer) {
-    await tenantEventModel.create(tenant.id, 'CERTIFICATE_UPLOADED', {
-      issuerId: newIssuer.id,
-      certFingerprint: newIssuer.cert_fingerprint,
-      certExpiry: newIssuer.cert_expiry,
-    });
-  }
-
-  const documentTypes = Array.isArray(fields.documentTypes) && fields.documentTypes.length > 0
-    ? [...new Set(fields.documentTypes)]
-    : ['01'];
-  await issuerDocumentTypeModel.bulkCreate(newIssuer.id, documentTypes);
-
-  const sequentialMap = {};
-  if (Array.isArray(fields.initialSequentials)) {
-    for (const entry of fields.initialSequentials) {
-      sequentialMap[entry.documentType] = parseInt(entry.sequential, 10);
-    }
-  }
-  for (const docType of documentTypes) {
-    await sequentialService.initialize(
-      newIssuer.id,
-      newIssuer.branch_code,
-      newIssuer.issue_point_code,
-      docType,
-      sequentialMap[docType] || 1,
-      tenant.sandbox,
-    );
-  }
-
-  // Admin issuer creation does NOT mint an API key — the tenant already has its own keys.
-  // If this is the first issuer for a brand-new admin-created tenant, mint a key separately
-  // via createApiKey.
-
-  return { issuer: formatIssuer(newIssuer) };
-}
 
 async function listIssuers() {
   const rows = await issuerModel.findAll();
@@ -530,7 +379,7 @@ async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
 }
 
 module.exports = {
-  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, listTenantEvents,
-  createIssuer, listIssuers, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, promoteTenant, renewIssuerCertificate,
+  listTenants, updateTenantTier, updateTenantStatus, verifyTenant, listTenantEvents,
+  listIssuers, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, promoteTenant, renewIssuerCertificate,
   createWebhookEndpoint,
 };
