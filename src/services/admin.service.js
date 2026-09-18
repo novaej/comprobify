@@ -307,17 +307,8 @@ async function listIssuers() {
   return rows.map(formatIssuer);
 }
 
-// isReserved: mints a comprobify-web-internal key (master or per-role) —
-// exempt from the tenant's own effectiveApiKeyLimit entirely (it never
-// competes for that budget), gated instead by a generous sanity ceiling
-// (RESERVED_API_KEYS_FOR_FRONTEND) meant only to catch a runaway minting
-// bug, never to block real usage.
-//
-// replaceKeyId: atomically revokes that one specific key (verified to
-// belong to tenantId) and mints its replacement, instead of the blanket
-// revokeExisting flag which revokes every active key in the environment —
-// this is what a reserved-key rotation (e.g. suspected compromise) should
-// use, so it doesn't collaterally revoke unrelated self-service keys.
+// isReserved keys skip the tenant limit entirely (bug-ceiling only).
+// replaceKeyId atomically swaps one specific key instead of revoking the whole environment.
 async function createApiKey(tenantId, { label, environment, revokeExisting, scopes, isReserved, replaceKeyId } = {}) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
@@ -422,12 +413,7 @@ async function promoteTenant(tenantId, initialSequentials = []) {
     }
   }
 
-  // Revoke all sandbox keys and create matching production keys (same
-  // labels), reserved keys included — includeReserved: true. Unlike the
-  // tenant-facing POST /v1/tenants/promote (tenant.service.js#promote),
-  // this route is only ever reachable with ADMIN_SECRET — already the
-  // highest trust boundary in the system — so there's no caller to hide a
-  // reserved key's plaintext from; every mirrored token is returned.
+  // Mirrors every sandbox key including reserved ones — ADMIN_SECRET is already the top trust boundary.
   const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId, true);
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, 'sandbox');
   const apiKeys = [];

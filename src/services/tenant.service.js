@@ -48,9 +48,7 @@ async function acceptAgreements(tenantId, termsVersion, { ip, userAgent } = {}) 
   await tenantModel.updateAgreementAcceptance(tenantId, termsVersion);
 }
 
-// callerIsReserved: whether the key authenticating THIS request is itself a
-// reserved (comprobify-web-internal) key — see the key-mirroring comment
-// below for why it gates which mirrored keys appear in the response.
+// callerIsReserved: whether the authenticating key is itself reserved — gates which mirrored keys are returned below.
 async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY', callerIsReserved = false) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
@@ -99,18 +97,8 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
     }
   }
 
-  // Mirrors EVERY sandbox key into production, reserved ones included —
-  // includeReserved: true — so comprobify-web's own production access keeps
-  // working with no separate re-provisioning step, the same as before
-  // reserved keys existed as a concept. What changes is the RESPONSE: a
-  // mirrored reserved key's plaintext is only included when callerIsReserved
-  // is true — i.e. this request was itself authenticated with a reserved key
-  // (in practice, only comprobify-web's master key ever holds tenant:promote
-  // scope on the frontend side; per-role keys don't). That's the same caller
-  // who's about to store it, so it's safe. A self-service key can technically
-  // also hold tenant:promote and call this directly — for that caller,
-  // reserved keys are still mirrored (production access isn't broken), just
-  // never shown, exactly like every other tenant-facing surface.
+  // Mirrors every key including reserved ones; a reserved key's plaintext is only
+  // returned when the caller itself authenticated with a reserved key.
   const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId, true);
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, 'sandbox');
   const apiKeys = [];

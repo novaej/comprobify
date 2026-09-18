@@ -27,10 +27,7 @@ async function create({ tenantId, url, secret, eventTypes = [], isReserved }, cl
 
 /**
  * Return all active webhook endpoints for a tenant.
- *
- * includeReserved: false (default) is the tenant-facing view — a tenant
- * must never see comprobify-web's own canonical webhook subscription.
- * Admin-facing callers pass true for full visibility.
+ * includeReserved: false (tenant-facing) hides comprobify-web's own endpoint; admin callers pass true.
  *
  * @param {number} tenantId
  */
@@ -46,9 +43,7 @@ async function findActiveByTenantId(tenantId, includeReserved = false) {
 }
 
 /**
- * Count active, non-reserved endpoints for a tenant (used to enforce tier
- * limit) — reserved (comprobify-web-internal) endpoints are excluded, same
- * reasoning as api-key.model.js#countActiveByTenantId.
+ * Count active, non-reserved endpoints for a tenant (used to enforce tier limit).
  *
  * @param {number} tenantId
  */

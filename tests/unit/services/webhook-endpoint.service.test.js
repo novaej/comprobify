@@ -115,12 +115,34 @@ describe('WebhookEndpointService', () => {
       expect(webhookEndpointModel.update).not.toHaveBeenCalled();
     });
 
-    test('throws NotFoundError for a reserved endpoint — a tenant must never see or touch it', async () => {
+    test('throws NotFoundError retargeting url on a reserved endpoint — a tenant must not redirect comprobify-web\'s own notification receiver', async () => {
       webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', is_reserved: true });
 
       await expect(webhookEndpointService.update(1, 10, { url: 'https://new.example.com' }))
         .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
       expect(webhookEndpointModel.update).not.toHaveBeenCalled();
+    });
+
+    test('throws NotFoundError changing eventTypes on a reserved endpoint', async () => {
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', is_reserved: true });
+
+      await expect(webhookEndpointService.update(1, 10, { eventTypes: ['DOCUMENT_AUTHORIZED'] }))
+        .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+      expect(webhookEndpointModel.update).not.toHaveBeenCalled();
+    });
+
+    test('allows toggling active on a reserved endpoint — it\'s a delivery switch, not a credential, unlike an API key', async () => {
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', is_reserved: true });
+      webhookEndpointModel.update.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', event_types: [], active: false,
+        created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-05'), is_reserved: true,
+      });
+
+      const result = await webhookEndpointService.update(1, 10, { active: false });
+
+      expect(webhookEndpointModel.update).toHaveBeenCalledWith(10, { active: false });
+      expect(result.active).toBe(false);
+      expect(result.isReserved).toBe(true);
     });
 
     test('updates the endpoint and returns the formatted result', async () => {
@@ -150,12 +172,13 @@ describe('WebhookEndpointService', () => {
       expect(webhookEndpointModel.update).not.toHaveBeenCalled();
     });
 
-    test('throws NotFoundError for a reserved endpoint — a tenant must never see or touch it', async () => {
+    test('deregisters a reserved endpoint too — active isn\'t a credential the way an API key is', async () => {
       webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://example.com', is_reserved: true });
+      webhookEndpointModel.update.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', active: false });
 
-      await expect(webhookEndpointService.deregister(1, 10))
-        .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
-      expect(webhookEndpointModel.update).not.toHaveBeenCalled();
+      await webhookEndpointService.deregister(1, 10);
+
+      expect(webhookEndpointModel.update).toHaveBeenCalledWith(10, { active: false });
     });
 
     test('soft-deletes the endpoint by setting active=false', async () => {

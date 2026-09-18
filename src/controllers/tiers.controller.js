@@ -77,11 +77,7 @@ const list = async (req, res) => {
       overagePerDocumentUsd:   tier.overagePerDocumentUsd,
     };
   }));
-  // maxApiKeys/maxWebhookEndpoints above are each tier's exact self-service
-  // ceiling now — comprobify-web's own internal keys/webhook no longer add
-  // reserved headroom on top (migration 102), so there's nothing left to
-  // publish here; a tenant's limit.max on GET /v1/keys already equals these
-  // values exactly.
+  // maxApiKeys/maxWebhookEndpoints above are each tier's exact ceiling now — no more reserved headroom to publish separately.
   res.json({
     ok: true,
     ivaRate: IVA_RATE,

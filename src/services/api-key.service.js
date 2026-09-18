@@ -25,10 +25,7 @@ function formatKey(row) {
   };
 }
 
-// Returns { keys, limit: { max, used } } — max is the same enforced ceiling
-// createKey checks against (the tier's own self-service pool only; reserved
-// comprobify-web-internal keys are excluded entirely, not just uncounted
-// headroom on top — see findActiveByTenantId's includeReserved default).
+// limit.max is the tier's own self-service pool only — reserved keys are excluded, not added on top.
 async function listKeys(tenant) {
   const rows = await apiKeyModel.findActiveByTenantId(tenant.id);
   const tierConfig = TIERS[tenant.subscriptionTier] || TIERS.FREE;
@@ -111,9 +108,7 @@ async function getDailyUsage(tenantId, keyId, days = 30) {
 
 async function revokeKey(tenantId, keyId, currentApiKeyId) {
   const row = await apiKeyModel.findByIdAndTenantId(keyId, tenantId);
-  // A reserved (comprobify-web-internal) key must be indistinguishable from
-  // a nonexistent one to self-service callers — a tenant must never be able
-  // to confirm it exists, let alone revoke it, even if they learned its id.
+  // A reserved key must look nonexistent to a self-service caller.
   if (!row || !row.active || row.is_reserved) {
     throw new NotFoundError('API key');
   }

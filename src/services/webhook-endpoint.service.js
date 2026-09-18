@@ -64,10 +64,7 @@ async function create(tenantId, subscriptionTier, url, eventTypes = []) {
 }
 
 /**
- * List all active, non-reserved webhook endpoints for a tenant (secrets
- * excluded), plus the same { max, used } limit info `create` enforces —
- * the tier's own self-service pool only; comprobify-web's own reserved
- * endpoint is never included or counted here.
+ * List all active, non-reserved webhook endpoints for a tenant (secrets excluded).
  *
  * @param {number} tenantId
  * @param {string} subscriptionTier
@@ -83,6 +80,7 @@ async function list(tenantId, subscriptionTier) {
 
 /**
  * Update an endpoint's URL, event subscriptions, or active flag.
+ * A reserved endpoint allows toggling `active` only — `active` isn't a credential, but `url`/`eventTypes` stay locked.
  *
  * @param {number}   tenantId
  * @param {number}   endpointId
@@ -90,23 +88,24 @@ async function list(tenantId, subscriptionTier) {
  */
 async function update(tenantId, endpointId, fields) {
   const existing = await webhookEndpointModel.findByIdAndTenantId(endpointId, tenantId);
-  // Same reasoning as api-key.service.js#revokeKey — a reserved endpoint
-  // must look nonexistent to a tenant-facing caller.
-  if (!existing || existing.is_reserved) throw new NotFoundError('Webhook endpoint');
+  if (!existing) throw new NotFoundError('Webhook endpoint');
+  if (existing.is_reserved && Object.keys(fields).some((key) => key !== 'active')) {
+    throw new NotFoundError('Webhook endpoint');
+  }
 
   const updated = await webhookEndpointModel.update(endpointId, fields);
   return formatEndpoint(updated);
 }
 
 /**
- * Deregister an endpoint (soft-delete via active=false).
+ * Deregister an endpoint (soft-delete via active=false). Allowed on a reserved endpoint too.
  *
  * @param {number} tenantId
  * @param {number} endpointId
  */
 async function deregister(tenantId, endpointId) {
   const existing = await webhookEndpointModel.findByIdAndTenantId(endpointId, tenantId);
-  if (!existing || existing.is_reserved) throw new NotFoundError('Webhook endpoint');
+  if (!existing) throw new NotFoundError('Webhook endpoint');
 
   await webhookEndpointModel.update(endpointId, { active: false });
 }

@@ -37,10 +37,7 @@ async function create({ tenantId, keyHash, label, environment, scopes, isReserve
   return rows[0];
 }
 
-// includeReserved: false (default) is the tenant-facing view — a tenant must
-// never see comprobify-web's own master/per-role keys. Admin-facing callers
-// pass true, since they need full visibility (e.g. to find a reserved key's
-// id for a replaceKeyId rotation call).
+// includeReserved: false (tenant-facing) hides comprobify-web's own keys; admin callers pass true.
 async function findActiveByTenantId(tenantId, includeReserved = false) {
   const { rows } = await db.query(
     `SELECT ak.id, ak.label, ak.environment, ak.scopes, ak.active, ak.created_at, ak.revoked_at,
@@ -115,10 +112,7 @@ async function revokeAllByTenantIdAndEnvironment(tenantId, environment) {
   );
 }
 
-// Only counts non-reserved keys — this backs every self-service/tier-limit
-// check (createKey, admin's non-reserved createApiKey), so reserved keys
-// must never be visible to it. See countReservedByTenantId for the separate,
-// non-security sanity check on reserved-key counts.
+// Excludes reserved keys — backs every self-service/tier-limit check.
 async function countActiveByTenantId(tenantId) {
   const { rows } = await db.query(
     `SELECT COUNT(*) AS count FROM api_keys WHERE tenant_id = $1 AND active = true AND is_reserved = false`,
@@ -127,9 +121,7 @@ async function countActiveByTenantId(tenantId) {
   return parseInt(rows[0].count, 10);
 }
 
-// Bug/incident-detection ceiling only (RESERVED_API_KEYS_FOR_FRONTEND) — not
-// a security boundary, since only ADMIN_SECRET/requireInternalService-gated
-// paths can ever mint a reserved key in the first place.
+// Bug-detection sanity ceiling only, not a security boundary.
 async function countReservedByTenantId(tenantId) {
   const { rows } = await db.query(
     `SELECT COUNT(*) AS count FROM api_keys WHERE tenant_id = $1 AND active = true AND is_reserved = true`,

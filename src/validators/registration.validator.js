@@ -131,11 +131,7 @@ const recover = [
     .optional()
     .isString(),
 
-  // Multipart body — arrives as the string "true"/"false", not a real
-  // boolean (see CLAUDE.md Common Mistake #25). Only comprobify-web ever
-  // calls this endpoint; it passes this when the recovered key should stay
-  // internal (comprobify-web's own master key) rather than be returned for
-  // a human to link.
+  // Multipart body — arrives as the string "true"/"false" (Common Mistake #25).
   body('reserved')
     .optional()
     .isIn(['true', 'false'])

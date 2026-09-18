@@ -2787,7 +2787,7 @@
 										}
 									}
 								},
-								"description": "Generates a new tenant-scoped API key. The plaintext token is returned only once — store it immediately.\n\n`label` is optional (max 100 chars). `environment` is optional — omit it to default to the tenant's current active environment (`sandbox` or `production`), or pass `\"sandbox\"`/`\"production\"` explicitly to override.\n\nCopy the returned key value into the `api_key` collection variable."
+								"description": "Generates a new tenant-scoped API key. The plaintext token is returned only once — store it immediately.\n\n`label` is optional (max 100 chars). `environment` is optional — omit it to default to the tenant's current active environment (`sandbox` or `production`), or pass `\"sandbox\"`/`\"production\"` explicitly to override.\n\n`scopes` is optional — an array from the 9-value scope vocabulary (see `ApiKeyScopes`). Omit it to default to full access (`ALL_SCOPES`).\n\n`isReserved` is optional (boolean, default `false`) — mints a comprobify-web-internal key (master or per-role) instead of an ordinary tenant key. Exempt from the tenant's own `maxApiKeys` limit entirely; gated instead by a generous sanity ceiling meant only to catch a runaway minting bug.\n\n`replaceKeyId` is optional (UUID) — atomically revokes that one specific existing key and mints this one as its replacement, in a transaction, without touching any other active key. Used for reserved-key rotation (e.g. suspected compromise). Cannot be combined with `revokeExisting`.\n\nCopy the returned key value into the `api_key` collection variable."
 							}
 						},
 						{
@@ -2856,6 +2856,46 @@
 									]
 								},
 								"description": "Revokes (soft-deletes) an API key by ID. The key stops working immediately."
+							}
+						}
+					]
+				},
+				{
+					"name": "Webhook Endpoints",
+					"item": [
+						{
+							"name": "Mint Webhook Endpoint (admin)",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/webhook-endpoints",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"v1",
+										"admin",
+										"tenants",
+										"{{tenant_id}}",
+										"webhook-endpoints"
+									]
+								},
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"url\": \"https://app.example.com/api/webhooks/receive\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"description": "Registers a new webhook endpoint for a tenant and returns the signing `secret` — shown only once.\n\n`url` must be a valid HTTPS URL. `eventTypes` is optional — omit it or pass `[]` to subscribe to all event types.\n\n`isReserved` is optional (boolean, default `false`) — registers comprobify-web's own internal endpoint (e.g. its canonical in-app notification receiver) instead of an ordinary tenant endpoint. Exempt from the tenant's own `maxWebhookEndpoints` limit entirely; gated instead by a generous sanity ceiling meant only to catch a runaway registration bug.\n\n`replaceEndpointId` is optional (UUID) — atomically deactivates that one specific existing endpoint and mints this one as its replacement, in a transaction, without touching any other active endpoint.\n\nCopy the returned endpoint `id` into the `webhook_id` collection variable."
 							}
 						}
 					]
