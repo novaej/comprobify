@@ -75,14 +75,24 @@ const adminLimiter = rateLimit({
   passOnStoreError: true,
 });
 
-// Strict IP-based limiter for registration: 5 req/hour
-const registrationLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
-  keyGenerator: (req) => ipKeyGenerator(req.ip),
-  handler,
-  store: buildStore('rl:registration:'),
-  passOnStoreError: true,
-});
+// One limiter per route (not shared) — 5 req/hour each, independent abuse vectors.
+function accountLifecycleLimiter(prefix) {
+  return rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    keyGenerator: (req) => ipKeyGenerator(req.ip),
+    handler,
+    store: buildStore(prefix),
+    passOnStoreError: true,
+  });
+}
 
-module.exports = { writeLimiter, readLimiter, adminLimiter, registrationLimiter, buildStore, keyGenerator };
+const registerLimiter = accountLifecycleLimiter('rl:register:');
+const recoverLimiter = accountLifecycleLimiter('rl:recover:');
+const resendVerificationLimiter = accountLifecycleLimiter('rl:resend-verification:');
+
+module.exports = {
+  writeLimiter, readLimiter, adminLimiter,
+  registerLimiter, recoverLimiter, resendVerificationLimiter,
+  buildStore, keyGenerator,
+};

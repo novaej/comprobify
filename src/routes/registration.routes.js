@@ -4,7 +4,7 @@ const controller = require('../controllers/registration.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const { register, recover, resendVerification, verifyEmail, verifyEmailBody } = require('../validators/registration.validator');
-const { registrationLimiter } = require('../middleware/rate-limit');
+const { registerLimiter, recoverLimiter, resendVerificationLimiter } = require('../middleware/rate-limit');
 const requireInternalService = require('../middleware/require-internal-service');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
@@ -56,9 +56,9 @@ const uploadRecoveryFile = (req, res, next) => {
 // own server-side BFF, never directly by a third-party integrator or a
 // visitor's browser (ADR-035) — requireInternalService rejects anything that
 // doesn't carry a valid X-Internal-Service-Secret before any other work runs.
-router.post('/register', requireInternalService, registrationLimiter, uploadRegistrationFiles, register, validateRequest, asyncHandler(controller.register));
-router.post('/recover', requireInternalService, registrationLimiter, uploadRecoveryFile, recover, validateRequest, asyncHandler(controller.recover));
-router.post('/resend-verification', requireInternalService, registrationLimiter, resendVerification, validateRequest, asyncHandler(controller.resendVerification));
+router.post('/register', requireInternalService, registerLimiter, uploadRegistrationFiles, register, validateRequest, asyncHandler(controller.register));
+router.post('/recover', requireInternalService, recoverLimiter, uploadRecoveryFile, recover, validateRequest, asyncHandler(controller.recover));
+router.post('/resend-verification', requireInternalService, resendVerificationLimiter, resendVerification, validateRequest, asyncHandler(controller.resendVerification));
 // Read-only check — safe for email link-scanners (Microsoft Defender/Safe
 // Links etc.) to prefetch repeatedly without burning the token, and doesn't
 // create or activate anything — left reachable without requireInternalService.
