@@ -28,7 +28,7 @@ You can also download the collection JSON directly: [`comprobify.postman_collect
 
 The account starts on the **FREE** tier (5 documents/month, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
 
-Account recovery (`POST /v1/recover`) also happens in the web app, by uploading the same `.p12` certificate you registered with — see [Recover Account](endpoints/recover.md). As with registration, if your account is already linked to the web app, the resulting key isn't shown to you either.
+Account recovery (`POST /v1/recover`) also happens in the web app, by uploading the same `.p12` certificate you registered with — see [Recover Account](endpoints/recover.md). As with registration, the resulting key isn't shown to you either, whether your account was already linked to the web app or is being linked for the first time.
 
 ---
 

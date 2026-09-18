@@ -28,7 +28,7 @@ También puedes descargar el JSON de la colección directamente: [`comprobify.po
 
 La cuenta comienza en el plan **FREE** (5 comprobantes/mes, 1 sucursal, 1 punto de emisión, solo facturas). Todos los comprobantes se envían al ambiente de pruebas del SRI hasta que te promuevas a producción. Las pruebas en sandbox no consumen la cuota — solo los comprobantes de producción lo hacen.
 
-La recuperación de cuenta (`POST /v1/recover`) también se hace desde la aplicación web, subiendo el mismo certificado `.p12` con el que te registraste — ver [Recuperar cuenta](endpoints/recover.md). Como con el registro, si tu cuenta ya está vinculada a la aplicación web, la llave que resulta tampoco se te muestra.
+La recuperación de cuenta (`POST /v1/recover`) también se hace desde la aplicación web, subiendo el mismo certificado `.p12` con el que te registraste — ver [Recuperar cuenta](endpoints/recover.md). Como con el registro, la llave que resulta tampoco se te muestra, sea que tu cuenta ya estuviera vinculada a la aplicación web o se esté vinculando por primera vez.
 
 ---
 

@@ -6,7 +6,7 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 ## Account creation, recovery & activation (Comprobify web app only)
 
-Sign up, lost-key recovery, and email confirmation all happen through the Comprobify web app, not directly against this API — see [Register](register.md) for why. The one exception is the read-only check below.
+Sign up, account recovery (re-establishing the web app's link to your account), and email confirmation all happen through the Comprobify web app, not directly against this API — see [Register](register.md) for why. The one exception is the read-only check below.
 
 | Method | Path | Description |
 |---|---|---|
