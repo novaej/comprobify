@@ -471,6 +471,51 @@ describe('RegistrationService', () => {
         config.email.provider = originalProvider;
       }
     });
+
+    test('matched + alreadyLinked: confirms the match without rotating the key or forcing re-verification', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password, true, true);
+
+      expect(result).toEqual({ ok: true, matched: true, alreadyLinked: true });
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+      expect(tenantModel.demoteToPendingVerification).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalledWith('VERIFICATION_EMAIL_SEND', expect.anything());
+    });
+
+    test('matched + alreadyLinked: still records a RECOVERY_SUCCESS attempt (fires unconditionally on any real match)', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      await registrationService.recover(baseFields.email, p12Buffer, p12Password, true, true);
+
+      expect(attemptTrackerService.recordEvent).toHaveBeenCalledWith(AttemptEventTypes.RECOVERY_SUCCESS, existingTenant.id);
+    });
+
+    test('matched + alreadyLinked + suspended: still rejects with ACCOUNT_SUSPENDED (suspension check runs before the early return)', async () => {
+      tenantModel.findByEmail.mockResolvedValue({ ...existingTenant, status: 'SUSPENDED' });
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      await expect(registrationService.recover(baseFields.email, p12Buffer, p12Password, true, true))
+        .rejects.toMatchObject({ statusCode: 403, code: 'ACCOUNT_SUSPENDED' });
+
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+    });
+
+    test('matched, alreadyLinked omitted: defaults to false — existing callers keep today\'s rotate+demote behavior unchanged', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000500' });
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalled();
+      expect(apiKeyModel.create).toHaveBeenCalled();
+      expect(tenantModel.demoteToPendingVerification).toHaveBeenCalled();
+      expect(result.apiKey).toEqual(expect.any(String));
+    });
   });
 
   describe('resendVerification', () => {

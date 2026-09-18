@@ -313,7 +313,7 @@
 								}
 							]
 						},
-						"description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nThis endpoint is for new accounts only. If the email already exists, it rejects with 409 CONFLICT regardless of account status — use the public collection's \"Recover Account\" request instead if the API key was lost.\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
+						"description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nThis endpoint is for new accounts only. If the email already exists, it rejects with 409 CONFLICT regardless of account status — use the \"Recover\" request in this same folder instead if the local link was lost.\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
 					},
 					"event": [
 						{
@@ -325,6 +325,77 @@
 									"if (r.apiKey) pm.collectionVariables.set('api_key', r.apiKey);",
 									"if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
 									"if (r.issuer?.id) pm.collectionVariables.set('issuer_id', String(r.issuer.id));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Recover",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Internal-Service-Secret",
+								"value": "{{internal_service_secret}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/recover",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"recover"
+							]
+						},
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "email",
+									"value": "your@email.com",
+									"type": "text"
+								},
+								{
+									"key": "certPassword",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "cert",
+									"type": "file",
+									"src": ""
+								},
+								{
+									"key": "reserved",
+									"value": "true",
+									"description": "Whether the reissued key stays internal (never shown to the tenant). comprobify-web always sends true — see CLAUDE.md's \"Account recovery\".",
+									"type": "text",
+									"disabled": true
+								},
+								{
+									"key": "alreadyLinked",
+									"value": "true",
+									"description": "Set true when the caller already has this tenant linked locally — returns { matched: true, alreadyLinked: true } with no key rotation and no re-verification demotion. Omit (or false) for the actual recovery path (missing/broken local link), which does rotate the key and force re-verification.",
+									"type": "text",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Regains access when the local link between a comprobify-web account and its Comprobify tenant is missing or broken (matches by email + the P12 cert used at registration).\n\nDeliberately anti-enumeration: an unregistered email, a tenant with no issuer, or a fingerprint mismatch all return the same generic `{ ok: true, message: ... }` — only a genuine match does anything observable.\n\nOn a genuine match with `alreadyLinked` omitted/false: revokes and reissues the key for the tenant's current environment, and forces the tenant back into PENDING_VERIFICATION (a cert proves P12 possession, not control of the registered inbox). With `alreadyLinked: true`: just confirms the match — no rotation, no demotion — since there's nothing to recover when the caller already has this tenant linked.\n\nSee CLAUDE.md's \"Account recovery\" for the full design rationale."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"if (r.apiKey) pm.collectionVariables.set('api_key', r.apiKey);",
+									"if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));"
 								],
 								"type": "text/javascript"
 							}
@@ -354,30 +425,6 @@
 							]
 						},
 						"description": "Read-only check of whether a verification token is still valid — does not activate the tenant. Safe to call repeatedly, including by email link-scanners that prefetch links. Returns { valid, email } or { valid: false }."
-					}
-				},
-				{
-					"name": "Verify Email",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/v1/verify-email?token={{verification_token}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"v1",
-								"verify-email"
-							],
-							"query": [
-								{
-									"key": "token",
-									"value": "{{verification_token}}"
-								}
-							]
-						},
-						"description": "Legacy combined check-and-consume endpoint, kept for backward compatibility (this is what the verification email links to directly when no verificationRedirectUrl was set). Prefer Check Verify Email Token + Confirm Verify Email for new integrations — see those requests."
 					}
 				},
 				{

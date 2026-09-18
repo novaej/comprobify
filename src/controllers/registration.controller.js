@@ -17,7 +17,9 @@ const register = async (req, res) => {
 
 const recover = async (req, res) => {
   const result = await registrationService.recover(
-    req.body.email, req.file?.buffer, req.body.certPassword, req.body.reserved === true || req.body.reserved === 'true'
+    req.body.email, req.file?.buffer, req.body.certPassword,
+    req.body.reserved === true || req.body.reserved === 'true',
+    req.body.alreadyLinked === true || req.body.alreadyLinked === 'true'
   );
   res.json(result);
 };
