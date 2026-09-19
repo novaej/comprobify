@@ -271,9 +271,9 @@ Intentar crear una sucursal más allá del límite del plan devuelve `402 BRANCH
 
 ---
 
-## Límite de tasa
+## Límite de solicitudes
 
-Las solicitudes tienen un límite de tasa por API key según tu plan de suscripción (ver tabla arriba). Cuando excedes el límite, la API devuelve [`429 Too Many Requests`](errors/too-many-requests.md). Implementa retroceso exponencial: espera 1s, luego 2s, luego 4s antes de reintentar.
+Cada API key tiene un límite de solicitudes por minuto según tu plan de suscripción (ver tabla arriba). Cuando excedes el límite, la API devuelve [`429 Too Many Requests`](errors/too-many-requests.md). Implementa retroceso exponencial: espera 1s, luego 2s, luego 4s antes de reintentar.
 
 ---
 

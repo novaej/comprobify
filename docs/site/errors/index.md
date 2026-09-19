@@ -194,7 +194,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | Código | Cuándo ocurre |
 |---|---|
 | `RESEND_COOLDOWN` | Se solicitó reenviar la verificación de nuevo antes de que transcurriera el período de espera de 60 segundos |
-| `TOO_MANY_REQUESTS` | Se excedió el límite de tasa de la API key |
+| `TOO_MANY_REQUESTS` | Se excedió el límite de solicitudes de la API key |
 
 ### 500 / 502
 

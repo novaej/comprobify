@@ -54,7 +54,7 @@ Un tipo de comprobante que nunca ha emitido un comprobante en un entorno reporta
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
-| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de solicitudes |
 
 ---
 
@@ -106,4 +106,4 @@ La escritura bloquea la fila del contador (`SELECT ... FOR UPDATE`) dentro de la
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
-| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de solicitudes |

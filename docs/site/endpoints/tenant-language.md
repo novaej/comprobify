@@ -37,7 +37,7 @@ Bearer token — se requiere API key.
 | `400` | `VALIDATION_FAILED` | `language` falta o no es un valor admitido |
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `FORBIDDEN` | La cuenta está suspendida |
-| `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
+| `429` | `TOO_MANY_REQUESTS` | Límite de solicitudes excedido |
 
 ## Notas
 

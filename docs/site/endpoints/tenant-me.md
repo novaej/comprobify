@@ -52,7 +52,7 @@ GET /v1/tenants/me
 | Estado HTTP | Código | Cuándo ocurre |
 |---|---|---|
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
-| `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
+| `429` | `TOO_MANY_REQUESTS` | Límite de solicitudes excedido |
 
 ## Notas
 

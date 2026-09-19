@@ -2,7 +2,7 @@
 
 **Estado HTTP:** `429 Too Many Requests`
 
-La solicitud fue limitada. Revisa el campo `code` para distinguir entre un límite de tasa de la API y un período de espera específico de una operación.
+La solicitud fue limitada. Revisa el campo `code` para distinguir entre un límite de solicitudes de la API y un período de espera específico de una operación.
 
 ## Códigos
 
@@ -12,7 +12,7 @@ Se pidió reenviar el correo de verificación (desde la aplicación web) antes d
 
 **Qué hacer:** Espera 60 segundos desde la solicitud de reenvío anterior, luego vuelve a intentarlo.
 
-### `TOO_MANY_REQUESTS` — límite de tasa de la API
+### `TOO_MANY_REQUESTS` — límite de solicitudes de la API
 
 Tu API key excedió el límite de solicitudes por minuto.
 
@@ -20,10 +20,10 @@ Tu API key excedió el límite de solicitudes por minuto.
 - **Endpoints de escritura** (POST): 60 solicitudes / minuto
 - **Endpoints de lectura** (GET): 300 solicitudes / minuto
 
-Los límites de tasa son escalonados por plan. Los planes de suscripción más altos tienen límites más altos — consulta los detalles de tu plan.
+Los límites de solicitudes son escalonados por plan. Los planes de suscripción más altos tienen límites más altos — consulta los detalles de tu plan.
 
 **Qué hacer:**
-1. **Espera y reintenta** — Los límites de tasa se reinician cada minuto.
+1. **Espera y reintenta** — Los límites de solicitudes se reinician cada minuto.
 2. **Implementa retroceso exponencial** — Cuando recibas un 429, espera 1 s, luego 2 s, luego 4 s, etc. antes de reintentar.
 3. **Optimiza tus solicitudes** — Agrupa cuando sea posible, guarda en caché los resultados de lectura, evita el sondeo (polling) en un ciclo cerrado.
 4. **Mejora tu plan** — Si alcanzas los límites de forma constante, un plan más alto los aumentará.
@@ -59,7 +59,7 @@ async function requestWithRetry(fn, maxRetries = 3) {
   "title":    "Too Many Requests",
   "status":   429,
   "code":     "TOO_MANY_REQUESTS",
-  "detail":   "Se excedió el límite de tasa para esta API key",
+  "detail":   "Se excedió el límite de solicitudes para esta API key",
   "instance": "/v1/documents"
 }
 ```

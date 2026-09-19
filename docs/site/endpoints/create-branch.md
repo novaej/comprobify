@@ -10,7 +10,7 @@ POST /v1/issuers
 
 `Authorization: Bearer <api-key>`
 
-## Límite de tasa
+## Límite de solicitudes
 
 Limitador de escritura — depende del plan (10–300 solicitudes/min por API key).
 

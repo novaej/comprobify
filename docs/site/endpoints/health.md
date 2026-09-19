@@ -39,4 +39,4 @@ No requerida.
 
 - El endpoint siempre responde (incluso ante una falla de base de datos) — es el propio proceso del servidor reportando su estado.
 - Una respuesta `503` significa que la aplicación está en ejecución pero no puede atender solicitudes que requieren la base de datos. El proceso debe considerarse no saludable y ser reemplazado.
-- Este endpoint está intencionalmente excluido del límite de tasa y de la autenticación.
+- Este endpoint está intencionalmente excluido del límite de solicitudes y de la autenticación.

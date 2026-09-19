@@ -115,7 +115,7 @@ Este es el único lugar que muestra la secuencia completa de cambios en tu suscr
 |---|---|---|
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `404` | `NOT_FOUND` | No se pudo resolver el tenant (normalmente no debería ocurrir en una solicitud autenticada) |
-| `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
+| `429` | `TOO_MANY_REQUESTS` | Límite de solicitudes excedido |
 
 ## Notas
 
