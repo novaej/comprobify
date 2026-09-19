@@ -6,7 +6,7 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 
 ## Creación, recuperación y activación de cuenta (solo app web de Comprobify)
 
-El registro, la recuperación de llave perdida y la confirmación de correo ocurren todos a través de la aplicación web de Comprobify, no directamente contra esta API — ver [Registro](register.md) para saber por qué. La única excepción es la comprobación de solo lectura de abajo.
+El registro, la recuperación de cuenta (restablecer el vínculo de la app web con tu cuenta) y la confirmación de correo ocurren todos a través de la aplicación web de Comprobify, no directamente contra esta API — ver [Registro](register.md) para saber por qué. La única excepción es la comprobación de solo lectura de abajo.
 
 | Método | Ruta | Descripción |
 |---|---|---|

@@ -81,4 +81,3 @@ Both endpoints on this page are read-only, so they stay reachable even if the te
 - Documents are generated at registration and lazily for any new template version when this endpoint or `GET /v1/tenants/agreements` is called — no separate step is needed to "request" a document.
 - Viewing the document does not change its status. Call `POST /v1/tenants/agreements` separately.
 - All historical instances are preserved — accepting a new version never overwrites the old accepted record. `GET /v1/tenants/agreements/history` returns the full history per type ordered newest first.
-- For admin backfill of pre-existing tenants, see `POST /v1/admin/tenants/:id/agreements`.

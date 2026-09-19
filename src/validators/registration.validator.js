@@ -131,6 +131,17 @@ const recover = [
     .optional()
     .isString(),
 
+  // Multipart body — arrives as the string "true"/"false" (Common Mistake #25).
+  body('reserved')
+    .optional()
+    .isIn(['true', 'false'])
+    .withMessage('reserved must be "true" or "false"'),
+
+  body('alreadyLinked')
+    .optional()
+    .isIn(['true', 'false'])
+    .withMessage('alreadyLinked must be "true" or "false"'),
+
   body().custom((_, { req }) => {
     if (!req.file) throw new Error('A P12 certificate file is required');
     return true;

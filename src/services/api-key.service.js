@@ -21,12 +21,11 @@ function formatKey(row) {
     revokedAt: row.revoked_at,
     lastUsedAt: row.last_used_at,
     requestCount: Number(row.request_count),
+    isReserved: row.is_reserved === true,
   };
 }
 
-// Returns { keys, limit: { max, used } } — max is the same enforced ceiling
-// createKey checks against (tier's self-service pool + the frontend's
-// reserved keys), so the frontend never has to reimplement that arithmetic.
+// limit.max is the tier's own self-service pool only — reserved keys are excluded, not added on top.
 async function listKeys(tenant) {
   const rows = await apiKeyModel.findActiveByTenantId(tenant.id);
   const tierConfig = TIERS[tenant.subscriptionTier] || TIERS.FREE;
@@ -109,7 +108,8 @@ async function getDailyUsage(tenantId, keyId, days = 30) {
 
 async function revokeKey(tenantId, keyId, currentApiKeyId) {
   const row = await apiKeyModel.findByIdAndTenantId(keyId, tenantId);
-  if (!row || !row.active) {
+  // A reserved key must look nonexistent to a self-service caller.
+  if (!row || !row.active || row.is_reserved) {
     throw new NotFoundError('API key');
   }
   if (row.id === currentApiKeyId) {

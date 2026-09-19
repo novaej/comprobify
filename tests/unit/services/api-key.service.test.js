@@ -27,7 +27,7 @@ describe('ApiKeyService', () => {
         },
       ]);
 
-      const result = await apiKeyService.listKeys({ id: 7, subscriptionTier: 'FREE' });
+      const result = await apiKeyService.listKeys({ id: 7, subscriptionTier: 'STARTER' });
 
       expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith(7);
       expect(result).toEqual({
@@ -42,9 +42,10 @@ describe('ApiKeyService', () => {
             revokedAt: null,
             lastUsedAt: lastUsedAt,
             requestCount: 15832,
+            isReserved: false,
           },
         ],
-        limit: { max: 5, used: 1 }, // FREE: 0 self-service + 5 reserved for the frontend
+        limit: { max: 5, used: 1 }, // STARTER's own self-service pool — reserved keys are excluded, not added on top
       });
     });
 
@@ -68,12 +69,12 @@ describe('ApiKeyService', () => {
       expect(result.requestCount).toBe(0);
     });
 
-    test('returns an empty array when the tenant has no active keys', async () => {
+    test('returns an empty array and a genuinely zero limit for a FREE tenant', async () => {
       apiKeyModel.findActiveByTenantId.mockResolvedValue([]);
 
       const result = await apiKeyService.listKeys({ id: 7, subscriptionTier: 'FREE' });
 
-      expect(result).toEqual({ keys: [], limit: { max: 5, used: 0 } });
+      expect(result).toEqual({ keys: [], limit: { max: 0, used: 0 } });
     });
   });
 
@@ -245,9 +246,9 @@ describe('ApiKeyService', () => {
     // These set countActiveByTenantId's mocked return value, which persists across tests
     // (afterEach only clears call history) — kept last in this describe block so they can't
     // leak a stale count into an earlier test that doesn't set it.
-    test('rejects when the tenant has reached their tier API key limit', async () => {
+    test('rejects a FREE tenant outright — maxApiKeys: 0 means genuinely zero, not 0 + reserved headroom', async () => {
       const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscriptionTier: 'FREE' };
-      apiKeyModel.countActiveByTenantId.mockResolvedValue(5); // FREE: 0 self-service + 5 reserved for the frontend
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(0);
 
       await expect(apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES))
         .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
@@ -255,14 +256,23 @@ describe('ApiKeyService', () => {
     });
 
     test('allows creating up to (but not exceeding) the tier API key limit', async () => {
-      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscriptionTier: 'FREE' };
-      apiKeyModel.countActiveByTenantId.mockResolvedValue(4); // FREE: 0 self-service + 5 reserved for the frontend
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscriptionTier: 'STARTER' };
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(4); // STARTER's own pool is 5 — one slot left
       apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002' });
 
       const { token } = await apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES);
 
       expect(typeof token).toBe('string');
       expect(apiKeyModel.create).toHaveBeenCalled();
+    });
+
+    test('rejects a STARTER tenant once they reach their own 5-key self-service pool', async () => {
+      const tenant = { id: '00000000-0000-0000-0000-000000000001', status: 'ACTIVE', subscriptionTier: 'STARTER' };
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(5);
+
+      await expect(apiKeyService.createKey(tenant, { label: 'erp', environment: 'sandbox' }, ALL_SCOPES))
+        .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
 
     test('never enforces an API key limit for a tier with maxApiKeys: null', async () => {
@@ -334,6 +344,14 @@ describe('ApiKeyService', () => {
 
     test('throws NotFoundError when the key is already inactive', async () => {
       apiKeyModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000099', active: false });
+
+      await expect(apiKeyService.revokeKey(1, 99, 5))
+        .rejects.toMatchObject({ statusCode: 404 });
+      expect(apiKeyModel.revoke).not.toHaveBeenCalled();
+    });
+
+    test('throws NotFoundError for a reserved key — a tenant must never confirm it exists, let alone revoke it', async () => {
+      apiKeyModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000099', active: true, is_reserved: true });
 
       await expect(apiKeyService.revokeKey(1, 99, 5))
         .rejects.toMatchObject({ statusCode: 404 });

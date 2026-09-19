@@ -1,7 +1,7 @@
 {
 	"info": {
 		"name": "Comprobify API — Internal (Admin)",
-		"description": "Comprobify internal/admin collection. Flow:\n1. Publish Agreements (TERMS, PRIVACY, DPA)\n2. Register or Create Tenant + Create Issuer + Create API Key\n3. Verify tenant (admin or email)\n4. Tenant creates a subscription → payment_id captured\n5. List Payments → review queue\n6. Get Payment Proof → view file\n7. Review Payment (VERIFIED)\n8. Self-bill invoice through own issuer → capture accessKey\n9. Link Invoice to Subscription → awaits SRI authorization\n10. Run Subscription Jobs (for tier-changes and renewals)",
+		"description": "Comprobify internal/admin collection. Flow:\n1. Publish Agreements (TERMS, PRIVACY, DPA)\n2. Register (POST /v1/register) — creates tenant + issuer + API key\n3. Verify tenant (admin or email)\n4. Tenant creates a subscription → payment_id captured\n5. List Payments → review queue\n6. Get Payment Proof → view file\n7. Review Payment (VERIFIED)\n8. Self-bill invoice through own issuer → capture accessKey\n9. Link Invoice to Subscription → awaits SRI authorization\n10. Run Subscription Jobs (for tier-changes and renewals)",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -49,7 +49,7 @@
 		{
 			"key": "tenant_id",
 			"value": "",
-			"description": "Tenant ID — copy from Create Tenant (admin) response",
+			"description": "Tenant ID — copy from the Register response (POST /v1/register), or List Tenants (admin)",
 			"type": "string"
 		},
 		{
@@ -313,7 +313,7 @@
 								}
 							]
 						},
-						"description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nThis endpoint is for new accounts only. If the email already exists, it rejects with 409 CONFLICT regardless of account status — use the public collection's \"Recover Account\" request instead if the API key was lost.\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
+						"description": "Self-service registration. Creates a tenant, issuer, and sandbox API key in one call.\n\nStore the returned `apiKey` — it is shown only once. Copy it into the `api_key` collection variable.\n\nThis endpoint is for new accounts only. If the email already exists, it rejects with 409 CONFLICT regardless of account status — use the \"Recover\" request in this same folder instead if the local link was lost.\n\nOptional `verificationRedirectUrl` sets a frontend page for the email verification link."
 					},
 					"event": [
 						{
@@ -325,6 +325,77 @@
 									"if (r.apiKey) pm.collectionVariables.set('api_key', r.apiKey);",
 									"if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));",
 									"if (r.issuer?.id) pm.collectionVariables.set('issuer_id', String(r.issuer.id));"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Recover",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-Internal-Service-Secret",
+								"value": "{{internal_service_secret}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/v1/recover",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"v1",
+								"recover"
+							]
+						},
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "email",
+									"value": "your@email.com",
+									"type": "text"
+								},
+								{
+									"key": "certPassword",
+									"value": "",
+									"type": "text"
+								},
+								{
+									"key": "cert",
+									"type": "file",
+									"src": ""
+								},
+								{
+									"key": "reserved",
+									"value": "true",
+									"description": "Whether the reissued key stays internal (never shown to the tenant). comprobify-web always sends true — see CLAUDE.md's \"Account recovery\".",
+									"type": "text",
+									"disabled": true
+								},
+								{
+									"key": "alreadyLinked",
+									"value": "true",
+									"description": "Set true when the caller already has this tenant linked locally — returns { matched: true, alreadyLinked: true } with no key rotation and no re-verification demotion. Omit (or false) for the actual recovery path (missing/broken local link), which does rotate the key and force re-verification.",
+									"type": "text",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Regains access when the local link between a comprobify-web account and its Comprobify tenant is missing or broken (matches by email + the P12 cert used at registration).\n\nDeliberately anti-enumeration: an unregistered email, a tenant with no issuer, or a fingerprint mismatch all return the same generic `{ ok: true, message: ... }` — only a genuine match does anything observable.\n\nOn a genuine match with `alreadyLinked` omitted/false: revokes and reissues the key for the tenant's current environment, and forces the tenant back into PENDING_VERIFICATION (a cert proves P12 possession, not control of the registered inbox). With `alreadyLinked: true`: just confirms the match — no rotation, no demotion — since there's nothing to recover when the caller already has this tenant linked.\n\nSee CLAUDE.md's \"Account recovery\" for the full design rationale."
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const r = pm.response.json();",
+									"pm.test('Status 200', () => pm.response.to.have.status(200));",
+									"if (r.apiKey) pm.collectionVariables.set('api_key', r.apiKey);",
+									"if (r.tenant?.id) pm.collectionVariables.set('tenant_id', String(r.tenant.id));"
 								],
 								"type": "text/javascript"
 							}
@@ -354,30 +425,6 @@
 							]
 						},
 						"description": "Read-only check of whether a verification token is still valid — does not activate the tenant. Safe to call repeatedly, including by email link-scanners that prefetch links. Returns { valid, email } or { valid: false }."
-					}
-				},
-				{
-					"name": "Verify Email",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{base_url}}/v1/verify-email?token={{verification_token}}",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"v1",
-								"verify-email"
-							],
-							"query": [
-								{
-									"key": "token",
-									"value": "{{verification_token}}"
-								}
-							]
-						},
-						"description": "Legacy combined check-and-consume endpoint, kept for backward compatibility (this is what the verification email links to directly when no verificationRedirectUrl was set). Prefer Check Verify Email Token + Confirm Verify Email for new integrations — see those requests."
 					}
 				},
 				{
@@ -2541,52 +2588,6 @@
 					"name": "Tenants",
 					"item": [
 						{
-							"name": "Create Tenant",
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/v1/admin/tenants",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"v1",
-										"admin",
-										"tenants"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"email\": \"client@example.com\",\n  \"subscriptionTier\": \"FREE\"\n}",
-									"options": {
-										"raw": {
-											"language": "json"
-										}
-									}
-								},
-								"description": "Create a tenant for manual onboarding. Status is set to ACTIVE automatically — no email verification required.\n\nCopy the returned `id` into the `tenant_id` collection variable."
-							},
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"exec": [
-											"const r = pm.response.json();",
-											"pm.test('Status 201', () => pm.response.to.have.status(201));",
-											"if (r.tenant?.id) { pm.collectionVariables.set('tenant_id', String(r.tenant.id)); console.log('tenant_id set to', r.tenant.id); }"
-										],
-										"type": "text/javascript"
-									}
-								}
-							]
-						},
-						{
 							"name": "List Tenants",
 							"request": {
 								"method": "GET",
@@ -2787,7 +2788,7 @@
 										}
 									}
 								},
-								"description": "Generates a new tenant-scoped API key. The plaintext token is returned only once — store it immediately.\n\n`label` is optional (max 100 chars). `environment` is optional — omit it to default to the tenant's current active environment (`sandbox` or `production`), or pass `\"sandbox\"`/`\"production\"` explicitly to override.\n\nCopy the returned key value into the `api_key` collection variable."
+								"description": "Generates a new tenant-scoped API key. The plaintext token is returned only once — store it immediately.\n\n`label` is optional (max 100 chars). `environment` is optional — omit it to default to the tenant's current active environment (`sandbox` or `production`), or pass `\"sandbox\"`/`\"production\"` explicitly to override.\n\n`scopes` is optional — an array from the 9-value scope vocabulary (see `ApiKeyScopes`). Omit it to default to full access (`ALL_SCOPES`).\n\n`isReserved` is optional (boolean, default `false`) — mints a comprobify-web-internal key (master or per-role) instead of an ordinary tenant key. Exempt from the tenant's own `maxApiKeys` limit entirely; gated instead by a generous sanity ceiling meant only to catch a runaway minting bug.\n\n`replaceKeyId` is optional (UUID) — atomically revokes that one specific existing key and mints this one as its replacement, in a transaction, without touching any other active key. Used for reserved-key rotation (e.g. suspected compromise). Cannot be combined with `revokeExisting`.\n\nCopy the returned key value into the `api_key` collection variable."
 							}
 						},
 						{
@@ -2861,225 +2862,48 @@
 					]
 				},
 				{
-					"name": "Issuers",
+					"name": "Webhook Endpoints",
 					"item": [
 						{
-							"name": "Create Issuer (P12 upload)",
+							"name": "Mint Webhook Endpoint (admin)",
 							"request": {
 								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
 								"url": {
-									"raw": "{{base_url}}/v1/admin/issuers",
+									"raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/webhook-endpoints",
 									"host": [
 										"{{base_url}}"
 									],
 									"path": [
 										"v1",
 										"admin",
-										"issuers"
+										"tenants",
+										"{{tenant_id}}",
+										"webhook-endpoints"
 									]
 								},
 								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "tenantId",
-											"value": "{{tenant_id}}",
-											"type": "text",
-											"description": "Tenant UUID (required)"
-										},
-										{
-											"key": "ruc",
-											"value": "1700000000001",
-											"type": "text",
-											"description": "13-digit RUC"
-										},
-										{
-											"key": "businessName",
-											"value": "Acme S.A.",
-											"type": "text"
-										},
-										{
-											"key": "tradeName",
-											"value": "Acme",
-											"type": "text",
-											"description": "Optional trade name",
-											"disabled": true
-										},
-										{
-											"key": "mainAddress",
-											"value": "Av. Amazonas 123, Quito",
-											"type": "text",
-											"description": "Main (fiscal) address"
-										},
-										{
-											"key": "branchAddress",
-											"value": "Av. Amazonas 123, Quito",
-											"type": "text",
-											"description": "Branch address (optional — defaults to mainAddress if omitted)",
-											"disabled": true
-										},
-										{
-											"key": "branchCode",
-											"value": "001",
-											"type": "text",
-											"description": "3-digit branch code"
-										},
-										{
-											"key": "issuePointCode",
-											"value": "001",
-											"type": "text",
-											"description": "3-digit issue point code"
-										},
-										{
-											"key": "emissionType",
-											"value": "1",
-											"type": "text",
-											"description": "Always 1 (normal emission)"
-										},
-										{
-											"key": "requiredAccounting",
-											"value": "false",
-											"type": "text",
-											"description": "true if the issuer is required to keep accounting (obligado a llevar contabilidad)"
-										},
-										{
-											"key": "specialTaxpayer",
-											"value": "",
-											"type": "text",
-											"description": "Special taxpayer resolution number (optional)",
-											"disabled": true
-										},
-										{
-											"key": "certPassword",
-											"value": "your-p12-password",
-											"type": "text"
-										},
-										{
-											"key": "cert",
-											"type": "file",
-											"src": "",
-											"description": "P12 certificate file"
-										},
-										{
-											"key": "documentTypes",
-											"value": "[\"01\"]",
-											"type": "text",
-											"description": "Optional. Document type codes to enable (default: [\"01\"])",
-											"disabled": true
-										},
-										{
-											"key": "initialSequentials",
-											"value": "[{\"documentType\":\"01\",\"sequential\":1}]",
-											"type": "text",
-											"description": "Optional — pre-seed sequential counters. Example: [{\"documentType\":\"01\",\"sequential\":500}] means the first invoice will be 000000500.",
-											"disabled": true
+									"mode": "raw",
+									"raw": "{\n  \"url\": \"https://app.example.com/api/webhooks/receive\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
 										}
-									]
+									}
 								},
-								"description": "Creates a new issuer for a tenant by uploading a P12 certificate. Requires `tenantId`. **Does NOT return an API key** — mint one separately via `POST /v1/admin/tenants/:id/api-keys`.\n\nAfter a successful response, copy the issuer `id` into `issuer_id`."
+								"description": "Registers a new webhook endpoint for a tenant and returns the signing `secret` — shown only once.\n\n`url` must be a valid HTTPS URL. `eventTypes` is optional — omit it or pass `[]` to subscribe to all event types.\n\n`isReserved` is optional (boolean, default `false`) — registers comprobify-web's own internal endpoint (e.g. its canonical in-app notification receiver) instead of an ordinary tenant endpoint. Exempt from the tenant's own `maxWebhookEndpoints` limit entirely; gated instead by a generous sanity ceiling meant only to catch a runaway registration bug.\n\n`replaceEndpointId` is optional (UUID) — atomically deactivates that one specific existing endpoint and mints this one as its replacement, in a transaction, without touching any other active endpoint.\n\nCopy the returned endpoint `id` into the `webhook_id` collection variable."
 							}
-						},
-						{
-							"name": "Create Issuer (branch copy)",
-							"request": {
-								"method": "POST",
-								"url": {
-									"raw": "{{base_url}}/v1/admin/issuers",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"v1",
-										"admin",
-										"issuers"
-									]
-								},
-								"body": {
-									"mode": "formdata",
-									"formdata": [
-										{
-											"key": "tenantId",
-											"value": "{{tenant_id}}",
-											"type": "text",
-											"description": "Tenant UUID (required)"
-										},
-										{
-											"key": "sourceIssuerId",
-											"value": "{{issuer_id}}",
-											"type": "text",
-											"description": "ID of the issuer to copy the certificate from"
-										},
-										{
-											"key": "ruc",
-											"value": "1700000000001",
-											"type": "text"
-										},
-										{
-											"key": "businessName",
-											"value": "Acme S.A.",
-											"type": "text"
-										},
-										{
-											"key": "tradeName",
-											"value": "Acme",
-											"type": "text",
-											"description": "Optional trade name",
-											"disabled": true
-										},
-										{
-											"key": "mainAddress",
-											"value": "Av. Naciones Unidas 456, Quito",
-											"type": "text",
-											"description": "Main (fiscal) address"
-										},
-										{
-											"key": "branchAddress",
-											"value": "Av. Naciones Unidas 456, Quito",
-											"type": "text",
-											"description": "Branch address (optional — defaults to mainAddress if omitted)",
-											"disabled": true
-										},
-										{
-											"key": "branchCode",
-											"value": "002",
-											"type": "text",
-											"description": "Different branch code from the source issuer"
-										},
-										{
-											"key": "issuePointCode",
-											"value": "001",
-											"type": "text"
-										},
-										{
-											"key": "emissionType",
-											"value": "1",
-											"type": "text"
-										},
-										{
-											"key": "requiredAccounting",
-											"value": "false",
-											"type": "text",
-											"description": "true if the issuer is required to keep accounting"
-										},
-										{
-											"key": "specialTaxpayer",
-											"value": "",
-											"type": "text",
-											"description": "Special taxpayer resolution number (optional)",
-											"disabled": true
-										},
-										{
-											"key": "initialSequentials",
-											"value": "[{\"documentType\":\"01\",\"sequential\":1}]",
-											"type": "text",
-											"description": "Optional — pre-seed sequential counters. Example: [{\"documentType\":\"01\",\"sequential\":500}]",
-											"disabled": true
-										}
-									]
-								},
-								"description": "Creates a new branch issuer by copying the certificate from an existing issuer. No P12 file needed. Requires `tenantId`. **Does NOT return an API key** — mint one separately via `POST /v1/admin/tenants/:id/api-keys`."
-							}
-						},
+						}
+					]
+				},
+				{
+					"name": "Issuers",
+					"item": [
 						{
 							"name": "List Issuers (admin)",
 							"request": {
@@ -3142,49 +2966,6 @@
 				{
 					"name": "Agreements",
 					"item": [
-						{
-							"name": "Generate Agreements for Tenant (Backfill)",
-							"event": [
-								{
-									"listen": "test",
-									"script": {
-										"exec": [
-											"const r = pm.response.json();",
-											"pm.test('Status 201', () => pm.response.to.have.status(201));",
-											"if (r.ok) console.log('Generated', r.generated, 'document instances for tenant {{tenant_id}}');"
-										],
-										"type": "text/javascript"
-									}
-								}
-							],
-							"request": {
-								"method": "POST",
-								"header": [
-									{
-										"key": "X-Admin-Secret",
-										"value": "{{admin_secret}}"
-									}
-								],
-								"url": {
-									"raw": "{{base_url}}/v1/admin/tenants/{{tenant_id}}/agreements",
-									"host": [
-										"{{base_url}}"
-									],
-									"path": [
-										"v1",
-										"admin",
-										"tenants",
-										"{{tenant_id}}",
-										"agreements"
-									]
-								},
-								"body": {
-									"mode": "raw",
-									"raw": "{}"
-								},
-								"description": "Generates personalized PENDING document instances for a tenant who registered before agreements were published, or to regenerate after a template update. Reads current published templates + the tenant's primary issuer data. Idempotent — skips types already generated for the current template version."
-							}
-						},
 						{
 							"name": "Publish Agreement (TERMS)",
 							"event": [

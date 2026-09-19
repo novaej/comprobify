@@ -44,6 +44,7 @@ const authenticate = async (req, _res, next) => {
     label: row.label,
     environment: row.key_environment,
     scopes: row.key_scopes,
+    isReserved: row.key_is_reserved === true,
   };
   req.tenant = {
     id: row.tenant_id,

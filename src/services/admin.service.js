@@ -4,6 +4,8 @@ const tenantModel = require('../models/tenant.model');
 const issuerModel = require('../models/issuer.model');
 const apiKeyModel = require('../models/api-key.model');
 const apiKeyService = require('./api-key.service');
+const webhookEndpointModel = require('../models/webhook-endpoint.model');
+const webhookEndpointService = require('./webhook-endpoint.service');
 const issuerDocumentTypeModel = require('../models/issuer-document-type.model');
 const tenantEventModel = require('../models/tenant-event.model');
 const { formatTenantEvent } = require('../presenters/tenant-event.presenter');
@@ -15,7 +17,10 @@ const certificateService = require('./certificate.service');
 const AppError = require('../errors/app-error');
 const ConflictError = require('../errors/conflict-error');
 const NotFoundError = require('../errors/not-found-error');
-const { TIERS, effectiveApiKeyLimit } = require('../constants/subscription-tiers');
+const {
+  TIERS, effectiveApiKeyLimit, RESERVED_API_KEYS_FOR_FRONTEND,
+  effectiveWebhookEndpointLimit, RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND,
+} = require('../constants/subscription-tiers');
 const TenantStatus = require('../constants/tenant-status');
 const SuspensionReasons = require('../constants/suspension-reasons');
 const ErrorCodes = require('../constants/error-codes');
@@ -54,41 +59,6 @@ function formatIssuer(row) {
 }
 
 // --- Tenant management ---
-
-async function createTenant(fields) {
-  const existing = await tenantModel.findByEmail(fields.email);
-  if (existing) {
-    throw new ConflictError(`A tenant with email ${fields.email} already exists`);
-  }
-  const tier = fields.subscriptionTier || 'FREE';
-  if (!TIERS[tier]) {
-    throw new AppError(`Unknown subscription tier: '${tier}'. Valid tiers: ${Object.keys(TIERS).join(', ')}`, 400, ErrorCodes.INVALID_TIER);
-  }
-  // TIERS[tier] || TIERS.FREE, not `?.documentQuota ?? ...` — the latter
-  // would collapse ENTERPRISE's legitimate null (unlimited) cap back down
-  // to FREE's, since `??` treats null and undefined identically. See
-  // tenant-quota.service.js's capForTier() for the same guard.
-  const documentQuota = (TIERS[tier] || TIERS.FREE).documentQuota;
-
-  const client = await db.getClient();
-  let row, quotaRow;
-  try {
-    await client.query('BEGIN');
-    row = await tenantModel.create({
-      email: fields.email,
-      subscriptionTier: tier,
-      status: TenantStatus.ACTIVE,
-    }, client);
-    quotaRow = await tenantQuotaService.initializeForTenant(row.id, documentQuota, client);
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
-  }
-  return formatTenant(row, quotaRow);
-}
 
 async function listTenants() {
   const rows = await tenantModel.findAll();
@@ -181,128 +151,14 @@ async function listTenantEvents(id) {
 
 // --- Issuer management ---
 
-async function createIssuer(fields, p12Buffer, p12Password, sourceIssuerId) {
-  const tenant = await tenantModel.findById(fields.tenantId);
-  if (!tenant) throw new NotFoundError('Tenant');
-
-  const tierConfig = TIERS[tenant.subscription_tier];
-  const issuePointCount = await tenantModel.countIssuePointsByBranch(tenant.id, fields.branchCode);
-  if (issuePointCount === 0) {
-    if (tierConfig.maxBranches !== null) {
-      const branchCount = await tenantModel.countBranchesByTenantId(tenant.id);
-      if (branchCount >= tierConfig.maxBranches) {
-        throw new AppError(
-          `Tenant has reached the branch limit for the ${tenant.subscription_tier} plan (${tierConfig.maxBranches}).`,
-          402,
-          ErrorCodes.BRANCH_LIMIT_REACHED
-        );
-      }
-    }
-  } else {
-    if (tierConfig.maxIssuePointsPerBranch !== null) {
-      if (issuePointCount >= tierConfig.maxIssuePointsPerBranch) {
-        throw new AppError(
-          `Branch ${fields.branchCode} has reached the issue point limit for the ${tenant.subscription_tier} plan (${tierConfig.maxIssuePointsPerBranch}).`,
-          402,
-          ErrorCodes.ISSUE_POINT_LIMIT_REACHED
-        );
-      }
-    }
-  }
-
-  let encryptedPrivateKey, certificatePem, certFingerprint, certExpiry;
-
-  if (p12Buffer) {
-    const parsed = certificateService.parseCertificate(p12Buffer, p12Password || '');
-    encryptedPrivateKey = cryptoService.encrypt(parsed.privateKeyPem);
-    certificatePem = parsed.certPem;
-    certFingerprint = parsed.certFingerprint;
-    certExpiry = parsed.certExpiry;
-  } else {
-    const source = await issuerModel.findById(sourceIssuerId);
-    if (!source) throw new NotFoundError('Source issuer', ErrorCodes.SOURCE_ISSUER_NOT_FOUND);
-    if (source.ruc !== fields.ruc) {
-      throw new AppError(
-        `RUC mismatch: source issuer RUC (${source.ruc}) does not match the supplied RUC (${fields.ruc}).`,
-        400,
-        ErrorCodes.RUC_MISMATCH
-      );
-    }
-    encryptedPrivateKey = source.encrypted_private_key;
-    certificatePem = source.certificate_pem;
-    certFingerprint = source.cert_fingerprint;
-    certExpiry = source.cert_expiry;
-  }
-
-  let newIssuer;
-  try {
-    newIssuer = await issuerModel.create({
-      tenantId: tenant.id,
-      ruc: fields.ruc,
-      businessName: fields.businessName,
-      tradeName: fields.tradeName || null,
-      mainAddress: fields.mainAddress || null,
-      branchCode: fields.branchCode,
-      issuePointCode: fields.issuePointCode,
-      emissionType: fields.emissionType,
-      requiredAccounting: [true, 'true', '1', 1].includes(fields.requiredAccounting) ? 'SI' : 'NO',
-      specialTaxpayer: fields.specialTaxpayer || null,
-      branchAddress: fields.branchAddress || null,
-      encryptedPrivateKey,
-      certificatePem,
-      certFingerprint,
-      certExpiry,
-    });
-  } catch (err) {
-    if (err.code === '23505') {
-      throw new ConflictError(`Issuer with RUC ${fields.ruc}, branch ${fields.branchCode}, issue point ${fields.issuePointCode} already exists`);
-    }
-    throw err;
-  }
-
-  if (p12Buffer) {
-    await tenantEventModel.create(tenant.id, 'CERTIFICATE_UPLOADED', {
-      issuerId: newIssuer.id,
-      certFingerprint: newIssuer.cert_fingerprint,
-      certExpiry: newIssuer.cert_expiry,
-    });
-  }
-
-  const documentTypes = Array.isArray(fields.documentTypes) && fields.documentTypes.length > 0
-    ? [...new Set(fields.documentTypes)]
-    : ['01'];
-  await issuerDocumentTypeModel.bulkCreate(newIssuer.id, documentTypes);
-
-  const sequentialMap = {};
-  if (Array.isArray(fields.initialSequentials)) {
-    for (const entry of fields.initialSequentials) {
-      sequentialMap[entry.documentType] = parseInt(entry.sequential, 10);
-    }
-  }
-  for (const docType of documentTypes) {
-    await sequentialService.initialize(
-      newIssuer.id,
-      newIssuer.branch_code,
-      newIssuer.issue_point_code,
-      docType,
-      sequentialMap[docType] || 1,
-      tenant.sandbox,
-    );
-  }
-
-  // Admin issuer creation does NOT mint an API key — the tenant already has its own keys.
-  // If this is the first issuer for a brand-new admin-created tenant, mint a key separately
-  // via createApiKey.
-
-  return { issuer: formatIssuer(newIssuer) };
-}
-
 async function listIssuers() {
   const rows = await issuerModel.findAll();
   return rows.map(formatIssuer);
 }
 
-async function createApiKey(tenantId, label, environment, revokeExistingInEnv = false) {
+// isReserved keys skip the tenant limit entirely (bug-ceiling only).
+// replaceKeyId atomically swaps one specific key instead of revoking the whole environment.
+async function createApiKey(tenantId, { label, environment, revokeExisting, scopes, isReserved, replaceKeyId } = {}) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
 
@@ -313,28 +169,71 @@ async function createApiKey(tenantId, label, environment, revokeExistingInEnv = 
   if (!['sandbox', 'production'].includes(resolvedEnvironment)) {
     throw new AppError(`environment must be 'sandbox' or 'production', got: '${resolvedEnvironment}'`, 400);
   }
-  if (revokeExistingInEnv) {
-    await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, resolvedEnvironment);
-  }
-  const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
-  const maxKeys = effectiveApiKeyLimit(tierConfig);
-  if (maxKeys !== null) {
-    const currentCount = await apiKeyModel.countActiveByTenantId(tenantId);
-    if (currentCount >= maxKeys) {
+
+  const grantedScopes = Array.isArray(scopes) && scopes.length > 0 ? scopes : ALL_SCOPES;
+  const plainToken = crypto.randomBytes(32).toString('hex');
+
+  if (isReserved) {
+    const reservedCount = await apiKeyModel.countReservedByTenantId(tenantId);
+    if (reservedCount >= RESERVED_API_KEYS_FOR_FRONTEND) {
       throw new AppError(
-        `Tenant has reached the API key limit for the ${tenant.subscription_tier} plan (${maxKeys}).`,
-        402,
-        ErrorCodes.API_KEY_LIMIT_REACHED
+        `Tenant already has ${reservedCount} reserved keys — this should not happen under normal use; investigate before minting another.`,
+        409,
+        ErrorCodes.RESERVED_KEY_LIMIT_REACHED
       );
     }
+  } else {
+    const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
+    const maxKeys = effectiveApiKeyLimit(tierConfig);
+    if (maxKeys !== null) {
+      const currentCount = await apiKeyModel.countActiveByTenantId(tenantId);
+      if (currentCount >= maxKeys) {
+        throw new AppError(
+          `Tenant has reached the API key limit for the ${tenant.subscription_tier} plan (${maxKeys}).`,
+          402,
+          ErrorCodes.API_KEY_LIMIT_REACHED
+        );
+      }
+    }
   }
-  const plainToken = crypto.randomBytes(32).toString('hex');
+
+  if (replaceKeyId) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const existing = await apiKeyModel.findByIdAndTenantId(replaceKeyId, tenantId, client);
+      if (!existing || !existing.active) {
+        throw new NotFoundError('API key');
+      }
+      await apiKeyModel.revoke(replaceKeyId, client);
+      await apiKeyModel.create({
+        tenantId,
+        keyHash: sha256Hex(plainToken),
+        label: label || existing.label,
+        environment: resolvedEnvironment,
+        scopes: grantedScopes,
+        isReserved,
+      }, client);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    return plainToken;
+  }
+
+  if (revokeExisting) {
+    await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, resolvedEnvironment);
+  }
   await apiKeyModel.create({
     tenantId,
     keyHash: sha256Hex(plainToken),
     label: label || null,
     environment: resolvedEnvironment,
-    scopes: ALL_SCOPES,
+    scopes: grantedScopes,
+    isReserved,
   });
   return plainToken;
 }
@@ -363,16 +262,16 @@ async function promoteTenant(tenantId, initialSequentials = []) {
     }
   }
 
-  // Revoke all sandbox keys and create matching production keys (same labels).
-  // KEY_MIRRORING: the tenant receives one new production token per sandbox key
-  // that was active at the time of promotion. All tokens are returned in the
-  // response and shown once — store them immediately.
-  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId);
+  // Mirrors every sandbox key including reserved ones — ADMIN_SECRET is already the top trust boundary.
+  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId, true);
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, 'sandbox');
   const apiKeys = [];
   for (const key of sandboxKeys) {
     const plainToken = crypto.randomBytes(32).toString('hex');
-    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production', scopes: key.scopes });
+    await apiKeyModel.create({
+      tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production',
+      scopes: key.scopes, isReserved: key.is_reserved,
+    });
     apiKeys.push({ label: key.label, apiKey: plainToken });
   }
 
@@ -383,7 +282,7 @@ async function promoteTenant(tenantId, initialSequentials = []) {
 async function listApiKeys(tenantId) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
-  const rows = await apiKeyModel.findActiveByTenantId(tenantId);
+  const rows = await apiKeyModel.findActiveByTenantId(tenantId, true);
   return rows.map(apiKeyService.formatKey);
 }
 
@@ -398,6 +297,66 @@ async function revokeApiKey(id) {
   const row = await apiKeyModel.revoke(id);
   if (!row) throw new NotFoundError('API key');
   return row;
+}
+
+// Mirrors createApiKey's shape/reasoning — see its comments for isReserved
+// and replaceEndpointId (this endpoint's equivalent of replaceKeyId).
+async function createWebhookEndpoint(tenantId, { url, eventTypes, isReserved, replaceEndpointId } = {}) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+
+  const secret = crypto.randomBytes(32).toString('hex');
+  const resolvedEventTypes = eventTypes || [];
+
+  if (isReserved) {
+    const reservedCount = await webhookEndpointModel.countReservedByTenantId(tenantId);
+    if (reservedCount >= RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND) {
+      throw new AppError(
+        `Tenant already has ${reservedCount} reserved webhook endpoints — this should not happen under normal use; investigate before registering another.`,
+        409,
+        ErrorCodes.RESERVED_KEY_LIMIT_REACHED
+      );
+    }
+  } else {
+    const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
+    const maxEndpoints = effectiveWebhookEndpointLimit(tierConfig);
+    if (maxEndpoints !== null) {
+      const currentCount = await webhookEndpointModel.countActiveByTenantId(tenantId);
+      if (currentCount >= maxEndpoints) {
+        throw new AppError(
+          `Tenant has reached the webhook endpoint limit for the ${tenant.subscription_tier} plan (${maxEndpoints}).`,
+          402,
+          ErrorCodes.WEBHOOK_ENDPOINT_LIMIT_REACHED
+        );
+      }
+    }
+  }
+
+  if (replaceEndpointId) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const existing = await webhookEndpointModel.findByIdAndTenantId(replaceEndpointId, tenantId, client);
+      if (!existing || !existing.active) {
+        throw new NotFoundError('Webhook endpoint');
+      }
+      await webhookEndpointModel.update(replaceEndpointId, { active: false }, client);
+      const endpoint = await webhookEndpointModel.create(
+        { tenantId, url: url || existing.url, secret, eventTypes: eventTypes || existing.event_types, isReserved },
+        client
+      );
+      await client.query('COMMIT');
+      return { endpoint: webhookEndpointService.formatEndpoint(endpoint), secret };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  const endpoint = await webhookEndpointModel.create({ tenantId, url, secret, eventTypes: resolvedEventTypes, isReserved });
+  return { endpoint: webhookEndpointService.formatEndpoint(endpoint), secret };
 }
 
 async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
@@ -420,6 +379,7 @@ async function renewIssuerCertificate(issuerId, p12Buffer, p12Password) {
 }
 
 module.exports = {
-  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, listTenantEvents,
-  createIssuer, listIssuers, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, promoteTenant, renewIssuerCertificate,
+  listTenants, updateTenantTier, updateTenantStatus, verifyTenant, listTenantEvents,
+  listIssuers, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, promoteTenant, renewIssuerCertificate,
+  createWebhookEndpoint,
 };

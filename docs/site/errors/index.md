@@ -126,7 +126,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED` | El emisor tiene solo un tipo de comprobante activo restante — no se puede eliminar |
 | `ISSUER_HAS_DOCUMENTS` | El emisor tiene comprobantes emitidos (en cualquiera de los dos ambientes) y no se puede eliminar |
 | `SEQUENTIAL_CANNOT_DECREASE` | `nextSequential` no es mayor que el valor actual del contador |
-| `TIER_CHANGE_NO_OP` | El tier y el intervalo de facturación solicitados en Change Tier coinciden con los valores actuales de la suscripción |
+| `TIER_CHANGE_NO_OP` | El plan y el intervalo de facturación solicitados en Change Tier coinciden con los valores actuales de la suscripción |
 | `SEAT_CHANGE_NO_OP` | El `extraSeats` solicitado en Change Seats coincide con el número actual de la suscripción |
 | `INVALID_BILLING_INTERVAL` | `billingInterval` en Create Subscription o Change Tier no es `MONTHLY` ni `YEARLY` |
 | `BAD_REQUEST` | Otra solicitud mal formada (respaldo — lee `detail`) |

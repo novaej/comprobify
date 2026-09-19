@@ -3,7 +3,7 @@ const db = require('../config/database');
 async function findByKeyHash(keyHash) {
   const { rows } = await db.query(
     `SELECT ak.id AS key_id, ak.tenant_id, ak.label, ak.environment AS key_environment,
-            ak.scopes AS key_scopes,
+            ak.scopes AS key_scopes, ak.is_reserved AS key_is_reserved,
             t.subscription_tier AS tenant_subscription_tier,
             t.status            AS tenant_status,
             t.suspension_reason_code AS tenant_suspension_reason_code,
@@ -26,19 +26,22 @@ async function findByKeyHash(keyHash) {
   return rows[0] || null;
 }
 
-async function create({ tenantId, keyHash, label, environment, scopes }) {
-  const { rows } = await db.query(
-    `INSERT INTO api_keys (tenant_id, key_hash, label, environment, scopes)
-     VALUES ($1, $2, $3, $4, $5)
+async function create({ tenantId, keyHash, label, environment, scopes, isReserved }, client = null) {
+  const conn = client || db;
+  const { rows } = await conn.query(
+    `INSERT INTO api_keys (tenant_id, key_hash, label, environment, scopes, is_reserved)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [tenantId, keyHash, label || null, environment, scopes]
+    [tenantId, keyHash, label || null, environment, scopes, isReserved === true]
   );
   return rows[0];
 }
 
-async function findActiveByTenantId(tenantId) {
+// includeReserved: false (tenant-facing) hides comprobify-web's own keys; admin callers pass true.
+async function findActiveByTenantId(tenantId, includeReserved = false) {
   const { rows } = await db.query(
     `SELECT ak.id, ak.label, ak.environment, ak.scopes, ak.active, ak.created_at, ak.revoked_at,
+            ak.is_reserved,
             COALESCE(u.request_count, 0)::bigint AS request_count,
             u.last_used_at
      FROM api_keys ak
@@ -48,8 +51,9 @@ async function findActiveByTenantId(tenantId) {
        WHERE api_key_id = ak.id
      ) u ON true
      WHERE ak.tenant_id = $1 AND ak.active = true
+       AND ($2::boolean OR ak.is_reserved = false)
      ORDER BY ak.created_at DESC`,
-    [tenantId]
+    [tenantId, includeReserved]
   );
   return rows;
 }
@@ -82,16 +86,18 @@ async function findDailyUsage(apiKeyId, days) {
   return rows;
 }
 
-async function findByIdAndTenantId(id, tenantId) {
-  const { rows } = await db.query(
+async function findByIdAndTenantId(id, tenantId, client = null) {
+  const conn = client || db;
+  const { rows } = await conn.query(
     `SELECT * FROM api_keys WHERE id = $1 AND tenant_id = $2`,
     [id, tenantId]
   );
   return rows[0] || null;
 }
 
-async function revoke(id) {
-  const { rows } = await db.query(
+async function revoke(id, client = null) {
+  const conn = client || db;
+  const { rows } = await conn.query(
     `UPDATE api_keys SET active = false, revoked_at = NOW() WHERE id = $1 RETURNING *`,
     [id]
   );
@@ -106,9 +112,19 @@ async function revokeAllByTenantIdAndEnvironment(tenantId, environment) {
   );
 }
 
+// Excludes reserved keys — backs every self-service/tier-limit check.
 async function countActiveByTenantId(tenantId) {
   const { rows } = await db.query(
-    `SELECT COUNT(*) AS count FROM api_keys WHERE tenant_id = $1 AND active = true`,
+    `SELECT COUNT(*) AS count FROM api_keys WHERE tenant_id = $1 AND active = true AND is_reserved = false`,
+    [tenantId]
+  );
+  return parseInt(rows[0].count, 10);
+}
+
+// Bug-detection sanity ceiling only, not a security boundary.
+async function countReservedByTenantId(tenantId) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*) AS count FROM api_keys WHERE tenant_id = $1 AND active = true AND is_reserved = true`,
     [tenantId]
   );
   return parseInt(rows[0].count, 10);
@@ -119,6 +135,7 @@ module.exports = {
   create,
   findActiveByTenantId,
   countActiveByTenantId,
+  countReservedByTenantId,
   findByIdAndTenantId,
   revoke,
   revokeAllByTenantIdAndEnvironment,

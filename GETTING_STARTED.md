@@ -119,6 +119,16 @@ ENCRYPTION_KEY=             # see step 4
 # Admin API secret — protects /admin/* endpoints (see step 5)
 ADMIN_SECRET=               # see step 5
 
+# Internal service secret — gates account creation/recovery (POST /v1/register,
+# /recover, /resend-verification, /verify-email). These routes are meant to be
+# called only by comprobify-web's own server-side BFF, so for local dev you
+# supply this secret yourself via curl the same way comprobify-web would.
+INTERNAL_SERVICE_SECRET=    # see step 5
+
+# Required for POST /v1/register — the base URL this API considers itself
+# reachable at. Any value works for local dev.
+APP_BASE_URL=http://localhost:8080
+
 # RabbitMQ — required. The document send/authorize pipeline is fully async:
 # POST /:key/send and GET /:key/authorize always queue and return 202;
 # workers/worker.js is the only process that calls SRI. For local dev,
@@ -126,6 +136,18 @@ ADMIN_SECRET=               # see step 5
 #   docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 # then RABBITMQ_URL=amqp://guest:guest@localhost:5672
 RABBITMQ_URL=
+
+# Required — shown to a tenant paying by bank transfer. Any placeholder
+# values work for local dev; nothing validates them against a real account.
+BANK_TRANSFER_BANK_NAME=Test Bank
+BANK_TRANSFER_ACCOUNT_TYPE=Savings
+BANK_TRANSFER_ACCOUNT_NUMBER=0000000000
+BANK_TRANSFER_ACCOUNT_HOLDER=Comprobify Dev
+BANK_TRANSFER_IDENTIFICATION=1700000000001
+
+# Required — who gets emailed when a tenant submits payment proof. A real
+# address isn't needed locally if EMAIL_PROVIDER=none.
+ADMIN_NOTIFICATION_EMAIL=admin@example.com
 
 # Email delivery (optional — omit to disable buyer notifications)
 EMAIL_PROVIDER=mailgun
@@ -138,7 +160,7 @@ MAILGUN_DOMAIN=mg.yourdomain.com
 MAILGUN_WEBHOOK_SIGNING_KEY=
 ```
 
-> **Issuer data (RUC, branch code, issue point, certificate) is stored per-issuer in the `issuers` database table — not in `.env`.** The admin API in step 8 populates it. Each issuer has a `sandbox` flag (default `true` — test mode). Set `sandbox=false` only on production issuers and only when `APP_ENV=production` in `.env`.
+> **Issuer data (RUC, branch code, issue point, certificate) is stored per-issuer in the `issuers` database table — not in `.env`.** Registration in step 8 populates it. Each issuer has a `sandbox` flag (default `true` — test mode). Set `sandbox=false` only on production issuers and only when `APP_ENV=production` in `.env`.
 
 > **Email delivery is optional.** If `MAILGUN_API_KEY` or `MAILGUN_DOMAIN` are not set, the server still runs normally — emails are simply not sent and `email_status` stays `PENDING`.
 
@@ -154,13 +176,13 @@ Copy the output into `ENCRYPTION_KEY` in `.env`.
 
 ---
 
-## 5. Generate admin secret
+## 5. Generate admin secret and internal service secret
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Copy the output into `ADMIN_SECRET` in `.env`. This secret protects all `/admin/*` endpoints — treat it like a password. Keep it behind an internal firewall and never expose it on the public internet.
+Run this twice — once for `ADMIN_SECRET` (protects all `/admin/*` endpoints), once for `INTERNAL_SERVICE_SECRET` (gates `POST /v1/register`/`/recover`/`/resend-verification`/`/verify-email` — see step 8). Copy each output into `.env`. Treat both like passwords; keep them behind an internal firewall and never expose them on the public internet.
 
 ---
 
@@ -201,28 +223,28 @@ This applies all 33 migrations, creating tables: `issuers`, `api_keys`, `documen
 
 ---
 
-## 8. Create your first issuer and API key
+## 8. Create your first tenant, issuer, and API key
 
-Use the admin API to upload your P12 certificate, extract and store the keys, and generate your first Bearer token — all in one request.
+There is no admin-created-tenant path — every tenant (including your first local test tenant) goes through the same self-service registration route comprobify-web calls, `POST /v1/register`. It's gated behind `X-Internal-Service-Secret` (ADR-035) so only a trusted caller can create accounts; for local dev, that's just you supplying the secret directly with curl.
 
-### New certificate (first issuer or new RUC)
+### Register (first issuer + API key, one request)
 
 ```bash
-curl -s -X POST http://localhost:8080/v1/admin/issuers \
-  -H "Authorization: Bearer $ADMIN_SECRET" \
+curl -s -X POST http://localhost:8080/v1/register \
+  -H "X-Internal-Service-Secret: $INTERNAL_SERVICE_SECRET" \
+  -F "email=you@example.com" \
   -F "ruc=1700000000001" \
   -F "businessName=Acme S.A." \
   -F "tradeName=Acme" \
   -F "mainAddress=123 Test Street" \
   -F "branchCode=001" \
   -F "issuePointCode=001" \
-  -F "environment=1" \
   -F "emissionType=1" \
   -F "requiredAccounting=false" \
-  -F "specialTaxpayer=" \
   -F "branchAddress=123 Test Street" \
   -F "certPassword=YOUR_P12_PASSWORD" \
-  -F "cert=@/path/to/token.p12" | jq
+  -F "cert=@/path/to/token.p12" \
+  -F "verificationRedirectUrl=http://localhost:8080/verify" | jq
 ```
 
 Response:
@@ -230,41 +252,36 @@ Response:
 ```json
 {
   "ok": true,
-  "issuer": { "id": 1, "ruc": "1700000000001", ... }
+  "tenant": { "id": "...", "status": "PENDING_VERIFICATION", ... },
+  "issuer": { "id": "...", "ruc": "1700000000001", ... },
+  "apiKey": "..."
 }
 ```
 
-Admin issuer creation does **not** mint an API key — keys are tenant-scoped. Mint one for the issuer's tenant separately:
-
-```bash
-curl -s -X POST http://localhost:8080/v1/admin/tenants/<tenant-id>/api-keys \
-  -H "Authorization: Bearer $ADMIN_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{"label": "Initial sandbox key", "environment": "sandbox"}' | jq
-```
-
 **Save the `apiKey`** — it is printed once and never stored in plaintext. Use it as `Authorization: Bearer <apiKey>` on every request. Every document request must also include `X-Issuer-Id: <issuer.id>` to declare which branch the request targets.
+
+The tenant starts `PENDING_VERIFICATION` — that's fine for local dev: sandbox document creation works immediately regardless of verification status. Verification is only required before `POST /v1/tenants/promote` (sandbox → production), which you won't need for local testing. If you do want a verified tenant locally, skip the email step and force it directly: `curl -s -X POST http://localhost:8080/v1/admin/tenants/<tenant-id>/verify -H "Authorization: Bearer $ADMIN_SECRET"`.
 
 ### Seeding sequential counters (migrating an existing issuer)
 
 If the issuer has already issued documents outside this system, pass `initialSequentials` to pre-seed the counters so the next document picks up from the right number. Each entry takes a `documentType` code and the **next** sequential you want the system to issue:
 
 ```bash
-curl -s -X POST http://localhost:8080/v1/admin/issuers \
-  -H "Authorization: Bearer $ADMIN_SECRET" \
+curl -s -X POST http://localhost:8080/v1/register \
+  -H "X-Internal-Service-Secret: $INTERNAL_SERVICE_SECRET" \
+  -F "email=you2@example.com" \
   -F "ruc=1700000000001" \
   -F "businessName=Acme S.A." \
   -F "tradeName=Acme" \
   -F "mainAddress=123 Test Street" \
   -F "branchCode=001" \
   -F "issuePointCode=001" \
-  -F "environment=1" \
   -F "emissionType=1" \
   -F "requiredAccounting=false" \
-  -F "specialTaxpayer=" \
   -F "branchAddress=123 Test Street" \
   -F "certPassword=YOUR_P12_PASSWORD" \
   -F "cert=@/path/to/token.p12" \
+  -F "verificationRedirectUrl=http://localhost:8080/verify" \
   -F 'initialSequentials=[{"documentType":"01","sequential":500},{"documentType":"04","sequential":12}]' | jq
 ```
 
@@ -274,23 +291,19 @@ This seeds the invoice counter (`01`) so the first document created will be `000
 
 ### Additional branch (reuse existing certificate)
 
-If the same RUC has multiple branch/issue-point combinations, copy the certificate from an existing issuer row instead of re-uploading the P12:
+If the same RUC has multiple branch/issue-point combinations, this is now self-service — use your tenant's own API key (from registration) to copy the certificate from an existing issuer row instead of re-uploading the P12. Requires the tenant to be `ACTIVE` (verified) first. `ruc`/`businessName`/`tradeName`/`mainAddress`/`emissionType` are inherited from `sourceIssuerId`'s row, not read from the request body:
 
 ```bash
-curl -s -X POST http://localhost:8080/v1/admin/issuers \
-  -H "Authorization: Bearer $ADMIN_SECRET" \
-  -F "ruc=1700000000001" \
-  -F "businessName=Acme S.A." \
-  -F "tradeName=Acme" \
-  -F "mainAddress=123 Test Street" \
-  -F "branchCode=002" \
-  -F "issuePointCode=001" \
-  -F "environment=1" \
-  -F "emissionType=1" \
-  -F "requiredAccounting=false" \
-  -F "specialTaxpayer=" \
-  -F "branchAddress=Warehouse Location" \
-  -F "sourceIssuerId=1" | jq
+curl -s -X POST http://localhost:8080/v1/issuers \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "branchCode": "002",
+    "issuePointCode": "001",
+    "requiredAccounting": false,
+    "branchAddress": "Warehouse Location",
+    "sourceIssuerId": "<first-issuer-id>"
+  }' | jq
 ```
 
 ---
@@ -320,7 +333,7 @@ Run this in a second terminal, alongside `npm start`. It's a standalone long-run
 ## 11. Verify
 
 ```bash
-# Replace <token> with the Bearer token returned by POST /v1/admin/issuers
+# Replace <token> with the Bearer token returned by POST /v1/register
 curl -s http://localhost:8080/v1/documents/0000000000000000000000000000000000000000000000000 \
   -H "Authorization: Bearer <token>" | jq
 # → { "ok": false, "message": "Document not found" }
@@ -341,7 +354,7 @@ curl -s http://localhost:8080/v1/documents/0000000000000000000000000000000000000
 
 ```bash
 TOKEN=<your_bearer_token>
-ISSUER_ID=<your_issuer_id>   # from POST /v1/admin/issuers, or GET /v1/issuers
+ISSUER_ID=<your_issuer_id>   # from POST /v1/register, or GET /v1/issuers
 
 curl -s -X POST http://localhost:8080/v1/documents \
   -H "Content-Type: application/json" \
@@ -549,7 +562,7 @@ All requests are verified with HMAC-SHA256 and rejected with 401 if the signatur
 ## Troubleshooting
 
 **`Missing or invalid Authorization header`**
-Every request requires `Authorization: Bearer <token>`. Use `POST /v1/admin/issuers` to create an issuer and receive its initial API key.
+Every request requires `Authorization: Bearer <token>`. Use `POST /v1/register` (step 8) to create a tenant + issuer and receive its initial API key.
 
 **`Invalid or revoked API key` / lost API key**
 The token does not match any active key in `api_keys`. Generate a replacement key — pass `revokeExisting: true` to revoke all current keys of the same environment for that tenant atomically:

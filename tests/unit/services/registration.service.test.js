@@ -192,6 +192,7 @@ describe('RegistrationService', () => {
         label: 'Initial master key',
         environment: 'sandbox',
         scopes: ALL_SCOPES,
+        isReserved: true, // always claimed internally by the frontend — never a self-service key
       }));
       expect(pendingEffectService.enqueue).toHaveBeenCalledWith(
         'VERIFICATION_EMAIL_SEND',
@@ -370,12 +371,23 @@ describe('RegistrationService', () => {
         label: 'Recovery key',
         environment: 'sandbox',
         scopes: ALL_SCOPES,
+        isReserved: false, // default — the plaintext genuinely needs to reach this caller
       }));
       expect(result.environment).toBe('sandbox');
       expect(result.apiKey).toEqual(expect.any(String));
       expect(result.apiKey).toHaveLength(64);
       expect(result.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000001', email: baseFields.email });
       expect(result.issuer).toMatchObject({ id: '00000000-0000-0000-0000-000000000010', ruc: baseFields.ruc });
+    });
+
+    test('matched + reserved: true — the reissued key is tagged reserved, for the already-linked frontend case', async () => {
+      tenantModel.findByEmail.mockResolvedValue({ ...existingTenant, sandbox: true });
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000500' });
+
+      await registrationService.recover(baseFields.email, p12Buffer, p12Password, true);
+
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ isReserved: true }));
     });
 
     test('matched: records a RECOVERY_SUCCESS attempt keyed by tenant id', async () => {
@@ -458,6 +470,51 @@ describe('RegistrationService', () => {
       } finally {
         config.email.provider = originalProvider;
       }
+    });
+
+    test('matched + alreadyLinked: confirms the match without rotating the key or forcing re-verification', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password, true, true);
+
+      expect(result).toEqual({ ok: true, matched: true, alreadyLinked: true });
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+      expect(tenantModel.demoteToPendingVerification).not.toHaveBeenCalled();
+      expect(pendingEffectService.enqueue).not.toHaveBeenCalledWith('VERIFICATION_EMAIL_SEND', expect.anything());
+    });
+
+    test('matched + alreadyLinked: still records a RECOVERY_SUCCESS attempt (fires unconditionally on any real match)', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      await registrationService.recover(baseFields.email, p12Buffer, p12Password, true, true);
+
+      expect(attemptTrackerService.recordEvent).toHaveBeenCalledWith(AttemptEventTypes.RECOVERY_SUCCESS, existingTenant.id);
+    });
+
+    test('matched + alreadyLinked + suspended: still rejects with ACCOUNT_SUSPENDED (suspension check runs before the early return)', async () => {
+      tenantModel.findByEmail.mockResolvedValue({ ...existingTenant, status: 'SUSPENDED' });
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      await expect(registrationService.recover(baseFields.email, p12Buffer, p12Password, true, true))
+        .rejects.toMatchObject({ statusCode: 403, code: 'ACCOUNT_SUSPENDED' });
+
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+    });
+
+    test('matched, alreadyLinked omitted: defaults to false — existing callers keep today\'s rotate+demote behavior unchanged', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      apiKeyModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000500' });
+
+      const result = await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalled();
+      expect(apiKeyModel.create).toHaveBeenCalled();
+      expect(tenantModel.demoteToPendingVerification).toHaveBeenCalled();
+      expect(result.apiKey).toEqual(expect.any(String));
     });
   });
 

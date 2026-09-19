@@ -5,20 +5,13 @@ const tenantQuotaService = require('../services/tenant-quota.service');
 const queueReconciliationService = require('../services/queue-reconciliation.service');
 const payphonePaymentService = require('../services/payphone-payment.service');
 const agreementService = require('../services/agreement.service');
-const tenantAgreementService = require('../services/tenant-agreement.service');
 const notificationEmailTemplateService = require('../services/notification-email-template.service');
 const pricingService = require('../services/pricing.service');
 const rideService = require('../services/ride.service');
-const issuerModel = require('../models/issuer.model');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 
 // Tenants
-const createTenant = async (req, res) => {
-  const tenant = await adminService.createTenant(req.body);
-  res.status(201).json({ ok: true, tenant });
-};
-
 const listTenants = async (req, res) => {
   const tenants = await adminService.listTenants();
   res.json({ ok: true, tenants });
@@ -45,16 +38,6 @@ const listTenantEvents = async (req, res) => {
 };
 
 // Issuers
-const createIssuer = async (req, res) => {
-  const { issuer } = await adminService.createIssuer(
-    req.body,
-    req.file?.buffer,
-    req.body.certPassword,
-    req.body.sourceIssuerId,
-  );
-  res.status(201).json({ ok: true, issuer });
-};
-
 const listIssuers = async (req, res) => {
   const issuers = await adminService.listIssuers();
   res.json({ ok: true, issuers });
@@ -83,12 +66,14 @@ const promoteTenant = async (req, res) => {
 // API keys
 const createApiKey = async (req, res) => {
   const tenantId = req.params.id;
-  const apiKey = await adminService.createApiKey(
-    tenantId,
-    req.body.label,
-    req.body.environment,
-    req.body.revokeExisting === true,
-  );
+  const apiKey = await adminService.createApiKey(tenantId, {
+    label: req.body.label,
+    environment: req.body.environment,
+    revokeExisting: req.body.revokeExisting === true,
+    scopes: req.body.scopes,
+    isReserved: req.body.isReserved === true,
+    replaceKeyId: req.body.replaceKeyId,
+  });
   res.status(201).json({ ok: true, apiKey });
 };
 
@@ -106,6 +91,17 @@ const getApiKeyUsage = async (req, res) => {
 const revokeApiKey = async (req, res) => {
   await adminService.revokeApiKey(req.params.id);
   res.json({ ok: true });
+};
+
+const createWebhookEndpoint = async (req, res) => {
+  const tenantId = req.params.id;
+  const result = await adminService.createWebhookEndpoint(tenantId, {
+    url: req.body.url,
+    eventTypes: req.body.eventTypes,
+    isReserved: req.body.isReserved === true,
+    replaceEndpointId: req.body.replaceEndpointId,
+  });
+  res.status(201).json({ ok: true, ...result });
 };
 
 // Subscriptions & payments
@@ -177,15 +173,6 @@ const refundPayment = async (req, res) => {
 };
 
 // Legal documents
-
-const generateTenantAgreements = async (req, res) => {
-  const tenantId = req.params.id;
-  const issuer = await issuerModel.findByTenantId(tenantId);
-  const created = await tenantAgreementService.generateForTenant(tenantId, issuer);
-  res.status(201).json({ ok: true, generated: created.length, documents: created.map((d) => ({
-    id: d.id, documentType: d.document_type, templateVersion: d.template_version, status: d.status,
-  }))});
-};
 
 const publishAgreement = async (req, res) => {
   const document = await agreementService.publish(
@@ -504,12 +491,13 @@ const getDocumentRide = async (req, res) => {
 };
 
 module.exports = {
-  createTenant, listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
-  createIssuer, listIssuers, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, runNotificationJobs,
+  listTenants, updateTenantTier, updateTenantStatus, verifyTenant, promoteTenant, listTenantEvents,
+  listIssuers, renewIssuerCertificate, createApiKey, listApiKeys, getApiKeyUsage, revokeApiKey, runNotificationJobs,
+  createWebhookEndpoint,
   runSubscriptionJobs, runQuotaJobs, runQueueReconciliationJob, runPayphoneReconciliationJob,
   createSubscription, listSubscriptions, linkInvoice, cancelSubscription,
   reviewPayment, getPaymentProof, listPaymentProofs, listPayments, listPendingInvoices, refundPayment,
-  publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion, generateTenantAgreements,
+  publishAgreement, activateAgreement, listAgreementVersions, getAgreementVersion,
   publishNotificationEmailTemplate, activateNotificationEmailTemplate, listNotificationEmailTemplateVersions, getNotificationEmailTemplateVersion,
   listCurrentNotificationEmailTemplates,
   getDocumentRide,

@@ -168,7 +168,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
   // must NEVER be gated by effectiveApiKeyLimit()/TIERS[tier].maxApiKeys.
   // FREE/SOLO/LITE have a 0 self-service pool (see ADR-034), but every
   // tenant, regardless of tier, still needs one fully-working key the moment
-  // they register so they can use the API directly with no further setup.
+  // they register. isReserved: true — always claimed internally by the frontend, never shown to the tenant.
   plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId: tenant.id,
@@ -176,6 +176,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
     label: 'Initial master key',
     environment: 'sandbox',
     scopes: ALL_SCOPES,
+    isReserved: true,
   });
 
   // Durably enqueued (see ADR-022/queueVerificationEmail) — doesn't fail
@@ -208,7 +209,9 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
 // real match issues a key synchronously; anything else (unregistered
 // email, no issuer, wrong certificate) returns the identical generic
 // response so none of those cases are distinguishable from one another.
-async function recover(email, p12Buffer, p12Password) {
+// reserved: true when the tenant is already linked to a web-app account (key stays internal); false when a human needs the plaintext to link one.
+// alreadyLinked: caller (comprobify-web) already has this tenant linked locally — see the early return below.
+async function recover(email, p12Buffer, p12Password, reserved = false, alreadyLinked = false) {
   // Parse the certificate BEFORE any tenant lookup — a corrupt/wrong-password/
   // expired P12 fails identically whether or not the email is registered, so
   // certificate errors never correlate with account existence.
@@ -228,20 +231,31 @@ async function recover(email, p12Buffer, p12Password) {
     throw new AppError('This account has been suspended.', 403, ErrorCodes.ACCOUNT_SUSPENDED);
   }
 
+  // Anti-enumeration means every non-match already looks identical (see the
+  // generic response above) — the only observable signal here is a genuine
+  // match repeating unexpectedly often, which could indicate a compromised
+  // certificate being reused rather than one being guessed. Fires unconditionally
+  // on any real match, regardless of alreadyLinked below.
+  await attemptTrackerService.recordEvent(AttemptEventTypes.RECOVERY_SUCCESS, tenant.id);
+
+  // alreadyLinked: caller (comprobify-web) already has this tenant linked to
+  // an account locally — there is nothing to recover. Confirm the match so
+  // the caller can tell the user, without rotating their real key or
+  // forcing re-verification, both of which would be a disruptive, unrequested
+  // side effect on an account that already works. This endpoint's rotation
+  // side effect exists solely to (re)establish a tenant↔user link for the
+  // first time — never to "refresh" one that already exists.
+  if (alreadyLinked) {
+    return { ok: true, matched: true, alreadyLinked: true };
+  }
+
   // Environment is resolved from the tenant's actual current environment,
   // not hardcoded to sandbox, so a promoted (production) tenant's real key
   // gets recovered too.
   const environment = tenant.sandbox ? 'sandbox' : 'production';
   console.warn(`[registration] recovery key issued for tenant ${tenant.id} (${environment})`);
-  // Anti-enumeration means every non-match already looks identical (see the
-  // generic response above) — the only observable signal here is a genuine
-  // match repeating unexpectedly often, which could indicate a compromised
-  // certificate being reused rather than one being guessed.
-  await attemptTrackerService.recordEvent(AttemptEventTypes.RECOVERY_SUCCESS, tenant.id);
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenant.id, environment);
-  // Same deliberate bypass as register()'s "Initial master key" above — a
-  // FREE/SOLO/LITE tenant recovering access must get a working key back even
-  // though their self-service pool is 0.
+  // Same deliberate bypass as register()'s "Initial master key" above.
   const plainToken = crypto.randomBytes(32).toString('hex');
   await apiKeyModel.create({
     tenantId: tenant.id,
@@ -249,6 +263,7 @@ async function recover(email, p12Buffer, p12Password) {
     label: 'Recovery key',
     environment,
     scopes: ALL_SCOPES,
+    isReserved: reserved,
   });
 
   // Extra validation: a matching certificate proves possession of the P12,

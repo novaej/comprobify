@@ -1,7 +1,9 @@
 jest.mock('../../../src/services/redis.service');
 
 const redisService = require('../../../src/services/redis.service');
-const { writeLimiter, readLimiter, buildStore, keyGenerator } = require('../../../src/middleware/rate-limit');
+const {
+  writeLimiter, readLimiter, registerLimiter, recoverLimiter, resendVerificationLimiter, buildStore, keyGenerator,
+} = require('../../../src/middleware/rate-limit');
 
 describe('rate-limit middleware', () => {
   describe('writeLimiter', () => {
@@ -13,6 +15,16 @@ describe('rate-limit middleware', () => {
   describe('readLimiter', () => {
     test('should export readLimiter as a middleware function', () => {
       expect(typeof readLimiter).toBe('function');
+    });
+  });
+
+  describe('account-lifecycle limiters', () => {
+    test('register, recover, and resend-verification are independent middleware instances', () => {
+      expect(typeof registerLimiter).toBe('function');
+      expect(typeof recoverLimiter).toBe('function');
+      expect(typeof resendVerificationLimiter).toBe('function');
+      expect(registerLimiter).not.toBe(recoverLimiter);
+      expect(recoverLimiter).not.toBe(resendVerificationLimiter);
     });
   });
 
@@ -43,11 +55,8 @@ describe('rate-limit middleware', () => {
     });
 
     // Regression test: keyGenerator used to call ipKeyGenerator(req) — the
-    // whole request object, not req.ip. ipKeyGenerator's isIPv6() check then
-    // silently returned that object unchanged, which string-coerces to the
-    // literal "[object Object]" for every request, collapsing every distinct
-    // IP onto one shared bucket (writeLimiter/readLimiter's unauthenticated
-    // fallback, and unconditionally for adminLimiter/registrationLimiter).
+    // whole request object, not req.ip — collapsing every distinct IP onto
+    // one shared bucket. See Common Mistake #44.
     test('falls back to a distinct key per IP when there is no keyHash', () => {
       const keyA = keyGenerator({ ip: '1.2.3.4' });
       const keyB = keyGenerator({ ip: '5.6.7.8' });

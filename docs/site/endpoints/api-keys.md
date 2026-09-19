@@ -78,7 +78,7 @@ Devuelve todas las llaves activas del tenant. El token en texto plano **nunca** 
 
 `lastUsedAt` (nullable, `null` si la llave nunca ha autenticado una solicitud) y `requestCount` (contador de por vida, no por ventana — para volumen acotado en el tiempo usa los logs estructurados de solicitudes o una herramienta APM) se actualizan en cada solicitud que esa llave autentica con éxito. `scopes` refleja lo que esa llave tiene permitido hacer actualmente — ver [Scopes](#scopes) arriba.
 
-`limit.max` es cuántas llaves activas puedes tener en total antes de que `POST /v1/keys` devuelva `402 API_KEY_LIMIT_REACHED`, y `limit.used` es tu conteo actual. En Free/Solo/Lite este número no es cero pese a que esos planes no venden llaves adicionales por self-service (ver [Tiers de suscripción](../getting-started.md#tiers-de-suscripcion)) — comprobify reserva una pequeña cuota fija en cada plan para su propia app web, así que `max` siempre incluye ese margen encima de lo que tu plan vende.
+`limit.max` es cuántas llaves activas puedes tener en total antes de que `POST /v1/keys` devuelva `402 API_KEY_LIMIT_REACHED`, y `limit.used` es tu conteo actual — coincide exactamente con el máximo de tu plan (ver [Planes de suscripción](../getting-started.md#planes-de-suscripcion)). En Free/Solo/Lite `max` es `0`: esos planes no venden llaves adicionales por self-service, y las llaves internas que la aplicación web usa para operar tu panel nunca cuentan aquí ni aparecen en este listado.
 
 ### Errores
 
@@ -115,7 +115,7 @@ Crea una nueva llave a nivel de tenant. El token en texto plano se muestra **una
 
 **Contención de privilegios:** cada elemento de `scopes` debe estar ya presente en la llave que hace esta solicitud — no puedes crear una llave más amplia que la tuya, ni siquiera si tienes `keys:manage`. Una llave con acceso total puede crear cualquier combinación (incluyendo otra llave con acceso total); una llave con solo `["keys:manage", "documents:read"]` puede crear una llave con `["documents:read"]` pero no una con `["documents:write"]`.
 
-**Límite del plan:** cada tier limita cuántas llaves activas puede tener un tenant a la vez (ver [Tiers de suscripción](../getting-started.md#tiers-de-suscripcion)). Revoca una llave sin uso vía `DELETE /v1/keys/:id` para liberar un cupo, o mejora tu plan.
+**Límite del plan:** cada plan limita cuántas llaves activas puede tener un tenant a la vez (ver [Planes de suscripción](../getting-started.md#planes-de-suscripcion)). Revoca una llave sin uso vía `DELETE /v1/keys/:id` para liberar un cupo, o mejora tu plan.
 
 ### Respuesta
 
@@ -140,7 +140,7 @@ El token en texto plano (`apiKey`) se muestra una sola vez; `scopes` refleja lo 
 | `403` | `FORBIDDEN` | El correo del tenant no está verificado, O se intenta crear una llave de producción antes de que algún emisor haya sido promovido |
 | `403` | `INSUFFICIENT_SCOPE` | La llave usada en esta solicitud no tiene el scope `keys:manage` |
 | `403` | `SCOPE_ESCALATION_FORBIDDEN` | `scopes` incluye un elemento que la llave solicitante no tiene — ver Contención de privilegios arriba |
-| `402` | `API_KEY_LIMIT_REACHED` | El tenant ya tiene el número máximo de llaves activas que permite su plan — ver [Tiers de suscripción](../getting-started.md#tiers-de-suscripcion) |
+| `402` | `API_KEY_LIMIT_REACHED` | El tenant ya tiene el número máximo de llaves activas que permite su plan — ver [Planes de suscripción](../getting-started.md#planes-de-suscripcion) |
 
 ---
 

@@ -35,82 +35,6 @@ describe('AdminService', () => {
     jest.clearAllMocks();
   });
 
-  describe('createTenant', () => {
-    test('rejects when a tenant with the email already exists', async () => {
-      tenantModel.findByEmail.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001' });
-
-      await expect(adminService.createTenant({ email: 'a@b.com' }))
-        .rejects.toMatchObject({ statusCode: 409 });
-      expect(tenantModel.create).not.toHaveBeenCalled();
-    });
-
-    test('defaults to the FREE tier and its quota when no tier is supplied', async () => {
-      tenantModel.findByEmail.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscription_tier: 'FREE', status: 'ACTIVE',
-        created_at: new Date('2026-01-01'),
-      });
-      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 5, document_count: 0 });
-
-      const result = await adminService.createTenant({ email: 'a@b.com' });
-
-      expect(tenantModel.create).toHaveBeenCalledWith({
-        email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE',
-      }, mockClient);
-      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 5, mockClient);
-      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
-      expect(result).toEqual({
-        id: '00000000-0000-0000-0000-000000000001', email: 'a@b.com', subscriptionTier: 'FREE', status: 'ACTIVE',
-        suspensionReasonCode: null, documentQuota: 5, documentCount: 0, createdAt: new Date('2026-01-01'),
-      });
-    });
-
-    test('creates a tenant with an explicit tier and its matching quota', async () => {
-      tenantModel.findByEmail.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000002', email: 'b@c.com', subscription_tier: 'GROWTH', status: 'ACTIVE',
-        created_at: new Date('2026-01-01'),
-      });
-      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: 1000, document_count: 0 });
-
-      await adminService.createTenant({ email: 'b@c.com', subscriptionTier: 'GROWTH' });
-
-      expect(tenantModel.create).toHaveBeenCalledWith({
-        email: 'b@c.com', subscriptionTier: 'GROWTH', status: 'ACTIVE',
-      }, mockClient);
-      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000002', 1000, mockClient);
-    });
-
-    // Regression guard: `TIERS[tier]?.documentQuota ?? TIERS.FREE.documentQuota`
-    // would silently collapse ENTERPRISE's legitimate null (unlimited) cap
-    // down to FREE's, since `??` treats null and undefined identically.
-    test('creates an ENTERPRISE tenant with a null (unlimited) quota, not FREE\'s', async () => {
-      tenantModel.findByEmail.mockResolvedValue(null);
-      tenantModel.create.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000003', email: 'd@e.com', subscription_tier: 'ENTERPRISE', status: 'ACTIVE',
-        created_at: new Date('2026-01-01'),
-      });
-      tenantQuotaService.initializeForTenant.mockResolvedValue({ document_quota: null, document_count: 0 });
-
-      const result = await adminService.createTenant({ email: 'd@e.com', subscriptionTier: 'ENTERPRISE' });
-
-      expect(tenantQuotaService.initializeForTenant).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000003', null, mockClient);
-      expect(result.documentQuota).toBeNull();
-    });
-
-    // NOTE: unlike updateTenantTier, createTenant does not validate the supplied
-    // subscriptionTier against TIERS — an unrecognized value is passed straight
-    // through to tenantModel.create, only the *quota* falls back to FREE's.
-    // Documented here as observed behavior, not asserted as desirable.
-    test('rejects an unrecognized tier', async () => {
-      tenantModel.findByEmail.mockResolvedValue(null);
-
-      await expect(adminService.createTenant({ email: 'c@d.com', subscriptionTier: 'BOGUS' }))
-        .rejects.toMatchObject({ statusCode: 400, code: 'INVALID_TIER' });
-      expect(tenantModel.create).not.toHaveBeenCalled();
-    });
-  });
-
   describe('listTenants', () => {
     test('returns all tenants formatted', async () => {
       tenantModel.findAll.mockResolvedValue([
@@ -274,238 +198,6 @@ describe('AdminService', () => {
     });
   });
 
-  describe('createIssuer', () => {
-    const baseFields = {
-      tenantId: '00000000-0000-0000-0000-000000000001', ruc: '1234567890001', businessName: 'Acme', branchCode: '001',
-      issuePointCode: '001', emissionType: '1',
-    };
-    const p12Buffer = Buffer.from('fake-p12');
-
-    test('rejects when the tenant does not exist', async () => {
-      tenantModel.findById.mockResolvedValue(null);
-
-      await expect(adminService.createIssuer(baseFields, p12Buffer, 'pw'))
-        .rejects.toMatchObject({ statusCode: 404 });
-    });
-
-    test('rejects with BRANCH_LIMIT_REACHED when creating a new branch at the plan cap', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true }); // maxBranches = 3
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(3);
-
-      await expect(adminService.createIssuer(baseFields, p12Buffer, 'pw'))
-        .rejects.toMatchObject({ statusCode: 402, code: 'BRANCH_LIMIT_REACHED' });
-      expect(issuerModel.create).not.toHaveBeenCalled();
-    });
-
-    test('allows creating a new branch under the plan cap', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(2);
-      certificateService.parseCertificate.mockReturnValue({ privateKeyPem: 'pk', certPem: 'cert', certFingerprint: 'fp', certExpiry: new Date() });
-      cryptoService.encrypt.mockReturnValue('enc');
-      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', branch_code: '001', issue_point_code: '001' });
-
-      await expect(adminService.createIssuer(baseFields, p12Buffer, 'pw')).resolves.toBeDefined();
-      expect(issuerModel.create).toHaveBeenCalled();
-    });
-
-    test('BUSINESS tier (unlimited branches) skips the branch-count check entirely', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'BUSINESS', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      certificateService.parseCertificate.mockReturnValue({ privateKeyPem: 'pk', certPem: 'cert', certFingerprint: 'fp', certExpiry: new Date() });
-      cryptoService.encrypt.mockReturnValue('enc');
-      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', branch_code: '001', issue_point_code: '001' });
-
-      await adminService.createIssuer(baseFields, p12Buffer, 'pw');
-
-      expect(tenantModel.countBranchesByTenantId).not.toHaveBeenCalled();
-      expect(issuerModel.create).toHaveBeenCalled();
-    });
-
-    test('rejects with ISSUE_POINT_LIMIT_REACHED when adding an issue point at the branch cap', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true }); // maxIssuePointsPerBranch = 2
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(2);
-
-      await expect(adminService.createIssuer(baseFields, p12Buffer, 'pw'))
-        .rejects.toMatchObject({ statusCode: 402, code: 'ISSUE_POINT_LIMIT_REACHED' });
-      expect(issuerModel.create).not.toHaveBeenCalled();
-    });
-
-    test('BUSINESS tier (unlimited issue points) skips the issue-point check', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'BUSINESS', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(50);
-      certificateService.parseCertificate.mockReturnValue({ privateKeyPem: 'pk', certPem: 'cert', certFingerprint: 'fp', certExpiry: new Date() });
-      cryptoService.encrypt.mockReturnValue('enc');
-      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', branch_code: '001', issue_point_code: '001' });
-
-      await adminService.createIssuer(baseFields, p12Buffer, 'pw');
-
-      expect(issuerModel.create).toHaveBeenCalled();
-    });
-
-    test('parses the P12, encrypts the private key, and maps a truthy requiredAccounting to "SI"', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      const certExpiry = new Date('2030-01-01');
-      certificateService.parseCertificate.mockReturnValue({
-        privateKeyPem: 'pk-pem', certPem: 'cert-pem', certFingerprint: 'abc123', certExpiry,
-      });
-      cryptoService.encrypt.mockReturnValue('encrypted-pk-value');
-      issuerModel.create.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', branch_code: '001', issue_point_code: '001',
-        cert_fingerprint: 'abc123', cert_expiry: certExpiry,
-      });
-
-      await adminService.createIssuer({ ...baseFields, requiredAccounting: true }, p12Buffer, 'pw');
-
-      expect(certificateService.parseCertificate).toHaveBeenCalledWith(p12Buffer, 'pw');
-      expect(cryptoService.encrypt).toHaveBeenCalledWith('pk-pem');
-      expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
-        tenantId: '00000000-0000-0000-0000-000000000001', ruc: baseFields.ruc, businessName: baseFields.businessName,
-        encryptedPrivateKey: 'encrypted-pk-value', certificatePem: 'cert-pem',
-        certFingerprint: 'abc123', certExpiry, requiredAccounting: 'SI',
-      }));
-      expect(tenantEventModel.create).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', 'CERTIFICATE_UPLOADED', {
-        issuerId: '00000000-0000-0000-0000-000000000010', certFingerprint: 'abc123', certExpiry,
-      });
-    });
-
-    test('maps a falsy requiredAccounting to "NO"', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      certificateService.parseCertificate.mockReturnValue({ privateKeyPem: 'pk', certPem: 'cert', certFingerprint: 'fp', certExpiry: new Date() });
-      cryptoService.encrypt.mockReturnValue('enc');
-      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', branch_code: '001', issue_point_code: '001' });
-
-      await adminService.createIssuer(baseFields, p12Buffer, 'pw');
-
-      expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({ requiredAccounting: 'NO' }));
-    });
-
-    test('rejects when sourceIssuerId does not resolve to an existing issuer', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      issuerModel.findById.mockResolvedValue(null);
-
-      await expect(adminService.createIssuer(baseFields, null, null, 99))
-        .rejects.toMatchObject({ statusCode: 404, code: 'SOURCE_ISSUER_NOT_FOUND' });
-    });
-
-    test('rejects when the source issuer RUC does not match the supplied RUC', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      issuerModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000005', ruc: '9999999999001' });
-
-      await expect(adminService.createIssuer(baseFields, null, null, 5))
-        .rejects.toMatchObject({ statusCode: 400, code: 'RUC_MISMATCH' });
-    });
-
-    test('copies certificate fields from the source issuer when branching without a P12', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      const certExpiry = new Date('2030-01-01');
-      issuerModel.findById.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000005', ruc: baseFields.ruc, encrypted_private_key: 'src-enc', certificate_pem: 'src-cert',
-        cert_fingerprint: 'src-fp', cert_expiry: certExpiry,
-      });
-      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', branch_code: '001', issue_point_code: '001' });
-
-      await adminService.createIssuer(baseFields, null, null, 5);
-
-      expect(certificateService.parseCertificate).not.toHaveBeenCalled();
-      expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
-        encryptedPrivateKey: 'src-enc', certificatePem: 'src-cert', certFingerprint: 'src-fp', certExpiry,
-      }));
-      expect(tenantEventModel.create).not.toHaveBeenCalledWith(expect.anything(), 'CERTIFICATE_UPLOADED', expect.anything());
-    });
-
-    test('translates a unique-constraint violation on issuer creation into a ConflictError', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      certificateService.parseCertificate.mockReturnValue({ privateKeyPem: 'pk', certPem: 'cert', certFingerprint: 'fp', certExpiry: new Date() });
-      cryptoService.encrypt.mockReturnValue('enc');
-      const dupError = new Error('duplicate key value violates unique constraint');
-      dupError.code = '23505';
-      issuerModel.create.mockRejectedValue(dupError);
-
-      await expect(adminService.createIssuer(baseFields, p12Buffer, 'pw'))
-        .rejects.toMatchObject({ statusCode: 409 });
-    });
-
-    test('rethrows a non-duplicate-key error from issuerModel.create unchanged', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      certificateService.parseCertificate.mockReturnValue({ privateKeyPem: 'pk', certPem: 'cert', certFingerprint: 'fp', certExpiry: new Date() });
-      cryptoService.encrypt.mockReturnValue('enc');
-      const otherError = new Error('connection reset');
-      issuerModel.create.mockRejectedValue(otherError);
-
-      await expect(adminService.createIssuer(baseFields, p12Buffer, 'pw')).rejects.toThrow('connection reset');
-    });
-
-    test('defaults documentTypes to ["01"] and seeds sequential 1 when nothing is supplied', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      certificateService.parseCertificate.mockReturnValue({ privateKeyPem: 'pk', certPem: 'cert', certFingerprint: 'fp', certExpiry: new Date() });
-      cryptoService.encrypt.mockReturnValue('enc');
-      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', branch_code: '001', issue_point_code: '001' });
-
-      await adminService.createIssuer(baseFields, p12Buffer, 'pw');
-
-      expect(issuerDocumentTypeModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', ['01']);
-      expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', '001', '001', '01', 1, true);
-    });
-
-    test('dedupes requested documentTypes and seeds each from initialSequentials (falling back to 1)', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'GROWTH', sandbox: false });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      certificateService.parseCertificate.mockReturnValue({ privateKeyPem: 'pk', certPem: 'cert', certFingerprint: 'fp', certExpiry: new Date() });
-      cryptoService.encrypt.mockReturnValue('enc');
-      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000011', branch_code: '002', issue_point_code: '001' });
-
-      await adminService.createIssuer({
-        ...baseFields, documentTypes: ['01', '04', '01'],
-        initialSequentials: [{ documentType: '01', sequential: '50' }],
-      }, p12Buffer, 'pw');
-
-      expect(issuerDocumentTypeModel.bulkCreate).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', ['01', '04']);
-      expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', '002', '001', '01', 50, false);
-      expect(sequentialService.initialize).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000011', '002', '001', '04', 1, false);
-    });
-
-    test('returns the newly created issuer formatted', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', subscription_tier: 'STARTER', sandbox: true });
-      tenantModel.countIssuePointsByBranch.mockResolvedValue(0);
-      tenantModel.countBranchesByTenantId.mockResolvedValue(0);
-      const certExpiry = new Date('2030-01-01');
-      certificateService.parseCertificate.mockReturnValue({ privateKeyPem: 'pk', certPem: 'cert', certFingerprint: 'fp', certExpiry });
-      cryptoService.encrypt.mockReturnValue('enc');
-      issuerModel.create.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000010', tenant_id: '00000000-0000-0000-0000-000000000001', ruc: baseFields.ruc, business_name: 'Acme', trade_name: null,
-        branch_code: '001', issue_point_code: '001', cert_fingerprint: 'fp', cert_expiry: certExpiry, active: true,
-      });
-
-      const result = await adminService.createIssuer(baseFields, p12Buffer, 'pw');
-
-      expect(result).toEqual({
-        issuer: {
-          id: '00000000-0000-0000-0000-000000000010', tenantId: '00000000-0000-0000-0000-000000000001', ruc: baseFields.ruc, businessName: 'Acme', tradeName: null,
-          branchCode: '001', issuePointCode: '001', certFingerprint: 'fp', certExpiry, active: true,
-        },
-      });
-    });
-  });
-
   describe('listIssuers', () => {
     test('returns all issuers formatted', async () => {
       issuerModel.findAll.mockResolvedValue([
@@ -524,14 +216,14 @@ describe('AdminService', () => {
     test('rejects when the tenant does not exist', async () => {
       tenantModel.findById.mockResolvedValue(null);
 
-      await expect(adminService.createApiKey(1, 'label', 'sandbox')).rejects.toMatchObject({ statusCode: 404 });
+      await expect(adminService.createApiKey(1, { label: 'label', environment: 'sandbox' })).rejects.toMatchObject({ statusCode: 404 });
     });
 
     test('defaults to sandbox when the tenant is still in sandbox and no environment is given', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', undefined);
+      await adminService.createApiKey(1, { label: 'label' });
 
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ environment: 'sandbox' }));
     });
@@ -540,7 +232,7 @@ describe('AdminService', () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: false });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', undefined);
+      await adminService.createApiKey(1, { label: 'label' });
 
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ environment: 'production' }));
     });
@@ -548,7 +240,7 @@ describe('AdminService', () => {
     test('rejects an invalid environment value', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
 
-      await expect(adminService.createApiKey(1, 'label', 'staging')).rejects.toMatchObject({ statusCode: 400 });
+      await expect(adminService.createApiKey(1, { label: 'label', environment: 'staging' })).rejects.toMatchObject({ statusCode: 400 });
       expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
 
@@ -556,7 +248,7 @@ describe('AdminService', () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', 'sandbox', true);
+      await adminService.createApiKey(1, { label: 'label', environment: 'sandbox', revokeExisting: true });
 
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
     });
@@ -565,55 +257,111 @@ describe('AdminService', () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', 'sandbox');
+      await adminService.createApiKey(1, { label: 'label', environment: 'sandbox' });
 
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
     });
 
     test('rejects when the tenant has reached their tier API key limit', async () => {
       tenantModel.findById.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'STARTER',
+      });
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(5); // STARTER's own pool is 5
+
+      await expect(adminService.createApiKey(1, { label: 'label', environment: 'sandbox' }))
+        .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+    });
+
+    test('a FREE tenant is rejected outright — maxApiKeys: 0 is genuinely zero, not 0 + reserved headroom', async () => {
+      tenantModel.findById.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE',
       });
-      apiKeyModel.countActiveByTenantId.mockResolvedValue(5); // FREE: 0 self-service + 5 reserved for the frontend
+      apiKeyModel.countActiveByTenantId.mockResolvedValue(0);
 
-      await expect(adminService.createApiKey(1, 'label', 'sandbox'))
+      await expect(adminService.createApiKey(1, { label: 'label', environment: 'sandbox' }))
         .rejects.toMatchObject({ statusCode: 402, code: 'API_KEY_LIMIT_REACHED' });
       expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
 
     test('revoke-and-replace succeeds when the post-revoke count is within the tier limit', async () => {
       tenantModel.findById.mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE',
+        id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'STARTER',
       });
       apiKeyModel.countActiveByTenantId.mockResolvedValue(0);
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, 'label', 'sandbox', true);
+      await adminService.createApiKey(1, { label: 'label', environment: 'sandbox', revokeExisting: true });
 
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
       expect(apiKeyModel.create).toHaveBeenCalled();
     });
 
     test('mints a token whose SHA-256 hash matches what was persisted', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'STARTER' });
       apiKeyModel.create.mockResolvedValue({});
 
-      const token = await adminService.createApiKey('00000000-0000-0000-0000-000000000001', 'frontend', 'sandbox');
+      const token = await adminService.createApiKey('00000000-0000-0000-0000-000000000001', { label: 'frontend', environment: 'sandbox' });
 
       expect(typeof token).toBe('string');
       const expectedHash = crypto.createHash('sha256').update(token).digest('hex');
       expect(apiKeyModel.create).toHaveBeenCalledWith({
-        tenantId: '00000000-0000-0000-0000-000000000001', keyHash: expectedHash, label: 'frontend', environment: 'sandbox', scopes: ALL_SCOPES,
+        tenantId: '00000000-0000-0000-0000-000000000001', keyHash: expectedHash, label: 'frontend', environment: 'sandbox', scopes: ALL_SCOPES, isReserved: undefined,
       });
     });
 
     test('stores a null label when none is given', async () => {
-      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'STARTER' });
       apiKeyModel.create.mockResolvedValue({});
 
-      await adminService.createApiKey(1, undefined, 'sandbox');
+      await adminService.createApiKey(1, { environment: 'sandbox' });
 
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: null }));
+    });
+
+    test('mints a reserved key exempt from the tier limit, gated by the reserved sanity ceiling instead', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(1);
+      apiKeyModel.create.mockResolvedValue({});
+
+      await adminService.createApiKey(1, { label: 'App — Viewer', environment: 'sandbox', isReserved: true, scopes: ['documents:read'] });
+
+      expect(apiKeyModel.countActiveByTenantId).not.toHaveBeenCalled();
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ isReserved: true, scopes: ['documents:read'] }));
+    });
+
+    test('rejects minting a reserved key past the sanity ceiling', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(5);
+
+      await expect(adminService.createApiKey(1, { label: 'App — Viewer', environment: 'sandbox', isReserved: true }))
+        .rejects.toMatchObject({ statusCode: 409, code: 'RESERVED_KEY_LIMIT_REACHED' });
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
+    });
+
+    test('replaceKeyId atomically revokes one specific key and mints its replacement, leaving other keys untouched', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(0);
+      apiKeyModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000099', active: true, label: 'Initial master key' });
+
+      await adminService.createApiKey(1, { environment: 'sandbox', isReserved: true, replaceKeyId: '00000000-0000-0000-0000-000000000099' });
+
+      expect(mockClient.query).toHaveBeenCalledWith('BEGIN');
+      expect(apiKeyModel.revoke).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000099', mockClient);
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ isReserved: true }), mockClient);
+      expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+      expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).not.toHaveBeenCalled();
+    });
+
+    test('replaceKeyId rejects when the target key does not belong to the tenant, rolling back', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(0);
+      apiKeyModel.findByIdAndTenantId.mockResolvedValue(null);
+
+      await expect(adminService.createApiKey(1, { environment: 'sandbox', isReserved: true, replaceKeyId: '00000000-0000-0000-0000-000000000099' }))
+        .rejects.toMatchObject({ statusCode: 404 });
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(apiKeyModel.create).not.toHaveBeenCalled();
     });
   });
 
@@ -642,7 +390,7 @@ describe('AdminService', () => {
 
       const result = await adminService.listApiKeys('00000000-0000-0000-0000-000000000001');
 
-      expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001');
+      expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000001', true);
       expect(result).toEqual([
         expect.objectContaining({
           id: '00000000-0000-0000-0000-000000000017',
@@ -725,6 +473,7 @@ describe('AdminService', () => {
 
       const result = await adminService.promoteTenant(1);
 
+      expect(apiKeyModel.findActiveByTenantId).toHaveBeenCalledWith(1, true);
       expect(apiKeyModel.revokeAllByTenantIdAndEnvironment).toHaveBeenCalledWith(1, 'sandbox');
       expect(apiKeyModel.create).toHaveBeenCalledTimes(2);
       expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'frontend', environment: 'production', scopes: ALL_SCOPES }));
@@ -734,6 +483,20 @@ describe('AdminService', () => {
         { label: 'erp', apiKey: expect.any(String) },
       ]);
       expect(tenantModel.promote).toHaveBeenCalledWith(1);
+    });
+
+    test('mirrors a reserved key into production and always includes it — the admin route is already ADMIN_SECRET-trusted, no caller to hide it from', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true });
+      issuerModel.findAllByTenantId.mockResolvedValue([]);
+      apiKeyModel.findActiveByTenantId.mockResolvedValue([
+        { label: 'Initial master key', scopes: ALL_SCOPES, is_reserved: true },
+      ]);
+      tenantModel.promote.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: false });
+
+      const result = await adminService.promoteTenant(1);
+
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ label: 'Initial master key', isReserved: true }));
+      expect(result.apiKeys).toEqual([{ label: 'Initial master key', apiKey: expect.any(String) }]);
     });
 
     test('returns no apiKeys when the tenant had none active in sandbox', async () => {

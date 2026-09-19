@@ -24,11 +24,11 @@ You can also download the collection JSON directly: [`comprobify.postman_collect
 
 **Account creation is not a third-party-callable endpoint.** `POST /v1/register` requires an `X-Internal-Service-Secret` header that only the Comprobify web app holds — any other caller gets `403 INTERNAL_SERVICE_ONLY`. This is deliberate: each RUC can only be registered once, and registration is a guided flow (uploading your `.p12` certificate, accepting the legal agreements, etc.) meant to happen in the app.
 
-**Sign up at the Comprobify web app.** Once you're done, your account already has an issuer and a sandbox API key — the same API key `POST /v1/register` used to return directly. Copy it from the dashboard; it's shown only once.
+**Sign up at the Comprobify web app.** Once you're done, your account already has an issuer and a fully-functional sandbox API key — but, by design, the web app **never shows you its text**. It stores it encrypted and uses it internally to run your dashboard; there's nowhere in the UI to copy it from. That's fine if you're only ever going to use the dashboard, but if you need to integrate your own system directly against the API, keep reading — section 3 below explains how to get a key you can actually copy.
 
 The account starts on the **FREE** tier (5 documents/month, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
 
-Lost your API key? Account recovery (`POST /v1/recover`) also happens in the web app, by uploading the same `.p12` certificate you registered with — see [Recover Account](endpoints/recover.md).
+Account recovery (`POST /v1/recover`) also happens in the web app, by uploading the same `.p12` certificate you registered with — see [Recover Account](endpoints/recover.md). As with registration, the resulting key isn't shown to you either, whether your account was already linked to the web app or is being linked for the first time.
 
 ---
 
@@ -54,7 +54,7 @@ Authorization: Bearer <your-api-key>
 
 The key is SHA-256 hashed on each request — the plaintext is never persisted after creation. If a key is compromised, contact support to revoke it and issue a new one.
 
-> **What do I need to use the API directly?** Just the key your account already came with from signing up in the web app (see section 1 above). That key already has every permission (`ALL_SCOPES`) and covers all your branches — you don't need to call `POST /v1/keys` or any other setup endpoint before creating your first document. Minting additional keys (`POST /v1/keys`) and registering your own webhooks (`POST /v1/webhooks`) are Starter-and-up features — see "Multiple named keys per tenant" and the tier table below — but neither is a requirement to integrate.
+> **What do I need to use the API directly?** The key your account got at sign-up (see section 1 above) already has every permission and covers all your branches — but the web app never shows you its text, it uses it internally to run your dashboard. To integrate your own system (a backend, a script, an ERP) you need a key you can copy, and the only way to get one is to mint a new one via `POST /v1/keys` from `/settings/api-keys` in the dashboard — that one *is* shown to you once, at creation. Minting keys this way (and registering your own webhooks via `POST /v1/webhooks`) are Starter-and-up features — see "Multiple named keys per tenant" below. **On Free/Solo/Lite there's currently no self-service way to get a key's text** — contact support if you need direct integration on one of those tiers.
 
 ---
 
@@ -104,7 +104,7 @@ No new API key is minted — the key you already have covers every branch under 
 
 ### Multiple named keys per tenant (Starter and up)
 
-**Free/Solo/Lite cannot mint additional keys via self-service** — you only get the initial key registration already gave you, which is enough to integrate a single system. From Starter up, since one tenant-scoped key covers all your branches, you can mint additional keys via `POST /v1/keys` to track which integration is making each call (frontend, ERP, mobile app, etc.):
+**Free/Solo/Lite cannot mint keys via self-service at all — not even one.** Your initial key (the one registration created) is never shown to you — see section 3 above — so there's no key text to copy for your own integration on those tiers; contact support if you need one. From Starter up, since one tenant-scoped key covers all your branches, you can mint named keys via `POST /v1/keys` (shown to you once, at creation) to track which integration is making each call (frontend, ERP, mobile app, etc.):
 
 ```http
 POST /v1/keys
@@ -120,10 +120,10 @@ Use `GET /v1/keys` to list them and `DELETE /v1/keys/:id` to revoke one. `enviro
 
 | Stage | Key environment | What to do |
 |---|---|---|
-| After registration | Sandbox | Use for testing against the SRI test environment. |
-| After `POST /v1/tenants/promote` | Production | All sandbox keys are revoked and production mirrors are returned in the response. |
-| Adding integrations | Same tenant | Mint named keys via `POST /v1/keys` for per-integration observability. |
-| Lost key | — | Mint a replacement via `POST /v1/keys`, revoke the old one via `DELETE /v1/keys/:id`. |
+| After registration | Sandbox | The web app uses it to run your dashboard right away; you don't need its text for that. |
+| After `POST /v1/tenants/promote` | Production | All sandbox keys are revoked and production mirrors are returned in the response — this happens entirely inside the web app, with no key text ever shown to you. |
+| Adding your own integrations (Starter+) | Same tenant | Mint named keys via `POST /v1/keys` for per-integration observability. |
+| Lost a named key (Starter+) | — | Mint a replacement via `POST /v1/keys`, revoke the old one via `DELETE /v1/keys/:id`. |
 
 ### Why tenant-scoped keys?
 
@@ -277,7 +277,7 @@ Listed prices are the **tax-exclusive** rate (the "sticker price") — IVA (curr
 
 **Free is monthly-only** — it's never actually purchased (there's no subscription behind it), so there's no annual variant to switch to. **Solo is yearly-only** (no monthly billing on that plan) — a low-cost annual commitment below Starter, meant as the entry rung. **Enterprise has no document quota at all**: it's genuinely unlimited (not a large number), and has no overage rate either, since there's no cap to ever overage past.
 
-¹ **"0" doesn't mean you can't use the API.** These two columns are how many *additional* keys/webhooks you can create yourself via self-service — minting additional keys and registering your own webhooks are Starter-and-up features. On Free/Solo/Lite you already have, from registration, one fully-permissioned key that's enough to integrate your own systems; you just can't self-mint a second one or register a webhook until you upgrade. See the "What do I need to use the API directly?" note in section 3.
+¹ **On Free/Solo/Lite, "0" means there's no key whose text you can self-service obtain at all.** These two columns are how many keys/webhooks you can create yourself — minting keys and registering your own webhooks are Starter-and-up features. Your initial key from registration exists and works, but the web app never shows you its text (it uses it internally to run your dashboard), so on Free/Solo/Lite there's no self-service way to get a copyable key for your own integration — contact support if you need one. See the "What do I need to use the API directly?" note in section 3.
 
 > **Note:** these prices reflect the currently published catalog and can change — any price change requires at least 30 days' notice to active tenants (see [Your subscription & billing](paying-your-subscription.md)), so a price never changes overnight. Always check the Comprobify web app for the live catalog; this table is a reference and can fall out of date between edits to this page.
 

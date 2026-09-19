@@ -44,8 +44,8 @@ GET /v1/tenants/me
 | `extraSeats` | Extra dashboard user seats purchased on top of the plan's included count (0 if none, or if there's no active subscription). Comprobify bills for this but does not enforce it — see [Your subscription & billing](../paying-your-subscription.md#extra-user-seats). |
 | `pendingExtraSeats` | A scheduled seat count taking effect at the end of the current billing period (a decrease in progress), or `null` if nothing is scheduled. |
 | `sandbox` | `true` if the tenant is in the SRI test environment, `false` if promoted to production. |
-| `agreementAcceptedAt` | Timestamp of the most recent agreement acceptance event, or `null` for admin-created tenants. Compare against `GET /v1/tenants/agreements` to detect drift. |
-| `agreementVersion` | The TERMS document version the tenant last accepted, or `null` for admin-created tenants. |
+| `agreementAcceptedAt` | Timestamp of the most recent agreement acceptance event, or `null` if the tenant hasn't accepted any yet. Compare against `GET /v1/tenants/agreements` to detect drift. |
+| `agreementVersion` | The TERMS document version the tenant last accepted, or `null` if the tenant hasn't accepted any yet. |
 
 ## Errors
 

@@ -28,6 +28,7 @@ function formatEndpoint(row) {
     active:     row.active,
     createdAt:  row.created_at,
     updatedAt:  row.updated_at,
+    isReserved: row.is_reserved === true,
   };
 }
 
@@ -63,9 +64,7 @@ async function create(tenantId, subscriptionTier, url, eventTypes = []) {
 }
 
 /**
- * List all active webhook endpoints for a tenant (secrets excluded), plus
- * the same { max, used } limit info `create` enforces (tier's self-service
- * pool + the frontend's reserved endpoints).
+ * List all active, non-reserved webhook endpoints for a tenant (secrets excluded).
  *
  * @param {number} tenantId
  * @param {string} subscriptionTier
@@ -81,6 +80,7 @@ async function list(tenantId, subscriptionTier) {
 
 /**
  * Update an endpoint's URL, event subscriptions, or active flag.
+ * A reserved endpoint allows toggling `active` only — `active` isn't a credential, but `url`/`eventTypes` stay locked.
  *
  * @param {number}   tenantId
  * @param {number}   endpointId
@@ -89,13 +89,16 @@ async function list(tenantId, subscriptionTier) {
 async function update(tenantId, endpointId, fields) {
   const existing = await webhookEndpointModel.findByIdAndTenantId(endpointId, tenantId);
   if (!existing) throw new NotFoundError('Webhook endpoint');
+  if (existing.is_reserved && Object.keys(fields).some((key) => key !== 'active')) {
+    throw new NotFoundError('Webhook endpoint');
+  }
 
   const updated = await webhookEndpointModel.update(endpointId, fields);
   return formatEndpoint(updated);
 }
 
 /**
- * Deregister an endpoint (soft-delete via active=false).
+ * Deregister an endpoint (soft-delete via active=false). Allowed on a reserved endpoint too.
  *
  * @param {number} tenantId
  * @param {number} endpointId
@@ -107,4 +110,4 @@ async function deregister(tenantId, endpointId) {
   await webhookEndpointModel.update(endpointId, { active: false });
 }
 
-module.exports = { create, list, update, deregister };
+module.exports = { create, list, update, deregister, formatEndpoint };

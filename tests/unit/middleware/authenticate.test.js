@@ -52,10 +52,18 @@ describe('authenticate middleware', () => {
       label: 'frontend-prod',
       environment: 'sandbox',
       scopes: ALL_SCOPES,
+      isReserved: false,
     });
     expect(req.keyHash).toBeDefined();
     expect(typeof req.keyHash).toBe('string');
     expect(req.issuer).toBeUndefined();
+  });
+
+  test('sets req.apiKey.isReserved when the authenticating key is a reserved (comprobify-web-internal) key', async () => {
+    apiKeyModel.findByKeyHash.mockResolvedValue({ ...mockRow, key_is_reserved: true });
+    const req = makeReq('Bearer mytoken');
+    await runMiddleware(req);
+    expect(req.apiKey.isReserved).toBe(true);
   });
 
   test('passes 401 when Authorization header is missing', async () => {

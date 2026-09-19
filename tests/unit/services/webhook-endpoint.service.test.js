@@ -27,7 +27,7 @@ describe('WebhookEndpointService', () => {
     });
 
     test('allows creating up to (but not exceeding) the tier limit', async () => {
-      webhookEndpointModel.countActiveByTenantId.mockResolvedValue(1); // GROWTH: 5 self-service + 1 reserved for the frontend
+      webhookEndpointModel.countActiveByTenantId.mockResolvedValue(1); // GROWTH's own pool is 5
       webhookEndpointModel.create.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000010', url: 'https://example.com/hook', event_types: [], active: true,
         created_at: new Date(), updated_at: new Date(),
@@ -58,7 +58,7 @@ describe('WebhookEndpointService', () => {
       expect(result.secret).toBe(createArgs.secret);
       expect(result.endpoint).toEqual({
         id: '00000000-0000-0000-0000-000000000010', url: 'https://example.com/hook', eventTypes: [], active: true,
-        createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01'),
+        createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01'), isReserved: false,
       });
       expect(result.endpoint.secret).toBeUndefined();
     });
@@ -84,25 +84,25 @@ describe('WebhookEndpointService', () => {
         { id: '00000000-0000-0000-0000-000000000011', url: 'https://b.example.com', event_types: ['DOCUMENT_AUTHORIZED'], active: true, created_at: new Date('2026-01-02'), updated_at: new Date('2026-01-02'), secret: 'should-not-leak-either' },
       ]);
 
-      const result = await webhookEndpointService.list(1, 'FREE');
+      const result = await webhookEndpointService.list(1, 'STARTER');
 
       expect(webhookEndpointModel.findActiveByTenantId).toHaveBeenCalledWith(1);
       expect(result).toEqual({
         endpoints: [
-          { id: '00000000-0000-0000-0000-000000000010', url: 'https://a.example.com', eventTypes: [], active: true, createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01') },
-          { id: '00000000-0000-0000-0000-000000000011', url: 'https://b.example.com', eventTypes: ['DOCUMENT_AUTHORIZED'], active: true, createdAt: new Date('2026-01-02'), updatedAt: new Date('2026-01-02') },
+          { id: '00000000-0000-0000-0000-000000000010', url: 'https://a.example.com', eventTypes: [], active: true, createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-01'), isReserved: false },
+          { id: '00000000-0000-0000-0000-000000000011', url: 'https://b.example.com', eventTypes: ['DOCUMENT_AUTHORIZED'], active: true, createdAt: new Date('2026-01-02'), updatedAt: new Date('2026-01-02'), isReserved: false },
         ],
-        limit: { max: 1, used: 2 }, // FREE: 0 self-service + 1 reserved for the frontend
+        limit: { max: 2, used: 2 }, // STARTER's own self-service pool — reserved endpoints are excluded, not added on top
       });
       expect(result.endpoints[0].secret).toBeUndefined();
     });
 
-    test('returns an empty array when the tenant has no endpoints', async () => {
+    test('returns an empty array and a genuinely zero limit for a FREE tenant', async () => {
       webhookEndpointModel.findActiveByTenantId.mockResolvedValue([]);
 
       const result = await webhookEndpointService.list(1, 'FREE');
 
-      expect(result).toEqual({ endpoints: [], limit: { max: 1, used: 0 } });
+      expect(result).toEqual({ endpoints: [], limit: { max: 0, used: 0 } });
     });
   });
 
@@ -113,6 +113,36 @@ describe('WebhookEndpointService', () => {
       await expect(webhookEndpointService.update(1, 99, { url: 'https://new.example.com' }))
         .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
       expect(webhookEndpointModel.update).not.toHaveBeenCalled();
+    });
+
+    test('throws NotFoundError retargeting url on a reserved endpoint — a tenant must not redirect comprobify-web\'s own notification receiver', async () => {
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', is_reserved: true });
+
+      await expect(webhookEndpointService.update(1, 10, { url: 'https://new.example.com' }))
+        .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+      expect(webhookEndpointModel.update).not.toHaveBeenCalled();
+    });
+
+    test('throws NotFoundError changing eventTypes on a reserved endpoint', async () => {
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', is_reserved: true });
+
+      await expect(webhookEndpointService.update(1, 10, { eventTypes: ['DOCUMENT_AUTHORIZED'] }))
+        .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+      expect(webhookEndpointModel.update).not.toHaveBeenCalled();
+    });
+
+    test('allows toggling active on a reserved endpoint — it\'s a delivery switch, not a credential, unlike an API key', async () => {
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', is_reserved: true });
+      webhookEndpointModel.update.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', event_types: [], active: false,
+        created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-05'), is_reserved: true,
+      });
+
+      const result = await webhookEndpointService.update(1, 10, { active: false });
+
+      expect(webhookEndpointModel.update).toHaveBeenCalledWith(10, { active: false });
+      expect(result.active).toBe(false);
+      expect(result.isReserved).toBe(true);
     });
 
     test('updates the endpoint and returns the formatted result', async () => {
@@ -128,7 +158,7 @@ describe('WebhookEndpointService', () => {
       expect(webhookEndpointModel.update).toHaveBeenCalledWith(10, { url: 'https://new.example.com', active: false });
       expect(result).toEqual({
         id: '00000000-0000-0000-0000-000000000010', url: 'https://new.example.com', eventTypes: [], active: false,
-        createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-05'),
+        createdAt: new Date('2026-01-01'), updatedAt: new Date('2026-01-05'), isReserved: false,
       });
     });
   });
@@ -140,6 +170,15 @@ describe('WebhookEndpointService', () => {
       await expect(webhookEndpointService.deregister(1, 99))
         .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
       expect(webhookEndpointModel.update).not.toHaveBeenCalled();
+    });
+
+    test('deregisters a reserved endpoint too — active isn\'t a credential the way an API key is', async () => {
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://example.com', is_reserved: true });
+      webhookEndpointModel.update.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', active: false });
+
+      await webhookEndpointService.deregister(1, 10);
+
+      expect(webhookEndpointModel.update).toHaveBeenCalledWith(10, { active: false });
     });
 
     test('soft-deletes the endpoint by setting active=false', async () => {

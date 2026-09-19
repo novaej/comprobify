@@ -7,7 +7,7 @@ const config = require('../config');
 // own shared egress IP instead. Only takes effect when X-Internal-Service-Secret
 // matches config.internalServiceSecret; a client-supplied X-Forwarded-Visitor-Ip
 // is otherwise ignored - trusting it blindly would let anyone bypass
-// registrationLimiter by claiming a fresh fake IP per request. See NEXT_STEPS.md #8.
+// the account-lifecycle limiters by claiming a fresh fake IP per request. See NEXT_STEPS.md #8.
 function trustedForwardedIp(req, res, next) {
   const secret = config.internalServiceSecret;
   const presented = req.headers['x-internal-service-secret'];

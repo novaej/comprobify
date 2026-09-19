@@ -14,7 +14,6 @@ router.use(adminLimiter);
 router.use(authenticateAdmin);
 
 // Tenants
-router.post('/tenants',                  v.createTenant,       validateRequest, asyncHandler(controller.createTenant));
 router.get('/tenants',                                                           asyncHandler(controller.listTenants));
 router.patch('/tenants/:id/tier',        v.updateTenantTier,   validateRequest, asyncHandler(controller.updateTenantTier));
 router.patch('/tenants/:id/status',      v.updateTenantStatus, validateRequest, asyncHandler(controller.updateTenantStatus));
@@ -23,7 +22,6 @@ router.post('/tenants/:id/promote',      v.promoteTenant,      validateRequest, 
 router.get('/tenants/:id/events',        v.listTenantEvents,   validateRequest, asyncHandler(controller.listTenantEvents));
 
 // Issuers
-router.post('/issuers', upload.single('cert'), v.createIssuer, validateRequest, asyncHandler(controller.createIssuer));
 router.get('/issuers',                                                           asyncHandler(controller.listIssuers));
 router.patch('/issuers/:id/certificate', upload.single('cert'), v.renewIssuerCertificate, validateRequest, asyncHandler(controller.renewIssuerCertificate));
 
@@ -32,6 +30,10 @@ router.post('/tenants/:id/api-keys', v.createApiKey,       validateRequest, asyn
 router.get('/tenants/:id/api-keys',  v.listApiKeys,        validateRequest, asyncHandler(controller.listApiKeys));
 router.get('/tenants/:id/api-keys/:keyId/usage', v.getApiKeyUsage, validateRequest, asyncHandler(controller.getApiKeyUsage));
 router.delete('/api-keys/:id',       v.revokeApiKey,       validateRequest, asyncHandler(controller.revokeApiKey));
+
+// Webhook endpoints (tenant-scoped) — mints/replaces a reserved (comprobify-web-
+// internal) endpoint or an ordinary one, mirroring the api-keys routes above.
+router.post('/tenants/:id/webhook-endpoints', v.createWebhookEndpoint, validateRequest, asyncHandler(controller.createWebhookEndpoint));
 
 // Subscriptions & payments
 router.post('/tenants/:id/subscriptions',       v.createSubscription, validateRequest, asyncHandler(controller.createSubscription));
@@ -55,7 +57,6 @@ router.post('/agreements', v.publishAgreement, validateRequest, asyncHandler(con
 router.get('/agreements/versions/:id', v.getAgreementVersion, validateRequest, asyncHandler(controller.getAgreementVersion));
 router.get('/agreements/:type/versions', v.listAgreementVersions, validateRequest, asyncHandler(controller.listAgreementVersions));
 router.patch('/agreements/:id/activate', v.activateAgreement, validateRequest, asyncHandler(controller.activateAgreement));
-router.post('/tenants/:id/agreements', v.verifyTenant, validateRequest, asyncHandler(controller.generateTenantAgreements));
 
 // Notification email templates (ADR-024 Phase C)
 router.post('/notification-email-templates', v.publishNotificationEmailTemplate, validateRequest, asyncHandler(controller.publishNotificationEmailTemplate));

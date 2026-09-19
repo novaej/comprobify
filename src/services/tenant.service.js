@@ -48,7 +48,8 @@ async function acceptAgreements(tenantId, termsVersion, { ip, userAgent } = {}) 
   await tenantModel.updateAgreementAcceptance(tenantId, termsVersion);
 }
 
-async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY') {
+// callerIsReserved: whether the authenticating key is itself reserved — gates which mirrored keys are returned below.
+async function promote(tenantId, initialSequentials = [], tier = null, billingInterval = 'MONTHLY', callerIsReserved = false) {
   const tenant = await tenantModel.findById(tenantId);
   if (!tenant) throw new NotFoundError('Tenant');
   if (tenant.status !== TenantStatus.ACTIVE) {
@@ -96,13 +97,20 @@ async function promote(tenantId, initialSequentials = [], tier = null, billingIn
     }
   }
 
-  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId);
+  // Mirrors every key including reserved ones; a reserved key's plaintext is only
+  // returned when the caller itself authenticated with a reserved key.
+  const sandboxKeys = await apiKeyModel.findActiveByTenantId(tenantId, true);
   await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, 'sandbox');
   const apiKeys = [];
   for (const key of sandboxKeys) {
     const plainToken = crypto.randomBytes(32).toString('hex');
-    await apiKeyModel.create({ tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production', scopes: key.scopes });
-    apiKeys.push({ label: key.label, apiKey: plainToken });
+    await apiKeyModel.create({
+      tenantId, keyHash: sha256Hex(plainToken), label: key.label, environment: 'production',
+      scopes: key.scopes, isReserved: key.is_reserved,
+    });
+    if (!key.is_reserved || callerIsReserved) {
+      apiKeys.push({ label: key.label, apiKey: plainToken });
+    }
   }
 
   await tenantModel.promote(tenantId);

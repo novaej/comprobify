@@ -99,7 +99,7 @@ Guarda el `secret` de forma segura. Se usa para verificar el header `X-Comprobif
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | `url` no es una URL HTTPS válida, o un `eventType` no es reconocido |
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
-| `402` | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Se alcanzó el límite del tier en endpoints activos |
+| `402` | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Se alcanzó el límite del plan en endpoints activos |
 
 ---
 
@@ -123,7 +123,7 @@ Devuelve todos los endpoints activos del tenant (los secretos de firma nunca se 
 }
 ```
 
-`limit.max` es cuántos endpoints activos puedes tener en total antes de que `POST /v1/webhooks` devuelva `402 WEBHOOK_ENDPOINT_LIMIT_REACHED`, y `limit.used` es tu conteo actual — ver [Tiers de suscripción](../getting-started.md#tiers-de-suscripcion). En Free/Solo/Lite `max` puede no ser cero pese a que esos planes no venden webhooks propios por self-service: comprobify reserva una pequeña cuota fija en cada plan para su propia app web.
+`limit.max` es cuántos endpoints activos puedes tener en total antes de que `POST /v1/webhooks` devuelva `402 WEBHOOK_ENDPOINT_LIMIT_REACHED`, y `limit.used` es tu conteo actual — coincide exactamente con el máximo de tu plan (ver [Planes de suscripción](../getting-started.md#planes-de-suscripcion)). En Free/Solo/Lite `max` es `0`: esos planes no venden webhooks propios por self-service, y el endpoint interno que la aplicación web usa para sí misma nunca cuenta aquí ni aparece en este listado.
 
 ---
 
