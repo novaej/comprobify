@@ -30,6 +30,7 @@ Everything else (`api_key`, `issuer_id`, `access_key`, etc.) is auto-captured by
 |---|---|
 | `base_url` | Same API URL |
 | `admin_secret` | `ADMIN_SECRET` env var value |
+| `internal_service_secret` | `INTERNAL_SERVICE_SECRET` env var value — needed for the Registration folder's Register/Recover/Resend Verification requests (`X-Internal-Service-Secret` header), gated per ADR-035 |
 
 ---
 
@@ -297,7 +298,7 @@ Repeat Steps 8–11 with the production `api_key`. The invoice now goes to SRI's
 
 ## Flow B — Admin / Operator (Internal)
 
-Use `comprobify-internal.postman_collection.json`. Set `base_url` and `admin_secret`.
+Use `comprobify-internal.postman_collection.json`. Set `base_url`, `admin_secret`, and `internal_service_secret` (needed for Step 2's Register request).
 
 ---
 
@@ -313,69 +314,41 @@ All three must use the same `version` string so a single registration checkbox c
 
 ---
 
-### Step 2 — Create a tenant (admin-created, no self-service flow)
+### Step 2 — Use a registered tenant
 
-**`POST /v1/admin/tenants`** *(Admin folder)*
+There is no admin-created-tenant path — every tenant, including one you're about to operate on as an admin, is created through self-service registration. Run **`POST /v1/register`** *(Registration folder — see Flow A Step 3 for field details)* to get one, or reuse `{{tenant_id}}`/`{{api_key}}`/`{{issuer_id}}` from a prior run of Flow A. Registration already creates the tenant + issuer + sandbox API key, and durably enqueues agreement generation in the background — nothing further to set up here.
 
-```json
-{ "email": "client@company.com", "subscriptionTier": "STARTER" }
-```
-
-✓ Test script captures `tenant_id`.
-
-Admin-created tenants start with `status: ACTIVE` immediately — no email verification required.
+If you want a fully `ACTIVE` (verified) tenant without waiting on an email, continue to Step 4 below.
 
 ---
 
-### Step 3 — Create an issuer for the tenant
+### Step 3 — Mint an additional API key for the tenant (optional)
 
-**`POST /v1/admin/issuers`** *(Admin folder — "Create Issuer (P12 upload)" request)*
-
-Attach the tenant's `.p12` file and fill in `tenantId` (uses `{{tenant_id}}`), RUC, branchCode, etc.
-
-✓ Captures `issuer_id` if you add the script — currently the request doesn't have one (add manually from the response if needed).
-
----
-
-### Step 4 — Mint an API key for the tenant
+Not required to proceed — registration already returned a working key in Step 2. This demonstrates the admin key-minting path, e.g. for testing per-role/reserved key provisioning:
 
 **`POST /v1/admin/tenants/{{tenant_id}}/api-keys`** *(Admin folder)*
 
 ```json
-{ "label": "default", "environment": "sandbox" }
+{ "label": "second-key", "environment": "sandbox" }
 ```
 
-✓ Test script captures `api_key` — share this with the tenant. Shown once.
+✓ Test script captures `api_key`, overwriting the one from Step 2 — re-run Step 2's Register request if you need the original back.
 
 ---
 
-### Step 4a — Generate agreements for the tenant (admin-created tenants)
-
-Admin-created tenants don't go through the self-service registration flow, so no agreement instances are auto-generated for them (unlike `POST /v1/register`, which always enqueues generation in the background). Generate them now:
-
-**`POST /v1/admin/tenants/{{tenant_id}}/agreements`** *(Admin folder)*
-
-Creates PENDING instances (TERMS, PRIVACY, DPA) using the current published templates with the tenant's business name and RUC substituted in. The tenant can then view and accept them via their own API key.
-
-Expected: `{ "ok": true, "generated": 3, "documents": [...] }`
-
-> **Also use this** to backfill any existing tenant who registered before agreements were first published, or after a template update when you want to regenerate their personalized copy immediately rather than waiting for lazy generation.
-
----
-
-### Step 5 — Manually verify the tenant (if needed)
+### Step 4 — Manually verify the tenant (if needed)
 
 **`POST /v1/admin/tenants/{{tenant_id}}/verify`** *(Admin folder)*
 
-Skips the email verification flow. Useful for tenants onboarded out-of-band.
+Skips the email verification flow. Useful when you don't want to wait for (or can't receive) the verification email during testing.
 
 ---
 
-### Step 5b — Tenant views and accepts agreements
+### Step 5 — Tenant views and accepts agreements
 
-The agreement instances were generated in Step 4a. The tenant must accept them before they can be promoted to production — do this now using the `api_key` captured in Step 4.
+Agreement instances were generated automatically in the background when the tenant registered (Step 2). The tenant must accept them before they can be promoted to production — do this now using the `api_key` captured in Step 2 (or Step 3, if you re-minted one).
 
-**`GET /v1/tenants/agreements`** — check which documents need acceptance (all three will be `PENDING`).
+**`GET /v1/tenants/agreements`** — check which documents need acceptance (all three will be `PENDING`). If they're not there yet, generation is async — retry in a moment, or call this endpoint again since it also lazily generates any still-missing rows.
 
 **`GET /v1/tenants/agreements/TERMS`** — view the personalized Terms of Service HTML.
 
@@ -395,9 +368,9 @@ Expected: `{ "ok": true }` — all three documents flip to `ACCEPTED`.
 
 ---
 
-### Step 5c — Tenant creates a subscription
+### Step 5a — Tenant creates a subscription
 
-Using the tenant's `api_key` from Step 4:
+Using the tenant's `api_key` from Step 2:
 
 **`POST /v1/subscriptions`** *(Subscriptions folder)*
 
@@ -411,9 +384,9 @@ Response includes `bankTransfer` instructions showing where to send the SPI tran
 
 ---
 
-### Step 5c-alt — Tenant pays by card instead (Payphone)
+### Step 5a-alt — Tenant pays by card instead (Payphone)
 
-Card payment is an alternative to steps 5d–8 below, not an addition: there is nothing to upload and nothing for you to review. Skip to Step 9 afterwards — you still owe the factura.
+Card payment is an alternative to steps 5b–8 below, not an addition: there is nothing to upload and nothing for you to review. Skip to Step 9 afterwards — you still owe the factura.
 
 Requires `PAYPHONE_TOKEN` / `PAYPHONE_STORE_ID` (test store on staging). Without them, **Create Payphone Session** returns `503 PAYMENT_GATEWAY_NOT_CONFIGURED` and the SPI flow below is unaffected — worth running once on purpose to confirm card support really is optional.
 
@@ -446,7 +419,7 @@ For the failure modes (declined card, closed browser, the captured-but-unapplied
 
 ---
 
-### Step 5d — Tenant submits proof of payment
+### Step 5b — Tenant submits proof of payment
 
 After making the bank transfer, the tenant uploads a receipt:
 
@@ -592,13 +565,14 @@ All variables are set at the **collection** level (not environment). Change them
 | Variable | Set by | Used in |
 |---|---|---|
 | `base_url` | You (manual) | Every request |
-| `admin_secret` | You (manual) | All `X-Admin-Secret` headers |
-| `api_key` | ✓ Register / Promote / Mint Key | `Authorization: Bearer {{api_key}}` |
+| `admin_secret` | You (manual) | `Authorization: Bearer {{admin_secret}}` on all `/v1/admin/*` requests |
+| `internal_service_secret` | You (manual) | `X-Internal-Service-Secret` on Register / Recover / Resend Verification / Confirm Verify Email |
+| `api_key` | ✓ Register / Recover / Promote / Mint Key | `Authorization: Bearer {{api_key}}` |
 | `agreement_version` | ✓ List Documents / Publish TERMS | `termsVersion` in Accept Agreements |
 | `tier_price_id` | ✓ Create Tier Price (Draft) / List Tier Prices | Update / Publish / Get Tier Price |
 | `verification_token` | You (from email) | Verify Email |
 | `issuer_id` | ✓ Register / List Issuers | `X-Issuer-Id` on all document requests |
-| `tenant_id` | ✓ Register / Create Tenant (admin) | Admin tenant routes |
+| `tenant_id` | ✓ Register | Admin tenant routes |
 | `access_key` | ✓ Create Invoice | All `/:accessKey/` document routes |
 | `subscription_id` | ✓ Create Subscription / Promote | Admin subscription routes |
 | `payment_id` | ✓ Create Subscription / List Payments | Proof upload + review routes |
