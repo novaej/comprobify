@@ -253,7 +253,7 @@ Returns active (unexpired) notifications for the tenant, newest first. Both read
 
 | Parameter | Type | Description |
 |---|---|---|
-| `sinceId` | string (UUID) | Optional. When provided, returns only notifications with `id > sinceId`. Use for efficient catch-up polling: store the highest `id` seen on each poll and pass it on the next request. |
+| `sinceId` | string (UUID) | Optional. When provided, returns only notifications created after the one with that `id` (ids are UUIDv7, which sort by time, so `id > sinceId` means "newer than"). Use for efficient catch-up polling: store the `id` of the most recent notification you received on each poll and pass it on the next request. |
 
 ### Issuer filter
 
@@ -408,7 +408,7 @@ When `enabled` is `false` for `(type, IN_APP)`, the notification stops appearing
 │                                                                     │
 │  Fallback / catch-up:                                               │
 │    Poll GET /v1/notifications?sinceId=<lastSeenId> every 60–300s   │
-│    Store highest id seen → pass as sinceId on next poll             │
+│    Store newest id seen → pass as sinceId on next poll              │
 │                                                                     │
 │  When user opens notification panel:                                │
 │    Mark read in frontend DB per user                                │

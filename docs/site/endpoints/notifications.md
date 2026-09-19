@@ -253,7 +253,7 @@ Devuelve las notificaciones activas (no expiradas) del tenant, de la más recien
 
 | Parámetro | Tipo | Descripción |
 |---|---|---|
-| `sinceId` | string (UUID) | Opcional. Cuando se proporciona, devuelve solo las notificaciones con `id > sinceId`. Úsalo para consultas de actualización incremental eficientes: guarda el `id` más alto visto en cada consulta y pásalo en la siguiente solicitud. |
+| `sinceId` | string (UUID) | Opcional. Cuando se proporciona, devuelve solo las notificaciones creadas después de la que tiene ese `id` (los ids son UUID v7, ordenables por tiempo, por lo que `id > sinceId` equivale a "más recientes que"). Úsalo para consultas de actualización incremental eficientes: guarda el `id` de la notificación más reciente que recibiste en cada consulta y pásalo en la siguiente solicitud. |
 
 ### Filtro por emisor
 
@@ -408,7 +408,7 @@ Cuando `enabled` es `false` para `(type, IN_APP)`, la notificación deja de apar
 │                                                                     │
 │  Respaldo / actualización incremental:                              │
 │    Consulta GET /v1/notifications?sinceId=<lastSeenId> cada 60–300s │
-│    Guarda el id más alto visto → pásalo como sinceId en la próxima  │
+│    Guarda el id más reciente → pásalo como sinceId en la próxima    │
 │    consulta                                                         │
 │                                                                     │
 │  Cuando el usuario abre el panel de notificaciones:                 │
