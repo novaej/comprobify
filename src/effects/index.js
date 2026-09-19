@@ -113,9 +113,10 @@ const handlers = {
   },
 
   [EffectTypes.VERIFICATION_EMAIL_SEND]: async (payload) => {
-    const { tenantId, email, verificationToken, redirectUrl, language } = payload;
+    const { tenantId, email, verificationToken, redirectUrl, language, reason } = payload;
     try {
-      const { messageId } = await emailService.sendVerificationEmail(email, verificationToken, redirectUrl, language || 'es');
+      const extra = reason ? [reason] : [];
+      const { messageId } = await emailService.sendVerificationEmail(email, verificationToken, redirectUrl, language || 'es', ...extra);
       await tenantModel.updateVerificationEmailSent(tenantId, messageId);
       await tenantEventModel.create(tenantId, 'VERIFICATION_EMAIL_SENT');
     } catch (err) {

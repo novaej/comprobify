@@ -24,14 +24,14 @@ La aplicación web te envía un correo a la dirección con la que te registraste
 
 Si nunca lo recibiste o el enlace venció, pide uno nuevo desde la aplicación web (se puede reenviar una vez por minuto).
 
-Hasta que verifiques tu correo puedes emitir comprobantes en sandbox, pero **no puedes** crear sucursales adicionales, generar llaves, iniciar una suscripción ni pasar a producción. Si intentas alguna de esas acciones recibes `403 EMAIL_VERIFICATION_REQUIRED`.
+Hasta que verifiques tu correo puedes emitir comprobantes en sandbox, pero **no puedes** crear sucursales adicionales, generar llaves, registrar webhooks, iniciar una suscripción ni pasar a producción. Si intentas alguna de esas acciones recibes `403 EMAIL_VERIFICATION_REQUIRED`.
 
 ## Recuperar tu cuenta
 
 Si la aplicación web muestra tu cuenta como no vinculada, usa su flujo de recuperación: sube el mismo certificado `.p12` con el que te registraste. Si coincide, tu cuenta se vuelve a vincular. Por seguridad:
 
 - **Se revocan todas las llaves activas del ambiente actual** (sandbox o producción) y se emite una llave interna nueva para la aplicación web. Si tenías llaves con nombre para tus integraciones (Starter en adelante), dejan de funcionar — genera nuevas desde el panel.
-- Tu cuenta vuelve al estado de correo pendiente de verificar y recibes un correo nuevo. Hasta que lo confirmes rigen las mismas restricciones de arriba. La emisión en sandbox sigue funcionando.
+- Tu cuenta vuelve al estado de correo pendiente de verificar y recibes un correo de aviso a la dirección registrada, con el enlace para confirmarlo. Si no fuiste tú quien recuperó la cuenta, **no hagas clic** en el enlace y contacta de inmediato a soporte: alguien podría tener tu certificado. La recuperación queda registrada en el historial de eventos de tu cuenta. Hasta que lo confirmes rigen las mismas restricciones de arriba (sucursales adicionales, llaves nuevas, webhooks, suscripción nueva), pero **emitir y consultar comprobantes sigue funcionando** en tu ambiente actual — también si ya estás en producción.
 
 Si tu cuenta ya estaba vinculada y solo quieres confirmar que el certificado es el correcto, la aplicación web lo detecta y no toca tus llaves ni tu estado.
 

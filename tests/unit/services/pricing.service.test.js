@@ -130,7 +130,7 @@ describe('PricingService', () => {
 
     test('defaults to the configured floor (30 days) when noticeDays is omitted', async () => {
       tierPriceModel.publish.mockResolvedValue({ id: 'p1', status: 'PUBLISHED' });
-      tenantModel.findAllByStatus.mockResolvedValue([]);
+      tenantModel.findAllNotifiableForPriceChanges.mockResolvedValue([]);
 
       await pricingService.publishPrice('p1');
 
@@ -147,16 +147,16 @@ describe('PricingService', () => {
         .rejects.toMatchObject({ statusCode: 400, code: 'PRICE_NOT_DRAFT' });
     });
 
-    test('notifies every ACTIVE tenant after publishing, one at a time, tolerating per-tenant failure', async () => {
+    test('notifies every notifiable tenant (ACTIVE, or PENDING_VERIFICATION with a live subscription) after publishing, one at a time, tolerating per-tenant failure', async () => {
       tierPriceModel.publish.mockResolvedValue({ id: 'p1', status: 'PUBLISHED' });
-      tenantModel.findAllByStatus.mockResolvedValue([{ id: 'tenant-1' }, { id: 'tenant-2' }]);
+      tenantModel.findAllNotifiableForPriceChanges.mockResolvedValue([{ id: 'tenant-1' }, { id: 'tenant-2' }]);
       tierPriceModel.findUnnotifiedPendingForTenant
         .mockRejectedValueOnce(new Error('db hiccup'))
         .mockResolvedValueOnce([]);
 
       const result = await pricingService.publishPrice('p1');
 
-      expect(tenantModel.findAllByStatus).toHaveBeenCalledWith('ACTIVE');
+      expect(tenantModel.findAllNotifiableForPriceChanges).toHaveBeenCalled();
       expect(tierPriceModel.findUnnotifiedPendingForTenant).toHaveBeenCalledTimes(2);
       expect(result).toEqual({ id: 'p1', status: 'PUBLISHED' });
     });
@@ -243,11 +243,11 @@ describe('PricingService', () => {
 
     test('publishSeatPrice notifies every ACTIVE tenant, mirroring publishPrice', async () => {
       seatPriceModel.publish.mockResolvedValue({ id: 'sp1', status: 'PUBLISHED' });
-      tenantModel.findAllByStatus.mockResolvedValue([{ id: 'tenant-1' }]);
+      tenantModel.findAllNotifiableForPriceChanges.mockResolvedValue([{ id: 'tenant-1' }]);
 
       await pricingService.publishSeatPrice('sp1');
 
-      expect(tenantModel.findAllByStatus).toHaveBeenCalledWith('ACTIVE');
+      expect(tenantModel.findAllNotifiableForPriceChanges).toHaveBeenCalled();
     });
   });
 
@@ -281,7 +281,7 @@ describe('PricingService', () => {
 
   describe('reconcilePendingPriceChangeNotifications', () => {
     test('scans every ACTIVE tenant and reports how many needed catching up', async () => {
-      tenantModel.findAllByStatus.mockResolvedValue([{ id: 'tenant-1' }, { id: 'tenant-2' }, { id: 'tenant-3' }]);
+      tenantModel.findAllNotifiableForPriceChanges.mockResolvedValue([{ id: 'tenant-1' }, { id: 'tenant-2' }, { id: 'tenant-3' }]);
       tenantModel.findById.mockResolvedValue({ id: 'tenant-x' });
       tierPriceModel.findCurrent.mockResolvedValue({ price_usd: '20.00' });
       tierPriceModel.findUnnotifiedPendingForTenant
@@ -291,13 +291,13 @@ describe('PricingService', () => {
 
       const result = await pricingService.reconcilePendingPriceChangeNotifications();
 
-      expect(tenantModel.findAllByStatus).toHaveBeenCalledWith('ACTIVE');
+      expect(tenantModel.findAllNotifiableForPriceChanges).toHaveBeenCalled();
       expect(result).toEqual({ tenantsChecked: 3, notified: 2 });
     });
 
     test('tolerates one tenant failing without aborting the rest', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      tenantModel.findAllByStatus.mockResolvedValue([{ id: 'tenant-1' }, { id: 'tenant-2' }]);
+      tenantModel.findAllNotifiableForPriceChanges.mockResolvedValue([{ id: 'tenant-1' }, { id: 'tenant-2' }]);
       tierPriceModel.findUnnotifiedPendingForTenant
         .mockRejectedValueOnce(new Error('db hiccup'))
         .mockResolvedValueOnce([]);

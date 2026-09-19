@@ -24,14 +24,14 @@ The web app sends an email to the address you registered with, linking to its ow
 
 If you never received it or the link expired, ask for a new one from the web app (it can be resent once per minute).
 
-Until you verify your email you can issue sandbox documents, but you **cannot** create extra branches, mint keys, start a subscription, or go to production. Attempting any of those returns `403 EMAIL_VERIFICATION_REQUIRED`.
+Until you verify your email you can issue sandbox documents, but you **cannot** create extra branches, mint keys, register webhooks, start a subscription, or go to production. Attempting any of those returns `403 EMAIL_VERIFICATION_REQUIRED`.
 
 ## Recovering your account
 
 If the web app shows your account as unlinked, use its recovery flow: upload the same `.p12` certificate you registered with. If it matches, your account is linked again. For your security:
 
 - **Every active key in the current environment (sandbox or production) is revoked** and a new internal key is issued for the web app. If you had named keys for your integrations (Starter and up), they stop working — mint new ones from the dashboard.
-- Your account goes back to pending email verification and you receive a new email. The same restrictions as above apply until you confirm it. Sandbox issuing keeps working.
+- Your account goes back to pending email verification and a notice is sent to the registered address, with the link to confirm it. If you were not the one who recovered the account, **do not click** the link and contact support right away: someone may have your certificate. The recovery is recorded in your account's event history. The same restrictions as above apply until you confirm it (extra branches, new keys, webhooks, a new subscription), but **issuing and querying documents keeps working** in your current environment — including production if you're already there.
 
 If your account was already linked and you only want to confirm the certificate is the right one, the web app detects that and leaves your keys and status untouched.
 

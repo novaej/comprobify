@@ -34,9 +34,10 @@ function sha256Hex(value) {
 // VERIFICATION_EMAIL_SENT/FAILED tenant events — identical outcome to the
 // old inline chain, just durable and retried by reconciliation on failure
 // instead of a one-shot in-process attempt.
-async function queueVerificationEmail(tenantId, email, verificationToken, redirectUrl, language) {
+// `reason: 'RECOVERY'` swaps the welcome copy for a security notice (see verify-email.js).
+async function queueVerificationEmail(tenantId, email, verificationToken, redirectUrl, language, reason = null) {
   const effect = await pendingEffectService.enqueue(EffectTypes.VERIFICATION_EMAIL_SEND, tenantId, {
-    tenantId, email, verificationToken, redirectUrl, language,
+    tenantId, email, verificationToken, redirectUrl, language, ...(reason && { reason }),
   });
   pendingEffectService.dispatch(effect);
 }
@@ -270,7 +271,7 @@ async function recover(email, p12Buffer, p12Password, reserved = false, alreadyL
   // but not control of the registered email inbox. Force re-verification —
   // demote to PENDING_VERIFICATION with a fresh token — until the tenant
   // clicks the link, same restrictions a freshly-registered tenant already
-  // has (sandbox document creation still works via the reissued key; branch
+  // has (document creation still works via the reissued key, in whichever environment the tenant is in; branch
   // creation, promotion, subscriptions, and minting additional named keys
   // do not, until verified). Reuses the exact same token/email/redemption
   // machinery as resendVerification() — GET /v1/verify-email reactivates via
@@ -279,13 +280,17 @@ async function recover(email, p12Buffer, p12Password, reserved = false, alreadyL
   const verificationTokenExpiresAt = new Date(Date.now() + config.verificationTokenTtlHours * 60 * 60 * 1000);
   const demoted = await tenantModel.demoteToPendingVerification(tenant.id, verificationToken, verificationTokenExpiresAt);
 
+  // Durable audit record — recovery revokes every key in the environment and
+  // demotes the account, so it must not be visible only as a routine-looking email.
+  await tenantEventModel.create(tenant.id, 'ACCOUNT_RECOVERED', { environment, previousStatus: tenant.status });
+
   // Durably enqueued (see ADR-022/queueVerificationEmail) — the demotion
   // above still happens even if EMAIL_PROVIDER=none (matches register()'s
   // unconditional PENDING_VERIFICATION default); only the actual send is
   // conditional. A tenant stuck this way is recoverable via the existing
   // admin override, POST /v1/admin/tenants/:id/verify.
   if (config.email.provider !== 'none') {
-    await queueVerificationEmail(tenant.id, email, verificationToken, tenant.verification_redirect_url || null, tenant.preferred_language || 'es');
+    await queueVerificationEmail(tenant.id, email, verificationToken, tenant.verification_redirect_url || null, tenant.preferred_language || 'es', 'RECOVERY');
   }
 
   const quotaRow = await tenantQuotaService.getCurrentForTenant(tenant.id);

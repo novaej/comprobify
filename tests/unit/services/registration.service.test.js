@@ -452,8 +452,38 @@ describe('RegistrationService', () => {
           verificationToken: expect.any(String),
           redirectUrl: existingTenant.verification_redirect_url,
           language: existingTenant.preferred_language,
+          // recovery gets the security-notice copy, not the welcome email
+          reason: 'RECOVERY',
         }
       );
+    });
+
+    test('matched: writes a durable ACCOUNT_RECOVERED audit event, even when no email can be sent', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+      const originalProvider = config.email.provider;
+      config.email.provider = 'none';
+
+      try {
+        await registrationService.recover(baseFields.email, p12Buffer, p12Password);
+      } finally {
+        config.email.provider = originalProvider;
+      }
+
+      expect(tenantEventModel.create).toHaveBeenCalledWith(
+        existingTenant.id,
+        'ACCOUNT_RECOVERED',
+        expect.objectContaining({ environment: expect.any(String), previousStatus: existingTenant.status })
+      );
+    });
+
+    test('alreadyLinked match: no ACCOUNT_RECOVERED event (nothing was rotated or demoted)', async () => {
+      tenantModel.findByEmail.mockResolvedValue(existingTenant);
+      issuerModel.findByTenantId.mockResolvedValue(existingIssuer);
+
+      await registrationService.recover(baseFields.email, p12Buffer, p12Password, false, true);
+
+      expect(tenantEventModel.create).not.toHaveBeenCalledWith(existingTenant.id, 'ACCOUNT_RECOVERED', expect.anything());
     });
 
     test('matched, EMAIL_PROVIDER=none: still demotes to PENDING_VERIFICATION even though no email can be sent', async () => {

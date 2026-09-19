@@ -30,7 +30,7 @@ The account starts on the **FREE** tier and all documents go to the SRI test env
 
 ## 2. Verify your email
 
-The web app sends you a verification email; click the link to activate your account. You can issue sandbox invoices right away without verifying, but verification is required before you can create branches, mint keys, start a subscription, or go to production. See [Your account & the web app](account-lifecycle.md#verifying-your-email).
+The web app sends you a verification email; click the link to activate your account. You can issue sandbox invoices right away without verifying, but verification is required before you can create branches, mint keys, register webhooks, start a subscription, or go to production. See [Your account & the web app](account-lifecycle.md#verifying-your-email).
 
 ---
 

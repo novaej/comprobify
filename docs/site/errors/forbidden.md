@@ -30,6 +30,7 @@ La operación requiere que se haya completado la verificación de correo. Esto b
 - Crear sucursales adicionales (`POST /v1/issuers`)
 - Promover a producción
 - Generar nuevas API keys (`POST /v1/keys`)
+- Registrar un endpoint de webhook o cambiar su URL o sus tipos de evento
 
 **Qué hacer:** Revisa la bandeja de entrada en busca del correo de verificación original, o pide uno nuevo desde la aplicación web de Comprobify (el reenvío solo se hace desde ella — ver [Tu cuenta y la aplicación web](../account-lifecycle.md#verificar-tu-correo)). Luego reintenta la operación original.
 

@@ -100,6 +100,7 @@ Store `secret` securely. It is used to verify the `X-Comprobify-Signature` heade
 | `400` | `VALIDATION_FAILED` | `url` is not a valid HTTPS URL, or an `eventType` is unrecognised |
 | `401` | `UNAUTHORIZED` | Missing or invalid API key |
 | `402` | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Tier limit on active endpoints reached |
+| `403` | `EMAIL_VERIFICATION_REQUIRED` | The account's email is not verified (e.g. after account recovery) — registering an endpoint or changing its URL/event types requires it; disabling one does not |
 
 ---
 

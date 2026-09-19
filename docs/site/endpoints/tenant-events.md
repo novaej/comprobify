@@ -107,6 +107,7 @@ Este es el único lugar que muestra la secuencia completa de cambios en tu suscr
 | `SUBSCRIPTION_RENEWED` | Un pago de renovación fue verificado, extendiendo el periodo de facturación |
 | `SUBSCRIPTION_EXPIRED` | La suscripción superó su periodo de gracia de renovación sin ningún pago y fue degradada a FREE |
 | `STATUS_CHANGED` | El estado de la cuenta cambió — `detail` trae `from`, `to` y, al suspender, `reasonCode` (ver `suspensionReasonCode` en [`GET /v1/tenants/me`](tenant-me.md)) |
+| `ACCOUNT_RECOVERED` | La cuenta se recuperó con su certificado: se revocaron las llaves del ambiente actual y la cuenta volvió a verificación de correo — `detail` trae `environment` y `previousStatus` |
 | `CERTIFICATE_UPLOADED` / `CERTIFICATE_RENEWED` | Se cargó un certificado P12 nuevo para un emisor, o se renovó uno existente — `detail` trae `issuerId`, `certFingerprint` y `certExpiry` |
 
 ## Errores

@@ -1,16 +1,30 @@
 jest.mock('../../../src/models/webhook-endpoint.model');
+jest.mock('../../../src/models/tenant.model');
 
 const webhookEndpointModel = require('../../../src/models/webhook-endpoint.model');
+const tenantModel = require('../../../src/models/tenant.model');
 const webhookEndpointService = require('../../../src/services/webhook-endpoint.service');
 
 const HEX_64 = /^[0-9a-f]{64}$/;
 
 describe('WebhookEndpointService', () => {
+  beforeEach(() => {
+    tenantModel.findById.mockResolvedValue({ id: 1, status: 'ACTIVE' });
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
 
   describe('create', () => {
+    test('rejects an unverified (PENDING_VERIFICATION) tenant — e.g. one demoted by account recovery', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1, status: 'PENDING_VERIFICATION' });
+
+      await expect(webhookEndpointService.create(1, 'GROWTH', 'https://example.com/hook'))
+        .rejects.toMatchObject({ statusCode: 403, code: 'EMAIL_VERIFICATION_REQUIRED' });
+      expect(webhookEndpointModel.create).not.toHaveBeenCalled();
+    });
+
     test('rejects an unknown subscription tier', async () => {
       await expect(webhookEndpointService.create(1, 'NOT_A_TIER', 'https://example.com/hook'))
         .rejects.toMatchObject({ statusCode: 400 });
@@ -107,6 +121,44 @@ describe('WebhookEndpointService', () => {
   });
 
   describe('update', () => {
+    test('rejects retargeting url or eventTypes for an unverified tenant, but still allows disabling', async () => {
+      tenantModel.findById.mockResolvedValue({ id: 1, status: 'PENDING_VERIFICATION' });
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com' });
+
+      await expect(webhookEndpointService.update(1, 10, { url: 'https://attacker.example.com' }))
+        .rejects.toMatchObject({ statusCode: 403, code: 'EMAIL_VERIFICATION_REQUIRED' });
+      await expect(webhookEndpointService.update(1, 10, { eventTypes: ['DOCUMENT_AUTHORIZED'] }))
+        .rejects.toMatchObject({ statusCode: 403, code: 'EMAIL_VERIFICATION_REQUIRED' });
+      expect(webhookEndpointModel.update).not.toHaveBeenCalled();
+
+      webhookEndpointModel.update.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', event_types: [], active: false,
+        created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-05'),
+      });
+      await expect(webhookEndpointService.update(1, 10, { active: false })).resolves.toMatchObject({ active: false });
+    });
+
+    test('treats the controller\'s undefined-valued keys as omitted: toggling active on a reserved endpoint via PATCH works', async () => {
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', is_reserved: true });
+      webhookEndpointModel.update.mockResolvedValue({
+        id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', event_types: [], active: false,
+        created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-05'), is_reserved: true,
+      });
+
+      // exactly the shape webhook-endpoint.controller.js builds from { active: false }
+      const result = await webhookEndpointService.update(1, 10, { url: undefined, eventTypes: undefined, active: false });
+
+      expect(result.active).toBe(false);
+      expect(webhookEndpointModel.update).toHaveBeenCalled();
+    });
+
+    test('still blocks a real url change on a reserved endpoint when the other keys are undefined', async () => {
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', url: 'https://old.example.com', is_reserved: true });
+
+      await expect(webhookEndpointService.update(1, 10, { url: 'https://new.example.com', eventTypes: undefined, active: undefined }))
+        .rejects.toMatchObject({ statusCode: 404, code: 'NOT_FOUND' });
+    });
+
     test('throws NotFoundError when the endpoint does not belong to the tenant', async () => {
       webhookEndpointModel.findByIdAndTenantId.mockResolvedValue(null);
 

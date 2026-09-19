@@ -30,6 +30,7 @@ The operation requires email verification to have been completed. This blocks:
 - Creating additional branches (`POST /v1/issuers`)
 - Promoting to production
 - Minting new API keys (`POST /v1/keys`)
+- Registering a webhook endpoint or changing its URL or event types
 
 **What to do:** Check the inbox for the original verification email, or request a new one from the Comprobify web app (resending is only done from there — see [Your account & the web app](../account-lifecycle.md#verifying-your-email)). Then retry the original operation.
 

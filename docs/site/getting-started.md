@@ -30,7 +30,7 @@ La cuenta comienza en el plan **FREE** y todos los comprobantes se envían al am
 
 ## 2. Verifica tu correo
 
-La aplicación web te envía un correo de verificación; haz clic en el enlace para activar tu cuenta. Puedes emitir facturas de sandbox de inmediato sin verificar, pero se requiere verificación antes de crear sucursales, generar llaves, iniciar una suscripción o pasar a producción. Ver [Tu cuenta y la aplicación web](account-lifecycle.md#verificar-tu-correo).
+La aplicación web te envía un correo de verificación; haz clic en el enlace para activar tu cuenta. Puedes emitir facturas de sandbox de inmediato sin verificar, pero se requiere verificación antes de crear sucursales, generar llaves, registrar webhooks, iniciar una suscripción o pasar a producción. Ver [Tu cuenta y la aplicación web](account-lifecycle.md#verificar-tu-correo).
 
 ---
 

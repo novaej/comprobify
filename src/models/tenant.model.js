@@ -65,6 +65,26 @@ async function findAllByStatus(status) {
   return rows;
 }
 
+/**
+ * Tenants who should receive a price-change notice: every ACTIVE tenant, plus
+ * PENDING_VERIFICATION tenants that are actually being billed (an ACTIVE
+ * subscription) — e.g. a production tenant demoted by account recovery, who
+ * still pays but would otherwise never hear about a price change before it
+ * takes effect. Never-verified sandbox tenants have no billing relationship
+ * and are skipped.
+ */
+async function findAllNotifiableForPriceChanges() {
+  const { rows } = await db.query(
+    `SELECT t.* FROM tenants t
+     WHERE t.status = $1
+        OR (t.status = $2 AND EXISTS (
+              SELECT 1 FROM subscriptions s WHERE s.tenant_id = t.id AND s.status = 'ACTIVE'))
+     ORDER BY t.id`,
+    [TenantStatus.ACTIVE, TenantStatus.PENDING_VERIFICATION]
+  );
+  return rows;
+}
+
 async function activate(id) {
   const { rows } = await db.query(
     `UPDATE tenants
@@ -200,4 +220,4 @@ async function countIssuePointsByBranch(tenantId, branchCode) {
   return parseInt(rows[0].count, 10);
 }
 
-module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, findAllActive, findAllByStatus, activate, demoteToPendingVerification, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, updateAgreementAcceptance, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
+module.exports = { create, findById, findByEmail, findByVerificationToken, findAll, findAllActive, findAllByStatus, findAllNotifiableForPriceChanges, activate, demoteToPendingVerification, promote, updateTier, updateStatus, updateVerificationToken, updateVerificationRedirectUrl, updatePreferredLanguage, updateAgreementAcceptance, findByVerificationEmailMessageId, updateVerificationEmailStatus, updateVerificationEmailSent, countBranchesByTenantId, countIssuePointsByBranch };
