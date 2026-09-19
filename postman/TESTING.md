@@ -7,6 +7,8 @@ Two Postman collections cover both sides of the system:
 | `comprobify.postman_collection.json` | Developer / tenant integrating the API | Developer flow below |
 | `comprobify-internal.postman_collection.json` | Operator running the platform | Admin flow below |
 
+> **Frontend-only endpoints (ADR-035):** registration, recovery, verification, promotion, legal agreements (public and tenant-facing), and subscription/payment mutations all require `X-Internal-Service-Secret`. They live only in the **internal** collection, which sends the header from its `internal_service_secret` variable. Steps below that reference the *Agreements* or *Tenants → Agreements/Promote* folders run from the internal collection; the public collection no longer includes them.
+
 Requests marked **✓** in the collections have test scripts that automatically capture response values (API key, IDs, etc.) into collection variables — no manual copy-paste needed for those steps.
 
 ---
@@ -258,7 +260,9 @@ Attach a screenshot or PDF of the bank transfer confirmation as the `proof` file
 > 2. All agreements must be ACCEPTED (see Step 5b) — promotion returns `403 AGREEMENT_ACCEPTANCE_REQUIRED` if not
 > 3. Complete the subscription payment cycle (Steps 12–13 + admin review in Flow B) OR promote on FREE tier and subscribe afterward
 
-**`POST /v1/tenants/promote`** *(Tenants folder)*
+**`POST /v1/tenants/promote`** *(Tenants folder — internal collection only)*
+
+> Frontend-only (ADR-035): the request sends `X-Internal-Service-Secret` from the `internal_service_secret` variable; without it the API returns `403 INTERNAL_SERVICE_ONLY`. The public collection no longer includes this request.
 
 ✓ Test script captures new production `api_key` and logs all returned keys.
 

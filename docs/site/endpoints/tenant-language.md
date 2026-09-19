@@ -41,7 +41,7 @@ Bearer token — se requiere API key.
 
 ## Notas
 
-- El idioma configurado en el registro (`POST /v1/register`) se usa como valor inicial (por defecto `es`).
+- El idioma configurado en el registro se usa como valor inicial (por defecto `es`).
 - Este endpoint permite actualizar el idioma después del registro sin necesidad de volver a registrarse.
 - Idiomas admitidos: `es` (español), `en` (inglés).
 - La preferencia de idioma aplica a todos los tipos de correo — actualmente correos de verificación, y correos de comprobantes en una futura versión.

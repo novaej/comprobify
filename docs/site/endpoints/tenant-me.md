@@ -1,6 +1,6 @@
 # Consultar Tenant Actual
 
-Devuelve la identidad y los detalles de la cuenta del tenant propietario de la API key usada para autenticar la solicitud. Útil para una aplicación de terceros que ya tiene una API key (por ejemplo, emitida mediante `POST /v1/register` o por un administrador) y necesita resolver el `tenant.id` — por ejemplo, para vincular una cuenta API existente en un frontend sin volver a ingresar el RUC o el certificado P12, o para hacer coincidir los envíos de webhooks entrantes con la cuenta correcta.
+Devuelve la identidad y los detalles de la cuenta del tenant propietario de la API key usada para autenticar la solicitud. Útil para una aplicación de terceros que ya tiene una API key (por ejemplo, una llave que generaste desde tu panel) y necesita resolver el `tenant.id` — por ejemplo, para vincular una cuenta API existente en un frontend sin volver a ingresar el RUC o el certificado P12, o para hacer coincidir los envíos de webhooks entrantes con la cuenta correcta.
 
 ```
 GET /v1/tenants/me
@@ -44,7 +44,7 @@ GET /v1/tenants/me
 | `extraSeats` | Usuarios adicionales del panel comprados por encima del número incluido en el plan (0 si no hay ninguno, o si no existe una suscripción activa). Comprobify factura esto pero no lo aplica — ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md#usuarios-adicionales). |
 | `pendingExtraSeats` | Un número de usuarios programado para entrar en vigencia al final del periodo de facturación actual (una reducción en curso), o `null` si no hay nada programado. |
 | `sandbox` | `true` si el tenant está en el entorno de pruebas del SRI, `false` si fue promovido a producción. |
-| `agreementAcceptedAt` | Timestamp del evento de aceptación de acuerdos más reciente, o `null` si el tenant aún no ha aceptado ninguno. Compáralo con `GET /v1/tenants/agreements` para detectar desactualizaciones. |
+| `agreementAcceptedAt` | Timestamp del evento de aceptación de acuerdos más reciente, o `null` si el tenant aún no ha aceptado ninguno. |
 | `agreementVersion` | La versión del documento TERMS que el tenant aceptó por última vez, o `null` si aún no ha aceptado ninguno. |
 
 ## Errores
@@ -61,4 +61,4 @@ GET /v1/tenants/me
 - Esto no devuelve la lista de emisores (sucursales) — usa `GET /v1/issuers` para eso.
 - `suspensionReasonCode` te dice *por qué* la cuenta fue suspendida sin tener que revisar [`GET /v1/tenants/events`](tenant-events.md); el historial completo (incluidas suspensiones anteriores ya levantadas) sigue estando ahí, en el `detail` de los eventos `STATUS_CHANGED`.
 - A diferencia de la mayoría de los endpoints autenticados, este sigue siendo accesible incluso cuando `status` es `SUSPENDED` — es uno de un pequeño conjunto de endpoints de solo lectura que un tenant suspendido todavía puede usar (ver la entrada `ACCOUNT_SUSPENDED` en el [catálogo de errores](../errors/index.md)). Consultar este endpoint periódicamente es una forma válida de detectar una suspensión y revisar el `status` actual de la cuenta.
-- **Esta es también la forma de saber que una mejora a un plan pago se completó.** Después de solicitar un plan en la [promoción](promote-tenant.md) y [Tu suscripción y cómo pagarla](../paying-your-subscription.md), recibirás una [notificación](notifications.md) y un correo en el momento en que tu proveedor registre su decisión — y esa decisión *es* la activación: `subscriptionTier` y `documentQuota` ya reflejan el plan nuevo cuando llega la notificación `PAYMENT_VERIFIED`. No hay que esperar a ningún paso posterior de facturación. Para los estados intermedios (pendiente, rechazado, motivo) usa [Tu suscripción y cómo pagarla](../paying-your-subscription.md) en su lugar — este endpoint solo muestra el resultado final.
+- **Esta es también la forma de saber que una mejora a un plan pago se completó.** Después de solicitar un plan en la [promoción](../account-lifecycle.md#pasar-a-produccion) y [Tu suscripción y cómo pagarla](../paying-your-subscription.md), recibirás una [notificación](notifications.md) y un correo en el momento en que tu proveedor registre su decisión — y esa decisión *es* la activación: `subscriptionTier` y `documentQuota` ya reflejan el plan nuevo cuando llega la notificación `PAYMENT_VERIFIED`. No hay que esperar a ningún paso posterior de facturación. Para los estados intermedios (pendiente, rechazado, motivo) usa [Tu suscripción y cómo pagarla](../paying-your-subscription.md) en su lugar — este endpoint solo muestra el resultado final.

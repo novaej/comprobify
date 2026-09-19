@@ -18,20 +18,26 @@ La cuenta del tenant ha sido suspendida. Toda solicitud de escritura falla hasta
 
 **Qué hacer:** Contacta a soporte. Las cuentas suspendidas no pueden recuperarse por sí solas, pero puedes seguir revisando lo que ya está en tu cuenta mientras se resuelve el problema.
 
+### `INTERNAL_SERVICE_ONLY`
+
+La solicitud llegó a una acción reservada a la aplicación web de Comprobify: crear la cuenta, verificar el correo, recuperarla, aceptar los acuerdos legales, pasar a producción, o gestionar la suscripción y los pagos. La API no ofrece una forma directa de hacerlo.
+
+**Qué hacer:** Realiza esa acción desde la aplicación web. No hay nada que configurar en tu integración — ver [Tu cuenta y la aplicación web](../account-lifecycle.md#si-ves-internal-service-only).
+
 ### `EMAIL_VERIFICATION_REQUIRED`
 
 La operación requiere que se haya completado la verificación de correo. Esto bloquea:
 - Crear sucursales adicionales (`POST /v1/issuers`)
-- Promover a producción (`POST /v1/tenants/promote`)
+- Promover a producción
 - Generar nuevas API keys (`POST /v1/keys`)
 
-**Qué hacer:** Revisa la bandeja de entrada en busca del correo de verificación original, o pide uno nuevo desde la aplicación web de Comprobify (`POST /v1/resend-verification` es solo invocable por ella — ver [Reenviar Correo de Verificación](../endpoints/resend-verification.md)). Luego reintenta la operación original.
+**Qué hacer:** Revisa la bandeja de entrada en busca del correo de verificación original, o pide uno nuevo desde la aplicación web de Comprobify (el reenvío solo se hace desde ella — ver [Tu cuenta y la aplicación web](../account-lifecycle.md#verificar-tu-correo)). Luego reintenta la operación original.
 
 ### `PRODUCTION_KEY_REQUIRES_PROMOTION`
 
 Una API key de producción solo puede crearse si el tenant ya se ha promovido a producción al menos una vez. Antes de la promoción, solo se pueden generar llaves de sandbox.
 
-**Qué hacer:** Llama a `POST /v1/tenants/promote` para promover el tenant a producción. Las llaves de producción se emitirán automáticamente como parte de esa respuesta. Se pueden generar llaves de producción adicionales después vía `POST /v1/keys`.
+**Qué hacer:** Promueve tu cuenta a producción desde la aplicación web de Comprobify (la promoción solo se hace desde ella — ver [Tu cuenta y la aplicación web](../account-lifecycle.md#pasar-a-produccion)). Las llaves de producción se emiten automáticamente como parte de la promoción, y se pueden generar llaves adicionales después vía `POST /v1/keys`.
 
 ### `INSUFFICIENT_SCOPE`
 

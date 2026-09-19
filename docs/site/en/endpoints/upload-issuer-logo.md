@@ -47,7 +47,7 @@ PATCH /v1/issuers/:id/logo
 
 - Calling this endpoint again overwrites the existing logo — there is no separate delete endpoint; to remove a logo, re-register or contact support.
 - The logo is embedded directly in the PDF at render time. No public URL is exposed.
-- The logo can also be supplied at registration time via the optional `logo` file field on `POST /v1/register`.
+- The logo can also be supplied at registration time from the web app (the logo is optional at sign-up).
 
 ## Logo sizing guide
 

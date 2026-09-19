@@ -46,7 +46,7 @@ The `X-Issuer-Id` header value is not a valid UUID (e.g. `abc`, `123`).
 
 The email verification token in the URL query parameter (`?token=…`) is invalid or has expired. Tokens expire after 24 hours (configurable via `VERIFICATION_TOKEN_TTL_HOURS`).
 
-**What to do:** Request a fresh token from the Comprobify web app (`POST /v1/resend-verification` is only callable by it).
+**What to do:** Request a fresh token from the Comprobify web app.
 
 ### `DOCUMENT_TYPE_NOT_ENABLED`
 
@@ -88,7 +88,7 @@ You cannot revoke the API key that authenticated the current request.
 
 ### `INVALID_FILE_UPLOAD`
 
-A file upload (e.g. a P12 certificate or issuer logo) is missing, the wrong MIME type, or exceeds the field's size limit. The `detail` field names the specific constraint that failed — for example, a logo over 500 KB on `POST /v1/register` or `PATCH /v1/issuers/:id/logo`.
+A file upload (e.g. a P12 certificate or issuer logo) is missing, the wrong MIME type, or exceeds the field's size limit. The `detail` field names the specific constraint that failed — for example, a logo over 500 KB on `PATCH /v1/issuers/:id/logo`.
 
 **What to do:** Check the file against the limits documented on the endpoint (e.g. [Upload Issuer Logo](../endpoints/upload-issuer-logo.md)) and re-upload.
 

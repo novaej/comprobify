@@ -8,7 +8,7 @@ Un conflicto de unicidad o de estado impidió que la operación se completara.
 
 ### `ALREADY_VERIFIED`
 
-Se llamó a `POST /v1/resend-verification` para una dirección de correo cuya cuenta ya está activa (correo ya verificado). No hay nada que reenviar.
+Se pidió reenviar el correo de verificación (desde la aplicación web) para una dirección cuya cuenta ya está activa (correo ya verificado). No hay nada que reenviar.
 
 **Qué hacer:** No se requiere ninguna acción — la cuenta está verificada y puede usarse con normalidad.
 
@@ -29,17 +29,6 @@ Se proporcionó un encabezado `Idempotency-Key` con un valor que ya fue usado pa
 - **Otros conflictos** — p. ej. un par duplicado de `(branch_code, issue_point_code)` de emisor. Lee `detail` para conocer la restricción específica.
 
 ## Ejemplos de respuesta
-
-```json
-{
-  "type":     "https://docs.comprobify.com/errors/conflict",
-  "title":    "Conflict",
-  "status":   409,
-  "code":     "ALREADY_VERIFIED",
-  "detail":   "Esta cuenta ya está verificada.",
-  "instance": "/v1/resend-verification"
-}
-```
 
 ```json
 {

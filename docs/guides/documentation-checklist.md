@@ -16,6 +16,8 @@ When making changes to the codebase, update the corresponding documentation plac
 - ✅ `src/models/{resource}.model.js` — add DB queries if needed
 - ✅ Apply middleware: rate limiting if authenticated, validators, errorHandler
 
+> **Frontend-only endpoint** (mounts `requireInternalService`, ADR-035)? Skip the `docs/site` steps below — it gets **no** public page or URI on the site. Instead: add the route to `tests/unit/routes/internal-service-gating.test.js`, document its contract in `docs/guides/frontend-only-endpoints.md`, and if users are affected, explain the flow (without the URI) in `docs/site/account-lifecycle.md` and its `en/` mirror.
+
 **Documentation files:**
 1. **`docs/site/endpoints/{endpoint-name}.md`** — create new endpoint documentation
    - Include: method, path, auth, params, request body, response, errors

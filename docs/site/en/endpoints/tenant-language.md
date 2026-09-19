@@ -41,7 +41,7 @@ Bearer token — API key required.
 
 ## Notes
 
-- The language set at registration (`POST /v1/register`) is used as the initial value (default `es`).
+- The language set at registration is used as the initial value (default `es`).
 - This endpoint allows updating the language after registration without re-registering.
 - Supported languages: `es` (Spanish), `en` (English).
 - The language preference applies to all email types — currently verification emails, and document emails in a future release.

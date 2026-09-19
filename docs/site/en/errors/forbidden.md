@@ -18,20 +18,26 @@ The tenant account has been suspended. Every write request fails until the suspe
 
 **What to do:** Contact support. Suspended accounts cannot self-recover, but you can keep reviewing what's already in your account while the issue is resolved.
 
+### `INTERNAL_SERVICE_ONLY`
+
+The request reached an action reserved for the Comprobify web app: creating the account, verifying the email, recovering it, accepting the legal agreements, going to production, or managing the subscription and payments. The API offers no direct way to do it.
+
+**What to do:** Do that action from the web app. There is nothing to configure in your integration — see [Your account & the web app](../account-lifecycle.md#if-you-see-internal-service-only).
+
 ### `EMAIL_VERIFICATION_REQUIRED`
 
 The operation requires email verification to have been completed. This blocks:
 - Creating additional branches (`POST /v1/issuers`)
-- Promoting to production (`POST /v1/tenants/promote`)
+- Promoting to production
 - Minting new API keys (`POST /v1/keys`)
 
-**What to do:** Check the inbox for the original verification email, or request a new one from the Comprobify web app (`POST /v1/resend-verification` is only callable by it — see [Resend Verification](../endpoints/resend-verification.md)). Then retry the original operation.
+**What to do:** Check the inbox for the original verification email, or request a new one from the Comprobify web app (resending is only done from there — see [Your account & the web app](../account-lifecycle.md#verifying-your-email)). Then retry the original operation.
 
 ### `PRODUCTION_KEY_REQUIRES_PROMOTION`
 
 A production API key can only be created if the tenant has already promoted to production at least once. Before promotion, only sandbox keys can be minted.
 
-**What to do:** Call `POST /v1/tenants/promote` to promote the tenant to production. Production keys will be issued automatically as part of that response. Additional production keys can be minted afterwards via `POST /v1/keys`.
+**What to do:** Promote your account to production from the Comprobify web app (promotion is only done from there — see [Your account & the web app](../account-lifecycle.md#going-to-production)). Production keys are issued automatically as part of promotion, and additional ones can be minted afterwards via `POST /v1/keys`.
 
 ### `INSUFFICIENT_SCOPE`
 

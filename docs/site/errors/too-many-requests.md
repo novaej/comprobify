@@ -8,7 +8,7 @@ La solicitud fue limitada. Revisa el campo `code` para distinguir entre un lími
 
 ### `RESEND_COOLDOWN`
 
-`POST /v1/resend-verification` fue llamado de nuevo antes de que transcurriera el período de espera de 60 segundos del lado del servidor. Este período de espera por cuenta evita la inundación de correos sin importar la IP.
+Se pidió reenviar el correo de verificación (desde la aplicación web) antes de que transcurriera el período de espera de 60 segundos del lado del servidor. Este período de espera por cuenta evita la inundación de correos sin importar la IP.
 
 **Qué hacer:** Espera 60 segundos desde la solicitud de reenvío anterior, luego vuelve a intentarlo.
 
@@ -52,17 +52,6 @@ async function requestWithRetry(fn, maxRetries = 3) {
 ```
 
 ## Ejemplos de respuesta
-
-```json
-{
-  "type":     "https://docs.comprobify.com/errors/too-many-requests",
-  "title":    "Too Many Requests",
-  "status":   429,
-  "code":     "RESEND_COOLDOWN",
-  "detail":   "Por favor espera antes de solicitar otro correo de verificación.",
-  "instance": "/v1/resend-verification"
-}
-```
 
 ```json
 {

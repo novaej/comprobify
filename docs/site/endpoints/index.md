@@ -4,24 +4,9 @@ Los endpoints de comprobantes requieren `Authorization: Bearer <api-key>` **y** 
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
 
-## Creación, recuperación y activación de cuenta (solo app web de Comprobify)
+## Cuenta, acuerdos legales y promoción a producción (solo aplicación web)
 
-El registro, la recuperación de cuenta (restablecer el vínculo de la app web con tu cuenta) y la confirmación de correo ocurren todos a través de la aplicación web de Comprobify, no directamente contra esta API — ver [Registro](register.md) para saber por qué. La única excepción es la comprobación de solo lectura de abajo.
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/v1/verify-email/check` | Comprueba si un token de verificación es válido, sin consumirlo — seguro para que lo precarguen escáneres de enlaces de correo. El único endpoint de este grupo invocable directamente. |
-| `POST` | `/v1/register` | Solo desde la app web — ver [Registro](register.md) |
-| `POST` | `/v1/recover` | Solo desde la app web — ver [Recuperar cuenta](recover.md) |
-| `POST` | `/v1/resend-verification` | Solo desde la app web — ver [Reenviar Correo de Verificación](resend-verification.md) |
-| `POST` | `/v1/verify-email` | Solo desde la app web — ver [Verificar Correo](verify-email.md) |
-
-## Acuerdos (público)
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `GET` | `/v1/agreements` | Lista la versión publicada actual de cada tipo de documento (TERMS, PRIVACY, DPA) — lee `version` de aquí y pásalo como `termsVersion` al aceptar vía `POST /v1/tenants/agreements` |
-| `GET` | `/v1/agreements/:type` | Obtiene el documento actual renderizado como HTML — insértalo en un modal o página de tu UI de registro |
+Crear la cuenta, verificar el correo, recuperar el acceso, aceptar los acuerdos legales y pasar a producción se hacen en la aplicación web de Comprobify, no por API — ver [Tu cuenta y la aplicación web](../account-lifecycle.md).
 
 > **¿Cómo pagas tu suscripción?** Desde la aplicación web — con tarjeta o transferencia bancaria, incluyendo consultar los planes y precios vigentes. No hay endpoints públicos que integrar para nada de esto; ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md).
 
@@ -31,11 +16,6 @@ El registro, la recuperación de cuenta (restablecer el vínculo de la app web c
 |---|---|---|
 | `GET` | `/v1/tenants/me` | Resuelve el tenant (id, correo, plan, estado, cuota, entorno, aceptación de acuerdos) para la API key autenticada |
 | `PATCH` | `/v1/tenants/language` | Actualiza el idioma preferido para los correos salientes |
-| `POST` | `/v1/tenants/promote` | Promueve el tenant a producción — revoca todas las llaves de sandbox y crea llaves de producción equivalentes |
-| `GET` | `/v1/tenants/agreements` | Verifica si algún acuerdo necesita aceptación — devuelve qué tipos están desactualizados. Genera instancias PENDING de forma diferida para cualquier versión de plantilla nueva; los integradores externos deberían consultar esto periódicamente |
-| `POST` | `/v1/tenants/agreements` | Acepta todos los acuerdos PENDING — requerido antes de promover a producción |
-| `GET` | `/v1/tenants/agreements/history` | Lista todas las instancias de acuerdo personalizadas del tenant, con estado y marcas de tiempo de aceptación |
-| `GET` | `/v1/tenants/agreements/:type` | Renderiza el documento personalizado del tenant como HTML — incluye su razón social/RUC y las fechas al momento en que se creó la cuenta |
 | `GET` | `/v1/tenants/events` | Bitácora de auditoría completa a nivel de tenant (verificación, suscripción, pagos, historial de cambios de plan/intervalo de facturación), en orden cronológico |
 | `POST` | `/v1/tenants/retry-failed-documents` | Recupera todos los comprobantes estancados del tenant (envío/autorización fallidos tras agotar los reintentos automáticos) — abarca todos los emisores, sin `X-Issuer-Id` ([Reintentar Todos los Comprobantes Fallidos](retry-failed-documents.md)) |
 

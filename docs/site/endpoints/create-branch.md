@@ -69,7 +69,7 @@ Una nueva sucursal se cuenta cuando el `branchCode` aún no existe para el tenan
 }
 ```
 
-El `id` devuelto es lo que pasas como `X-Issuer-Id` en las solicitudes de comprobantes dirigidas a esta sucursal. Las sucursales nuevas heredan el ambiente actual del tenant (sandbox o producción). Usa [`POST /v1/tenants/promote`](promote-tenant.md) para promover todo el tenant a producción.
+El `id` devuelto es lo que pasas como `X-Issuer-Id` en las solicitudes de comprobantes dirigidas a esta sucursal. Las sucursales nuevas heredan el ambiente actual del tenant (sandbox o producción). Promueve todo el tenant a producción desde la aplicación web de Comprobify — ver [Tu cuenta y la aplicación web](../account-lifecycle.md#pasar-a-produccion).
 
 ## Errores
 

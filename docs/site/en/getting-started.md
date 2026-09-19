@@ -6,7 +6,7 @@
 https://api.comprobify.com/v1
 ```
 
-All examples on this site use paths relative to that base (e.g. `POST /v1/register` means `POST https://api.comprobify.com/v1/register`).
+All examples on this site use paths relative to that base (e.g. `POST /v1/documents` means `POST https://api.comprobify.com/v1/documents`).
 
 ## Postman collection
 
@@ -22,25 +22,15 @@ You can also download the collection JSON directly: [`comprobify.postman_collect
 
 ## 1. Create your account (in the web app, not by API)
 
-**Account creation is not a third-party-callable endpoint.** `POST /v1/register` requires an `X-Internal-Service-Secret` header that only the Comprobify web app holds — any other caller gets `403 INTERNAL_SERVICE_ONLY`. This is deliberate: each RUC can only be registered once, and registration is a guided flow (uploading your `.p12` certificate, accepting the legal agreements, etc.) meant to happen in the app.
+Account creation is not a third-party-callable endpoint — it happens in the **Comprobify web app**. Once you're done, your account already has an issuer and a fully-functional sandbox key, but, by design, the web app **never shows you its text**: it stores it encrypted and uses it internally to run your dashboard. That's fine if you're only going to use the dashboard; if you need to integrate your own system directly against the API, keep reading — section 3 below explains how to get a key you can actually copy.
 
-**Sign up at the Comprobify web app.** Once you're done, your account already has an issuer and a fully-functional sandbox API key — but, by design, the web app **never shows you its text**. It stores it encrypted and uses it internally to run your dashboard; there's nowhere in the UI to copy it from. That's fine if you're only ever going to use the dashboard, but if you need to integrate your own system directly against the API, keep reading — section 3 below explains how to get a key you can actually copy.
-
-The account starts on the **FREE** tier (5 documents/month, 1 branch, 1 issuing point, facturas only). All documents are sent to the SRI test environment until you promote to production. Sandbox testing doesn't count against the quota — only production documents do.
-
-Account recovery (`POST /v1/recover`) also happens in the web app, by uploading the same `.p12` certificate you registered with — see [Recover Account](endpoints/recover.md). As with registration, the resulting key isn't shown to you either, whether your account was already linked to the web app or is being linked for the first time.
+The account starts on the **FREE** tier and all documents go to the SRI test environment until you go to production. See [Your account & the web app](account-lifecycle.md) for the details of registration and account recovery.
 
 ---
 
 ## 2. Verify your email
 
-The web app sends a verification email to the address you registered with, linking back to its own verification page — click it there to activate your account.
-
-`GET /v1/verify-email/check?token=<token>` (the read-only, non-consuming check) stays public if you want to confirm a token is valid programmatically; the action that actually activates the account (`POST /v1/verify-email`) is, like registration, only callable by the web app — see [Verify Email](endpoints/verify-email.md) for the full detail.
-
-Email verification is required before you can promote to production. You can issue sandbox invoices immediately without verifying.
-
-> If you are integrating programmatically and email is not available, contact support to verify your account manually.
+The web app sends you a verification email; click the link to activate your account. You can issue sandbox invoices right away without verifying, but verification is required before you can create branches, mint keys, start a subscription, or go to production. See [Your account & the web app](account-lifecycle.md#verifying-your-email).
 
 ---
 
@@ -54,7 +44,7 @@ Authorization: Bearer <your-api-key>
 
 The key is SHA-256 hashed on each request — the plaintext is never persisted after creation. If a key is compromised, contact support to revoke it and issue a new one.
 
-> **What do I need to use the API directly?** The key your account got at sign-up (see section 1 above) already has every permission and covers all your branches — but the web app never shows you its text, it uses it internally to run your dashboard. To integrate your own system (a backend, a script, an ERP) you need a key you can copy, and the only way to get one is to mint a new one via `POST /v1/keys` from `/settings/api-keys` in the dashboard — that one *is* shown to you once, at creation. Minting keys this way (and registering your own webhooks via `POST /v1/webhooks`) are Starter-and-up features — see "Multiple named keys per tenant" below. **On Free/Solo/Lite there's currently no self-service way to get a key's text** — contact support if you need direct integration on one of those tiers.
+> **What do I need to use the API directly?** The key your account got at sign-up (see section 1 above) already has every permission and covers all your branches — but the web app never shows you its text, it uses it internally to run your dashboard. To integrate your own system (a backend, a script, an ERP) you need a key you can copy, and the only way to get one is to mint a new one via `POST /v1/keys` from `/settings/api-keys` in the dashboard — that one *is* shown to you once, at creation. Minting keys this way (and registering your own webhooks via `POST /v1/webhooks`) are Starter-and-up features — see "Multiple named keys per tenant" below. **Free/Solo/Lite don't include direct API access** — your account's key is used only by the web app; to integrate your own system you need a Starter plan or higher.
 
 ---
 
@@ -104,7 +94,7 @@ No new API key is minted — the key you already have covers every branch under 
 
 ### Multiple named keys per tenant (Starter and up)
 
-**Free/Solo/Lite cannot mint keys via self-service at all — not even one.** Your initial key (the one registration created) is never shown to you — see section 3 above — so there's no key text to copy for your own integration on those tiers; contact support if you need one. From Starter up, since one tenant-scoped key covers all your branches, you can mint named keys via `POST /v1/keys` (shown to you once, at creation) to track which integration is making each call (frontend, ERP, mobile app, etc.):
+**Free/Solo/Lite cannot mint keys via self-service at all — not even one.** These tiers don't include direct API access: the initial key registration created is used only by the web app (see section 3 above), and to integrate your own system you need a Starter plan or higher. From Starter up, since one tenant-scoped key covers all your branches, you can mint named keys via `POST /v1/keys` (shown to you once, at creation) to track which integration is making each call (frontend, ERP, mobile app, etc.):
 
 ```http
 POST /v1/keys
@@ -121,7 +111,7 @@ Use `GET /v1/keys` to list them and `DELETE /v1/keys/:id` to revoke one. `enviro
 | Stage | Key environment | What to do |
 |---|---|---|
 | After registration | Sandbox | The web app uses it to run your dashboard right away; you don't need its text for that. |
-| After `POST /v1/tenants/promote` | Production | All sandbox keys are revoked and production mirrors are returned in the response — this happens entirely inside the web app, with no key text ever shown to you. |
+| After going to production (from the web app) | Production | All sandbox keys are revoked and production mirrors are created — this happens inside the web app, which shows you the text of any named keys you created once (your account's internal key is never shown). |
 | Adding your own integrations (Starter+) | Same tenant | Mint named keys via `POST /v1/keys` for per-integration observability. |
 | Lost a named key (Starter+) | — | Mint a replacement via `POST /v1/keys`, revoke the old one via `DELETE /v1/keys/:id`. |
 
@@ -167,7 +157,7 @@ Response:
 
 Omit `eventTypes` (or pass `[]`) to subscribe to all event types. You can register up to the limit for your plan (Free/Solo/Lite: 0 — not available; Starter: 2, Growth: 5, Business: 10, Enterprise: 20) and manage them via `GET / PATCH / DELETE /v1/webhooks`. `GET /v1/webhooks` includes a `limit: { max, used }` block so you can check your remaining headroom without guessing.
 
-> **If you cannot expose a public HTTPS URL** (local development, behind a firewall), poll `GET /v1/notifications?sinceId=<lastId>` instead. Store the highest `id` seen from each poll and pass it on the next request to efficiently catch up — see [Notifications](endpoints/notifications.md).
+> **If you cannot expose a public HTTPS URL** (local development, behind a firewall), poll `GET /v1/notifications?sinceId=<lastId>` instead. Store the `id` of the most recent notification you received from each poll and pass it as `sinceId` on the next request to efficiently catch up — see [Notifications](endpoints/notifications.md).
 
 ---
 
@@ -227,37 +217,7 @@ Queries the SRI for the authorization result.
 
 ## Going to production
 
-Once you have verified your email and tested your integration in sandbox:
-
-```http
-POST /v1/tenants/promote
-Authorization: Bearer <your-api-key>
-Content-Type: application/json
-
-{}
-```
-
-An empty body is valid. Optionally supply `initialSequentials` to set starting sequential numbers per issuer × document type.
-
-This is **one-way** — there is no going back to sandbox. On success:
-- **All active sandbox API keys are revoked** and a production key is created for each one, preserving the same label
-- All new production tokens are returned in the response — **store them immediately, they are shown only once**
-- All branches are promoted at once — there is no per-branch promotion
-- All subsequent documents for any branch will be sent to the SRI production endpoint with `ambiente = 2`
-
-```json
-{
-  "ok": true,
-  "apiKeys": [
-    { "label": "Initial master key", "apiKey": "<production-token>" },
-    { "label": "ERP integration",     "apiKey": "<production-token>" }
-  ]
-}
-```
-
-Distribute each token to the integration that previously used the sandbox key with the same label.
-
-> If your account status is `PENDING_VERIFICATION` (email not yet verified), this call returns `403`. Verify your email first.
+Once you have verified your email, accepted the legal agreements, and tested your integration in sandbox, promotion to production is done from the **web app**, not by API. It's one-way: your sandbox keys are revoked, production equivalents are created (the web app shows you the text of the ones you created yourself **once only** — copy them then), and all subsequent documents for any branch go to the SRI production environment (`ambiente = 2`). See [Your account & the web app](account-lifecycle.md#going-to-production).
 
 ---
 
@@ -277,7 +237,7 @@ Listed prices are the **tax-exclusive** rate (the "sticker price") — IVA (curr
 
 **Free is monthly-only** — it's never actually purchased (there's no subscription behind it), so there's no annual variant to switch to. **Solo is yearly-only** (no monthly billing on that plan) — a low-cost annual commitment below Starter, meant as the entry rung. **Enterprise has no document quota at all**: it's genuinely unlimited (not a large number), and has no overage rate either, since there's no cap to ever overage past.
 
-¹ **On Free/Solo/Lite, "0" means there's no key whose text you can self-service obtain at all.** These two columns are how many keys/webhooks you can create yourself — minting keys and registering your own webhooks are Starter-and-up features. Your initial key from registration exists and works, but the web app never shows you its text (it uses it internally to run your dashboard), so on Free/Solo/Lite there's no self-service way to get a copyable key for your own integration — contact support if you need one. See the "What do I need to use the API directly?" note in section 3.
+¹ **On Free/Solo/Lite, "0" means the plan doesn't include direct API access.** These two columns are how many keys/webhooks you can create yourself — minting keys and registering your own webhooks are Starter-and-up features. Your initial key from registration exists and works, but the web app never shows you its text (it uses it internally to run your dashboard), so those tiers don't include direct API access — to integrate your own system, upgrade to Starter or higher. See the "What do I need to use the API directly?" note in section 3.
 
 > **Note:** these prices reflect the currently published catalog and can change — any price change requires at least 30 days' notice to active tenants (see [Your subscription & billing](paying-your-subscription.md)), so a price never changes overnight. Always check the Comprobify web app for the live catalog; this table is a reference and can fall out of date between edits to this page.
 
@@ -314,8 +274,6 @@ Attempting to create a branch beyond the tier limit returns `402 BRANCH_LIMIT_RE
 ## Rate Limiting
 
 Requests are rate-limited per API key based on your subscription tier (see table above). When you exceed the limit, the API returns [`429 Too Many Requests`](errors/too-many-requests.md). Implement exponential backoff: wait 1s, then 2s, then 4s before retrying.
-
-`POST /v1/register` is additionally limited to **5 requests per hour per IP address**, regardless of tier.
 
 ---
 

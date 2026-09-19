@@ -6,7 +6,7 @@
 https://api.comprobify.com/v1
 ```
 
-Todos los ejemplos de este sitio usan rutas relativas a esa base (p. ej. `POST /v1/register` significa `POST https://api.comprobify.com/v1/register`).
+Todos los ejemplos de este sitio usan rutas relativas a esa base (p. ej. `POST /v1/documents` significa `POST https://api.comprobify.com/v1/documents`).
 
 ## Colección de Postman
 
@@ -22,25 +22,15 @@ También puedes descargar el JSON de la colección directamente: [`comprobify.po
 
 ## 1. Crea tu cuenta (en la aplicación web, no por API)
 
-**La creación de cuentas no es un endpoint invocable por terceros.** `POST /v1/register` requiere un encabezado `X-Internal-Service-Secret` que solo posee la aplicación web de Comprobify — cualquier otra llamada recibe `403 INTERNAL_SERVICE_ONLY`. Esto es intencional: cada RUC solo puede registrarse una vez, y el registro es un flujo guiado (subir tu certificado `.p12`, aceptar los acuerdos legales, etc.) pensado para hacerse desde la app.
+La creación de la cuenta no es un endpoint invocable por terceros — se hace en la **aplicación web de Comprobify**. Al terminar, tu cuenta ya tiene un emisor y una llave de sandbox completamente funcional, pero, por diseño, la aplicación web **no te muestra su texto**: la guarda cifrada y la usa internamente para operar tu panel. Eso está bien si solo vas a usar el panel; si necesitas integrar tu propio sistema directamente contra la API, sigue leyendo — la sección 3 más abajo explica cómo obtener una llave que sí puedas copiar.
 
-**Regístrate en la aplicación web de Comprobify.** Al terminar, tu cuenta ya tiene un emisor y una API key de sandbox completamente funcional — pero, por diseño, la aplicación web **no te muestra su texto**. La guarda cifrada y la usa internamente para operar tu panel; no hay ningún lugar en la interfaz donde puedas copiarla. Eso está bien si solo vas a usar el panel, pero si necesitas integrar tu propio sistema directamente contra la API, sigue leyendo — la sección 3 más abajo explica cómo obtener una llave que sí puedas copiar.
-
-La cuenta comienza en el plan **FREE** (5 comprobantes/mes, 1 sucursal, 1 punto de emisión, solo facturas). Todos los comprobantes se envían al ambiente de pruebas del SRI hasta que te promuevas a producción. Las pruebas en sandbox no consumen la cuota — solo los comprobantes de producción lo hacen.
-
-La recuperación de cuenta (`POST /v1/recover`) también se hace desde la aplicación web, subiendo el mismo certificado `.p12` con el que te registraste — ver [Recuperar cuenta](endpoints/recover.md). Como con el registro, la llave que resulta tampoco se te muestra, sea que tu cuenta ya estuviera vinculada a la aplicación web o se esté vinculando por primera vez.
+La cuenta comienza en el plan **FREE** y todos los comprobantes se envían al ambiente de pruebas del SRI hasta que pases a producción. Ver [Tu cuenta y la aplicación web](account-lifecycle.md) para el detalle del registro y de la recuperación de cuenta.
 
 ---
 
 ## 2. Verifica tu correo
 
-La aplicación web te envía un correo de verificación a la dirección con la que te registraste, con un enlace de vuelta a su propia página de verificación — haz clic ahí para activar tu cuenta.
-
-`GET /v1/verify-email/check?token=<token>` (la comprobación de solo lectura, sin consumir el token) sigue siendo público si quieres confirmar programáticamente que un token es válido; la acción que realmente activa la cuenta (`POST /v1/verify-email`) es, igual que el registro, solo invocable por la aplicación web — ver [Verificar Correo](endpoints/verify-email.md) para el detalle completo.
-
-Se requiere verificación de correo antes de poder promoverte a producción. Puedes emitir facturas de sandbox de inmediato sin verificar.
-
-> Si estás integrando de forma programática y el correo no está disponible, contacta a soporte para verificar tu cuenta manualmente.
+La aplicación web te envía un correo de verificación; haz clic en el enlace para activar tu cuenta. Puedes emitir facturas de sandbox de inmediato sin verificar, pero se requiere verificación antes de crear sucursales, generar llaves, iniciar una suscripción o pasar a producción. Ver [Tu cuenta y la aplicación web](account-lifecycle.md#verificar-tu-correo).
 
 ---
 
@@ -54,7 +44,7 @@ Authorization: Bearer <your-api-key>
 
 La llave se hashea con SHA-256 en cada solicitud — el texto plano nunca se persiste después de la creación. Si una llave se ve comprometida, contacta a soporte para revocarla y emitir una nueva.
 
-> **¿Qué necesito para usar la API directamente?** La llave que tu cuenta recibe al registrarte (ver la sección 1 arriba) tiene todos los permisos y cubre todas tus sucursales — pero la aplicación web nunca te muestra su texto, la usa internamente para operar tu panel. Para integrar tu propio sistema (backend, script, ERP) necesitas una llave que puedas copiar, y la única forma de obtener una es generar una nueva vía `POST /v1/keys` desde `/settings/api-keys` en el panel — esa sí se te muestra una vez, al crearla. Generar llaves de esta forma (y registrar webhooks propios vía `POST /v1/webhooks`) son funciones de los planes Starter en adelante — ver "Múltiples llaves con nombre por tenant" más abajo. **En Free/Solo/Lite no existe hoy una forma de autoservicio para obtener el texto de una llave** — si necesitas integración directa en uno de esos planes, contacta a soporte.
+> **¿Qué necesito para usar la API directamente?** La llave que tu cuenta recibe al registrarte (ver la sección 1 arriba) tiene todos los permisos y cubre todas tus sucursales — pero la aplicación web nunca te muestra su texto, la usa internamente para operar tu panel. Para integrar tu propio sistema (backend, script, ERP) necesitas una llave que puedas copiar, y la única forma de obtener una es generar una nueva vía `POST /v1/keys` desde `/settings/api-keys` en el panel — esa sí se te muestra una vez, al crearla. Generar llaves de esta forma (y registrar webhooks propios vía `POST /v1/webhooks`) son funciones de los planes Starter en adelante — ver "Múltiples llaves con nombre por tenant" más abajo. **Free/Solo/Lite no incluyen acceso directo a la API** — la llave de tu cuenta la usa únicamente la aplicación web; para integrar tu propio sistema necesitas un plan Starter o superior.
 
 ---
 
@@ -104,7 +94,7 @@ No se genera ninguna API key nueva — la llave que ya tienes cubre cada sucursa
 
 ### Múltiples llaves con nombre por tenant (Starter en adelante)
 
-**Free/Solo/Lite no pueden generar llaves por self-service en absoluto — ni siquiera una.** Su llave inicial (la que el registro creó) nunca se les muestra — ver la sección 3 arriba — así que en esos planes no hay ningún texto de llave que copiar para una integración propia; contacta a soporte si lo necesitas. A partir de Starter, dado que una sola llave vinculada al tenant cubre todas tus sucursales, puedes generar llaves con nombre vía `POST /v1/keys` (mostradas una vez, al crearlas) para rastrear qué integración está haciendo cada llamada (frontend, ERP, app móvil, etc.):
+**Free/Solo/Lite no pueden generar llaves por self-service en absoluto — ni siquiera una.** Estos planes no incluyen acceso directo a la API: la llave inicial que creó el registro la usa únicamente la aplicación web (ver la sección 3 arriba), y para integrar tu propio sistema necesitas un plan Starter o superior. A partir de Starter, dado que una sola llave vinculada al tenant cubre todas tus sucursales, puedes generar llaves con nombre vía `POST /v1/keys` (mostradas una vez, al crearlas) para rastrear qué integración está haciendo cada llamada (frontend, ERP, app móvil, etc.):
 
 ```http
 POST /v1/keys
@@ -121,7 +111,7 @@ Usa `GET /v1/keys` para listarlas y `DELETE /v1/keys/:id` para revocar una. `env
 | Etapa | Ambiente de la llave | Qué hacer |
 |---|---|---|
 | Después del registro | Sandbox | La aplicación web la usa para operar tu panel de inmediato; no necesitas su texto para eso. |
-| Después de `POST /v1/tenants/promote` | Producción | Todas las llaves de sandbox se revocan y se devuelven sus equivalentes de producción en la respuesta — esto ocurre por completo dentro de la aplicación web, sin que veas ningún texto de llave. |
+| Después de promover a producción (desde la aplicación web) | Producción | Todas las llaves de sandbox se revocan y se crean sus equivalentes de producción — esto ocurre dentro de la aplicación web, que te muestra una sola vez el texto de las llaves con nombre que hayas creado (la llave interna de tu cuenta nunca se muestra). |
 | Agregando integraciones propias (Starter+) | Mismo tenant | Genera llaves con nombre vía `POST /v1/keys` para observabilidad por integración. |
 | Llave con nombre perdida (Starter+) | — | Genera un reemplazo vía `POST /v1/keys`, revoca la anterior vía `DELETE /v1/keys/:id`. |
 
@@ -167,7 +157,7 @@ Respuesta:
 
 Omite `eventTypes` (o pasa `[]`) para suscribirte a todos los tipos de evento. Puedes registrar hasta el límite de tu plan (Free/Solo/Lite: 0 — no disponible; Starter: 2, Growth: 5, Business: 10, Enterprise: 20) y gestionarlos vía `GET / PATCH / DELETE /v1/webhooks`. `GET /v1/webhooks` incluye un bloque `limit: { max, used }` para que puedas verificar cuánto espacio te queda sin adivinar.
 
-> **Si no puedes exponer una URL HTTPS pública** (desarrollo local, detrás de un firewall), sondea `GET /v1/notifications?sinceId=<lastId>` en su lugar. Guarda el `id` más alto visto en cada sondeo y pásalo en la siguiente solicitud para ponerte al día de forma eficiente — consulta [Notificaciones](endpoints/notifications.md).
+> **Si no puedes exponer una URL HTTPS pública** (desarrollo local, detrás de un firewall), sondea `GET /v1/notifications?sinceId=<lastId>` en su lugar. Guarda el `id` de la notificación más reciente que recibiste en cada sondeo y pásalo como `sinceId` en la siguiente solicitud para ponerte al día de forma eficiente — consulta [Notificaciones](endpoints/notifications.md).
 
 ---
 
@@ -227,37 +217,7 @@ Consulta al SRI el resultado de la autorización.
 
 ## Pasando a producción
 
-Una vez que hayas verificado tu correo y probado tu integración en sandbox:
-
-```http
-POST /v1/tenants/promote
-Authorization: Bearer <your-api-key>
-Content-Type: application/json
-
-{}
-```
-
-Un cuerpo vacío es válido. Opcionalmente puedes proporcionar `initialSequentials` para establecer los números secuenciales iniciales por emisor y tipo de comprobante.
-
-Esto es de **una sola dirección** — no hay vuelta atrás al sandbox. Al tener éxito:
-- **Todas las API keys de sandbox activas se revocan** y se crea una llave de producción por cada una de ellas, conservando la misma etiqueta
-- Todos los nuevos tokens de producción se devuelven en la respuesta — **guárdalos de inmediato, se muestran solo una vez**
-- Todas las sucursales se promueven a la vez — no existe la promoción por sucursal
-- Todos los comprobantes posteriores de cualquier sucursal se enviarán al endpoint de producción del SRI con `ambiente = 2`
-
-```json
-{
-  "ok": true,
-  "apiKeys": [
-    { "label": "Initial master key", "apiKey": "<production-token>" },
-    { "label": "ERP integration",     "apiKey": "<production-token>" }
-  ]
-}
-```
-
-Distribuye cada token a la integración que anteriormente usaba la llave de sandbox con la misma etiqueta.
-
-> Si el estado de tu cuenta es `PENDING_VERIFICATION` (correo aún no verificado), esta llamada devuelve `403`. Verifica tu correo primero.
+Una vez que hayas verificado tu correo, aceptado los acuerdos legales y probado tu integración en sandbox, la promoción a producción se hace desde la **aplicación web**, no por API. Es de una sola dirección: se revocan tus llaves de sandbox, se crean las equivalentes de producción (la aplicación web te muestra **una sola vez** el texto de las que hayas creado tú — cópialas en ese momento), y todos los comprobantes posteriores de cualquier sucursal van al ambiente de producción del SRI (`ambiente = 2`). Ver [Tu cuenta y la aplicación web](account-lifecycle.md#pasar-a-produccion).
 
 ---
 
@@ -277,7 +237,7 @@ Los precios listados son la tarifa **sin IVA** (el "precio de etiqueta") — el 
 
 **Free es solo mensual** — nunca se compra realmente (no hay una suscripción detrás), así que no existe una variante anual a la que cambiar. **Solo es solo anual** (facturación mensual no disponible en ese plan) — un compromiso anual de bajo costo pensado para el escalón de entrada, por debajo de Starter. **Enterprise no tiene cuota de comprobantes**: es genuinamente ilimitado (no un número grande), y tampoco tiene tarifa de excedente, porque no hay tope que exceder.
 
-¹ **En Free/Solo/Lite, "0" significa que no hay ninguna llave cuyo texto puedas obtener por self-service.** Estas dos columnas son cuántas llaves/webhooks puedes crear tú mismo — generar llaves y registrar webhooks propios son funciones de Starter en adelante. Tu llave inicial del registro existe y funciona, pero la aplicación web nunca te muestra su texto (la usa internamente para operar tu panel), así que en Free/Solo/Lite no hay forma de autoservicio de obtener una llave copiable para tu propia integración — contacta a soporte si la necesitas. Consulta la nota de "¿Qué necesito para usar la API directamente?" en la sección 3.
+¹ **En Free/Solo/Lite, "0" significa que el plan no incluye acceso directo a la API.** Estas dos columnas son cuántas llaves/webhooks puedes crear tú mismo — generar llaves y registrar webhooks propios son funciones de Starter en adelante. Tu llave inicial del registro existe y funciona, pero la aplicación web nunca te muestra su texto (la usa internamente para operar tu panel), así que esos planes no incluyen acceso directo a la API — para integrar tu propio sistema, sube a Starter o superior. Consulta la nota de "¿Qué necesito para usar la API directamente?" en la sección 3.
 
 > **Nota:** estos precios reflejan el catálogo publicado en este momento y pueden cambiar — todo cambio de precio requiere al menos 30 días de aviso previo a los tenants activos (ver [Tu suscripción y cómo pagarla](paying-your-subscription.md)), así que un precio nunca cambia de un día para otro. Consulta siempre la aplicación web de Comprobify para el catálogo vigente en tiempo real; esta tabla es una referencia y puede quedar desactualizada entre ediciones de esta página.
 
@@ -314,8 +274,6 @@ Intentar crear una sucursal más allá del límite del plan devuelve `402 BRANCH
 ## Límite de tasa
 
 Las solicitudes tienen un límite de tasa por API key según tu plan de suscripción (ver tabla arriba). Cuando excedes el límite, la API devuelve [`429 Too Many Requests`](errors/too-many-requests.md). Implementa retroceso exponencial: espera 1s, luego 2s, luego 4s antes de reintentar.
-
-`POST /v1/register` tiene además un límite de **5 solicitudes por hora por dirección IP**, sin importar el plan.
 
 ---
 

@@ -69,7 +69,7 @@ A new branch is counted when `branchCode` does not yet exist for the tenant. Add
 }
 ```
 
-The returned `id` is what you pass as `X-Issuer-Id` on document requests targeting this branch. New branches inherit the tenant's current environment (sandbox or production). Use [`POST /v1/tenants/promote`](promote-tenant.md) to promote the entire tenant to production.
+The returned `id` is what you pass as `X-Issuer-Id` on document requests targeting this branch. New branches inherit the tenant's current environment (sandbox or production). Promote the entire tenant to production from the Comprobify web app — see [Your account & the web app](../account-lifecycle.md#going-to-production).
 
 ## Errors
 

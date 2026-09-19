@@ -8,7 +8,7 @@ A uniqueness or state conflict prevented the operation from completing.
 
 ### `ALREADY_VERIFIED`
 
-`POST /v1/resend-verification` was called for an email address whose account is already active (email already verified). There is nothing to resend.
+A verification-email resend (done from the web app) was requested for an address whose account is already active (email already verified). There is nothing to resend.
 
 **What to do:** No action needed — the account is verified and can be used normally.
 
@@ -29,17 +29,6 @@ An `Idempotency-Key` header was supplied with a value that has already been used
 - **Other conflicts** — e.g. duplicate issuer `(branch_code, issue_point_code)` pair. Read `detail` for the specific constraint.
 
 ## Example responses
-
-```json
-{
-  "type":     "https://docs.comprobify.com/errors/conflict",
-  "title":    "Conflict",
-  "status":   409,
-  "code":     "ALREADY_VERIFIED",
-  "detail":   "This account is already verified.",
-  "instance": "/v1/resend-verification"
-}
-```
 
 ```json
 {

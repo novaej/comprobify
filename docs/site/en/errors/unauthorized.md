@@ -10,7 +10,7 @@ The request did not include a valid API key, the key has been revoked, or there 
 
 The API key's environment (`sandbox` or `production`) does not match the tenant's current environment. For example: using a sandbox key after the tenant has promoted to production, or using a production key against a tenant still in sandbox mode.
 
-**What to do:** Use a key whose environment matches the tenant. List your active keys with `GET /v1/keys`. Sandbox and production keys are issued separately — sandbox keys are created at registration; production keys are issued automatically at promotion (`POST /v1/tenants/promote`) or minted manually afterwards.
+**What to do:** Use a key whose environment matches the tenant. List your active keys with `GET /v1/keys`. Sandbox and production keys are issued separately — sandbox keys are created at registration; production keys are issued automatically at promotion (done from the web app) or minted manually afterwards.
 
 ### `UNAUTHORIZED` (fallback)
 
