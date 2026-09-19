@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-09-19
+
 ### Removed
 - **`POST /v1/admin/tenants` (admin tenant creation), `POST /v1/admin/issuers` (admin issuer creation), and `POST /v1/admin/tenants/:id/agreements` (admin agreement backfill) are removed.** All three existed only to support admin-created tenants — an onboarding path that bypassed self-service registration (`POST /v1/register`) entirely. Every tenant is now created through self-service registration; there is no remaining scenario that needs an admin to create a tenant or its first issuer on their behalf, or to backfill legal-agreement snapshots for one, since `generateForTenant()` already runs automatically both at registration and lazily on `GET /v1/tenants/agreements`. `GET /v1/admin/tenants`/`GET /v1/admin/issuers` (listing) and every other admin tenant/issuer route (tier/status updates, manual verify, promote override, certificate renewal) are unaffected.
 
