@@ -27,6 +27,24 @@ GET /v1/documents
 
 All filters combine with `AND`.
 
+### Example
+
+No filters, first page at the default size:
+
+```http
+GET /v1/documents
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
+Combining several filters and sorting — query parameters are joined with `&`, same as in any URL:
+
+```http
+GET /v1/documents?status=AUTHORIZED&documentType=01&from=01/03/2026&to=31/03/2026&sortBy=issueDate&sortDir=desc&page=1&limit=20
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
 ## Response
 
 **200 OK**

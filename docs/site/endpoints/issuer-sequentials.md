@@ -24,6 +24,13 @@ Devuelve una fila por cada tipo de comprobante activo del emisor, con el valor a
 |---|---|
 | `id` | UUID del emisor |
 
+### Ejemplo
+
+```http
+GET /v1/issuers/00000000-0000-0000-0000-000000000001/sequentials
+Authorization: Bearer <your-api-key>
+```
+
 ### Respuesta
 
 ```json

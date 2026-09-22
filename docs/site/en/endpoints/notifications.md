@@ -264,6 +264,14 @@ Supply `X-Issuer-Id: <id>` to restrict results to a specific issuer. When the he
 
 Omit the header to receive all notifications across every issuer (useful for admin or overview pages).
 
+### Example
+
+```http
+GET /v1/notifications?sinceId=019a1b2c-3d4e-7f00-8000-000000000001
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
 ### Response
 
 **200 OK**

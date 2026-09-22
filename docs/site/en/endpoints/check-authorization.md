@@ -18,6 +18,14 @@ The document must be in `RECEIVED` status. A successful call queues the check an
 |---|---|
 | `accessKey` | The 49-digit access key of the document |
 
+### Example
+
+```http
+GET /v1/documents/1503202601179234567800110010010000000011234567810/authorize
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
 ## Response
 
 **202 Accepted** — confirms the check was queued, not the outcome.

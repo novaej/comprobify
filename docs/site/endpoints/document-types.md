@@ -24,6 +24,13 @@ Devuelve los tipos de comprobante activos para el emisor indicado.
 |---|---|
 | `id` | UUID del emisor (obtenido de `GET /v1/issuers`) |
 
+### Ejemplo
+
+```http
+GET /v1/issuers/00000000-0000-0000-0000-000000000001/document-types
+Authorization: Bearer <your-api-key>
+```
+
 ### Respuesta
 
 ```json

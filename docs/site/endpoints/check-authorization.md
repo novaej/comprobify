@@ -18,6 +18,14 @@ El comprobante debe estar en estado `RECEIVED`. Una llamada exitosa encola la ve
 |---|---|
 | `accessKey` | La clave de acceso de 49 dígitos del comprobante |
 
+### Ejemplo
+
+```http
+GET /v1/documents/1503202601179234567800110010010000000011234567810/authorize
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
 ## Respuesta
 
 **202 Accepted** — confirma que la verificación fue encolada, no el resultado.

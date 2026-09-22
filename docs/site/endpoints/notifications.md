@@ -264,6 +264,14 @@ Proporciona `X-Issuer-Id: <id>` para restringir los resultados a un emisor espec
 
 Omite el encabezado para recibir todas las notificaciones de todos los emisores (útil para páginas de administración o resumen).
 
+### Ejemplo
+
+```http
+GET /v1/notifications?sinceId=019a1b2c-3d4e-7f00-8000-000000000001
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
 ### Respuesta
 
 **200 OK**

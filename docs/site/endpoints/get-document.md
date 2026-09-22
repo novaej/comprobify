@@ -16,6 +16,14 @@ GET /v1/documents/:accessKey
 |---|---|
 | `accessKey` | La clave de acceso numérica de 49 dígitos devuelta al crear el comprobante |
 
+### Ejemplo
+
+```http
+GET /v1/documents/1503202601179234567800110010010000000011234567810
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
 ## Respuesta
 
 **200 OK**

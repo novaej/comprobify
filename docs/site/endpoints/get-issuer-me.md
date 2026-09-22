@@ -18,6 +18,13 @@ GET /v1/issuers/:id
 |---|---|
 | `id` | UUID del emisor (obtenido de `GET /v1/issuers`) |
 
+## Ejemplo
+
+```http
+GET /v1/issuers/00000000-0000-0000-0000-000000000001
+Authorization: Bearer <your-api-key>
+```
+
 ## Respuesta
 
 **200 OK**
