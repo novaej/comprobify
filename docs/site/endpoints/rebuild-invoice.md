@@ -1,6 +1,6 @@
-# Reconstruir Factura
+# Reconstruir Comprobante
 
-Corrige y vuelve a firmar un comprobante rechazado. El comprobante reconstruido conserva el mismo `accessKey`, `sequential`, y `issueDate` que el original — solo se reemplaza el contenido de la factura.
+Corrige y vuelve a firmar un comprobante rechazado. El comprobante reconstruido conserva el mismo `accessKey`, `sequential`, y `issueDate` que el original — solo se reemplaza el contenido del comprobante.
 
 ```
 POST /v1/documents/:accessKey/rebuild

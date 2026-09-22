@@ -121,4 +121,4 @@ This is the one place that shows the full sequence of changes to your subscripti
 ## Notes
 
 - Returns an empty array if nothing has happened yet beyond registration.
-- Not paginated — the full history is returned every time. Fine for typical tenant lifetime volume; if this ever needs pagination, `?sinceId=` (mirroring [Notifications](notifications.md)) would be the natural addition.
+- Not paginated — the full history is returned every time.

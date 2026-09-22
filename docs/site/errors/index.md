@@ -75,7 +75,7 @@ Cada entrada en `errors` tiene:
 
 ## Errores del SRI
 
-`POST /:accessKey/send` y `GET /:accessKey/authorize` son asíncronos (ver [Enviar al SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` ya no puede devolverse como respuesta HTTP desde ninguno de los dos endpoints. Un fallo de red ahora ocurre dentro del worker en segundo plano y se registra como un evento de comprobante `ERROR` en su lugar; ver [Envío al SRI Fallido](/errors/sri-error) para más detalles. La estructura de abajo se mantiene como referencia:
+`POST /:accessKey/send` y `GET /:accessKey/authorize` son asíncronos (ver [Enviar al SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` ya no puede devolverse como respuesta HTTP desde ninguno de los dos endpoints. Un fallo de red ahora ocurre en segundo plano y se registra como un evento de comprobante `ERROR` en su lugar; ver [Envío al SRI Fallido](/errors/sri-error) para más detalles. La estructura de abajo se mantiene como referencia:
 
 Cuando `code` es `SRI_SUBMISSION_FAILED`, un arreglo adicional `sriMessages` contiene los mensajes en bruto devueltos por el servicio SOAP del SRI:
 

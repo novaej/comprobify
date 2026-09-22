@@ -6,9 +6,9 @@ Encola el documento XML firmado para su envío al servicio SOAP del SRI. Este en
 POST /v1/documents/:accessKey/send
 ```
 
-El comprobante debe estar en estado `SIGNED`. Una llamada exitosa lo mueve inmediatamente a `PENDING_SEND` y retorna — **no** espera al SRI. Un proceso worker independiente recoge el trabajo encolado y llama al SRI; el comprobante eventualmente pasa a `RECEIVED` (el SRI lo aceptó para procesamiento) o `RETURNED` (el SRI lo rechazó — se requiere reconstrucción). Consulta [Consultar Comprobante](get-document.md) o [Consultar Eventos](get-events.md) para observar esa transición, o confía en el sistema de notificaciones/webhooks para el resultado final `AUTHORIZED` una vez que también hayas llamado a [Verificar Autorización](check-authorization.md).
+El comprobante debe estar en estado `SIGNED`. Una llamada exitosa lo mueve inmediatamente a `PENDING_SEND` y retorna — **no** espera al SRI. Un proceso en segundo plano toma el trabajo encolado y llama al SRI; el comprobante eventualmente pasa a `RECEIVED` (el SRI lo aceptó para procesamiento) o `RETURNED` (el SRI lo rechazó — se requiere reconstrucción). Consulta [Consultar Comprobante](get-document.md) o [Consultar Eventos](get-events.md) para observar esa transición, o confía en el sistema de notificaciones/webhooks para el resultado final `AUTHORIZED` una vez que también hayas llamado a [Verificar Autorización](check-authorization.md).
 
-Si RabbitMQ no está disponible momentáneamente cuando llamas a este endpoint, el comprobante igual pasa de forma duradera a `PENDING_SEND` — no se pierde nada. Un job de reconciliación periódico vuelve a encolar cualquier envío cuyo despacho nunca fue confirmado.
+Si hay un problema temporal al poner el envío en marcha, el comprobante igual pasa de forma duradera a `PENDING_SEND` — no se pierde nada. El sistema vuelve a intentarlo automáticamente, hasta un máximo de 5 intentos; si se agotan, el comprobante queda estancado y puedes recuperarlo con [Reintentar Envío/Autorización](retry-send.md).
 
 ## Autenticación
 
@@ -54,4 +54,4 @@ Esta respuesta solo confirma que el comprobante fue encolado — no refleja el r
 | `NOT_FOUND` | 404 | El emisor indicado en `X-Issuer-Id` no existe |
 | `NOT_FOUND` | 404 | Comprobante no encontrado |
 
-`SRI_SUBMISSION_FAILED` ya no puede ocurrir en este endpoint — las fallas de red/SOAP ahora suceden dentro del worker asíncrono, después de que este endpoint ya respondió. Un intento fallido se registra como un evento `ERROR` del comprobante, y el comprobante permanece elegible para un nuevo intento mediante el job de reconciliación.
+`SRI_SUBMISSION_FAILED` ya no puede ocurrir en este endpoint — las fallas de red/SOAP ahora suceden en segundo plano, después de que este endpoint ya respondió. Un intento fallido se registra como un evento `ERROR` del comprobante, y el sistema lo vuelve a intentar automáticamente hasta 5 veces — ver [Reintentar Envío/Autorización](retry-send.md) para qué hacer si los 5 se agotan.

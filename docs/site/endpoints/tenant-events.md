@@ -121,4 +121,4 @@ Este es el único lugar que muestra la secuencia completa de cambios en tu suscr
 ## Notas
 
 - Devuelve un arreglo vacío si aún no ha ocurrido nada más allá del registro.
-- No está paginado — se devuelve el historial completo cada vez. Es suficiente para el volumen típico de vida útil de un tenant; si en algún momento se necesita paginación, `?sinceId=` (siguiendo el patrón de [Notificaciones](notifications.md)) sería la adición natural.
+- No está paginado — se devuelve el historial completo cada vez.

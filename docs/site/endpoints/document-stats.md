@@ -1,6 +1,6 @@
 # Estadísticas de Comprobantes
 
-Devuelve un desglose por tipo de los comprobantes emitidos este mes, más un conteo histórico de comprobantes que requieren atención. Pensado para resúmenes de dashboard (por ejemplo, el widget de ingresos de comprobify-web, calculado en el cliente a partir de los valores de `authorizedTotal`).
+Devuelve un desglose por tipo de los comprobantes emitidos este mes, más un conteo histórico de comprobantes que requieren atención. Útil para mostrar un resumen de actividad reciente, incluyendo un total de ingresos por tipo de comprobante a partir de `authorizedTotal`.
 
 ```
 GET /v1/documents/stats

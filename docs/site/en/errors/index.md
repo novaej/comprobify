@@ -75,7 +75,7 @@ Each entry in `errors` has:
 
 ## SRI errors
 
-`POST /:accessKey/send` and `GET /:accessKey/authorize` are asynchronous (see [Send to SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` can no longer be returned as an HTTP response from either endpoint. A network failure now happens inside the background worker and is recorded as an `ERROR` document event instead; see [SRI Submission Failed](/errors/sri-error) for details. The shape below is kept for reference:
+`POST /:accessKey/send` and `GET /:accessKey/authorize` are asynchronous (see [Send to SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` can no longer be returned as an HTTP response from either endpoint. A network failure now happens in the background and is recorded as an `ERROR` document event instead; see [SRI Submission Failed](/errors/sri-error) for details. The shape below is kept for reference:
 
 When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contains the raw messages returned by the SRI SOAP service:
 

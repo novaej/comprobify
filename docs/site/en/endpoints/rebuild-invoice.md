@@ -1,6 +1,6 @@
-# Rebuild Invoice
+# Rebuild Document
 
-Corrects and re-signs a rejected document. The rebuilt document keeps the same `accessKey`, `sequential`, and `issueDate` as the original — only the invoice content is replaced.
+Corrects and re-signs a rejected document. The rebuilt document keeps the same `accessKey`, `sequential`, and `issueDate` as the original — only the document content is replaced.
 
 ```
 POST /v1/documents/:accessKey/rebuild

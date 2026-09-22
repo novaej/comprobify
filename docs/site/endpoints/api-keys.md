@@ -183,7 +183,7 @@ Marca la llave como inactiva. La llave no podrá usarse para autenticar ninguna 
 GET /v1/keys/:id/usage
 ```
 
-Devuelve una serie diaria de solicitudes autenticadas con esa llave — pensada para alimentar directamente un gráfico (p. ej. Chart.js, Recharts) sin que el frontend tenga que rellenar días sin actividad.
+Devuelve una serie diaria de solicitudes autenticadas con esa llave, con exactamente un valor por cada día del rango — los días sin actividad se incluyen con `requestCount: 0` en lugar de omitirse, así que no hace falta rellenar huecos antes de graficar la serie.
 
 ### Parámetros de ruta
 
@@ -196,6 +196,11 @@ Devuelve una serie diaria de solicitudes autenticadas con esa llave — pensada 
 | Parámetro | Tipo | Requerido | Por defecto | Descripción |
 |---|---|---|---|---|
 | `days` | integer | No | `30` | Cuántos días hacia atrás incluir (1–365), contando el día de hoy. |
+
+```http
+GET /v1/keys/00000000-0000-0000-0000-000000000501/usage?days=7
+Authorization: Bearer <your-api-key>
+```
 
 ### Respuesta
 
@@ -236,4 +241,4 @@ Cuando una llave se usa en una solicitud de comprobante, el middleware `resolveI
 | `production` | `true` | `401` — una llave de producción no puede dirigirse a un tenant sandbox |
 | `production` | `false` | OK |
 
-Esta es la única salvaguarda que evita solicitudes accidentales entre ambientes; trata el ambiente como parte de la identidad de la llave, similar a la convención `sk_test_…` vs `sk_live_…` de Stripe.
+Esta es la única salvaguarda que evita solicitudes accidentales entre ambientes; trata el ambiente como parte de la identidad de la llave, no como un detalle aparte de ella.

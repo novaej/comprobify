@@ -6,7 +6,7 @@ Recupera un comprobante cuyo despacho asíncrono al SRI (envío o verificación 
 POST /v1/documents/:accessKey/send/retry
 ```
 
-[Enviar al SRI](send-to-sri.md) y [Verificar Autorización](check-authorization.md) encolan el trabajo real y un job de reconciliación periódico (`POST /v1/admin/jobs/queue-reconciliation`, cada 5 minutos) vuelve a publicarlo automáticamente mientras siga sin confirmarse — hasta un máximo de 5 intentos (`PENDING_EFFECTS_MAX_ATTEMPTS`). Si los 5 se agotan (por ejemplo, tras una interrupción prolongada del servicio del SRI), el intento subyacente queda marcado como fallido de forma permanente y deja de reintentarse solo — este endpoint es la forma de recuperarlo: reinicia el contador de intentos a cero y lo vuelve a encolar de inmediato, sin esperar al siguiente ciclo de reconciliación.
+[Enviar al SRI](send-to-sri.md) y [Verificar Autorización](check-authorization.md) encolan el trabajo real, y el sistema lo vuelve a intentar automáticamente cada pocos minutos mientras siga sin confirmarse — hasta un máximo de 5 intentos. Si los 5 se agotan (por ejemplo, tras una interrupción prolongada del servicio del SRI), el intento queda marcado como fallido de forma permanente y deja de reintentarse solo — este endpoint es la forma de recuperarlo: reinicia el contador de intentos a cero y lo vuelve a encolar de inmediato, sin esperar al siguiente reintento automático.
 
 Funciona tanto si el comprobante está estancado en `PENDING_SEND` (el envío falló) como si está `RECEIVED` esperando autorización (la verificación de autorización falló) — detecta automáticamente cuál de los dos intentos está fallido.
 

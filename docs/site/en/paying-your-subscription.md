@@ -18,7 +18,7 @@ Billing is **monthly** or **yearly**. Yearly costs the equivalent of 10 months (
 
 You pay by card in the web app and **your plan is active within seconds**. There's nothing to upload and no review to wait on.
 
-Behind the scenes the charge is processed by Payphone. After completing the payment form you're redirected back to Comprobify, which confirms the charge automatically. If you close the browser at that moment the charge reverses itself and the money returns to your card — just try again whenever you like.
+Behind the scenes the charge is processed by Payphone. When you finish the payment form, your browser returns to Comprobify automatically, and that return is when Comprobify confirms the charge and activates your plan. If you close the tab or browser after paying but before that return completes, Comprobify never gets to confirm the charge and Payphone reverses it on its own after a few minutes: the money goes back to your card (how long it takes to show on your statement depends on your bank) and your plan is not activated — just try again whenever you like. Opening the payment form without completing it charges nothing.
 
 If your card is declined nothing is charged and you can retry immediately.
 

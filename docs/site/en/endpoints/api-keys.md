@@ -183,7 +183,7 @@ Marks the key as inactive. The key cannot be used to authenticate any future req
 GET /v1/keys/:id/usage
 ```
 
-Returns a daily series of authenticated requests for that key — meant to be fed directly into a chart (e.g. Chart.js, Recharts) without the frontend having to fill in gaps for idle days.
+Returns a daily series of authenticated requests for that key, with exactly one entry per day in the range — idle days are included with `requestCount: 0` rather than omitted, so there are no gaps to backfill before charting the series.
 
 ### Path parameters
 
@@ -196,6 +196,11 @@ Returns a daily series of authenticated requests for that key — meant to be fe
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `days` | integer | No | `30` | How many days back to include (1–365), counting today. |
+
+```http
+GET /v1/keys/00000000-0000-0000-0000-000000000501/usage?days=7
+Authorization: Bearer <your-api-key>
+```
 
 ### Response
 
@@ -236,4 +241,4 @@ When a key is used on a document request, the `resolveIssuer` middleware validat
 | `production` | `true` | `401` — production key cannot address a sandbox tenant |
 | `production` | `false` | OK |
 
-This is the only safeguard preventing accidental cross-environment requests; treat the environment as part of the key's identity, like Stripe's `sk_test_…` vs `sk_live_…` convention.
+This is the only safeguard preventing accidental cross-environment requests; treat the environment as part of the key's identity, not as a separate detail from it.
