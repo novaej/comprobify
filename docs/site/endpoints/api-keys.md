@@ -28,8 +28,8 @@ Cada llave lleva un arreglo `scopes`. Una solicitud solo se permite si los scope
 | `keys:manage` | Toda esta ruta `/v1/keys`. |
 | `billing:manage` | `GET /v1/subscriptions/me`, `GET /v1/payments/:id/proofs` y `GET /v1/payments/:id/proofs/:proofId` — los únicos tres endpoints de `/v1/subscriptions`/`/v1/payments` que una llave puede llamar directamente. Cualquier otro endpoint de esas dos rutas (iniciar una suscripción, cambiar de plan/usuarios adicionales, cancelar, enviar o eliminar comprobante, pagos con tarjeta) solo puede llamarlo la propia aplicación web de Comprobify — ver [Tu suscripción y cómo pagarla](../paying-your-subscription.md). |
 | `webhooks:manage` | `/v1/webhooks` completo. |
-| `tenant:manage` | `PATCH /v1/tenants/language` y `POST /v1/tenants/agreements`. |
-| `tenant:promote` | Solo `POST /v1/tenants/promote` — separado de `tenant:manage` porque emite/revoca todas las llaves del tenant y cambia de sandbox a producción de forma irreversible. |
+| `tenant:manage` | `PATCH /v1/tenants/language`. (También rige la aceptación de los acuerdos legales, que solo se hace desde la aplicación web.) |
+| `tenant:promote` | La promoción a producción — separado de `tenant:manage` porque emite/revoca todas las llaves del tenant y cambia de sandbox a producción de forma irreversible. Esa acción solo se hace desde la aplicación web, así que una llave propia con este scope no puede ejecutarla por sí sola. |
 
 La primera llave de un tenant (creada automáticamente en el registro) siempre obtiene las **nueve** — acceso total, idéntico a cómo se comportaba cualquier llave antes de que existieran los scopes. Crear una llave *adicional* vía `POST /v1/keys` es distinto: omitir `scopes` ahí **no** da acceso total por defecto — clona los scopes que ya tiene la llave que hace esa llamada (ver [Crear una nueva llave](#crear-una-nueva-llave) más abajo para la regla completa). Sigues pudiendo crear una llave sin enviar `scopes` en absoluto; solo que obtienes una copia de los scopes de tu propia llave en lugar de acceso total garantizado. Reducir el acceso aún más es opcional: envía un arreglo `scopes` explícito y más reducido. Las lecturas básicas de identidad (`GET /v1/tenants/me`, `/agreements`, `/events`) y los endpoints de notificaciones/catálogos están exentos de scope — cualquier llave activa puede llamarlos sin importar su arreglo `scopes`.
 
@@ -183,7 +183,7 @@ Marca la llave como inactiva. La llave no podrá usarse para autenticar ninguna 
 GET /v1/keys/:id/usage
 ```
 
-Devuelve una serie diaria de solicitudes autenticadas con esa llave — pensada para alimentar directamente un gráfico (p. ej. Chart.js, Recharts) sin que el frontend tenga que rellenar días sin actividad.
+Devuelve una serie diaria de solicitudes autenticadas con esa llave, con exactamente un valor por cada día del rango — los días sin actividad se incluyen con `requestCount: 0` en lugar de omitirse, así que no hace falta rellenar huecos antes de graficar la serie.
 
 ### Parámetros de ruta
 
@@ -196,6 +196,11 @@ Devuelve una serie diaria de solicitudes autenticadas con esa llave — pensada 
 | Parámetro | Tipo | Requerido | Por defecto | Descripción |
 |---|---|---|---|---|
 | `days` | integer | No | `30` | Cuántos días hacia atrás incluir (1–365), contando el día de hoy. |
+
+```http
+GET /v1/keys/00000000-0000-0000-0000-000000000501/usage?days=7
+Authorization: Bearer <your-api-key>
+```
 
 ### Respuesta
 
@@ -236,4 +241,4 @@ Cuando una llave se usa en una solicitud de comprobante, el middleware `resolveI
 | `production` | `true` | `401` — una llave de producción no puede dirigirse a un tenant sandbox |
 | `production` | `false` | OK |
 
-Esta es la única salvaguarda que evita solicitudes accidentales entre ambientes; trata el ambiente como parte de la identidad de la llave, similar a la convención `sk_test_…` vs `sk_live_…` de Stripe.
+Esta es la única salvaguarda que evita solicitudes accidentales entre ambientes; trata el ambiente como parte de la identidad de la llave, no como un detalle aparte de ella.

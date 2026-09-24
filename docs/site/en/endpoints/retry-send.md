@@ -6,7 +6,7 @@ Recovers a document whose asynchronous SRI dispatch (send or authorization check
 POST /v1/documents/:accessKey/send/retry
 ```
 
-[Send to SRI](send-to-sri.md) and [Check Authorization](check-authorization.md) queue the real work, and a periodic reconciliation job (`POST /v1/admin/jobs/queue-reconciliation`, every 5 minutes) automatically re-publishes it while it stays unconfirmed — up to 5 attempts total (`PENDING_EFFECTS_MAX_ATTEMPTS`). If all 5 are exhausted (e.g. after a prolonged SRI outage), the underlying attempt is permanently marked failed and stops retrying on its own — this endpoint is how you recover it: it resets the attempt counter to zero and re-queues it immediately, without waiting for the next reconciliation cycle.
+[Send to SRI](send-to-sri.md) and [Check Authorization](check-authorization.md) queue the real work, and the system automatically retries it every few minutes while it stays unconfirmed — up to 5 attempts total. If all 5 are exhausted (e.g. after a prolonged SRI outage), the attempt is permanently marked failed and stops retrying on its own — this endpoint is how you recover it: it resets the attempt counter to zero and re-queues it immediately, without waiting for the next automatic retry.
 
 Works whether the document is stuck in `PENDING_SEND` (the send failed) or `RECEIVED` awaiting authorization (the authorization check failed) — it automatically detects which of the two attempts is the failed one.
 

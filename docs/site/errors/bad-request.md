@@ -46,7 +46,7 @@ El valor del encabezado `X-Issuer-Id` no es un UUID válido (p. ej. `abc`, `123`
 
 El token de verificación de correo en el parámetro de consulta de la URL (`?token=…`) es inválido o ha expirado. Los tokens expiran después de 24 horas (configurable vía `VERIFICATION_TOKEN_TTL_HOURS`).
 
-**Qué hacer:** Solicita un token nuevo desde la aplicación web de Comprobify (`POST /v1/resend-verification` es solo invocable por ella).
+**Qué hacer:** Solicita un token nuevo desde la aplicación web de Comprobify.
 
 ### `DOCUMENT_TYPE_NOT_ENABLED`
 
@@ -88,7 +88,7 @@ No puedes revocar la API key que autenticó la solicitud actual.
 
 ### `INVALID_FILE_UPLOAD`
 
-Un archivo subido (p. ej. un certificado P12 o el logo del emisor) falta, es del tipo MIME incorrecto, o excede el límite de tamaño del campo. El campo `detail` nombra la restricción específica que falló — por ejemplo, un logo de más de 500 KB en `POST /v1/register` o `PATCH /v1/issuers/:id/logo`.
+Un archivo subido (p. ej. un certificado P12 o el logo del emisor) falta, es del tipo MIME incorrecto, o excede el límite de tamaño del campo. El campo `detail` nombra la restricción específica que falló — por ejemplo, un logo de más de 500 KB en `PATCH /v1/issuers/:id/logo`.
 
 **Qué hacer:** Verifica el archivo contra los límites documentados en el endpoint (p. ej. [Upload Issuer Logo](../endpoints/upload-issuer-logo.md)) y vuelve a subirlo.
 

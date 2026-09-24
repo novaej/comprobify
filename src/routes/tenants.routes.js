@@ -4,6 +4,7 @@ const controller = require('../controllers/tenant.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticate = require('../middleware/authenticate');
+const requireInternalService = require('../middleware/require-internal-service');
 const requireNotSuspended = require('../middleware/require-not-suspended');
 const requireNotPastDue = require('../middleware/require-past-due');
 const requireMatchingEnvironment = require('../middleware/require-matching-environment');
@@ -66,11 +67,15 @@ const acceptAgreementsValidator = [
 // resolution any key needs, regardless of scope.
 router.get('/me', readLimiter, requireMatchingEnvironment, asyncHandler(controller.getMe));
 router.patch('/language', requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_MANAGE), updateLanguageValidator, validateRequest, asyncHandler(controller.updateLanguage));
-router.post('/promote', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_PROMOTE), promoteValidator, validateRequest, asyncHandler(controller.promote));
-router.get('/agreements', readLimiter, asyncHandler(controller.getAgreementStatus));
-router.post('/agreements', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_MANAGE), acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
-router.get('/agreements/history', readLimiter, asyncHandler(controller.listTenantAgreements));
-router.get('/agreements/:type', readLimiter, asyncHandler(controller.getTenantAgreement));
+// requireInternalService: promotion mirrors every key and returns their plaintext,
+// which only comprobify-web's BFF is meant to receive and show (ADR-035).
+router.post('/promote', writeLimiter, requireInternalService, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_PROMOTE), promoteValidator, validateRequest, asyncHandler(controller.promote));
+// Agreements are frontend-only too: acceptance must be recorded against the human's
+// own IP/user-agent, which only comprobify-web's BFF forwards (trusted-forwarded-ip.js).
+router.get('/agreements', readLimiter, requireInternalService, asyncHandler(controller.getAgreementStatus));
+router.post('/agreements', writeLimiter, requireInternalService, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.TENANT_MANAGE), acceptAgreementsValidator, validateRequest, asyncHandler(controller.acceptAgreements));
+router.get('/agreements/history', readLimiter, requireInternalService, asyncHandler(controller.listTenantAgreements));
+router.get('/agreements/:type', readLimiter, requireInternalService, asyncHandler(controller.getTenantAgreement));
 router.get('/events', readLimiter, asyncHandler(controller.getEvents));
 // Operates on documents, not account settings — scoped like documents.routes.js's writes.
 router.post('/retry-failed-documents', writeLimiter, requireNotSuspended, requireNotPastDue, requireScope(ApiKeyScopes.DOCUMENTS_WRITE), asyncHandler(controller.retryFailedDocuments));

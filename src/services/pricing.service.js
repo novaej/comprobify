@@ -2,7 +2,6 @@ const tierPriceModel = require('../models/tier-price.model');
 const seatPriceModel = require('../models/seat-price.model');
 const tenantModel = require('../models/tenant.model');
 const notificationService = require('./notification.service');
-const TenantStatus = require('../constants/tenant-status');
 const { TIERS } = require('../constants/subscription-tiers');
 const config = require('../config');
 const AppError = require('../errors/app-error');
@@ -91,8 +90,8 @@ async function publishPrice(id, { noticeDays } = {}) {
     throw new AppError('Only a DRAFT price can be published', 400, ErrorCodes.PRICE_NOT_DRAFT);
   }
 
-  const activeTenants = await tenantModel.findAllByStatus(TenantStatus.ACTIVE);
-  await notifyPendingPriceChangesForTenants(activeTenants);
+  const recipients = await tenantModel.findAllNotifiableForPriceChanges();
+  await notifyPendingPriceChangesForTenants(recipients);
 
   return published;
 }
@@ -158,13 +157,13 @@ async function notifyPendingPriceChangesForTenants(tenants) {
 // can miss: an ACTIVE tenant skipped during publishPrice()'s bulk loop due to
 // a transient failure never gets revisited by anything else, since nothing
 // else re-checks a tenant who doesn't change status. This re-scans every
-// ACTIVE tenant on the same cadence as the rest of that job — cheap when
+// notifiable tenant (ACTIVE, or PENDING_VERIFICATION with a live subscription) on the same cadence as the rest of that job — cheap when
 // nothing is pending (the common case), since notifyPendingPriceChangesForTenant
 // is a no-op query per tenant when there's nothing to catch up on.
 async function reconcilePendingPriceChangeNotifications() {
-  const activeTenants = await tenantModel.findAllByStatus(TenantStatus.ACTIVE);
-  const notifiedCount = await notifyPendingPriceChangesForTenants(activeTenants);
-  return { tenantsChecked: activeTenants.length, notified: notifiedCount };
+  const recipients = await tenantModel.findAllNotifiableForPriceChanges();
+  const notifiedCount = await notifyPendingPriceChangesForTenants(recipients);
+  return { tenantsChecked: recipients.length, notified: notifiedCount };
 }
 
 async function listPrices({ tier } = {}) {
@@ -236,8 +235,8 @@ async function publishSeatPrice(id, { noticeDays } = {}) {
     throw new AppError('Only a DRAFT price can be published', 400, ErrorCodes.PRICE_NOT_DRAFT);
   }
 
-  const activeTenants = await tenantModel.findAllByStatus(TenantStatus.ACTIVE);
-  await notifyPendingPriceChangesForTenants(activeTenants);
+  const recipients = await tenantModel.findAllNotifiableForPriceChanges();
+  await notifyPendingPriceChangesForTenants(recipients);
 
   return published;
 }

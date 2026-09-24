@@ -84,9 +84,12 @@ async function sendInvoiceAuthorized(document) {
 // required field on POST /v1/register, and recover()/resendVerification()
 // only ever reuse that same tenant-stored value. There is no API-hosted
 // verification page to fall back to any more.
-async function sendVerificationEmail(email, token, redirectUrl, language = 'es') {
+// `reason: 'RECOVERY'` sends the account-recovered security notice instead of the welcome copy.
+async function sendVerificationEmail(email, token, redirectUrl, language = 'es', reason = null) {
   const verificationUrl = `${redirectUrl}?token=${token}`;
-  const rendered = verifyEmailTemplate.render(verificationUrl, config.verificationTokenTtlHours, language);
+  const rendered = reason
+    ? verifyEmailTemplate.render(verificationUrl, config.verificationTokenTtlHours, language, { reason, supportEmail: config.adminNotificationEmail })
+    : verifyEmailTemplate.render(verificationUrl, config.verificationTokenTtlHours, language);
   const { subject, text, html } = applyStagingBanner(rendered, language);
   const provider = emailFactory.getProvider();
 

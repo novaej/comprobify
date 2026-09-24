@@ -6,7 +6,7 @@ Queues an authorization check for a previously submitted document. This endpoint
 GET /v1/documents/:accessKey/authorize
 ```
 
-The document must be in `RECEIVED` status. A successful call queues the check and returns immediately — it does **not** wait for SRI's response. A standalone worker process picks up the queued job and calls SRI; the document eventually moves to `AUTHORIZED` (an email with the RIDE PDF and signed XML is automatically sent to the buyer's email address, and a `DOCUMENT_AUTHORIZED` notification is created — which fires a webhook to any registered endpoint subscribed to that event type, see [Webhooks](webhooks.md)) or `NOT_AUTHORIZED` (the document must be rebuilt). You don't have to call this endpoint at all to eventually see the transition — a periodic reconciliation job also queues an authorization check for any `RECEIVED` document past a short delay, so the eventual outcome and its notification/webhook still arrive even if no client ever polls.
+The document must be in `RECEIVED` status. A successful call queues the check and returns immediately — it does **not** wait for SRI's response. A background process picks up the queued job and calls SRI; the document eventually moves to `AUTHORIZED` (an email with the RIDE PDF and signed XML is automatically sent to the buyer's email address, and a `DOCUMENT_AUTHORIZED` notification is created — which fires a webhook to any registered endpoint subscribed to that event type, see [Webhooks](webhooks.md)) or `NOT_AUTHORIZED` (the document must be rebuilt). You don't have to call this endpoint at all to eventually see the transition — the system also checks authorization automatically for any `RECEIVED` document after a short delay, so the eventual outcome and its notification/webhook still arrive even if no client ever polls.
 
 ## Authentication
 
@@ -17,6 +17,14 @@ The document must be in `RECEIVED` status. A successful call queues the check an
 | Parameter | Description |
 |---|---|
 | `accessKey` | The 49-digit access key of the document |
+
+### Example
+
+```http
+GET /v1/documents/1503202601179234567800110010010000000011234567810/authorize
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
 
 ## Response
 
@@ -46,8 +54,8 @@ The document must be in `RECEIVED` status. A successful call queues the check an
 | `BAD_REQUEST` | 400 | Document is not in `RECEIVED` status |
 | `UNAUTHORIZED` | 401 | Missing or invalid API key, or environment mismatch (sandbox key targeting a production tenant or vice versa) |
 | `FORBIDDEN` | 403 | `X-Issuer-Id` issuer belongs to a different tenant |
-| `ACCOUNT_SUSPENDED` | 403 | Tenant account is suspended — unlike most other document read endpoints (list, get, RIDE, XML, events, credit-notes), this one stays blocked while suspended because it still results in an SRI call and the authorization email being sent (just asynchronously now, via the worker) — this is "using" the service, not passive viewing; see the [error catalogue](../errors/index.md) |
+| `ACCOUNT_SUSPENDED` | 403 | Tenant account is suspended — unlike most other document read endpoints (list, get, RIDE, XML, events, credit-notes), this one stays blocked while suspended because it still results in an SRI call and the authorization email being sent (just asynchronously now, in the background) — this is "using" the service, not passive viewing; see the [error catalogue](../errors/index.md) |
 | `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
 | `NOT_FOUND` | 404 | Document not found |
 
-`SRI_SUBMISSION_FAILED` can no longer occur on this endpoint — network/SOAP failures now happen inside the asynchronous worker, after this endpoint has already responded. A failed attempt is recorded as an `ERROR` document event and the document remains eligible for another attempt via the reconciliation job.
+`SRI_SUBMISSION_FAILED` can no longer occur on this endpoint — network/SOAP failures now happen in the background, after this endpoint has already responded. A failed attempt is recorded as an `ERROR` document event and the system automatically retries it.

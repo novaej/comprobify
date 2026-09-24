@@ -75,7 +75,7 @@ Cada entrada en `errors` tiene:
 
 ## Errores del SRI
 
-`POST /:accessKey/send` y `GET /:accessKey/authorize` son asíncronos (ver [Enviar al SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` ya no puede devolverse como respuesta HTTP desde ninguno de los dos endpoints. Un fallo de red ahora ocurre dentro del worker en segundo plano y se registra como un evento de comprobante `ERROR` en su lugar; ver [Envío al SRI Fallido](/errors/sri-error) para más detalles. La estructura de abajo se mantiene como referencia:
+`POST /:accessKey/send` y `GET /:accessKey/authorize` son asíncronos (ver [Enviar al SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` ya no puede devolverse como respuesta HTTP desde ninguno de los dos endpoints. Un fallo de red ahora ocurre en segundo plano y se registra como un evento de comprobante `ERROR` en su lugar; ver [Envío al SRI Fallido](/errors/sri-error) para más detalles. La estructura de abajo se mantiene como referencia:
 
 Cuando `code` es `SRI_SUBMISSION_FAILED`, un arreglo adicional `sriMessages` contiene los mensajes en bruto devueltos por el servicio SOAP del SRI:
 
@@ -121,7 +121,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | `SELF_REVOCATION_FORBIDDEN` | No se puede revocar la API key usada para autenticar esta solicitud |
 | `INVALID_FILE_UPLOAD` | El archivo subido falta, es del tipo incorrecto, o excede el límite de tamaño del campo (p. ej. un logo de más de 500 KB) |
 | `PROOF_FILE_LIMIT_REACHED` | El pago ya tiene el número máximo de archivos de comprobante activos (10) — elimina uno antes de subir más |
-| `VERSION_MISMATCH` | `termsVersion` en `POST /v1/tenants/agreements` no coincide con la versión actualmente publicada del documento TERMS — vuelve a consultar `GET /v1/agreements` y presenta la versión actual antes de pedirle al usuario que acepte de nuevo |
+| `VERSION_MISMATCH` | La versión de los Términos que se intentó aceptar no coincide con la publicada actualmente (solo aplicación web — se vuelve a mostrar el documento vigente) |
 | `LAST_ISSUER_CANNOT_BE_REMOVED` | El tenant tiene solo un emisor activo restante — no se puede eliminar |
 | `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED` | El emisor tiene solo un tipo de comprobante activo restante — no se puede eliminar |
 | `ISSUER_HAS_DOCUMENTS` | El emisor tiene comprobantes emitidos (en cualquiera de los dos ambientes) y no se puede eliminar |
@@ -155,8 +155,9 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 |---|---|
 | `ISSUER_FORBIDDEN` | `X-Issuer-Id` nombra un emisor que pertenece a otro tenant |
 | `ACCOUNT_SUSPENDED` | La cuenta del tenant está suspendida — contacta a soporte |
+| `INTERNAL_SERVICE_ONLY` | La acción está reservada a la aplicación web de Comprobify — hazla desde ahí |
 | `EMAIL_VERIFICATION_REQUIRED` | La operación requiere que la dirección de correo esté verificada |
-| `AGREEMENT_ACCEPTANCE_REQUIRED` | Promoción bloqueada — uno o más acuerdos siguen en estado `PENDING` (revisa `GET /v1/tenants/agreements`, visualízalos en `GET /v1/tenants/agreements/:type`, acéptalos vía `POST /v1/tenants/agreements`) |
+| `AGREEMENT_ACCEPTANCE_REQUIRED` | Promoción bloqueada — uno o más acuerdos legales siguen sin aceptar; acéptalos en la aplicación web |
 | `PRODUCTION_KEY_REQUIRES_PROMOTION` | No se puede crear una API key de producción antes de promover a producción |
 | `INSUFFICIENT_SCOPE` | La API key no tiene el scope que exige el endpoint — ver [API keys → Scopes](/endpoints/api-keys#scopes) |
 | `SCOPE_ESCALATION_FORBIDDEN` | `POST /v1/keys` — los scopes solicitados incluyen uno que la llave solicitante no tiene |
@@ -193,7 +194,7 @@ La mayoría de los errores llevan un `code` específico que es más preciso que 
 | Código | Cuándo ocurre |
 |---|---|
 | `RESEND_COOLDOWN` | Se solicitó reenviar la verificación de nuevo antes de que transcurriera el período de espera de 60 segundos |
-| `TOO_MANY_REQUESTS` | Se excedió el límite de tasa de la API key |
+| `TOO_MANY_REQUESTS` | Se excedió el límite de solicitudes de la API key |
 
 ### 500 / 502
 

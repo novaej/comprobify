@@ -4,24 +4,9 @@ Document endpoints require `Authorization: Bearer <api-key>` **and** `X-Issuer-I
 
 [![Run in Postman](https://run.pstmn.io/button.svg)](https://app.getpostman.com/run-collection/15935880-2sBXiqE8vL)
 
-## Account creation, recovery & activation (Comprobify web app only)
+## Account, legal agreements & going to production (web app only)
 
-Sign up, account recovery (re-establishing the web app's link to your account), and email confirmation all happen through the Comprobify web app, not directly against this API — see [Register](register.md) for why. The one exception is the read-only check below.
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/v1/verify-email/check` | Check whether a verification token is valid, without consuming it — safe for email link-scanners to prefetch. The only endpoint in this group callable directly. |
-| `POST` | `/v1/register` | Frontend-only — see [Register](register.md) |
-| `POST` | `/v1/recover` | Frontend-only — see [Recover Account](recover.md) |
-| `POST` | `/v1/resend-verification` | Frontend-only — see [Resend Verification](resend-verification.md) |
-| `POST` | `/v1/verify-email` | Frontend-only — see [Verify Email](verify-email.md) |
-
-## Agreements (public)
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/v1/agreements` | List current published version of each document type (TERMS, PRIVACY, DPA) — read `version` from here and pass it as `termsVersion` when accepting via `POST /v1/tenants/agreements` |
-| `GET` | `/v1/agreements/:type` | Fetch the current document rendered as HTML — embed in a modal or page in your registration UI |
+Creating the account, verifying the email, recovering access, accepting the legal agreements, and going to production all happen in the Comprobify web app, not through the API — see [Your account & the web app](../account-lifecycle.md).
 
 > **How do you pay your subscription?** From the web app — by card or bank transfer, including checking current plans and pricing. There are no public endpoints to integrate for any of that; see [Your subscription & billing](../paying-your-subscription.md).
 
@@ -31,11 +16,6 @@ Sign up, account recovery (re-establishing the web app's link to your account), 
 |---|---|---|
 | `GET` | `/v1/tenants/me` | Resolve the tenant (id, email, tier, status, quota, environment, agreement acceptance) for the authenticated API key |
 | `PATCH` | `/v1/tenants/language` | Update the preferred language for outgoing emails |
-| `POST` | `/v1/tenants/promote` | Promote the tenant to production — revokes all sandbox keys and creates matching production keys |
-| `GET` | `/v1/tenants/agreements` | Check whether any agreements need acceptance — returns which types are outdated. Lazily generates PENDING instances for any new template versions; third-party integrators should poll this periodically |
-| `POST` | `/v1/tenants/agreements` | Accept all PENDING agreements — required before promoting to production |
-| `GET` | `/v1/tenants/agreements/history` | List all personalized agreement instances for the tenant, with status and acceptance timestamps |
-| `GET` | `/v1/tenants/agreements/:type` | Render the tenant's personalized document as HTML — includes their business name/RUC and the dates as of when the account was created |
 | `GET` | `/v1/tenants/events` | Full tenant-level audit trail (verification, subscription, payment, tier/billing-interval change history), chronological |
 | `POST` | `/v1/tenants/retry-failed-documents` | Recovers every stuck document for the tenant (failed send/authorize after exhausting automatic retries) — covers all issuers, no `X-Issuer-Id` needed ([Retry All Failed Documents](retry-failed-documents.md)) |
 

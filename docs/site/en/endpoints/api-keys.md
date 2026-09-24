@@ -28,8 +28,8 @@ Every key carries a `scopes` array. A request is only allowed through if the key
 | `keys:manage` | This entire `/v1/keys` router. |
 | `billing:manage` | `GET /v1/subscriptions/me`, `GET /v1/payments/:id/proofs`, and `GET /v1/payments/:id/proofs/:proofId` — the only three `/v1/subscriptions`/`/v1/payments` endpoints a key can call directly. Every other endpoint in those two routers (starting a subscription, changing tier/seats, cancelling, submitting or deleting proof, card payments) can only be called by the Comprobify web app itself — see [Your subscription & billing](../paying-your-subscription.md). |
 | `webhooks:manage` | `/v1/webhooks` in full. |
-| `tenant:manage` | `PATCH /v1/tenants/language` and `POST /v1/tenants/agreements`. |
-| `tenant:promote` | `POST /v1/tenants/promote` only — split out from `tenant:manage` since it mints/revokes every one of the tenant's keys and flips sandbox→production irreversibly. |
+| `tenant:manage` | `PATCH /v1/tenants/language`. (It also governs accepting the legal agreements, which is only done from the web app.) |
+| `tenant:promote` | Going to production — split out from `tenant:manage` since it mints/revokes every one of the tenant's keys and flips sandbox→production irreversibly. That action is only done from the web app, so a key of your own with this scope cannot perform it on its own. |
 
 A tenant's very first key (minted automatically at registration) always gets **all nine** — full access, identical to how every key behaved before scopes existed. Minting an *additional* key via `POST /v1/keys` is different: omitting `scopes` there does **not** default to full access — it clones whatever scopes the key making that call already has (see [Mint a new key](#mint-a-new-key) below for the full rule). You can still always create a key without passing `scopes` at all; you just get a copy of your own key's scopes rather than a blanket full-access grant. Scoping down further is opt-in: pass an explicit, narrower `scopes` array. Basic identity reads (`GET /v1/tenants/me`, `/agreements`, `/events`) and notification/catalog endpoints are scope-exempt — any active key can call them regardless of its `scopes` array.
 
@@ -183,7 +183,7 @@ Marks the key as inactive. The key cannot be used to authenticate any future req
 GET /v1/keys/:id/usage
 ```
 
-Returns a daily series of authenticated requests for that key — meant to be fed directly into a chart (e.g. Chart.js, Recharts) without the frontend having to fill in gaps for idle days.
+Returns a daily series of authenticated requests for that key, with exactly one entry per day in the range — idle days are included with `requestCount: 0` rather than omitted, so there are no gaps to backfill before charting the series.
 
 ### Path parameters
 
@@ -196,6 +196,11 @@ Returns a daily series of authenticated requests for that key — meant to be fe
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `days` | integer | No | `30` | How many days back to include (1–365), counting today. |
+
+```http
+GET /v1/keys/00000000-0000-0000-0000-000000000501/usage?days=7
+Authorization: Bearer <your-api-key>
+```
 
 ### Response
 
@@ -236,4 +241,4 @@ When a key is used on a document request, the `resolveIssuer` middleware validat
 | `production` | `true` | `401` — production key cannot address a sandbox tenant |
 | `production` | `false` | OK |
 
-This is the only safeguard preventing accidental cross-environment requests; treat the environment as part of the key's identity, like Stripe's `sk_test_…` vs `sk_live_…` convention.
+This is the only safeguard preventing accidental cross-environment requests; treat the environment as part of the key's identity, not as a separate detail from it.

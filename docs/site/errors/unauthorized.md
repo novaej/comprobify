@@ -10,7 +10,7 @@ La solicitud no incluyó una API key válida, la llave fue revocada, o hay un de
 
 El ambiente de la API key (`sandbox` o `production`) no coincide con el ambiente actual del tenant. Por ejemplo: usar una llave de sandbox después de que el tenant se promovió a producción, o usar una llave de producción contra un tenant que sigue en modo sandbox.
 
-**Qué hacer:** Usa una llave cuyo ambiente coincida con el del tenant. Lista tus llaves activas con `GET /v1/keys`. Las llaves de sandbox y de producción se emiten por separado — las llaves de sandbox se crean en el registro; las llaves de producción se emiten automáticamente en la promoción (`POST /v1/tenants/promote`) o se generan manualmente después.
+**Qué hacer:** Usa una llave cuyo ambiente coincida con el del tenant. Lista tus llaves activas con `GET /v1/keys`. Las llaves de sandbox y de producción se emiten por separado — las llaves de sandbox se crean en el registro; las llaves de producción se emiten automáticamente en la promoción (que se hace desde la aplicación web) o se generan manualmente después.
 
 ### `UNAUTHORIZED` (respaldo)
 

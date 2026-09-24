@@ -8,7 +8,7 @@ The request was throttled. Check the `code` field to distinguish between an API 
 
 ### `RESEND_COOLDOWN`
 
-`POST /v1/resend-verification` was called again before the 60-second server-side cooldown elapsed. This per-account cooldown prevents email flooding regardless of IP.
+A verification-email resend (done from the web app) was requested again before the 60-second server-side cooldown elapsed. This per-account cooldown prevents email flooding regardless of IP.
 
 **What to do:** Wait 60 seconds from the previous resend request, then try again.
 
@@ -52,17 +52,6 @@ async function requestWithRetry(fn, maxRetries = 3) {
 ```
 
 ## Example responses
-
-```json
-{
-  "type":     "https://docs.comprobify.com/errors/too-many-requests",
-  "title":    "Too Many Requests",
-  "status":   429,
-  "code":     "RESEND_COOLDOWN",
-  "detail":   "Please wait before requesting another verification email.",
-  "instance": "/v1/resend-verification"
-}
-```
 
 ```json
 {

@@ -16,6 +16,14 @@ GET /v1/documents/:accessKey
 |---|---|
 | `accessKey` | The 49-digit numeric access key returned when the document was created |
 
+### Example
+
+```http
+GET /v1/documents/1503202601179234567800110010010000000011234567810
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
 ## Response
 
 **200 OK**

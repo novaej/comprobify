@@ -24,6 +24,13 @@ Returns one row per active document type for the issuer, with the current counte
 |---|---|
 | `id` | Issuer UUID |
 
+### Example
+
+```http
+GET /v1/issuers/00000000-0000-0000-0000-000000000001/sequentials
+Authorization: Bearer <your-api-key>
+```
+
 ### Response
 
 ```json

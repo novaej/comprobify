@@ -16,6 +16,14 @@ GET /v1/documents/:accessKey/ride
 |---|---|
 | `accessKey` | The 49-digit access key of an `AUTHORIZED` document |
 
+### Example
+
+```http
+GET /v1/documents/1503202601179234567800110010010000000011234567810/ride
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
 ## Response
 
 **200 OK** — PDF file download.

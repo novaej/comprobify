@@ -6,10 +6,12 @@
  */
 const crypto = require('crypto');
 const webhookEndpointModel = require('../models/webhook-endpoint.model');
+const tenantModel = require('../models/tenant.model');
 const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const { TIERS, effectiveWebhookEndpointLimit } = require('../constants/subscription-tiers');
 const ErrorCodes = require('../constants/error-codes');
+const TenantStatus = require('../constants/tenant-status');
 
 /** Generate a 64-char hex secret (32 random bytes). */
 function generateSecret() {
@@ -33,6 +35,25 @@ function formatEndpoint(row) {
 }
 
 /**
+ * A webhook endpoint receives the tenant's event fan-out (buyer names, totals),
+ * so registering or retargeting one requires a verified email — same gate as
+ * branches and keys. After account recovery a tenant is demoted to
+ * PENDING_VERIFICATION precisely because possession of the P12 doesn't prove
+ * control of the inbox. Disabling an endpoint stays allowed.
+ */
+async function assertEmailVerified(tenantId) {
+  const tenant = await tenantModel.findById(tenantId);
+  if (!tenant) throw new NotFoundError('Tenant');
+  if (tenant.status !== TenantStatus.ACTIVE) {
+    throw new AppError(
+      'Email verification is required before registering or changing webhook endpoints. Check your inbox.',
+      403,
+      ErrorCodes.EMAIL_VERIFICATION_REQUIRED
+    );
+  }
+}
+
+/**
  * Register a new webhook endpoint for a tenant.
  *
  * Returns `{ endpoint, secret }` — the secret is shown exactly once.
@@ -43,6 +64,8 @@ function formatEndpoint(row) {
  * @param {string[]} eventTypes        - empty array = all event types
  */
 async function create(tenantId, subscriptionTier, url, eventTypes = []) {
+  await assertEmailVerified(tenantId);
+
   const tier = TIERS[subscriptionTier];
   if (!tier) throw new AppError('Unknown subscription tier', 400);
 
@@ -89,8 +112,16 @@ async function list(tenantId, subscriptionTier) {
 async function update(tenantId, endpointId, fields) {
   const existing = await webhookEndpointModel.findByIdAndTenantId(endpointId, tenantId);
   if (!existing) throw new NotFoundError('Webhook endpoint');
-  if (existing.is_reserved && Object.keys(fields).some((key) => key !== 'active')) {
+  // The controller always passes { url, eventTypes, active } with `undefined` for
+  // whatever the caller omitted, so only fields actually supplied count as changes.
+  const changed = Object.keys(fields).filter((key) => fields[key] !== undefined);
+  if (existing.is_reserved && changed.some((key) => key !== 'active')) {
     throw new NotFoundError('Webhook endpoint');
+  }
+
+  // Only retargeting (url/eventTypes) is gated; toggling `active` never is.
+  if (changed.includes('url') || changed.includes('eventTypes')) {
+    await assertEmailVerified(tenantId);
   }
 
   const updated = await webhookEndpointModel.update(endpointId, fields);

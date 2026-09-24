@@ -18,7 +18,7 @@ La facturación puede ser **mensual** o **anual**. El plan anual equivale a 10 m
 
 Pagas con tarjeta desde la aplicación web y **tu plan queda activo en segundos**. No hay comprobante que subir ni revisión que esperar.
 
-Detrás de escena el cobro se procesa con Payphone. Tras completar el formulario de pago serás redirigido de vuelta a Comprobify, que confirma el cobro automáticamente. Si cierras el navegador en ese momento, el cobro se revierte solo y el dinero vuelve a tu tarjeta — vuelve a intentarlo cuando quieras.
+Detrás de escena el cobro se procesa con Payphone. Al terminar el formulario de pago, tu navegador vuelve automáticamente a Comprobify, y es en ese regreso cuando Comprobify confirma el cobro y activa tu plan. Si cierras la pestaña o el navegador después de pagar pero antes de que termine ese regreso, Comprobify no llega a confirmar el cobro y Payphone lo revierte solo pasados unos minutos: el dinero vuelve a tu tarjeta (cuánto tarda en verse en tu estado de cuenta depende de tu banco) y tu plan no se activa — vuelve a intentarlo cuando quieras. Abrir el formulario de pago sin completarlo no cobra nada.
 
 Si tu tarjeta es rechazada no se cobra nada y puedes reintentar de inmediato.
 

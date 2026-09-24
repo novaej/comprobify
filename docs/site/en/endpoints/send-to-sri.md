@@ -6,9 +6,9 @@ Queues the signed XML document for submission to the SRI SOAP service. This endp
 POST /v1/documents/:accessKey/send
 ```
 
-The document must be in `SIGNED` status. A successful call immediately moves it to `PENDING_SEND` and returns — it does **not** wait for SRI. A standalone worker process picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` (SRI accepted it for processing) or `RETURNED` (SRI rejected it — rebuild required). Poll [Get Document](get-document.md) or [Get Events](get-events.md) to observe that transition, or rely on the notification/webhook system for the eventual `AUTHORIZED` outcome once you've also called [Check Authorization](check-authorization.md).
+The document must be in `SIGNED` status. A successful call immediately moves it to `PENDING_SEND` and returns — it does **not** wait for SRI. A background process picks up the queued job and calls SRI; the document eventually moves to `RECEIVED` (SRI accepted it for processing) or `RETURNED` (SRI rejected it — rebuild required). Poll [Get Document](get-document.md) or [Get Events](get-events.md) to observe that transition, or rely on the notification/webhook system for the eventual `AUTHORIZED` outcome once you've also called [Check Authorization](check-authorization.md).
 
-If RabbitMQ is briefly unreachable when you call this endpoint, the document still durably moves to `PENDING_SEND` — nothing is lost. A periodic reconciliation job re-queues anything whose dispatch was never confirmed.
+If there's a temporary problem starting the submission, the document still durably moves to `PENDING_SEND` — nothing is lost. The system automatically retries, up to 5 attempts; if those are exhausted, the document gets stuck and you can recover it with [Retry Send/Authorize](retry-send.md).
 
 ## Authentication
 
@@ -54,4 +54,4 @@ This response only confirms the document was queued — it does not reflect SRI'
 | `NOT_FOUND` | 404 | `X-Issuer-Id` issuer does not exist |
 | `NOT_FOUND` | 404 | Document not found |
 
-`SRI_SUBMISSION_FAILED` can no longer occur on this endpoint — network/SOAP failures now happen inside the asynchronous worker, after this endpoint has already responded. A failed attempt is recorded as an `ERROR` document event and the document remains eligible for another attempt via the reconciliation job.
+`SRI_SUBMISSION_FAILED` can no longer occur on this endpoint — network/SOAP failures now happen in the background, after this endpoint has already responded. A failed attempt is recorded as an `ERROR` document event, and the system automatically retries it up to 5 times — see [Retry Send/Authorize](retry-send.md) for what to do if all 5 are exhausted.

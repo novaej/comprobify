@@ -100,6 +100,7 @@ Guarda el `secret` de forma segura. Se usa para verificar el header `X-Comprobif
 | `400` | `VALIDATION_FAILED` | `url` no es una URL HTTPS válida, o un `eventType` no es reconocido |
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `402` | `WEBHOOK_ENDPOINT_LIMIT_REACHED` | Se alcanzó el límite del plan en endpoints activos |
+| `403` | `EMAIL_VERIFICATION_REQUIRED` | El correo de la cuenta no está verificado (p. ej. tras recuperar la cuenta) — registrar un endpoint o cambiar su URL/tipos de evento lo requiere; desactivarlo no |
 
 ---
 

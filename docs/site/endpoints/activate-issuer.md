@@ -41,4 +41,4 @@ La reactivación vuelve a ejecutar las mismas validaciones de sucursal/punto de 
 | `402` | `ISSUE_POINT_LIMIT_REACHED` | La reactivación excedería el límite de puntos de emisión por sucursal del plan |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | El id del emisor no existe, pertenece a otro tenant, o ya está activo |
-| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de solicitudes |

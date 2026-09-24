@@ -16,6 +16,14 @@ GET /v1/documents/:accessKey/events
 |---|---|
 | `accessKey` | La clave de acceso de 49 dígitos del comprobante |
 
+### Ejemplo
+
+```http
+GET /v1/documents/1503202601179234567800110010010000000011234567810/events
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
+
 ## Respuesta
 
 **200 OK**

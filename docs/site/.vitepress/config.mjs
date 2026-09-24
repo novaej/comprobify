@@ -21,6 +21,7 @@ function esSidebar() {
   return [
     { text: 'Resumen', link: '/' },
     { text: 'Primeros Pasos', link: '/getting-started' },
+    { text: 'Tu cuenta y la aplicación web', link: '/account-lifecycle' },
     { text: 'Tu suscripción y cómo pagarla', link: '/paying-your-subscription' },
     {
       text: 'Endpoints',
@@ -28,31 +29,11 @@ function esSidebar() {
       items: [
         { text: 'Resumen', link: '/endpoints/' },
         {
-          text: 'Cuenta (solo app web)',
-          collapsed: false,
-          items: [
-            { text: 'Registrarse', link: '/endpoints/register' },
-            { text: 'Recuperar cuenta', link: '/endpoints/recover' },
-            { text: 'Verificar correo', link: '/endpoints/verify-email' },
-            { text: 'Reenviar verificación', link: '/endpoints/resend-verification' },
-          ],
-        },
-        {
-          text: 'Acuerdos legales',
-          collapsed: false,
-          items: [
-            { text: 'Acuerdos (público)', link: '/endpoints/agreements' },
-            { text: 'Aceptación de acuerdos', link: '/endpoints/agreement-acceptance' },
-            { text: 'Acuerdos del tenant', link: '/endpoints/tenant-agreements' },
-          ],
-        },
-        {
           text: 'Tenants',
           collapsed: false,
           items: [
             { text: 'Consultar tenant actual', link: '/endpoints/tenant-me' },
             { text: 'Actualizar idioma', link: '/endpoints/tenant-language' },
-            { text: 'Promover a producción', link: '/endpoints/promote-tenant' },
             { text: 'Historial de eventos del tenant', link: '/endpoints/tenant-events' },
             { text: 'Reintentar todos los comprobantes fallidos', link: '/endpoints/retry-failed-documents' },
           ],
@@ -93,7 +74,7 @@ function esSidebar() {
             { text: 'Enviar al SRI', link: '/endpoints/send-to-sri' },
             { text: 'Reintentar envío/autorización', link: '/endpoints/retry-send' },
             { text: 'Consultar autorización', link: '/endpoints/check-authorization' },
-            { text: 'Reconstruir factura', link: '/endpoints/rebuild-invoice' },
+            { text: 'Reconstruir comprobante', link: '/endpoints/rebuild-invoice' },
             { text: 'Anular comprobante', link: '/endpoints/void-document' },
             { text: 'Obtener RIDE (PDF)', link: '/endpoints/get-ride' },
             { text: 'Obtener XML', link: '/endpoints/get-xml' },
@@ -151,6 +132,7 @@ function enSidebar() {
   return [
     { text: 'Overview', link: '/en/' },
     { text: 'Getting Started', link: '/en/getting-started' },
+    { text: 'Your account & the web app', link: '/en/account-lifecycle' },
     { text: 'Your subscription & billing', link: '/en/paying-your-subscription' },
     {
       text: 'Endpoints',
@@ -158,31 +140,11 @@ function enSidebar() {
       items: [
         { text: 'Overview', link: '/en/endpoints/' },
         {
-          text: 'Account (web app only)',
-          collapsed: false,
-          items: [
-            { text: 'Register', link: '/en/endpoints/register' },
-            { text: 'Recover Account', link: '/en/endpoints/recover' },
-            { text: 'Verify Email', link: '/en/endpoints/verify-email' },
-            { text: 'Resend Verification', link: '/en/endpoints/resend-verification' },
-          ],
-        },
-        {
-          text: 'Agreements',
-          collapsed: false,
-          items: [
-            { text: 'Agreements (Public)', link: '/en/endpoints/agreements' },
-            { text: 'Agreement Acceptance', link: '/en/endpoints/agreement-acceptance' },
-            { text: 'Tenant Agreements', link: '/en/endpoints/tenant-agreements' },
-          ],
-        },
-        {
           text: 'Tenants',
           collapsed: false,
           items: [
             { text: 'Get Current Tenant', link: '/en/endpoints/tenant-me' },
             { text: 'Update Language', link: '/en/endpoints/tenant-language' },
-            { text: 'Promote to Production', link: '/en/endpoints/promote-tenant' },
             { text: 'Get Tenant Events', link: '/en/endpoints/tenant-events' },
             { text: 'Retry All Failed Documents', link: '/en/endpoints/retry-failed-documents' },
           ],
@@ -223,7 +185,7 @@ function enSidebar() {
             { text: 'Send to SRI', link: '/en/endpoints/send-to-sri' },
             { text: 'Retry Send/Authorize', link: '/en/endpoints/retry-send' },
             { text: 'Check Authorization', link: '/en/endpoints/check-authorization' },
-            { text: 'Rebuild Invoice', link: '/en/endpoints/rebuild-invoice' },
+            { text: 'Rebuild Document', link: '/en/endpoints/rebuild-invoice' },
             { text: 'Void Document', link: '/en/endpoints/void-document' },
             { text: 'Get RIDE (PDF)', link: '/en/endpoints/get-ride' },
             { text: 'Get XML', link: '/en/endpoints/get-xml' },

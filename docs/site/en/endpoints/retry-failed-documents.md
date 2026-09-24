@@ -8,7 +8,7 @@ POST /v1/tenants/retry-failed-documents
 
 Unlike the endpoints under `/v1/documents/*`, this one **does not require `X-Issuer-Id`** — it covers every issuer/branch on the tenant in a single call. It's the recommended way to recover from an SRI outage that affected multiple documents across different branches at once, instead of calling [Retry Send/Authorize](retry-send.md) once per document.
 
-Best-effort per document — if re-queueing one fails (e.g. RabbitMQ briefly unreachable), it doesn't stop the rest; that particular document is simply picked up by the next reconciliation cycle instead.
+Best-effort per document — if re-queueing one fails, it doesn't stop the rest; that particular document is retried automatically later.
 
 ## Authentication
 

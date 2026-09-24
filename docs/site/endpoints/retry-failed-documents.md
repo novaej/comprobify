@@ -8,7 +8,7 @@ POST /v1/tenants/retry-failed-documents
 
 A diferencia de los endpoints bajo `/v1/documents/*`, este **no requiere `X-Issuer-Id`** — cubre todos los emisores/sucursales del tenant en una sola llamada. Es la forma recomendada de recuperarse de una interrupción del servicio del SRI que afectó a varios comprobantes en distintas sucursales a la vez, en lugar de llamar a [Reintentar Envío/Autorización](retry-send.md) una vez por cada comprobante.
 
-Es "mejor esfuerzo" por comprobante — si el reencolado de uno falla (por ejemplo, RabbitMQ momentáneamente no disponible), no detiene el resto; ese comprobante en particular simplemente queda cubierto por el siguiente ciclo del job de reconciliación.
+Es "mejor esfuerzo" por comprobante — si el reencolado de uno falla, no detiene el resto; ese comprobante en particular se reintenta automáticamente más tarde.
 
 ## Autenticación
 

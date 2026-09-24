@@ -107,6 +107,7 @@ Este es el único lugar que muestra la secuencia completa de cambios en tu suscr
 | `SUBSCRIPTION_RENEWED` | Un pago de renovación fue verificado, extendiendo el periodo de facturación |
 | `SUBSCRIPTION_EXPIRED` | La suscripción superó su periodo de gracia de renovación sin ningún pago y fue degradada a FREE |
 | `STATUS_CHANGED` | El estado de la cuenta cambió — `detail` trae `from`, `to` y, al suspender, `reasonCode` (ver `suspensionReasonCode` en [`GET /v1/tenants/me`](tenant-me.md)) |
+| `ACCOUNT_RECOVERED` | La cuenta se recuperó con su certificado: se revocaron las llaves del ambiente actual y la cuenta volvió a verificación de correo — `detail` trae `environment` y `previousStatus` |
 | `CERTIFICATE_UPLOADED` / `CERTIFICATE_RENEWED` | Se cargó un certificado P12 nuevo para un emisor, o se renovó uno existente — `detail` trae `issuerId`, `certFingerprint` y `certExpiry` |
 
 ## Errores
@@ -115,9 +116,9 @@ Este es el único lugar que muestra la secuencia completa de cambios en tu suscr
 |---|---|---|
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `404` | `NOT_FOUND` | No se pudo resolver el tenant (normalmente no debería ocurrir en una solicitud autenticada) |
-| `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
+| `429` | `TOO_MANY_REQUESTS` | Límite de solicitudes excedido |
 
 ## Notas
 
 - Devuelve un arreglo vacío si aún no ha ocurrido nada más allá del registro.
-- No está paginado — se devuelve el historial completo cada vez. Es suficiente para el volumen típico de vida útil de un tenant; si en algún momento se necesita paginación, `?sinceId=` (siguiendo el patrón de [Notificaciones](notifications.md)) sería la adición natural.
+- No está paginado — se devuelve el historial completo cada vez.

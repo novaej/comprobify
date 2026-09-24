@@ -75,7 +75,7 @@ Each entry in `errors` has:
 
 ## SRI errors
 
-`POST /:accessKey/send` and `GET /:accessKey/authorize` are asynchronous (see [Send to SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` can no longer be returned as an HTTP response from either endpoint. A network failure now happens inside the background worker and is recorded as an `ERROR` document event instead; see [SRI Submission Failed](/errors/sri-error) for details. The shape below is kept for reference:
+`POST /:accessKey/send` and `GET /:accessKey/authorize` are asynchronous (see [Send to SRI](/endpoints/send-to-sri)) — `SRI_SUBMISSION_FAILED` can no longer be returned as an HTTP response from either endpoint. A network failure now happens in the background and is recorded as an `ERROR` document event instead; see [SRI Submission Failed](/errors/sri-error) for details. The shape below is kept for reference:
 
 When `code` is `SRI_SUBMISSION_FAILED`, an additional `sriMessages` array contains the raw messages returned by the SRI SOAP service:
 
@@ -121,7 +121,7 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 | `SELF_REVOCATION_FORBIDDEN` | Cannot revoke the API key used to authenticate this request |
 | `INVALID_FILE_UPLOAD` | Uploaded file is missing, the wrong type, or exceeds the field's size limit (e.g. a logo over 500 KB) |
 | `PROOF_FILE_LIMIT_REACHED` | Payment already has the maximum number of active proof files (10) — delete one before uploading more |
-| `VERSION_MISMATCH` | `termsVersion` in `POST /v1/tenants/agreements` does not match the currently published TERMS document version — re-fetch `GET /v1/agreements` and present the current version before asking the user to accept again |
+| `VERSION_MISMATCH` | The Terms version being accepted does not match the currently published one (web app only — the current document is shown again) |
 | `LAST_ISSUER_CANNOT_BE_REMOVED` | Tenant has only one active issuer left — it cannot be removed |
 | `LAST_DOCUMENT_TYPE_CANNOT_BE_REMOVED` | Issuer has only one active document type left — it cannot be removed |
 | `ISSUER_HAS_DOCUMENTS` | Issuer has issued documents (in either environment) and cannot be removed |
@@ -155,8 +155,9 @@ Most errors carry a specific `code` that is more precise than the HTTP status al
 |---|---|
 | `ISSUER_FORBIDDEN` | `X-Issuer-Id` names an issuer that belongs to a different tenant |
 | `ACCOUNT_SUSPENDED` | Tenant account is suspended — contact support |
+| `INTERNAL_SERVICE_ONLY` | Action is reserved for the Comprobify web app — do it from there |
 | `EMAIL_VERIFICATION_REQUIRED` | Operation requires a verified email address |
-| `AGREEMENT_ACCEPTANCE_REQUIRED` | Promotion blocked — one or more agreements are still `PENDING` (check `GET /v1/tenants/agreements`, view at `GET /v1/tenants/agreements/:type`, accept via `POST /v1/tenants/agreements`) |
+| `AGREEMENT_ACCEPTANCE_REQUIRED` | Promotion blocked — one or more legal agreements are still not accepted; accept them in the web app |
 | `PRODUCTION_KEY_REQUIRES_PROMOTION` | Production API key cannot be created before promoting to production |
 | `INSUFFICIENT_SCOPE` | The API key doesn't carry the scope the endpoint requires — see [API Keys → Scopes](/endpoints/api-keys#scopes) |
 | `SCOPE_ESCALATION_FORBIDDEN` | `POST /v1/keys` — requested scopes include one the requesting key doesn't itself hold |

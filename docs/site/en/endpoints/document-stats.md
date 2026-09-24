@@ -1,6 +1,6 @@
 # Document Stats
 
-Returns a per-type breakdown of documents issued this month plus an all-time count of documents needing attention. Intended for dashboard summaries (e.g. the comprobify-web revenue widget, computed client-side from `authorizedTotal` values).
+Returns a per-type breakdown of documents issued this month plus an all-time count of documents needing attention. Useful for showing a recent-activity summary, including revenue per document type from `authorizedTotal`.
 
 ```
 GET /v1/documents/stats

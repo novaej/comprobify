@@ -55,4 +55,4 @@ Con `canIssue: false`:
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `403` | `INSUFFICIENT_SCOPE` | La API key no tiene el scope `issuers:write` |
 | `404` | `ISSUER_NOT_FOUND` | El id del emisor no existe, pertenece a otro tenant, o está inactivo |
-| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de tasa |
+| `429` | `TOO_MANY_REQUESTS` | Se excedió el límite de solicitudes |

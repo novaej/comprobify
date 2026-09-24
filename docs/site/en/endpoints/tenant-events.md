@@ -107,6 +107,7 @@ This is the one place that shows the full sequence of changes to your subscripti
 | `SUBSCRIPTION_RENEWED` | A renewal payment was verified, extending the billing period |
 | `SUBSCRIPTION_EXPIRED` | Subscription ran past its renewal grace period with no payment and was downgraded to FREE |
 | `STATUS_CHANGED` | The account's status changed — `detail` carries `from`, `to`, and, when suspending, `reasonCode` (see `suspensionReasonCode` on [`GET /v1/tenants/me`](tenant-me.md)) |
+| `ACCOUNT_RECOVERED` | The account was recovered via its certificate: the current environment's keys were revoked and the account went back to email verification — `detail` carries `environment` and `previousStatus` |
 | `CERTIFICATE_UPLOADED` / `CERTIFICATE_RENEWED` | A new P12 certificate was uploaded for an issuer, or an existing one renewed — `detail` carries `issuerId`, `certFingerprint`, and `certExpiry` |
 
 ## Errors
@@ -120,4 +121,4 @@ This is the one place that shows the full sequence of changes to your subscripti
 ## Notes
 
 - Returns an empty array if nothing has happened yet beyond registration.
-- Not paginated — the full history is returned every time. Fine for typical tenant lifetime volume; if this ever needs pagination, `?sinceId=` (mirroring [Notifications](notifications.md)) would be the natural addition.
+- Not paginated — the full history is returned every time.

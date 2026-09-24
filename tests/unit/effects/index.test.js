@@ -141,6 +141,16 @@ describe('VERIFICATION_EMAIL_SEND handler', () => {
     expect(tenantEventModel.create).toHaveBeenCalledWith('tenant-1', 'VERIFICATION_EMAIL_SENT');
   });
 
+  test('forwards a RECOVERY reason so the recovery email gets the security-notice copy', async () => {
+    emailService.sendVerificationEmail.mockResolvedValue({ messageId: 'mg-2' });
+
+    await getHandler('VERIFICATION_EMAIL_SEND')({
+      tenantId: 'tenant-1', email: 'a@test.com', verificationToken: 'tok', redirectUrl: null, language: 'es', reason: 'RECOVERY',
+    });
+
+    expect(emailService.sendVerificationEmail).toHaveBeenCalledWith('a@test.com', 'tok', null, 'es', 'RECOVERY');
+  });
+
   test('on failure, logs VERIFICATION_EMAIL_FAILED and rethrows (so process() retries it)', async () => {
     emailService.sendVerificationEmail.mockRejectedValue(new Error('mailgun down'));
 

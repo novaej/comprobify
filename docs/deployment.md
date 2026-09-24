@@ -610,7 +610,7 @@ The SRI endpoint is determined at runtime by combining the `APP_ENV` variable wi
 | `production` | SRI test endpoint, `ambiente = 1` | SRI production endpoint, `ambiente = 2` |
 
 - **All tenants default to `sandbox = true`**. They will continue hitting the SRI test endpoint until explicitly promoted.
-- **To promote a tenant to production:** use `POST /v1/tenants/promote` (tenant-authenticated, requires `ACTIVE` status) or `POST /v1/admin/tenants/:id/promote` (admin override). This flips `tenants.sandbox = false`, seeds production sequentials, and rotates API keys. Only do this on the `APP_ENV=production` deployment.
+- **To promote a tenant to production:** use `POST /v1/tenants/promote` (tenant-authenticated, requires `ACTIVE` status, and frontend-only — needs `X-Internal-Service-Secret`) or `POST /v1/admin/tenants/:id/promote` (admin override). This flips `tenants.sandbox = false`, seeds production sequentials, and rotates API keys. Only do this on the `APP_ENV=production` deployment.
 - `ambiente` is derived from the same logic and is embedded in both the 49-digit access key and the XML `infoTributaria/ambiente` field — it is never read directly from a DB column.
 
 ---

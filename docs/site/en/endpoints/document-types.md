@@ -24,6 +24,13 @@ Returns the active document types for the named issuer.
 |---|---|
 | `id` | Issuer UUID (from `GET /v1/issuers`) |
 
+### Example
+
+```http
+GET /v1/issuers/00000000-0000-0000-0000-000000000001/document-types
+Authorization: Bearer <your-api-key>
+```
+
 ### Response
 
 ```json

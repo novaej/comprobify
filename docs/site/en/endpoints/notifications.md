@@ -253,7 +253,7 @@ Returns active (unexpired) notifications for the tenant, newest first. Both read
 
 | Parameter | Type | Description |
 |---|---|---|
-| `sinceId` | string (UUID) | Optional. When provided, returns only notifications with `id > sinceId`. Use for efficient catch-up polling: store the highest `id` seen on each poll and pass it on the next request. |
+| `sinceId` | string (UUID) | Optional. When provided, returns only notifications created after the one with that `id` (ids are UUIDv7, which sort by time, so `id > sinceId` means "newer than"). Use for efficient catch-up polling: store the `id` of the most recent notification you received on each poll and pass it on the next request. |
 
 ### Issuer filter
 
@@ -263,6 +263,14 @@ Supply `X-Issuer-Id: <id>` to restrict results to a specific issuer. When the he
 - Tenant-level notifications (`issuerId: null`), such as future quota warnings.
 
 Omit the header to receive all notifications across every issuer (useful for admin or overview pages).
+
+### Example
+
+```http
+GET /v1/notifications?sinceId=019a1b2c-3d4e-7f00-8000-000000000001
+Authorization: Bearer <your-api-key>
+X-Issuer-Id: 00000000-0000-0000-0000-000000000001
+```
 
 ### Response
 
@@ -408,7 +416,7 @@ When `enabled` is `false` for `(type, IN_APP)`, the notification stops appearing
 │                                                                     │
 │  Fallback / catch-up:                                               │
 │    Poll GET /v1/notifications?sinceId=<lastSeenId> every 60–300s   │
-│    Store highest id seen → pass as sinceId on next poll             │
+│    Store newest id seen → pass as sinceId on next poll              │
 │                                                                     │
 │  When user opens notification panel:                                │
 │    Mark read in frontend DB per user                                │

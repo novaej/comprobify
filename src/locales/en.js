@@ -23,6 +23,14 @@ module.exports = {
       expiry: (ttlLabel) => `This link expires in ${ttlLabel}.`,
       ttlLabel: (hours) => hours === 1 ? '1 hour' : `${hours} hours`,
       disclaimer: 'If you did not sign up for Comprobify, you can ignore this email. Do not reply — this is an automated message.',
+      // Sent instead of the welcome copy after POST /v1/recover — a security notice, not a greeting.
+      recovery: {
+        subject: 'Your Comprobify account was recovered — confirm your email',
+        greeting: 'Your Comprobify account was just recovered',
+        cta: 'Access to your account was recovered using its signing certificate, and the API keys for your current environment were replaced. If this was you, confirm your email address to restore full access (new branches, API keys, webhooks and subscriptions):',
+        disclaimer: 'If you did NOT do this, do not click the link — someone may have your certificate. Contact Comprobify support right away. Do not reply — this is an automated message.',
+        contact: (email) => `Support: ${email}`,
+      },
     },
     // paymentVerified/paymentRejected/subscriptionRenewalDue/
     // subscriptionExpired/priceChangeAnnounced removed (ADR-024 Phase C) —

@@ -41,13 +41,13 @@ PATCH /v1/issuers/:id/logo
 | `401` | `UNAUTHORIZED` | API key faltante o inválida |
 | `403` | `ISSUER_FORBIDDEN` | El emisor pertenece a otro tenant |
 | `404` | `ISSUER_NOT_FOUND` | Emisor no encontrado o inactivo |
-| `429` | `TOO_MANY_REQUESTS` | Límite de tasa excedido |
+| `429` | `TOO_MANY_REQUESTS` | Límite de solicitudes excedido |
 
 ## Notas
 
 - Volver a llamar a este endpoint sobrescribe el logo existente — no existe un endpoint de eliminación por separado; para quitar un logo, vuelve a registrarte o contacta a soporte.
 - El logo se incrusta directamente en el PDF al momento de renderizarlo. No se expone ninguna URL pública.
-- El logo también se puede proporcionar en el momento del registro mediante el campo opcional de archivo `logo` en `POST /v1/register`.
+- El logo también se puede proporcionar en el momento del registro desde la aplicación web (el logo es opcional al registrarte).
 
 ## Guía de dimensiones del logo
 

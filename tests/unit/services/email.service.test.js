@@ -148,6 +148,17 @@ describe('EmailService', () => {
       );
     });
 
+    test('a RECOVERY reason asks the template for the security-notice variant, with the support address', async () => {
+      await emailService.sendVerificationEmail('tenant@example.com', 'tok-123', 'https://app.example.com/verify', 'es', 'RECOVERY');
+
+      expect(verifyEmailTemplate.render).toHaveBeenCalledWith(
+        'https://app.example.com/verify?token=tok-123',
+        24,
+        'es',
+        expect.objectContaining({ reason: 'RECOVERY' })
+      );
+    });
+
     test('sends from "Comprobify" (platform sender), not an issuer name, and returns messageId', async () => {
       const result = await emailService.sendVerificationEmail('tenant@example.com', 'tok-123', 'https://app.example.com/verify');
 
