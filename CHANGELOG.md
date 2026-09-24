@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-09-23
+
 ### Added
 - **Account recovery now leaves an audit trail and sends a real security notice.** A genuine (non-`alreadyLinked`) `POST /v1/recover` writes an `ACCOUNT_RECOVERED` tenant event (`{ environment, previousStatus }`, migration 103, visible in `GET /v1/tenants/events`) and sends its verification email as a security-notice variant — "your account was recovered", warns not to click and to contact support if it wasn't you — instead of the "Welcome to Comprobify!" copy. Until now the only trace was a verification email that looked routine.
 
