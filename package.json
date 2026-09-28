@@ -22,7 +22,7 @@
   "dependencies": {
     "@logtail/node": "^0.5.10",
     "@logtail/winston": "^0.5.10",
-    "@sentry/node": "^10.75.0",
+    "@sentry/node": "^11.0.0",
     "amqplib": "^2.0.1",
     "buffer": "^6.0.3",
     "bwip-js": "^4.11.4",
