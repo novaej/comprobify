@@ -287,6 +287,29 @@ describe('RideService', () => {
       expect(rideData.businessName).toBe('From Signed XML');
     });
 
+    test('maps the document\'s own fechaEmision to rideData.issueDate (invoice)', async () => {
+      issuerModel.findById.mockResolvedValue(baseIssuer);
+
+      await rideService.generate(baseDocument);
+
+      const [rideData] = rideBuilder.build.mock.calls[0];
+      expect(rideData.issueDate).toBe('01/06/2026');
+    });
+
+    test('maps the document\'s own fechaEmision to rideData.issueDate (credit note)', async () => {
+      issuerModel.findById.mockResolvedValue(baseIssuer);
+      const document = {
+        ...baseDocument,
+        document_type: '04',
+        authorization_xml: buildCreditNoteXml(),
+      };
+
+      await rideService.generate(document);
+
+      const [rideData] = rideBuilder.build.mock.calls[0];
+      expect(rideData.issueDate).toBe('01/06/2026');
+    });
+
     test('resolves the buyer id type label from the catalog', async () => {
       issuerModel.findById.mockResolvedValue(baseIssuer);
 
