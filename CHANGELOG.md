@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-10-02
+
+### Fixed
+- **The issue date ("Fecha") was missing from generated RIDE PDFs.** `ride.service.js` mapped every other field out of the authorized document's XML into the data handed to the PDF renderer, but never read `fechaEmision`. Cosmetic only — the XML actually built, validated, signed, and authorized by SRI, and served as-is via `GET /:key/xml`, always had the correct date; the RIDE is regenerated from that same stored XML on every request, so the fix applies retroactively to every existing document the next time its RIDE is downloaded. Also fixes a latent formatting bug the missing field would otherwise have hit: the date is now rendered as the raw `DD/MM/YYYY` string SRI provides instead of being re-parsed through `moment()` with no explicit input format, which can misread `DD/MM` as `MM/DD` for any day ≤ 12.
+
+### Security
+- **A routine dependency bump (`@logtail/node`/`@logtail/winston`) transitively pulled in a high-severity `brace-expansion` denial-of-service vulnerability (CPU/stack exhaustion via crafted brace patterns).** Fixed with a version-scoped `package.json` override targeting only the affected `minimatch@9.x` dependency chain, leaving the separate `minimatch@10.x` chain (which legitimately depends on a different major version of `brace-expansion`) untouched.
+- **CI's production-dependency audit now allow-lists one specific, currently-unpatched `node-forge` advisory** (RSA PKCS#1 v1.5 signature verification accepting extra nested `DigestAlgorithm` elements) instead of staying permanently red for a finding nobody can act on yet. `node-forge` has no patched version upstream; the vulnerable `verify()` path isn't called anywhere in the deployed API/worker runtime, only by an offline debugging script. Every other high/critical finding still fails the build. See `docs/security-audit-2026-09-12.md` finding #6 for the full writeup.
+
 ## [1.2.0] — 2026-09-23
 
 ### Added
