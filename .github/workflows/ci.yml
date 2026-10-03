@@ -43,5 +43,11 @@ jobs:
       # vitepress's own vite/esbuild pin, see docs/security-audit-2026-09-12.md
       # #6) can carry findings with no fix available yet upstream, which
       # would make this gate permanently red for something nobody can act on.
+      #
+      # scripts/check-audit.js wraps the raw `npm audit` with a small,
+      # documented allowlist for the same reason, scoped to individual
+      # production advisories that have no patched version upstream (see #6)
+      # rather than excluding a whole dependency tree - everything else still
+      # fails the build.
       - name: Audit production dependencies
-        run: npm audit --omit=dev --audit-level=high
+        run: node scripts/check-audit.js
