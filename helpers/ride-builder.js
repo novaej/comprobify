@@ -253,7 +253,11 @@ async function drawHeader(doc, data, y) {
 // ─── Section 2: Buyer info ────────────────────────────────────────────────────
 function drawBuyerSection(doc, data, y) {
   const P = 4;
-  const issueDateStr = data.issueDate ? moment(data.issueDate).format('DD/MM/YYYY') : '';
+  // data.issueDate is SRI's own fechaEmision, already DD/MM/YYYY — reformatting it
+  // through moment() without an explicit parse format would misread it as MM/DD/YYYY
+  // for any day <= 12, so it's rendered as-is (same treatment as originalDocument.issueDate
+  // in buildModifiedDocRows below).
+  const issueDateStr = data.issueDate || '';
 
   // Row heights
   const R1 = 16;  // Razón social row
