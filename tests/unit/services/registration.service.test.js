@@ -36,6 +36,7 @@ const baseFields = {
   ruc: '1790012345001',
   businessName: 'Acme Corp',
   tradeName: 'Acme',
+  mainAddress: 'Av. Principal 123',
   branchCode: '001',
   issuePointCode: '001',
   emissionType: 'NORMAL',
@@ -210,6 +211,38 @@ describe('RegistrationService', () => {
       expect(result.apiKey).toHaveLength(64);
       expect(result.tenant).toMatchObject({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
       expect(result.issuer).toMatchObject({ id: '00000000-0000-0000-0000-000000000020', ruc: baseFields.ruc });
+    });
+
+    test('defaults branchAddress to mainAddress when the caller does not supply a distinct one', async () => {
+      tenantModel.findByEmail.mockResolvedValue(null);
+      issuerModel.findByRuc.mockResolvedValue(null);
+      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
+      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020' });
+
+      await registrationService.register(baseFields, p12Buffer, p12Password);
+
+      expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        mainAddress: baseFields.mainAddress,
+        branchAddress: baseFields.mainAddress,
+      }));
+    });
+
+    test('keeps an explicitly supplied branchAddress distinct from mainAddress', async () => {
+      tenantModel.findByEmail.mockResolvedValue(null);
+      issuerModel.findByRuc.mockResolvedValue(null);
+      tenantModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000002', email: baseFields.email });
+      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000020' });
+
+      await registrationService.register(
+        { ...baseFields, branchAddress: 'Av. Secundaria 456' },
+        p12Buffer,
+        p12Password
+      );
+
+      expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        mainAddress: baseFields.mainAddress,
+        branchAddress: 'Av. Secundaria 456',
+      }));
     });
 
     test('normalises requiredAccounting truthy variants to SI', async () => {

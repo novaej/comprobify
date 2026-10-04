@@ -140,7 +140,10 @@ async function createBranch(tenant, sourceIssuer, fields, p12Buffer, p12Password
       emissionType: sourceIssuer.emission_type,
       requiredAccounting: sourceIssuer.required_accounting,
       specialTaxpayer: sourceIssuer.special_taxpayer || null,
-      branchAddress: fields.branchAddress || null,
+      // Every issuer must carry both addresses - defaults to the source issuer's
+      // own main address (guaranteed non-null, DB-enforced) when the caller
+      // doesn't name a distinct branch address for the new issue point.
+      branchAddress: fields.branchAddress || sourceIssuer.main_address,
       encryptedPrivateKey,
       certificatePem,
       certFingerprint,

@@ -57,4 +57,24 @@ describe('Issuer Validator — createBranch', () => {
 
     expect(result.isEmpty()).toBe(false);
   });
+
+  describe('branchAddress', () => {
+    test('is optional - omitting it passes validation (the service defaults it)', async () => {
+      const { result } = await runValidation({ ...validBody });
+
+      expect(result.isEmpty()).toBe(true);
+    });
+
+    test('accepts a non-empty branchAddress', async () => {
+      const { result } = await runValidation({ ...validBody, branchAddress: 'Av. Principal 123' });
+
+      expect(result.isEmpty()).toBe(true);
+    });
+
+    test('rejects an explicitly empty branchAddress - never a blank value', async () => {
+      const { result } = await runValidation({ ...validBody, branchAddress: '' });
+
+      expect(result.isEmpty()).toBe(false);
+    });
+  });
 });

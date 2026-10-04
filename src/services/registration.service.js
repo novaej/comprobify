@@ -111,7 +111,10 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
       emissionType: fields.emissionType,
       requiredAccounting: [true, 'true', '1', 1].includes(fields.requiredAccounting) ? 'SI' : 'NO',
       specialTaxpayer: fields.specialTaxpayer || null,
-      branchAddress: fields.branchAddress || null,
+      // Every issuer must carry both addresses (see issuer.service.js's createBranch
+      // for the same rule applied to later branches) - the first issuer's branch
+      // IS the main address unless the caller names a distinct one.
+      branchAddress: fields.branchAddress || fields.mainAddress,
       encryptedPrivateKey,
       certificatePem: parsed.certPem,
       certFingerprint: parsed.certFingerprint,

@@ -24,11 +24,16 @@ const createBranch = [
     .matches(/^\d{3}$/)
     .withMessage('issuePointCode must be a 3-digit string'),
 
+  // Optional here - issuer.service.js's createBranch defaults it to the source
+  // issuer's main_address when omitted, so every issuer always has a branch
+  // address. notEmpty() only applies when the field is actually supplied, so an
+  // empty string can't be used to force a blank value.
   body('branchAddress')
     .optional()
     .isString()
+    .notEmpty()
     .isLength({ max: 300 })
-    .withMessage('branchAddress must be a string of max 300 characters'),
+    .withMessage('branchAddress must be a non-empty string of max 300 characters'),
 
   body('documentTypes')
     .optional()
@@ -66,11 +71,14 @@ const updateIssuer = [
     .isLength({ max: 300 })
     .withMessage('tradeName must be a string of max 300 characters'),
 
+  // notEmpty() prevents clearing an issuer's branch address to blank - every
+  // issuer must always have one (DB-enforced, branch_address is NOT NULL).
   body('branchAddress')
     .optional()
     .isString()
+    .notEmpty()
     .isLength({ max: 300 })
-    .withMessage('branchAddress must be a string of max 300 characters'),
+    .withMessage('branchAddress must be a non-empty string of max 300 characters'),
 
   body().custom((_value, { req }) => {
     if (req.body.tradeName === undefined && req.body.branchAddress === undefined) {

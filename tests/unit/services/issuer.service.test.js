@@ -191,7 +191,7 @@ describe('IssuerService', () => {
   describe('createBranch', () => {
     const tenant = { id: '00000000-0000-0000-0000-000000000009', subscriptionTier: 'BUSINESS', sandbox: true };
     const sourceIssuer = {
-      ruc: '1234567890001', business_name: 'Acme', trade_name: null, main_address: null,
+      ruc: '1234567890001', business_name: 'Acme', trade_name: null, main_address: 'Av. Principal 123',
       emission_type: '1', required_accounting: 'NO', special_taxpayer: null,
       encrypted_private_key: 'src-enc', certificate_pem: 'src-cert', cert_fingerprint: 'src-fp', cert_expiry: new Date('2029-01-01'),
     };
@@ -227,6 +227,28 @@ describe('IssuerService', () => {
 
       expect(certificateService.parseCertificate).not.toHaveBeenCalled();
       expect(tenantEventModel.create).not.toHaveBeenCalled();
+    });
+
+    test('defaults branchAddress to the source issuer\'s main_address when not supplied', async () => {
+      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', branch_code: '002', issue_point_code: '001' });
+
+      await issuerService.createBranch(tenant, sourceIssuer, fields, null, null);
+
+      expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        mainAddress: sourceIssuer.main_address,
+        branchAddress: sourceIssuer.main_address,
+      }));
+    });
+
+    test('keeps an explicitly supplied branchAddress distinct from the source issuer\'s main_address', async () => {
+      issuerModel.create.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000010', branch_code: '002', issue_point_code: '001' });
+
+      await issuerService.createBranch(tenant, sourceIssuer, { ...fields, branchAddress: 'Av. Secundaria 456' }, null, null);
+
+      expect(issuerModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        mainAddress: sourceIssuer.main_address,
+        branchAddress: 'Av. Secundaria 456',
+      }));
     });
   });
 });
