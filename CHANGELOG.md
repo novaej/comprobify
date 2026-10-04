@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.2] — 2026-10-04
+
 ### Fixed
 - **A new issuer's branch address (`dirEstablecimiento`) was silently left blank unless the caller explicitly supplied one**, so it never appeared on the RIDE PDF or in the authorized XML. `issuers.branch_address` is now `NOT NULL` (migration 104, backfilled from `main_address` for existing rows): self-service registration defaults a first issuer's branch address to its main address when not given a distinct one, and `POST /v1/issuers` (branch creation) defaults a new branch's address to the source issuer's main address the same way. Both validators also reject an explicitly empty string, so the default can't be bypassed with a blank value. No RIDE/XML builder changes were needed — both already print `branch_address` whenever it's present; this just guarantees it always is.
 
