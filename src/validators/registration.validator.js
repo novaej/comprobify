@@ -19,6 +19,23 @@ const register = [
     .isLength({ max: 300 })
     .withMessage('businessName is required and must be max 300 characters'),
 
+  // issuers.main_address is NOT NULL at the DB level - validated here too so an
+  // omission fails cleanly with a 400 instead of a raw DB constraint error.
+  body('mainAddress')
+    .notEmpty()
+    .isLength({ max: 300 })
+    .withMessage('mainAddress is required and must be max 300 characters'),
+
+  // Optional here - registration.service.js defaults it to mainAddress when
+  // omitted, since the first issuer's branch address is the business's own
+  // address unless told otherwise. notEmpty() only applies when the field is
+  // actually supplied, so an empty string can't be used to force a blank value.
+  body('branchAddress')
+    .optional()
+    .notEmpty()
+    .isLength({ max: 300 })
+    .withMessage('branchAddress must be a non-empty string of max 300 characters'),
+
   body('branchCode')
     .notEmpty()
     .matches(/^\d{3}$/)
