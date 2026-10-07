@@ -24,7 +24,7 @@ Because the MCP server is ours, not a third party's, neither problem has to be s
 3. **The MCP server calls this API with a reserved key**, one per tenant, minted by comprobify-web through the existing `POST /v1/admin/tenants/:id/api-keys` (`isReserved: true`), the same path it already uses for its per-role keys.
 4. **That key is read-only:** scopes `documents:read` and `issuers:read`. The MCP server only makes `GET` calls for now. `GET /:accessKey/authorize` stays out of reach, since it requires `documents:write`.
 5. **MCP access is available on every tier**, including FREE/SOLO/LITE. This is consistent with ADR-034, not an exception to it: the tenant never sees the key, cannot list or revoke it through `/v1/keys`, and gets a fixed set of read tools rather than API access. It is the same trust model as the dashboard.
-6. **The reserved-key sanity ceiling rises from 5 to 6** (`RESERVED_FRONTEND_API_KEYS`) to make room for the MCP key alongside the master and per-role keys.
+6. **The reserved-key sanity ceiling rises from 5 to 6** (`RESERVED_FRONTEND_API_KEYS`). A tenant can now hold five reserved keys: the master key, three per-role keys (Owner and Admin share the master), and the MCP key. Five fits under a ceiling of 5, but at the time `createApiKey()` checked the ceiling before it looked at `replaceKeyId`, so a tenant sitting exactly at the ceiling could not rotate any reserved key. That ordering is fixed in the same change (a like-for-like replace no longer counts against the limit, for keys and webhook endpoints alike); the ceiling stays at 6 anyway, as cheap headroom.
 
 ## Consequences
 
@@ -35,6 +35,9 @@ Because the MCP server is ours, not a third party's, neither problem has to be s
 
 **Negative / things to keep in mind**
 - **The key can be rotated out from under the MCP server.** Promotion revokes every sandbox key and mirrors them into production; `recover()` revokes every key in the environment and recreates only one, so the MCP key does not survive a recovery. The API stores only a hash, so a lost plaintext cannot be fetched again. comprobify-web must treat the key as re-mintable: capture it from the promote response, and mint a fresh one whenever it is missing or the API rejects it with `401`.
+- **The key is tenant-wide, but a dashboard user may not be.** comprobify-web restricts non-Owner/Admin users to the issuers they were granted; this API has no user concept and cannot enforce that on an MCP call. comprobify-web returns the user's allowed issuer ids alongside the key, and the MCP server must filter on them. A bug there exposes other branches' documents to a restricted user, and nothing in this API would catch it.
 - **Reserved no longer means "used by comprobify-web's own BFF only."** A reserved key now also backs a second first-party service. Anything that assumes otherwise (e.g. the `callerIsReserved` reasoning in `promote()`) should be read with that in mind; the MCP key holds no scope that can reach those routes.
 - **Adding write tools later reopens the tier question.** Creating documents through MCP on an entry tier would erode ADR-034's upgrade-by-capability lever. If writes are added, gate them by tier in the MCP server and revisit this ADR.
 - **A third-party integration is still unsupported.** This design works only because we operate the MCP server. Letting an outside service act for a tenant would need the API to accept delegated tokens after all, which is a separate decision.
+
+The comprobify-web side of this decision (the authorization server itself, token lifetimes, the introspection contract) is recorded in that repo's ADR-009 and `docs/guides/mcp-oauth-integration.md`.
