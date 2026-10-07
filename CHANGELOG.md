@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **The reserved (comprobify-web-internal) API key ceiling per tenant now defaults to 6, up from 5** (`RESERVED_FRONTEND_API_KEYS`). Makes room for one more internal key alongside the master and per-role keys — the read-only key comprobify-web mints for the hosted MCP server. Still only a bug-detection sanity ceiling (`409 RESERVED_KEY_LIMIT_REACHED` past it), not a tenant-facing limit.
+
 ## [1.3.3] — 2026-10-10
 
 ### Security

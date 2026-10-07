@@ -229,7 +229,7 @@ const config = {
   // purchased. See src/constants/subscription-tiers.js's
   // effectiveApiKeyLimit/effectiveWebhookEndpointLimit, the only two places
   // these are read.
-  reservedApiKeysForFrontend: parseInt(process.env.RESERVED_FRONTEND_API_KEYS, 10) || 5,
+  reservedApiKeysForFrontend: parseInt(process.env.RESERVED_FRONTEND_API_KEYS, 10) || 6,
   reservedWebhookEndpointsForFrontend: parseInt(process.env.RESERVED_FRONTEND_WEBHOOKS, 10) || 1,
 };
 

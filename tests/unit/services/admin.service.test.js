@@ -332,7 +332,7 @@ describe('AdminService', () => {
 
     test('rejects minting a reserved key past the sanity ceiling', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
-      apiKeyModel.countReservedByTenantId.mockResolvedValue(5);
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(6);
 
       await expect(adminService.createApiKey(1, { label: 'App — Viewer', environment: 'sandbox', isReserved: true }))
         .rejects.toMatchObject({ statusCode: 409, code: 'RESERVED_KEY_LIMIT_REACHED' });
