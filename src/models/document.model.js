@@ -22,8 +22,8 @@ const MUTABLE_EXTRA_COLUMNS = new Set([
 ]);
 
 async function create({ issuerId, documentType, accessKey, sequential, branchCode, issuePointCode, issueDate, status, unsignedXml, signedXml, buyerId, buyerName, buyerIdType, subtotal, total, requestPayload, buyerEmail, idempotencyKey, payloadHash }, client) {
-  const q = client || db;
-  const { rows } = await q.query(
+  // client must carry issuer context (setIssuerContext) — RLS rejects the insert otherwise
+  const { rows } = await client.query(
     `INSERT INTO documents
       (issuer_id, document_type, access_key, sequential, branch_code, issue_point_code, issue_date, status, unsigned_xml, signed_xml, buyer_id, buyer_name, buyer_id_type, subtotal, total, request_payload, buyer_email, idempotency_key, payload_hash)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
@@ -43,10 +43,10 @@ async function findByAccessKey(accessKey, issuerId = null, sandbox = false) {
     );
     return rows[0] || null;
   }
-  // Bypass mode (admin link-invoice, webhook, etc.) — mirrors findByEmailMessageId:
+  // System context (admin link-invoice, admin RIDE) — mirrors findByEmailMessageId:
   // search both schemas so a sandbox invoice can be linked during testing without
   // requiring the operator to have a production environment set up.
-  const { rows } = await db.query(
+  const { rows } = await db.queryAsSystem(
     `SELECT *, false AS sandbox FROM public.documents   WHERE access_key = $1
      UNION ALL
      SELECT *, true  AS sandbox FROM sandbox.documents WHERE access_key = $1
@@ -72,11 +72,6 @@ async function findCreditNotesByOriginalDocument(issuerId, originalDocumentType,
   return rows;
 }
 
-async function findById(id) {
-  const { rows } = await db.query('SELECT * FROM documents WHERE id = $1', [id]);
-  return rows[0] || null;
-}
-
 async function updateStatus(id, status, extraFields = {}, issuerId = null, sandbox = false, client = null) {
   for (const col of Object.keys(extraFields)) {
     if (!MUTABLE_EXTRA_COLUMNS.has(col)) {
@@ -100,33 +95,25 @@ async function updateStatus(id, status, extraFields = {}, issuerId = null, sandb
   let rows;
   if (client) {
     ({ rows } = await client.query(sql, params));
-  } else if (issuerId != null) {
-    ({ rows } = await db.queryAsIssuer(issuerId, sql, params, sandbox));
   } else {
-    ({ rows } = await db.query(sql, params));
+    ({ rows } = await db.queryAsIssuer(issuerId, sql, params, sandbox));
   }
   return rows[0] || null;
 }
 
-async function findByIdempotencyKey(key, issuerId = null, sandbox = false) {
-  if (issuerId != null) {
-    const { rows } = await db.queryAsIssuer(
-      issuerId,
-      'SELECT * FROM documents WHERE idempotency_key = $1',
-      [key],
-      sandbox
-    );
-    return rows[0] || null;
-  }
-  const { rows } = await db.query(
+async function findByIdempotencyKey(key, issuerId, sandbox = false) {
+  const { rows } = await db.queryAsIssuer(
+    issuerId,
     'SELECT * FROM documents WHERE idempotency_key = $1',
-    [key]
+    [key],
+    sandbox
   );
   return rows[0] || null;
 }
 
+// Mailgun webhook lookup — no issuer is known yet, so this runs in system context.
 async function findByEmailMessageId(messageId) {
-  const { rows } = await db.query(
+  const { rows } = await db.queryAsSystem(
     `SELECT *, false AS sandbox FROM public.documents WHERE email_message_id = $1
      UNION ALL
      SELECT *, true AS sandbox FROM sandbox.documents WHERE email_message_id = $1
@@ -136,11 +123,12 @@ async function findByEmailMessageId(messageId) {
   return rows[0] || null;
 }
 
-async function updateEmailStatus(id, emailStatus, sandbox = false) {
-  const schema = sandbox ? 'sandbox' : 'public';
-  const { rows } = await db.query(
-    `UPDATE ${schema}.documents SET email_status = $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
-    [id, emailStatus]
+async function updateEmailStatus(id, emailStatus, sandbox = false, issuerId) {
+  const { rows } = await db.queryAsIssuer(
+    issuerId,
+    'UPDATE documents SET email_status = $2, updated_at = NOW() WHERE id = $1 RETURNING *',
+    [id, emailStatus],
+    sandbox
   );
   return rows[0] || null;
 }
@@ -284,4 +272,4 @@ async function existsByIssuerId(issuerId) {
   return production.length > 0 || sandbox.length > 0;
 }
 
-module.exports = { create, findByAccessKey, findCreditNotesByOriginalDocument, findById, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId, getStats, existsByIssuerId };
+module.exports = { create, findByAccessKey, findCreditNotesByOriginalDocument, updateStatus, findPendingEmails, findByIdempotencyKey, findByEmailMessageId, updateEmailStatus, findByIssuerId, getStats, existsByIssuerId };

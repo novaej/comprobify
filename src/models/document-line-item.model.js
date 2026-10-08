@@ -1,6 +1,4 @@
-const db = require('../config/database');
-
-async function bulkCreate(documentId, items, client, sandbox = false) {
+async function bulkCreate(documentId, items, client) {
   if (!items || items.length === 0) return [];
 
   const COLS_PER_ROW = 11;
@@ -39,10 +37,9 @@ async function bulkCreate(documentId, items, client, sandbox = false) {
     );
   });
 
-  const q = client || db;
-  const schema = client ? '' : (sandbox ? 'sandbox.' : 'public.');
-  const { rows } = await q.query(
-    `INSERT INTO ${schema}document_line_items
+  // client must carry issuer context (setIssuerContext) — it also sets search_path
+  const { rows } = await client.query(
+    `INSERT INTO document_line_items
       (document_id, main_code, aux_code, description, quantity, unit_price, discount, subtotal, taxes, line_total, additional_details)
      VALUES ${placeholders.join(', ')}
      RETURNING *`,

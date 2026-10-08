@@ -12,6 +12,7 @@ When making changes to the codebase, update the corresponding documentation plac
 - ✅ `src/routes/{resource}.routes.js` — add the route
 - ✅ `src/controllers/{resource}.controller.js` — add the controller method
 - ✅ `src/services/{resource}.service.js` — add the service logic
+- ✅ If the endpoint adds a table with `issuer_id`/`document_id`: RLS policy in both schemas (ADR-036) and a case in `tests/integration/rls-fail-closed.test.js`
 - ✅ `src/validators/{resource}.validator.js` — add validation chain
 - ✅ `src/models/{resource}.model.js` — add DB queries if needed
 - ✅ Apply middleware: rate limiting if authenticated, validators, errorHandler

@@ -1,5 +1,7 @@
 # ADR-012: PostgreSQL Row-Level Security for Tenant Isolation
 
+> **Null bypass superseded (2026-10-07):** the policies below let a query through whenever `app.current_issuer_id` is unset. [ADR-036](036-fail-closed-row-level-security.md) removed that: an unset context now sees nothing, cross-issuer access needs an explicit system flag, and `sri_responses` is covered in both schemas. The rest of this ADR (transaction-local setting, `FORCE ROW LEVEL SECURITY`, non-superuser app role) still stands.
+
 > **Update (2026-07-21):** `issuer_id`/`id` columns are now `UUID`, not `BIGINT`. Every `::bigint` cast in the policy SQL below became `::uuid` — the RLS design itself (transaction-local `app.current_issuer_id` GUC, `NULLIF`-based bypass for context-free code paths) is unchanged. See ADR-020.
 
 > **Partially superseded (2026-05-11):** `api_keys` is listed below as one of the five tables under RLS, with a direct `issuer_id` column. [ADR-013](013-tenant-scoped-api-keys.md) made API keys tenant-scoped instead of issuer-scoped — `api_keys.issuer_id` no longer exists, and RLS was dropped from `api_keys` entirely (queries filter by `tenant_id` explicitly in application code instead; see CLAUDE.md's "Tenant-Scoped API Keys" entry). The RLS design for the remaining four tables (`documents`, `document_line_items`, `document_events`, `sequential_numbers`) is unaffected and still current.

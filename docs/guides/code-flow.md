@@ -73,7 +73,9 @@ const getClient = () => pool.connect();
 const setIssuerContext = (client, issuerId) =>
   client.query("SELECT set_config('app.current_issuer_id', $1, true)", [String(issuerId)]);
 const queryAsIssuer = async (issuerId, text, params) => { /* BEGIN + set_config + query + COMMIT */ };
-module.exports = { pool, query, getClient, setIssuerContext, queryAsIssuer };
+const setSystemContext = (client) => client.query("SELECT set_config('app.rls_system', 'on', true)");
+const queryAsSystem = async (text, params) => { /* BEGIN + set_config + query + COMMIT */ };
+module.exports = { pool, query, getClient, setIssuerContext, queryAsIssuer, setSystemContext, queryAsSystem };
 ```
 
 A single `pg.Pool` is created once and shared across the entire process. The pool maintains up to 20 idle connections and reuses them across requests.
@@ -87,6 +89,10 @@ A single `pg.Pool` is created once and shared across the entire process. The poo
 `setIssuerContext(client, issuerId)` sets `app.current_issuer_id` as a transaction-local PostgreSQL config value. It must be called after `BEGIN` on a transaction client. The setting is automatically rolled back if the transaction aborts, so there is no cleanup needed.
 
 `queryAsIssuer(issuerId, text, params)` is the non-transactional equivalent. It opens a dedicated connection, starts a mini-transaction, calls `set_config`, runs the query, commits, and releases the connection — all in one call. Use this in model functions that do a single read outside an explicit transaction.
+
+`setSystemContext(client)` and `queryAsSystem(text, params)` are the cross-issuer equivalents: they set `app.rls_system = 'on'` instead, which lets the policies through for every issuer. Use them only where no single issuer can be known (the Mailgun webhook's lookup, admin lookups by access key). They do not set `search_path`, so sandbox tables must be schema-qualified.
+
+Plain `query` against an RLS table returns nothing and cannot insert — RLS is fail-closed (ADR-036). It remains the right call for tables without RLS.
 
 **Why `set_config` and not `SET LOCAL`?** `SET LOCAL` does not accept parameterized values in PostgreSQL (prepared statement parameters are not valid in `SET` statements). `set_config('app.current_issuer_id', $1, true)` is a regular function call that accepts a parameter, making it safe from injection without string concatenation. The third argument `true` makes the setting transaction-local, equivalent to `SET LOCAL`.
 
@@ -689,7 +695,7 @@ tenants (1)
 
 API keys live at the tenant level and never reference an issuer directly. Every other tenant-scoped table references `issuers(id)` directly or via `documents(id)`, enabling per-branch filtering with a simple `WHERE issuer_id = $1`.
 
-**Row-Level Security** (migration 031) adds a second, database-enforced layer for issuer-scoped tables. Every query on `documents`, `document_line_items`, `document_events`, and `sequential_numbers` is automatically filtered to the current issuer via the `app.current_issuer_id` session setting. A bug that forgets the `WHERE issuer_id = $1` clause still cannot expose another tenant's data — the RLS policy blocks it. The application DB user must not be a PostgreSQL superuser; superusers bypass RLS unconditionally. RLS was dropped from `api_keys` in migration 042 (tenant-scoped keys); the model filters by `tenant_id` explicitly in every query.
+**Row-Level Security** (migrations 031 and 105, ADR-036) adds a second, database-enforced layer for issuer-scoped tables. Every query on `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `sri_responses` (both schemas) is filtered to the current issuer via the transaction-local `app.current_issuer_id` setting. It is fail-closed: a query that sets no context sees no rows at all, so a bug that forgets both the `WHERE issuer_id = $1` clause and the context exposes nothing. Cross-issuer access needs the explicit `app.rls_system` flag (`db.queryAsSystem`). The application DB user must not be a PostgreSQL superuser or hold `BYPASSRLS`; both skip RLS unconditionally. RLS was dropped from `api_keys` in migration 042 (tenant-scoped keys); the model filters by `tenant_id` explicitly in every query.
 
 ---
 

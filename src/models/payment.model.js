@@ -63,7 +63,8 @@ async function findBySubscriptionId(subscriptionId) {
 // payments don't carry it directly. Defaults to REPORTED (proof submitted,
 // not yet decided) but accepts any status for the same endpoint to reuse.
 async function findAllByStatus(status = 'REPORTED') {
-  const { rows } = await db.query(
+  // System context: the invoice_access_key subselects read RLS-protected documents
+  const { rows } = await db.queryAsSystem(
     `SELECT p.*, s.tenant_id, s.tier, s.billing_interval,
        COALESCE(
          (SELECT access_key FROM public.documents  WHERE id = p.invoice_document_id),

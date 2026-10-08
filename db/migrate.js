@@ -23,6 +23,11 @@ async function migrate() {
     // DROP/CREATE of the public schema in PostgreSQL 15+).
     await client.query('SET search_path TO public');
 
+    // RLS is fail-closed: without system context a data migration on an
+    // RLS table would silently touch zero rows. Session-level on purpose —
+    // some migration files issue their own COMMIT.
+    await client.query("SET app.rls_system = 'on'");
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS migrations (
         id SERIAL PRIMARY KEY,

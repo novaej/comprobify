@@ -80,7 +80,7 @@ describe('MailgunWebhookService', () => {
         event: 'delivered', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'DELIVERED', false);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'DELIVERED', false, '00000000-0000-0000-0000-000000000007');
       expect(documentEventModel.create).toHaveBeenCalledWith(
         '00000000-0000-0000-0000-000000000042', 'EMAIL_DELIVERED', null, null, { to: 'buyer@example.com' }, null, '00000000-0000-0000-0000-000000000007', false
       );
@@ -94,7 +94,7 @@ describe('MailgunWebhookService', () => {
         event: 'complained', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'COMPLAINED', false);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'COMPLAINED', false, '00000000-0000-0000-0000-000000000007');
       expect(documentEventModel.create).toHaveBeenCalledWith(
         '00000000-0000-0000-0000-000000000042', 'EMAIL_COMPLAINED', null, null, { to: 'buyer@example.com' }, null, '00000000-0000-0000-0000-000000000007', false
       );
@@ -120,7 +120,7 @@ describe('MailgunWebhookService', () => {
         event: 'failed', severity: 'permanent', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'FAILED', false);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'FAILED', false, '00000000-0000-0000-0000-000000000007');
       expect(documentEventModel.create).toHaveBeenCalledWith(
         '00000000-0000-0000-0000-000000000042', 'EMAIL_FAILED', null, null, { to: 'buyer@example.com', severity: 'permanent' }, null, '00000000-0000-0000-0000-000000000007', false
       );
@@ -133,7 +133,7 @@ describe('MailgunWebhookService', () => {
         event: 'failed', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'FAILED', false);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'FAILED', false, '00000000-0000-0000-0000-000000000007');
       expect(documentEventModel.create).toHaveBeenCalledWith(
         '00000000-0000-0000-0000-000000000042', 'EMAIL_FAILED', null, null, { to: 'buyer@example.com', severity: undefined }, null, '00000000-0000-0000-0000-000000000007', false
       );
@@ -146,7 +146,7 @@ describe('MailgunWebhookService', () => {
         event: 'delivered', 'message-id': '<abc@mailgun>', recipient: 'buyer@example.com',
       });
 
-      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'DELIVERED', true);
+      expect(documentModel.updateEmailStatus).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042', 'DELIVERED', true, '00000000-0000-0000-0000-000000000007');
       expect(documentEventModel.create).toHaveBeenCalledWith(
         '00000000-0000-0000-0000-000000000042', 'EMAIL_DELIVERED', null, null, { to: 'buyer@example.com' }, null, '00000000-0000-0000-0000-000000000007', true
       );

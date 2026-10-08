@@ -68,6 +68,7 @@ async function sendToSri(accessKey, issuer) {
         messages: null,
         rawResponse: err.rawResponse,
         sandbox: issuer.sandbox,
+        issuerId: issuer.id,
       });
     }
     throw err;
@@ -80,6 +81,7 @@ async function sendToSri(accessKey, issuer) {
     messages: result.messages,
     rawResponse: result.rawResponse,
     sandbox: issuer.sandbox,
+    issuerId: issuer.id,
   });
 
   const isProcessing = result.messages.some(m => m.identifier === '70');
@@ -147,6 +149,7 @@ async function checkAuthorization(accessKey, issuer) {
         messages: null,
         rawResponse: err.rawResponse,
         sandbox: issuer.sandbox,
+        issuerId: issuer.id,
       });
     }
     throw err;
@@ -159,6 +162,7 @@ async function checkAuthorization(accessKey, issuer) {
     messages: result.messages,
     rawResponse: result.rawResponse,
     sandbox: issuer.sandbox,
+    issuerId: issuer.id,
   });
 
   if (result.pending) {
