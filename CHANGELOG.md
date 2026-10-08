@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- **Updated `proxy-addr` 2.0.7 → 2.0.8** (transitive, via Express) for GHSA-jqcg-44mw-7w3h — IP spoofing through an IPv4-mapped IPv6 address when trusting a proxy by subnet. Lockfile-only change.
+
 ## [1.2.2] — 2026-10-04
 
 ### Fixed
