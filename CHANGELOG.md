@@ -11,6 +11,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Security
 - **Row-Level Security now fails closed.** Previously a query that set no issuer context saw every tenant's documents — the policies treated "no context" as "allow everything", so RLS only protected code paths that remembered to opt in. Now a query with no context sees no rows and cannot insert, and the few legitimately cross-tenant paths (the Mailgun webhook's lookup, admin lookups by access key, the admin payments list) declare an explicit system context instead (`db.queryAsSystem`). `sri_responses` gains RLS in the `public` schema, where it had none. Migration 105; manual rollback in `db/rollback/105_rls_fail_open.sql`. No API behavior changes. See ADR-036.
+- **Updated `proxy-addr` 2.0.7 → 2.0.8** (transitive, via Express) for GHSA-jqcg-44mw-7w3h — IP spoofing through an IPv4-mapped IPv6 address when trusting a proxy by subnet. Lockfile-only change.
 
 ### Changed
 - Connecting to the database by hand as `comprobify_app` now shows `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `sri_responses` as empty until the session runs `SET app.rls_system = 'on';` — see `GETTING_STARTED.md`'s "Querying the database by hand".
