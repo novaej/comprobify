@@ -106,7 +106,7 @@ async function getSriResponses(accessKey, issuer) {
   if (!document) {
     throw new NotFoundError('Document');
   }
-  const rows = await sriResponseModel.findByDocumentId(document.id, issuer.sandbox);
+  const rows = await sriResponseModel.findByDocumentId(document.id, issuer.sandbox, issuer.id);
   return rows.map(r => ({
     operationType: r.operation_type,
     status: r.status,

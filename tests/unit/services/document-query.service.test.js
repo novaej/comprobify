@@ -129,7 +129,7 @@ describe('DocumentQueryService', () => {
 
       const result = await documentQueryService.getSriResponses(accessKey, mockIssuer);
 
-      expect(sriResponseModel.findByDocumentId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', false);
+      expect(sriResponseModel.findByDocumentId).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000010', false, mockIssuer.id);
       expect(result).toEqual([
         {
           operationType: 'AUTHORIZATION',

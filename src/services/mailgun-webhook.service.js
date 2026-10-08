@@ -73,13 +73,13 @@ async function processDocumentEvent(document, event, recipient, severity, sandbo
   const issuerId = document.issuer_id;
 
   if (event === 'delivered') {
-    await documentModel.updateEmailStatus(document.id, EmailStatus.DELIVERED, sandbox);
+    await documentModel.updateEmailStatus(document.id, EmailStatus.DELIVERED, sandbox, issuerId);
     await documentEventModel.create(document.id, EventType.EMAIL_DELIVERED, null, null, { to: recipient }, null, issuerId, sandbox);
     return;
   }
 
   if (event === 'complained') {
-    await documentModel.updateEmailStatus(document.id, EmailStatus.COMPLAINED, sandbox);
+    await documentModel.updateEmailStatus(document.id, EmailStatus.COMPLAINED, sandbox, issuerId);
     await documentEventModel.create(document.id, EventType.EMAIL_COMPLAINED, null, null, { to: recipient }, null, issuerId, sandbox);
     return;
   }
@@ -88,7 +88,7 @@ async function processDocumentEvent(document, event, recipient, severity, sandbo
   if (severity === 'temporary') {
     await documentEventModel.create(document.id, EventType.EMAIL_TEMP_FAILED, null, null, { to: recipient, severity }, null, issuerId, sandbox);
   } else {
-    await documentModel.updateEmailStatus(document.id, EmailStatus.FAILED, sandbox);
+    await documentModel.updateEmailStatus(document.id, EmailStatus.FAILED, sandbox, issuerId);
     await documentEventModel.create(document.id, EventType.EMAIL_FAILED, null, null, { to: recipient, severity }, null, issuerId, sandbox);
   }
 }
