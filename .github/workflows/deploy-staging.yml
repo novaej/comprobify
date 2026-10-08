@@ -154,9 +154,28 @@ jobs:
             # this reload into a false "connection refused" failure even though caddy
             # already loaded the Caddyfile fine via its own normal startup. A real,
             # ongoing failure still fails the step - it just survives that one race.
+            caddy_reloaded=false
             for i in 1 2 3 4 5; do
-              docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile && exit 0
+              if docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile; then
+                caddy_reloaded=true
+                break
+              fi
               echo "caddy reload attempt $i/5 failed, retrying in 2s..."
               sleep 2
             done
+            [ "$caddy_reloaded" = true ] || exit 1
+            # "Started" only means the container process launched. The API runs
+            # migrations before it listens, so a migration that fails or blocks
+            # leaves the site down while Compose reports success. Wait for the
+            # API itself to answer before calling the deploy good. Checked from
+            # inside the container since the port is not published on the host.
+            for i in $(seq 1 40); do
+              if docker compose exec -T api node -e "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" 2>/dev/null; then
+                echo "API healthy after attempt $i"
+                exit 0
+              fi
+              sleep 3
+            done
+            echo "API did not become healthy within 120s - last api logs:"
+            docker compose logs --tail=40 api
             exit 1

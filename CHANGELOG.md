@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **A blocked migration no longer hangs the API indefinitely.** The 1.3.0 production deploy left the API unreachable for about seven minutes: migration 105 needed an exclusive lock on the document tables, a SQL client left connected to production held a conflicting one, and the migration waited on it silently while the HTTP server never started. `db/migrate.js` now sets a 10-second `lock_timeout`, so a blocked migration fails with a message naming the cause, applies nothing, and is retried on the container's next restart.
+- **A deploy that leaves the API down now fails.** The deploy workflow reported success as soon as the containers were started, which is before migrations run. It now waits up to 120 seconds for `/health` to answer from inside the `api` container and prints the container's recent logs if it never does. Applied to both `deploy-production.yml` and the disabled `deploy-staging.yml`.
+
 ## [1.3.0] — 2026-10-08
 
 ### Security
