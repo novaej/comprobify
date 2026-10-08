@@ -56,9 +56,7 @@ const queryAsIssuer = async (issuerId, text, params, sandbox = false) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query("SELECT set_config('app.current_issuer_id', $1, true)", [String(issuerId)]);
-    const searchPath = sandbox ? 'sandbox, public' : 'public';
-    await client.query(`SET LOCAL search_path TO ${searchPath}`);
+    await setIssuerContext(client, issuerId, sandbox);
     const result = await client.query(text, params);
     await client.query('COMMIT');
     return result;
@@ -70,4 +68,38 @@ const queryAsIssuer = async (issuerId, text, params, sandbox = false) => {
   }
 };
 
-module.exports = { pool, query, getClient, setIssuerContext, queryAsIssuer };
+/**
+ * Set the transaction-local system context on an existing client: RLS
+ * policies let it see every issuer's rows. Must be called after BEGIN.
+ * Does not touch search_path — qualify sandbox tables explicitly.
+ *
+ * @param {import('pg').PoolClient} client
+ */
+const setSystemContext = async (client) => {
+  await client.query("SELECT set_config('app.rls_system', 'on', true)");
+};
+
+/**
+ * Run a single parameterised query in system context. Only for code paths
+ * that are legitimately cross-issuer (webhook lookup, admin, cron).
+ *
+ * @param {string} text
+ * @param {Array} [params]
+ */
+const queryAsSystem = async (text, params) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await setSystemContext(client);
+    const result = await client.query(text, params);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { pool, query, getClient, setIssuerContext, queryAsIssuer, setSystemContext, queryAsSystem };

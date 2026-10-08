@@ -5,10 +5,9 @@ name: CI
 # branch ruleset, so a PR can't merge with a failing test or a newly
 # introduced vulnerable production dependency.
 #
-# Deliberately npm run test:unit, not the bare `npm test`/`jest` - Jest's
-# default testMatch picks up tests/integration/**/*.test.js too, which needs
-# a live Postgres connection this workflow doesn't provision. See CLAUDE.md's
-# Commands section: "npm run test:unit  # unit tests only (no DB required)".
+# Unit and integration tests run as separate steps: test:unit needs no
+# database, test:integration runs against the throwaway Postgres service
+# below (never a real database - the tests create and delete fixture rows).
 on:
   pull_request:
     branches: [main]
@@ -19,6 +18,18 @@ jobs:
   test:
     name: Test and audit
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
 
@@ -38,6 +49,30 @@ jobs:
 
       - name: Run unit tests
         run: npm run test:unit
+
+      # The app role must be a plain, non-superuser role that owns its own
+      # tables - superusers bypass RLS, which would make the RLS tests pass
+      # for the wrong reason. Mirrors GETTING_STARTED.md's local setup.
+      - name: Create integration test database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE comprobify_app LOGIN PASSWORD 'ci_password'" \
+            -c "CREATE DATABASE comprobify_test OWNER comprobify_app"
+
+      - name: Run integration tests
+        env:
+          APP_ENV: staging
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: comprobify_test
+          DB_USER: comprobify_app
+          DB_PASSWORD: ci_password
+          DB_SSL: 'false'
+        run: |
+          npm run migrate
+          npm run test:integration
 
       # Production dependencies only - dev-only tooling (currently
       # vitepress's own vite/esbuild pin, see docs/security-audit-2026-09-12.md
