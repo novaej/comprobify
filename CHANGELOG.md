@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- **Row-Level Security now fails closed.** Previously a query that set no issuer context saw every tenant's documents — the policies treated "no context" as "allow everything", so RLS only protected code paths that remembered to opt in. Now a query with no context sees no rows and cannot insert, and the few legitimately cross-tenant paths (the Mailgun webhook's lookup, admin lookups by access key, the admin payments list) declare an explicit system context instead (`db.queryAsSystem`). `sri_responses` gains RLS in the `public` schema, where it had none. Migration 105; manual rollback in `db/rollback/105_rls_fail_open.sql`. No API behavior changes. See ADR-036.
+
+### Changed
+- Connecting to the database by hand as `comprobify_app` now shows `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `sri_responses` as empty until the session runs `SET app.rls_system = 'on';` — see `GETTING_STARTED.md`'s "Querying the database by hand".
+- CI now runs integration tests against a throwaway Postgres (`npm run test:integration`), in addition to the unit suite. First test in that suite: `tests/integration/rls-fail-closed.test.js`.
+
 ## [1.2.2] — 2026-10-04
 
 ### Fixed

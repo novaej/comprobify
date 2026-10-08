@@ -1,9 +1,8 @@
 /**
- * Gate for the fail-closed RLS rollout (docs/plans/rls-fail-closed.md).
+ * Proves Row-Level Security is fail-closed (ADR-036).
  *
  * Runs against a real Postgres with all migrations applied, connected as the
  * non-superuser app role. Refuses to run unless DB_NAME ends in "_test".
- * Expected to FAIL until migration 105 and the db helpers exist.
  *
  *   DB_NAME=comprobify_test npm run migrate
  *   DB_NAME=comprobify_test npm run test:integration
@@ -472,7 +471,7 @@ describe('application code paths', () => {
   });
 
   // Need the HTTP app, RabbitMQ and SRI mock mode; run as staging smoke tests
-  // until an end-to-end harness exists. See the plan's pre-production checklist.
+  // by hand until an end-to-end harness exists.
   test.todo('POST /v1/documents → send → authorize in sandbox reaches AUTHORIZED (worker writes sri_responses)');
   test.todo('same flow for a promoted tenant in the public schema');
   test.todo('X-Issuer-Id of another tenant returns 403 and reads nothing');

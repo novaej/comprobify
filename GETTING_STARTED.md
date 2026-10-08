@@ -507,6 +507,44 @@ docker rmi comprobify
 
 ---
 
+## Integration tests
+
+`npm run test:unit` needs no database. `npm run test:integration` runs against a real Postgres and refuses to start unless the database name ends in `_test` — the tests create and delete rows, so they must never point at a database you care about.
+
+One-time setup (the app role can't create databases itself):
+
+```bash
+# native install
+psql -U postgres -c "CREATE DATABASE comprobify_test OWNER comprobify_app;"
+# Docker
+docker exec postgres18 psql -U postgres -c "CREATE DATABASE comprobify_test OWNER comprobify_app;"
+```
+
+Then, whenever migrations change:
+
+```bash
+DB_NAME=comprobify_test npm run migrate
+DB_NAME=comprobify_test npm run test:integration
+```
+
+The tests must connect as the same non-superuser role the app uses. A superuser bypasses Row-Level Security, which would make the RLS tests meaningless — the suite checks for this and fails.
+
+---
+
+## Querying the database by hand
+
+Row-Level Security is fail-closed ([ADR-036](docs/adr/036-fail-closed-row-level-security.md)). Connected as `comprobify_app` from `psql`, DBeaver, or any other client, `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `sri_responses` (in both `public` and `sandbox`) look **empty** until the session declares a context:
+
+```sql
+SET app.rls_system = 'on';                      -- see every issuer's rows
+-- or
+SET app.current_issuer_id = '<issuer uuid>';    -- see one issuer's rows
+```
+
+Both last for the session; `RESET app.rls_system;` undoes it. Updates and deletes without a context match zero rows and report success, so check the affected row count. Every other table is unaffected.
+
+---
+
 ## Reset the database (dev only)
 
 To wipe all data and start fresh:

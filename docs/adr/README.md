@@ -120,3 +120,4 @@ YYYY-MM-DD
 | [033](033-immediate-cross-interval-upgrade.md) | Immediate Proration for a MONTHLY → YEARLY Upgrade | Accepted | 2026-09-04 |
 | [034](034-entry-tier-gating-and-reserved-frontend-pool.md) | Entry-Tier Feature Gating and a Reserved Frontend API Key/Webhook Pool | Accepted | 2026-09-08 |
 | [035](035-frontend-only-account-lifecycle.md) | Account Creation, Recovery, and Activation Are Frontend-Only | Accepted | 2026-09-08 |
+| [036](036-fail-closed-row-level-security.md) | Fail-Closed Row-Level Security | Accepted | 2026-10-07 |

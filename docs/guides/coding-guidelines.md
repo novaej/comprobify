@@ -20,6 +20,7 @@ Route → Validator → Controller → Service → Model / Builder / Helper
 
 1. Add the SQL migration in `db/migrations/NNN_description.sql`
 2. Run `npm run migrate`
+   - A new table that carries `issuer_id` or `document_id` needs RLS in the same migration, in both the `public` and `sandbox` schemas: `ENABLE` + `FORCE ROW LEVEL SECURITY` and a fail-closed policy with `WITH CHECK` (copy the shape from `db/migrations/105_rls_fail_closed.sql`). Query it through `db.queryAsIssuer`/`db.setIssuerContext`, never plain `db.query()`. See ADR-036.
 3. Create or update the model in `src/models/`
 4. Create or update the service in `src/services/`
 5. Add the validator chain in `src/validators/`
