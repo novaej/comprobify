@@ -47,10 +47,16 @@ function applyStagingBanner({ subject, text, html }, language = 'es') {
  * @param {object} document - DB row from documents table
  * @returns {Promise<{ sent: boolean, reason?: string }>}
  */
+// EMAIL_PROVIDER=none turns sending off (local runs, demos). Callers record
+// that as skipped — it is not a failure and must not be retried.
+const emailDisabled = () => config.email.provider === 'none';
+const DISABLED = { sent: false, reason: 'email_disabled' };
+
 async function sendInvoiceAuthorized(document) {
   if (!document.buyer_email) {
     return { sent: false, reason: 'no_email' };
   }
+  if (emailDisabled()) return DISABLED;
 
   const issuer = await issuerModel.findById(document.issuer_id);
   const tenant = await tenantModel.findById(issuer.tenant_id);
@@ -120,6 +126,7 @@ async function sendPaymentProofSubmitted(payment, subscription, tenant, referenc
   if (!config.adminNotificationEmail) {
     return { sent: false, reason: 'no_admin_email' };
   }
+  if (emailDisabled()) return DISABLED;
 
   const rendered = paymentProofSubmittedTemplate.render(payment, subscription, tenant, referenceNumber);
   const { subject, text, html } = applyStagingBanner(rendered, 'en');
@@ -148,6 +155,7 @@ async function sendPaymentVerifiedOperator(payment, subscription, tenant) {
   if (!config.adminNotificationEmail) {
     return { sent: false, reason: 'no_admin_email' };
   }
+  if (emailDisabled()) return DISABLED;
 
   const rendered = paymentVerifiedOperatorTemplate.render(payment, subscription, tenant);
   const { subject, text, html } = applyStagingBanner(rendered, 'en');
@@ -177,9 +185,10 @@ async function sendPaymentVerifiedOperator(payment, subscription, tenant) {
  *
  * @param {object} tenant - DB row from tenants table (needs .email)
  * @param {{ subject: string, text: string, html: string }} rendered - from notificationEmailTemplateService.render()
- * @returns {Promise<{ sent: boolean }>}
+ * @returns {Promise<{ sent: boolean, reason?: string }>}
  */
 async function sendNotificationEmail(tenant, rendered) {
+  if (emailDisabled()) return DISABLED;
   const language = tenant.preferred_language || 'es';
   const { subject, text, html } = applyStagingBanner(rendered, language);
   const provider = emailFactory.getProvider();

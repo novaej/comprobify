@@ -259,6 +259,19 @@ describe('NOTIFICATION_DISPATCH handler', () => {
     expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('notif-1', 'SENT');
   });
 
+  test('marks the notification SKIPPED, not SENT, when sending is turned off', async () => {
+    notificationModel.findById.mockResolvedValue({ id: 'notif-1', tenant_id: 'tenant-1', type: 'PAYMENT_VERIFIED', metadata: {} });
+    notificationPreferenceModel.isEnabled.mockResolvedValue(true);
+    tenantModel.findById.mockResolvedValue({ id: 'tenant-1', email: 'tenant@example.com', preferred_language: 'es' });
+    notificationEmailTemplateService.render.mockResolvedValue({ subject: 's', text: 't', html: 'h' });
+    emailService.sendNotificationEmail.mockResolvedValue({ sent: false, reason: 'email_disabled' });
+
+    await getHandler('NOTIFICATION_DISPATCH')({ notificationId: 'notif-1' });
+
+    expect(notificationModel.updateEmailStatus).toHaveBeenCalledWith('notif-1', 'SKIPPED');
+    expect(notificationModel.updateEmailStatus).not.toHaveBeenCalledWith('notif-1', 'SENT');
+  });
+
   test('falls back to "es" when the tenant has no preferred_language set', async () => {
     const tenant = { id: 'tenant-1', email: 'tenant@example.com', preferred_language: null };
     const notification = { id: 'notif-2', tenant_id: 'tenant-1', type: 'SUBSCRIPTION_EXPIRED', metadata: { subscriptionId: 'sub-1' } };

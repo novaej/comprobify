@@ -19,6 +19,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 - Querying the protected tables by hand as `comprobify_app` now returns an error until the session sets a context (`SET app.rls_system = 'on';`). Previously the document tables looked empty.
 
+### Fixed
+- **`EMAIL_PROVIDER=none` made every email effect fail instead of skipping.** Only registration checked for it; the invoice email, notification emails and the two operator emails went on to ask for a provider, got `Unknown email provider: none`, and were retried until marked failed. Sending is now skipped cleanly: an invoice email is recorded as `SKIPPED` with an `EMAIL_SKIPPED` event (also on `POST /email-retry`, so it isn't picked up again), a notification's `email_status` becomes `SKIPPED`, and no RIDE is generated for an email that will not be sent. Deployments that use Mailgun were not affected.
+
 ## [1.3.1] — 2026-10-09
 
 ### Added

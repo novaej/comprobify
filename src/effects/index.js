@@ -177,8 +177,8 @@ const handlers = {
       const tenant = await tenantModel.findById(notification.tenant_id);
       const language = tenant.preferred_language || 'es';
       const rendered = await notificationEmailTemplateService.render(notification.type, language, notification);
-      await emailService.sendNotificationEmail(tenant, rendered);
-      await notificationModel.updateEmailStatus(notification.id, EmailStatus.SENT);
+      const { sent } = await emailService.sendNotificationEmail(tenant, rendered);
+      await notificationModel.updateEmailStatus(notification.id, sent ? EmailStatus.SENT : EmailStatus.SKIPPED);
     } catch (err) {
       await notificationModel.updateEmailStatus(notification.id, EmailStatus.FAILED);
       throw err;

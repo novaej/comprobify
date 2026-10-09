@@ -126,6 +126,32 @@ describe('EmailService', () => {
     });
   });
 
+  describe('when EMAIL_PROVIDER is "none"', () => {
+    const invoiceDocument = { id: 'doc-1', issuer_id: 'issuer-1', buyer_email: 'buyer@example.com', access_key: '1'.repeat(49), signed_xml: '<x/>' };
+
+    beforeEach(() => { config.email.provider = 'none'; });
+    afterEach(() => { delete config.email.provider; });
+
+    test('every send reports it was skipped and never asks for a provider', async () => {
+      config.adminNotificationEmail = 'ops@comprobify.test';
+      const skipped = { sent: false, reason: 'email_disabled' };
+
+      expect(await emailService.sendInvoiceAuthorized(invoiceDocument)).toEqual(skipped);
+      expect(await emailService.sendNotificationEmail({ email: 't@example.com' }, { subject: 's', text: 't', html: 'h' })).toEqual(skipped);
+      expect(await emailService.sendPaymentProofSubmitted({}, {}, {})).toEqual(skipped);
+      expect(await emailService.sendPaymentVerifiedOperator({}, {}, {})).toEqual(skipped);
+
+      expect(emailFactory.getProvider).not.toHaveBeenCalled();
+      expect(mockSend).not.toHaveBeenCalled();
+      // No RIDE is generated for an email that will not be sent.
+      expect(rideService.generate).not.toHaveBeenCalled();
+    });
+
+    test('a document with no buyer email is still reported as no_email', async () => {
+      expect(await emailService.sendInvoiceAuthorized({ ...invoiceDocument, buyer_email: null })).toEqual({ sent: false, reason: 'no_email' });
+    });
+  });
+
   describe('sendVerificationEmail', () => {
     beforeEach(() => {
       verifyEmailTemplate.render.mockReturnValue({

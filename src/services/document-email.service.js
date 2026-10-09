@@ -8,13 +8,24 @@ const EmailStatus = require('../constants/email-status');
 const EventType = require('../constants/event-type');
 const ErrorCodes = require('../constants/error-codes');
 
+async function markSkipped(document, issuer) {
+  await documentModel.updateStatus(document.id, document.status, { email_status: EmailStatus.SKIPPED }, issuer.id, issuer.sandbox);
+  await documentEventModel.create(document.id, EventType.EMAIL_SKIPPED,
+    null, null, { to: document.buyer_email, retried: true }, null, issuer.id, issuer.sandbox);
+}
+
 async function retryFailedEmails(issuer) {
   const documents = await documentModel.findPendingEmails(issuer.id, issuer.sandbox);
   const result = { sent: 0, failed: 0 };
 
   for (const doc of documents) {
     try {
-      const { messageId } = await emailService.sendInvoiceAuthorized(doc);
+      const { sent, messageId } = await emailService.sendInvoiceAuthorized(doc);
+      if (!sent) {
+        // Sending is off (EMAIL_PROVIDER=none) — record it so it isn't picked up again.
+        await markSkipped(doc, issuer);
+        continue;
+      }
       await documentModel.updateStatus(doc.id, doc.status, {
         email_status: EmailStatus.SENT,
         email_sent_at: new Date(),
@@ -62,7 +73,11 @@ async function retrySingleEmail(accessKey, { force = false } = {}, issuer) {
   }
 
   try {
-    const { messageId } = await emailService.sendInvoiceAuthorized(document);
+    const { sent, reason, messageId } = await emailService.sendInvoiceAuthorized(document);
+    if (!sent) {
+      await markSkipped(document, issuer);
+      return { sent: false, reason };
+    }
     await documentModel.updateStatus(document.id, document.status, {
       email_status: EmailStatus.SENT,
       email_sent_at: new Date(),

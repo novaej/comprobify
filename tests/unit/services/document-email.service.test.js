@@ -28,7 +28,7 @@ describe('DocumentEmailService', () => {
     test('sends a pending email, updates status to SENT, and logs EMAIL_SENT', async () => {
       const doc = { id: '00000000-0000-0000-0000-000000000001', status: 'AUTHORIZED', buyer_email: 'buyer@example.com' };
       documentModel.findPendingEmails.mockResolvedValue([doc]);
-      emailService.sendInvoiceAuthorized.mockResolvedValue({ messageId: 'msg-1' });
+      emailService.sendInvoiceAuthorized.mockResolvedValue({ sent: true, messageId: 'msg-1' });
       documentModel.updateStatus.mockResolvedValue({ ...doc, email_status: 'SENT' });
 
       const result = await documentEmailService.retryFailedEmails(mockIssuer);
@@ -69,13 +69,42 @@ describe('DocumentEmailService', () => {
       const doc2 = { id: '00000000-0000-0000-0000-000000000002', status: 'AUTHORIZED', buyer_email: 'b@example.com' };
       documentModel.findPendingEmails.mockResolvedValue([doc1, doc2]);
       emailService.sendInvoiceAuthorized
-        .mockResolvedValueOnce({ messageId: 'msg-1' })
+        .mockResolvedValueOnce({ sent: true, messageId: 'msg-1' })
         .mockRejectedValueOnce(new Error('bounce'));
       documentModel.updateStatus.mockResolvedValue({});
 
       const result = await documentEmailService.retryFailedEmails(mockIssuer);
 
       expect(result).toEqual({ sent: 1, failed: 1 });
+    });
+  });
+
+  describe('when sending is turned off (EMAIL_PROVIDER=none)', () => {
+    const DISABLED = { sent: false, reason: 'email_disabled' };
+
+    test('batch retry marks the document SKIPPED, logs EMAIL_SKIPPED, and counts it as neither sent nor failed', async () => {
+      const doc = { id: 'doc-1', status: 'AUTHORIZED', buyer_email: 'buyer@example.com' };
+      documentModel.findPendingEmails.mockResolvedValue([doc]);
+      emailService.sendInvoiceAuthorized.mockResolvedValue(DISABLED);
+
+      const result = await documentEmailService.retryFailedEmails(mockIssuer);
+
+      expect(result).toEqual({ sent: 0, failed: 0 });
+      expect(documentModel.updateStatus).toHaveBeenCalledWith('doc-1', 'AUTHORIZED', { email_status: 'SKIPPED' }, mockIssuer.id, mockIssuer.sandbox);
+      expect(documentEventModel.create).toHaveBeenCalledWith('doc-1', 'EMAIL_SKIPPED',
+        null, null, { to: 'buyer@example.com', retried: true }, null, mockIssuer.id, mockIssuer.sandbox);
+    });
+
+    test('single retry marks the document SKIPPED and reports why', async () => {
+      documentModel.findByAccessKey.mockResolvedValue({ id: 'doc-2', status: 'AUTHORIZED', buyer_email: 'buyer@example.com', email_status: 'FAILED' });
+      emailService.sendInvoiceAuthorized.mockResolvedValue(DISABLED);
+
+      const result = await documentEmailService.retrySingleEmail('0'.repeat(49), {}, mockIssuer);
+
+      expect(result).toEqual({ sent: false, reason: 'email_disabled' });
+      expect(documentModel.updateStatus).toHaveBeenCalledWith('doc-2', 'AUTHORIZED', { email_status: 'SKIPPED' }, mockIssuer.id, mockIssuer.sandbox);
+      expect(documentEventModel.create).toHaveBeenCalledWith('doc-2', 'EMAIL_SKIPPED',
+        null, null, expect.any(Object), null, mockIssuer.id, mockIssuer.sandbox);
     });
   });
 
@@ -140,7 +169,7 @@ describe('DocumentEmailService', () => {
       documentModel.findByAccessKey.mockResolvedValue({
         id: '00000000-0000-0000-0000-000000000001', status: 'AUTHORIZED', buyer_email: 'buyer@example.com', email_status: 'SENT',
       });
-      emailService.sendInvoiceAuthorized.mockResolvedValue({ messageId: 'msg-2' });
+      emailService.sendInvoiceAuthorized.mockResolvedValue({ sent: true, messageId: 'msg-2' });
       documentModel.updateStatus.mockResolvedValue({});
 
       const result = await documentEmailService.retrySingleEmail(accessKey, { force: true }, mockIssuer);
@@ -152,7 +181,7 @@ describe('DocumentEmailService', () => {
     test('sends, updates status to SENT, logs EMAIL_SENT, returns sent=true', async () => {
       const document = { id: '00000000-0000-0000-0000-000000000001', status: 'AUTHORIZED', buyer_email: 'buyer@example.com', email_status: 'PENDING' };
       documentModel.findByAccessKey.mockResolvedValue(document);
-      emailService.sendInvoiceAuthorized.mockResolvedValue({ messageId: 'msg-3' });
+      emailService.sendInvoiceAuthorized.mockResolvedValue({ sent: true, messageId: 'msg-3' });
       documentModel.updateStatus.mockResolvedValue({});
 
       const result = await documentEmailService.retrySingleEmail(accessKey, {}, mockIssuer);
