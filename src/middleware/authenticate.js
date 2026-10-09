@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const apiKeyModel = require('../models/api-key.model');
+const rlsContext = require('../config/rls-context');
 const attemptTrackerService = require('../services/attempt-tracker.service');
 const AttemptEventTypes = require('../constants/attempt-event-types');
 const AppError = require('../errors/app-error');
@@ -21,7 +22,8 @@ const authenticate = async (req, _res, next) => {
   }
 
   const keyHash = crypto.createHash('sha256').update(token).digest('hex');
-  const row = await apiKeyModel.findByKeyHash(keyHash);
+  // No tenant is known until the key resolves, so the lookup itself is system context.
+  const row = await rlsContext.runAsSystem(() => apiKeyModel.findByKeyHash(keyHash));
 
   if (!row) {
     // Repeated failed lookups for the same keyHash can indicate someone
@@ -34,7 +36,7 @@ const authenticate = async (req, _res, next) => {
   // attemptTrackerService.recordEvent() below (which never throws), a raw
   // db.query() can reject, so this gets its own .catch() to avoid an
   // unhandled rejection instead of being left to crash the process.
-  apiKeyModel.touchUsage(row.key_id).catch((err) =>
+  rlsContext.runAsSystem(() => apiKeyModel.touchUsage(row.key_id)).catch((err) =>
     logger.error('api_key_usage_update_failed', { error: err.message, keyId: row.key_id })
   );
 
@@ -65,7 +67,8 @@ const authenticate = async (req, _res, next) => {
     pendingExtraSeats: row.tenant_pending_extra_seats ?? null,
   };
 
-  next();
+  // Everything downstream of this middleware runs as this tenant.
+  rlsContext.runAsTenant(row.tenant_id, next);
 };
 
 module.exports = authenticate;

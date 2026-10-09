@@ -66,6 +66,25 @@ describe('authenticate middleware', () => {
     expect(req.apiKey.isReserved).toBe(true);
   });
 
+  test('looks the key up in system context and runs the rest of the request as the tenant', async () => {
+    const rlsContext = require('../../../src/config/rls-context');
+    let duringLookup;
+    apiKeyModel.findByKeyHash.mockImplementation(async () => {
+      duringLookup = rlsContext.current();
+      return mockRow;
+    });
+    let downstream;
+    await new Promise((resolve, reject) => {
+      authenticate(makeReq('Bearer mytoken'), {}, (err) => {
+        downstream = rlsContext.current();
+        return err ? reject(err) : resolve();
+      });
+    });
+    expect(duringLookup).toEqual({ system: true });
+    expect(downstream).toEqual({ tenantId: mockRow.tenant_id });
+    expect(rlsContext.current()).toBeNull();
+  });
+
   test('passes 401 when Authorization header is missing', async () => {
     const req = makeReq(undefined);
     await expect(runMiddleware(req)).rejects.toMatchObject({ statusCode: 401 });

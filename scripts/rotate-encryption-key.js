@@ -161,6 +161,7 @@ async function main() {
   const client = await db.getClient();
   try {
     await client.query('BEGIN');
+    await db.setSystemContext(client);
 
     // No active-only filter: an inactive (soft-deleted) issuer can still be
     // reactivated later (PATCH /v1/issuers/:id/activate), so its key needs

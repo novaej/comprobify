@@ -96,6 +96,7 @@ async function rollover(tenantId, newPeriodStart, newPeriodEnd, documentQuota, b
   const client = await getClient();
   try {
     await client.query('BEGIN');
+    await db.applyContext(client);
     await client.query(
       'UPDATE tenant_quotas SET is_current = false WHERE tenant_id = $1 AND is_current = true',
       [tenantId]

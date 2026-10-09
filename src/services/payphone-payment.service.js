@@ -174,6 +174,7 @@ async function resolveOutcome({ payphoneId, clientTransactionId, tenantId }) {
   let attempt;
   try {
     await client.query('BEGIN');
+    await db.applyContext(client);
 
     attempt = await payphoneTransactionModel.claimByClientTransactionId(client, clientTransactionId);
     if (!attempt) {

@@ -4,6 +4,7 @@ const controller = require('../controllers/admin.controller');
 const asyncHandler = require('../middleware/async-handler');
 const validateRequest = require('../middleware/validate-request');
 const authenticateAdmin = require('../middleware/authenticate-admin');
+const systemContext = require('../middleware/system-context');
 const { adminLimiter } = require('../middleware/rate-limit');
 const v = require('../validators/admin.validator');
 
@@ -12,6 +13,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(adminLimiter);
 router.use(authenticateAdmin);
+router.use(systemContext);
 
 // Tenants
 router.get('/tenants',                                                           asyncHandler(controller.listTenants));
