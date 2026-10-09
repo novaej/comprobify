@@ -112,6 +112,13 @@ describe('EmailService', () => {
       expect(invoiceAuthorizedTemplate.render).toHaveBeenCalledWith(document, issuer, 'es');
     });
 
+    test('attaches the signed XML when there is no authorization XML (SRI mock mode)', async () => {
+      await emailService.sendInvoiceAuthorized({ ...document, authorization_xml: null, signed_xml: '<factura>signed</factura>' });
+
+      const { attachments } = mockSend.mock.calls[0][0];
+      expect(attachments[1].data).toEqual(Buffer.from('<factura>signed</factura>', 'utf8'));
+    });
+
     test('propagates the error when the provider send fails', async () => {
       mockSend.mockRejectedValue(new Error('mailgun down'));
 

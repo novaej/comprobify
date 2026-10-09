@@ -55,7 +55,8 @@ async function sendInvoiceAuthorized(document) {
   const issuer = await issuerModel.findById(document.issuer_id);
   const tenant = await tenantModel.findById(issuer.tenant_id);
   const ridePdf  = await rideService.generate(document);
-  const xmlBytes = Buffer.from(document.authorization_xml, 'utf8');
+  // No authorization XML under SRI_MOCK_MODE — same fallback as the RIDE and GET /:key/xml.
+  const xmlBytes = Buffer.from(document.authorization_xml || document.signed_xml, 'utf8');
 
   const language = tenant.preferred_language || 'es';
   const rendered = invoiceAuthorizedTemplate.render(document, issuer, language);
