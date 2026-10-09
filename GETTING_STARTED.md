@@ -543,6 +543,8 @@ SET app.current_issuer_id = '<issuer uuid>';    -- see one issuer's rows
 
 Both last for the session; `RESET app.rls_system;` undoes it. Updates and deletes without a context match zero rows and report success, so check the affected row count. Every other table is unaffected.
 
+> **On production, don't leave a client connected with an open transaction.** A client in manual-commit mode (DBeaver's default for some drivers) keeps its locks until you commit or disconnect. A migration that alters a table you queried then can't get its lock, and the deploy fails after 10 seconds per attempt until you disconnect. Use auto-commit, or disconnect when you're done.
+
 ---
 
 ## Reset the database (dev only)
