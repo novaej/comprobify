@@ -82,6 +82,7 @@ async function register(fields, p12Buffer, p12Password, logoBuffer = null) {
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
+      await db.applyContext(client);
       tenant = await tenantModel.create({
         email: fields.email,
         subscriptionTier: 'FREE',

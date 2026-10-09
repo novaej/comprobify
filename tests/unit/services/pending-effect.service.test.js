@@ -122,6 +122,24 @@ describe('PendingEffectService', () => {
       expect(logger.info).toHaveBeenCalledWith('[worker] done', expect.objectContaining({ effectId: 'effect-1', effectType: 'WEBHOOK_FANOUT' }));
     });
 
+    test('claims in system context and runs the handler as the effect\'s own tenant', async () => {
+      const rlsContext = require('../../../src/config/rls-context');
+      const effect = { id: 'effect-1', tenant_id: 'tenant-9', status: 'DISPATCHED', effect_type: 'WEBHOOK_FANOUT', payload: {}, attempt_count: 0 };
+      let duringClaim;
+      let duringHandler;
+      pendingEffectModel.claimForProcessing.mockImplementation(async () => {
+        duringClaim = rlsContext.current();
+        return effect;
+      });
+      getHandler.mockReturnValue(async () => { duringHandler = rlsContext.current(); });
+
+      await pendingEffectService.process('effect-1');
+
+      expect(duringClaim).toEqual({ system: true });
+      expect(duringHandler).toEqual({ tenantId: 'tenant-9' });
+      expect(db.applyContext).toHaveBeenCalledWith(mockClient);
+    });
+
     test('leaves the row untouched (no DONE, no attempt bump) when the handler returns { requeue: true }', async () => {
       const effect = { id: 'effect-2', status: 'DISPATCHED', effect_type: 'SRI_AUTHORIZE', payload: {}, attempt_count: 0 };
       pendingEffectModel.claimForProcessing.mockResolvedValue(effect);

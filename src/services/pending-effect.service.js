@@ -14,6 +14,7 @@
 // undispatched (or dispatched-but-never-processed) is picked up by
 // queue-reconciliation.service.js's reconcilePendingEffects().
 const db = require('../config/database');
+const rlsContext = require('../config/rls-context');
 const pendingEffectModel = require('../models/pending-effect.model');
 const queueService = require('./queue.service');
 const { routingKeyForEffectType } = require('../constants/effect-types');
@@ -96,7 +97,10 @@ async function retryEffect(effectId) {
  * non-benign error, in which case it rethrows (caller should nack, no
  * requeue — reconciliation is the retry mechanism, not RabbitMQ).
  */
-async function process(effectId) {
+// Claiming and bookkeeping span every tenant's effects, so they run as system.
+const process = (effectId) => rlsContext.runAsSystem(() => processEffect(effectId));
+
+async function processEffect(effectId) {
   const { getHandler } = require('../effects'); // lazy: effects/index.js requires services that require this file
   const startedAt = Date.now();
   const client = await db.getClient();
@@ -106,6 +110,7 @@ async function process(effectId) {
 
   try {
     await client.query('BEGIN');
+    await db.applyContext(client);
     effect = await pendingEffectModel.claimForProcessing(client, effectId);
 
     if (!effect || effect.status === 'DONE' || effect.status === 'FAILED') {
@@ -115,7 +120,8 @@ async function process(effectId) {
     }
 
     try {
-      handlerResult = await getHandler(effect.effect_type)(effect.payload);
+      // The handler acts for the effect's own tenant, not with system reach.
+      handlerResult = await rlsContext.runAsTenant(effect.tenant_id, () => getHandler(effect.effect_type)(effect.payload));
     } catch (err) {
       handlerError = err;
     }

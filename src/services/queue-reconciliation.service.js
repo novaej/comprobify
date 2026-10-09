@@ -27,6 +27,7 @@ async function reconcilePendingEffects() {
   let republished = 0;
   try {
     await client.query('BEGIN');
+    await db.applyContext(client);
 
     const rows = await pendingEffectModel.findStaleForReconciliation(client, {
       checkDelayMinutes: config.queueReconciliation.authorizeCheckDelayMinutes,

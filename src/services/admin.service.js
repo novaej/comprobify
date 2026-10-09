@@ -201,6 +201,7 @@ async function createApiKey(tenantId, { label, environment, revokeExisting, scop
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
+      await db.applyContext(client);
       const existing = await apiKeyModel.findByIdAndTenantId(replaceKeyId, tenantId, client);
       if (!existing || !existing.active) {
         throw new NotFoundError('API key');
@@ -336,6 +337,7 @@ async function createWebhookEndpoint(tenantId, { url, eventTypes, isReserved, re
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
+      await db.applyContext(client);
       const existing = await webhookEndpointModel.findByIdAndTenantId(replaceEndpointId, tenantId, client);
       if (!existing || !existing.active) {
         throw new NotFoundError('Webhook endpoint');
