@@ -533,15 +533,18 @@ The tests must connect as the same non-superuser role the app uses. A superuser 
 
 ## Querying the database by hand
 
-Row-Level Security is fail-closed ([ADR-036](docs/adr/036-fail-closed-row-level-security.md)). Connected as `comprobify_app` from `psql`, DBeaver, or any other client, `documents`, `document_line_items`, `document_events`, `sequential_numbers`, and `sri_responses` (in both `public` and `sandbox`) look **empty** until the session declares a context:
+Row-Level Security is enforced and fail-loud ([ADR-036](docs/adr/036-fail-closed-row-level-security.md), [ADR-038](docs/adr/038-tenant-level-rls-fail-loud.md)). Connected as `comprobify_app` from `psql`, DBeaver, or any other client, a query on a protected table fails with `RLS: no tenant or system context ...` until the session declares one:
 
 ```sql
-SET app.rls_system = 'on';                      -- see every issuer's rows
--- or
-SET app.current_issuer_id = '<issuer uuid>';    -- see one issuer's rows
+SET app.rls_system = 'on';                      -- every tenant's rows
+-- or, to look at one tenant or issuer only
+SET app.current_tenant_id = '<tenant uuid>';    -- that tenant's notifications, payments, subscriptions, ...
+SET app.current_issuer_id = '<issuer uuid>';    -- that issuer's documents
 ```
 
-Both last for the session; `RESET app.rls_system;` undoes it. Updates and deletes without a context match zero rows and report success, so check the affected row count. Every other table is unaffected.
+Protected: the document tables in both schemas (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `sri_responses`) and, in `public`, `notifications`, `notification_preferences`, `webhook_endpoints`, `webhook_deliveries`, `tenant_events`, `tenant_agreements`, `subscriptions`, `tenant_quotas`, `payments`, `payment_proofs`, `payphone_transactions`. A tenant context does not open document tables and an issuer context does not open tenant tables; set both, or use system.
+
+Settings last for the session; `RESET app.rls_system;` undoes one. With system context on, an `UPDATE` or `DELETE` is no longer limited to one tenant, so keep `WHERE` clauses tight. Every other table is unaffected.
 
 > **On production, don't leave a client connected with an open transaction.** A client in manual-commit mode (DBeaver's default for some drivers) keeps its locks until you commit or disconnect. A migration that alters a table you queried then can't get its lock, and the deploy fails after 10 seconds per attempt until you disconnect. Use auto-commit, or disconnect when you're done.
 
