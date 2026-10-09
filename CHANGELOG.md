@@ -9,6 +9,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- **Row-Level Security now covers the messaging and billing tables** (ADR-038, migration 106): `notifications`, `notification_preferences`, `webhook_endpoints`, `webhook_deliveries`, `tenant_events`, `tenant_agreements`, `subscriptions`, `tenant_quotas`, `payments`, `payment_proofs` and `payphone_transactions`. Until now these relied only on `WHERE tenant_id = ...` in application code. A request can now only see and change its own tenant's rows in them, enforced by the database. No API behavior changes.
+- **A query with no RLS context now fails instead of returning nothing**, on these tables and on the document tables. It raises `42501` with a message starting `RLS: no tenant or system context`, so a code path that forgets its context is a visible error on first use rather than something that silently stops working.
+
+### Added
+- `tests/integration/http-two-tenants.test.js`: the real application driven over HTTP as two tenants against a real database, covering account, notification, webhook, subscription, payment, admin, cron and worker paths, and failing if any query runs without a context.
+
+### Changed
+- Querying the protected tables by hand as `comprobify_app` now returns an error until the session sets a context (`SET app.rls_system = 'on';`). Previously the document tables looked empty.
+
 ### Fixed
 - **`EMAIL_PROVIDER=none` made every email effect fail instead of skipping.** Only registration checked for it; the invoice email, notification emails and the two operator emails went on to ask for a provider, got `Unknown email provider: none`, and were retried until marked failed. Sending is now skipped cleanly: an invoice email is recorded as `SKIPPED` with an `EMAIL_SKIPPED` event (also on `POST /email-retry`, so it isn't picked up again), a notification's `email_status` becomes `SKIPPED`, and no RIDE is generated for an email that will not be sent. Deployments that use Mailgun were not affected.
 
