@@ -94,6 +94,8 @@ A single `pg.Pool` is created once and shared across the entire process. The poo
 
 Plain `query` against an RLS table returns nothing and cannot insert — RLS is fail-closed (ADR-036). It remains the right call for tables without RLS.
 
+**Request context (ADR-037):** `query` is no longer a bare pass-through. `src/config/rls-context.js` holds who the current request or job acts for — set by `authenticate` (the tenant), the `systemContext` middleware (admin, account-lifecycle and webhook routes), and `pendingEffectService.process()` (the worker) — and `query` applies it inside a short transaction. Explicit transactions do the same with `db.applyContext(client)` after `BEGIN`. No tenant-level policies exist yet; a context-free query on a tenant-owned table logs `rls_context_missing`.
+
 **Why `set_config` and not `SET LOCAL`?** `SET LOCAL` does not accept parameterized values in PostgreSQL (prepared statement parameters are not valid in `SET` statements). `set_config('app.current_issuer_id', $1, true)` is a regular function call that accepts a parameter, making it safe from injection without string concatenation. The third argument `true` makes the setting transaction-local, equivalent to `SET LOCAL`.
 
 ---
