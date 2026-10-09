@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-10-09
+
 ### Added
 - **Request-scoped database context, in shadow mode** (ADR-037). Groundwork for extending Row-Level Security from the document tables to the 17 tenant-owned tables (`tenants`, `issuers`, `api_keys`, `payments`, `notifications`, …). Each request or job now declares who it acts for once — a tenant after `authenticate`, system for admin routes, cron jobs, account-lifecycle routes and the Mailgun webhook, and the effect's own tenant inside the worker — and `db.query()` applies it to every query. **No policies are added and no behavior changes**; a query that reaches a tenant-owned table with no context logs `rls_context_missing` so gaps can be found from production traffic before anything is enforced.
 
@@ -17,8 +19,6 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - **The invoice email failed for every document authorized under `SRI_MOCK_MODE`.** The mock SRI response carries no authorization XML, and the email built its XML attachment from that field alone, so the `INVOICE_AUTHORIZED_EMAIL` effect threw and retried until it was marked failed. It now falls back to the signed XML, as the RIDE and `GET /:key/xml` already did. Real SRI responses always include the authorization XML, so production was not affected.
-
-### Fixed
 - **A blocked migration no longer hangs the API indefinitely.** The 1.3.0 production deploy left the API unreachable for about seven minutes: migration 105 needed an exclusive lock on the document tables, a SQL client left connected to production held a conflicting one, and the migration waited on it silently while the HTTP server never started. `db/migrate.js` now sets a 10-second `lock_timeout`, so a blocked migration fails with a message naming the cause, applies nothing, and is retried on the container's next restart.
 - **A deploy that leaves the API down now fails.** The deploy workflow reported success as soon as the containers were started, which is before migrations run. It now waits up to 120 seconds for `/health` to answer from inside the `api` container and prints the container's recent logs if it never does. Applied to both `deploy-production.yml` and the disabled `deploy-staging.yml`.
 
