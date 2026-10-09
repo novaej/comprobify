@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.2] — 2026-10-09
+
 ### Security
 - **Row-Level Security now covers the messaging and billing tables** (ADR-038, migration 106): `notifications`, `notification_preferences`, `webhook_endpoints`, `webhook_deliveries`, `tenant_events`, `tenant_agreements`, `subscriptions`, `tenant_quotas`, `payments`, `payment_proofs` and `payphone_transactions`. Until now these relied only on `WHERE tenant_id = ...` in application code. A request can now only see and change its own tenant's rows in them, enforced by the database. No API behavior changes.
 - **A query with no RLS context now fails instead of returning nothing**, on these tables and on the document tables. It raises `42501` with a message starting `RLS: no tenant or system context`, so a code path that forgets its context is a visible error on first use rather than something that silently stops working.
