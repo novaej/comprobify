@@ -16,6 +16,8 @@ process.env.APP_ENV = process.env.APP_ENV || 'staging';
 process.env.ADMIN_SECRET = process.env.ADMIN_SECRET || 'a'.repeat(64);
 process.env.INTERNAL_SERVICE_SECRET = process.env.INTERNAL_SERVICE_SECRET || 'b'.repeat(64);
 process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'c'.repeat(64);
+// Printed on every document as an additional-info field; the XSD rejects it empty.
+process.env.OPERATOR_RUC = process.env.OPERATOR_RUC || '1790000000001';
 
 // The broker is only a dispatch signal; effects are run inline below instead.
 jest.mock('../../src/services/queue.service', () => ({
