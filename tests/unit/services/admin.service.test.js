@@ -2,6 +2,7 @@ jest.mock('../../../src/config/database');
 jest.mock('../../../src/models/tenant.model');
 jest.mock('../../../src/models/issuer.model');
 jest.mock('../../../src/models/api-key.model');
+jest.mock('../../../src/models/webhook-endpoint.model');
 jest.mock('../../../src/models/issuer-document-type.model');
 jest.mock('../../../src/models/tenant-event.model');
 jest.mock('../../../src/services/sequential.service');
@@ -14,6 +15,7 @@ const db = require('../../../src/config/database');
 const tenantModel = require('../../../src/models/tenant.model');
 const issuerModel = require('../../../src/models/issuer.model');
 const apiKeyModel = require('../../../src/models/api-key.model');
+const webhookEndpointModel = require('../../../src/models/webhook-endpoint.model');
 const issuerDocumentTypeModel = require('../../../src/models/issuer-document-type.model');
 const tenantEventModel = require('../../../src/models/tenant-event.model');
 const sequentialService = require('../../../src/services/sequential.service');
@@ -332,7 +334,7 @@ describe('AdminService', () => {
 
     test('rejects minting a reserved key past the sanity ceiling', async () => {
       tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
-      apiKeyModel.countReservedByTenantId.mockResolvedValue(5);
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(6);
 
       await expect(adminService.createApiKey(1, { label: 'App — Viewer', environment: 'sandbox', isReserved: true }))
         .rejects.toMatchObject({ statusCode: 409, code: 'RESERVED_KEY_LIMIT_REACHED' });
@@ -362,6 +364,54 @@ describe('AdminService', () => {
         .rejects.toMatchObject({ statusCode: 404 });
       expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
       expect(apiKeyModel.create).not.toHaveBeenCalled();
+    });
+
+    test('replaceKeyId swaps a reserved key for a reserved key even at the ceiling', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(6);
+      apiKeyModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000099', active: true, is_reserved: true, label: 'App — MCP' });
+
+      await adminService.createApiKey(1, { environment: 'sandbox', isReserved: true, replaceKeyId: '00000000-0000-0000-0000-000000000099' });
+
+      expect(apiKeyModel.countReservedByTenantId).not.toHaveBeenCalled();
+      expect(apiKeyModel.create).toHaveBeenCalledWith(expect.objectContaining({ isReserved: true }), mockClient);
+    });
+
+    test('replaceKeyId still enforces the ceiling when it turns a tenant key into a reserved one', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      apiKeyModel.countReservedByTenantId.mockResolvedValue(6);
+      apiKeyModel.findByIdAndTenantId.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000099', active: true, is_reserved: false, label: 'erp' });
+
+      await expect(adminService.createApiKey(1, { environment: 'sandbox', isReserved: true, replaceKeyId: '00000000-0000-0000-0000-000000000099' }))
+        .rejects.toMatchObject({ statusCode: 409, code: 'RESERVED_KEY_LIMIT_REACHED' });
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(apiKeyModel.revoke).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createWebhookEndpoint', () => {
+    const endpointRow = { id: '00000000-0000-0000-0000-000000000099', url: 'https://app.example.com/api/webhooks/receive', event_types: [], active: true, is_reserved: true };
+
+    test('rejects registering a reserved endpoint past the sanity ceiling', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      webhookEndpointModel.countReservedByTenantId.mockResolvedValue(1);
+
+      await expect(adminService.createWebhookEndpoint(1, { url: endpointRow.url, isReserved: true }))
+        .rejects.toMatchObject({ statusCode: 409, code: 'RESERVED_KEY_LIMIT_REACHED' });
+      expect(webhookEndpointModel.create).not.toHaveBeenCalled();
+    });
+
+    test('replaceEndpointId swaps a reserved endpoint for a reserved one even at the ceiling', async () => {
+      tenantModel.findById.mockResolvedValue({ id: '00000000-0000-0000-0000-000000000001', sandbox: true, subscription_tier: 'FREE' });
+      webhookEndpointModel.countReservedByTenantId.mockResolvedValue(1);
+      webhookEndpointModel.findByIdAndTenantId.mockResolvedValue(endpointRow);
+      webhookEndpointModel.create.mockResolvedValue(endpointRow);
+
+      await adminService.createWebhookEndpoint(1, { isReserved: true, replaceEndpointId: '00000000-0000-0000-0000-000000000099' });
+
+      expect(webhookEndpointModel.countReservedByTenantId).not.toHaveBeenCalled();
+      expect(webhookEndpointModel.update).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000099', { active: false }, mockClient);
+      expect(webhookEndpointModel.create).toHaveBeenCalledWith(expect.objectContaining({ isReserved: true }), mockClient);
     });
   });
 

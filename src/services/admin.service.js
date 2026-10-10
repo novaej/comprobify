@@ -173,29 +173,33 @@ async function createApiKey(tenantId, { label, environment, revokeExisting, scop
   const grantedScopes = Array.isArray(scopes) && scopes.length > 0 ? scopes : ALL_SCOPES;
   const plainToken = crypto.randomBytes(32).toString('hex');
 
-  if (isReserved) {
-    const reservedCount = await apiKeyModel.countReservedByTenantId(tenantId);
-    if (reservedCount >= RESERVED_API_KEYS_FOR_FRONTEND) {
-      throw new AppError(
-        `Tenant already has ${reservedCount} reserved keys — this should not happen under normal use; investigate before minting another.`,
-        409,
-        ErrorCodes.RESERVED_KEY_LIMIT_REACHED
-      );
-    }
-  } else {
-    const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
-    const maxKeys = effectiveApiKeyLimit(tierConfig);
-    if (maxKeys !== null) {
-      const currentCount = await apiKeyModel.countActiveByTenantId(tenantId);
-      if (currentCount >= maxKeys) {
+  // A like-for-like replace (reserved→reserved, or tenant→tenant) is net zero,
+  // so it skips the limit; a replace that changes kind still adds one.
+  const assertWithinLimit = async () => {
+    if (isReserved) {
+      const reservedCount = await apiKeyModel.countReservedByTenantId(tenantId);
+      if (reservedCount >= RESERVED_API_KEYS_FOR_FRONTEND) {
         throw new AppError(
-          `Tenant has reached the API key limit for the ${tenant.subscription_tier} plan (${maxKeys}).`,
-          402,
-          ErrorCodes.API_KEY_LIMIT_REACHED
+          `Tenant already has ${reservedCount} reserved keys — this should not happen under normal use; investigate before minting another.`,
+          409,
+          ErrorCodes.RESERVED_KEY_LIMIT_REACHED
         );
       }
+    } else {
+      const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
+      const maxKeys = effectiveApiKeyLimit(tierConfig);
+      if (maxKeys !== null) {
+        const currentCount = await apiKeyModel.countActiveByTenantId(tenantId);
+        if (currentCount >= maxKeys) {
+          throw new AppError(
+            `Tenant has reached the API key limit for the ${tenant.subscription_tier} plan (${maxKeys}).`,
+            402,
+            ErrorCodes.API_KEY_LIMIT_REACHED
+          );
+        }
+      }
     }
-  }
+  };
 
   if (replaceKeyId) {
     const client = await db.getClient();
@@ -206,6 +210,7 @@ async function createApiKey(tenantId, { label, environment, revokeExisting, scop
       if (!existing || !existing.active) {
         throw new NotFoundError('API key');
       }
+      if (Boolean(existing.is_reserved) !== Boolean(isReserved)) await assertWithinLimit();
       await apiKeyModel.revoke(replaceKeyId, client);
       await apiKeyModel.create({
         tenantId,
@@ -225,6 +230,7 @@ async function createApiKey(tenantId, { label, environment, revokeExisting, scop
     return plainToken;
   }
 
+  await assertWithinLimit();
   if (revokeExisting) {
     await apiKeyModel.revokeAllByTenantIdAndEnvironment(tenantId, resolvedEnvironment);
   }
@@ -309,29 +315,32 @@ async function createWebhookEndpoint(tenantId, { url, eventTypes, isReserved, re
   const secret = crypto.randomBytes(32).toString('hex');
   const resolvedEventTypes = eventTypes || [];
 
-  if (isReserved) {
-    const reservedCount = await webhookEndpointModel.countReservedByTenantId(tenantId);
-    if (reservedCount >= RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND) {
-      throw new AppError(
-        `Tenant already has ${reservedCount} reserved webhook endpoints — this should not happen under normal use; investigate before registering another.`,
-        409,
-        ErrorCodes.RESERVED_KEY_LIMIT_REACHED
-      );
-    }
-  } else {
-    const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
-    const maxEndpoints = effectiveWebhookEndpointLimit(tierConfig);
-    if (maxEndpoints !== null) {
-      const currentCount = await webhookEndpointModel.countActiveByTenantId(tenantId);
-      if (currentCount >= maxEndpoints) {
+  // Same rule as createApiKey: a like-for-like replace skips the limit.
+  const assertWithinLimit = async () => {
+    if (isReserved) {
+      const reservedCount = await webhookEndpointModel.countReservedByTenantId(tenantId);
+      if (reservedCount >= RESERVED_WEBHOOK_ENDPOINTS_FOR_FRONTEND) {
         throw new AppError(
-          `Tenant has reached the webhook endpoint limit for the ${tenant.subscription_tier} plan (${maxEndpoints}).`,
-          402,
-          ErrorCodes.WEBHOOK_ENDPOINT_LIMIT_REACHED
+          `Tenant already has ${reservedCount} reserved webhook endpoints — this should not happen under normal use; investigate before registering another.`,
+          409,
+          ErrorCodes.RESERVED_KEY_LIMIT_REACHED
         );
       }
+    } else {
+      const tierConfig = TIERS[tenant.subscription_tier] || TIERS.FREE;
+      const maxEndpoints = effectiveWebhookEndpointLimit(tierConfig);
+      if (maxEndpoints !== null) {
+        const currentCount = await webhookEndpointModel.countActiveByTenantId(tenantId);
+        if (currentCount >= maxEndpoints) {
+          throw new AppError(
+            `Tenant has reached the webhook endpoint limit for the ${tenant.subscription_tier} plan (${maxEndpoints}).`,
+            402,
+            ErrorCodes.WEBHOOK_ENDPOINT_LIMIT_REACHED
+          );
+        }
+      }
     }
-  }
+  };
 
   if (replaceEndpointId) {
     const client = await db.getClient();
@@ -342,6 +351,7 @@ async function createWebhookEndpoint(tenantId, { url, eventTypes, isReserved, re
       if (!existing || !existing.active) {
         throw new NotFoundError('Webhook endpoint');
       }
+      if (Boolean(existing.is_reserved) !== Boolean(isReserved)) await assertWithinLimit();
       await webhookEndpointModel.update(replaceEndpointId, { active: false }, client);
       const endpoint = await webhookEndpointModel.create(
         { tenantId, url: url || existing.url, secret, eventTypes: eventTypes || existing.event_types, isReserved },
@@ -357,6 +367,7 @@ async function createWebhookEndpoint(tenantId, { url, eventTypes, isReserved, re
     }
   }
 
+  await assertWithinLimit();
   const endpoint = await webhookEndpointModel.create({ tenantId, url, secret, eventTypes: resolvedEventTypes, isReserved });
   return { endpoint: webhookEndpointService.formatEndpoint(endpoint), secret };
 }

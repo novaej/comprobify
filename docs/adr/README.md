@@ -124,3 +124,4 @@ YYYY-MM-DD
 | [037](037-request-scoped-rls-context.md) | Request-Scoped RLS Context and Shadow Mode | Accepted | 2026-10-09 |
 | [038](038-tenant-level-rls-fail-loud.md) | Tenant-Level RLS Policies, Fail-Loud | Accepted | 2026-10-09 |
 | [039](039-rls-identity-tables.md) | RLS on the Identity Tables and the Effects Outbox | Accepted | 2026-10-10 |
+| [040](040-mcp-access-via-reserved-read-only-key.md) | MCP Access Uses a Reserved Read-Only Key, Not OAuth Tokens at the API | Accepted | 2026-10-07 |

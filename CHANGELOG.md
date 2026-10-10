@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Docs: a "Connecting an AI assistant" page** (`docs/site/ai-assistants.md`, es + en) explaining how to connect an MCP-compatible assistant to a Comprobify account, what it can read, and how to revoke it from the web app. The feature itself lives in comprobify-web and the hosted MCP server; this API is unchanged by it (ADR-040).
+
+### Changed
+- **The reserved (comprobify-web-internal) API key ceiling per tenant now defaults to 6, up from 5** (`RESERVED_FRONTEND_API_KEYS`). comprobify-web now mints a fifth reserved key per tenant — a read-only one for the hosted MCP server (ADR-040) — which would otherwise put a fully-provisioned tenant exactly at the old ceiling. Still only a bug-detection sanity ceiling (`409 RESERVED_KEY_LIMIT_REACHED` past it), not a tenant-facing limit.
+
+### Fixed
+- **Replacing a key or webhook endpoint through the admin API was refused whenever the tenant was already at its limit**, even though a replace revokes one and creates one. `POST /v1/admin/tenants/:id/api-keys` (`replaceKeyId`) and `POST /v1/admin/tenants/:id/webhook-endpoints` (`replaceEndpointId`) checked the limit before looking at what was being replaced. For reserved webhook endpoints, whose ceiling is 1, that made every replace fail with `409 RESERVED_KEY_LIMIT_REACHED`. A like-for-like replace (reserved for reserved, or tenant-owned for tenant-owned) now skips the limit; a replace that changes kind still counts, since it does add one of the new kind.
+
 ## [1.3.3] — 2026-10-10
 
 ### Security
