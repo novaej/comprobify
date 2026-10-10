@@ -47,6 +47,7 @@ function validConfig(overrides = {}) {
       identification: '1792345678001',
     },
     adminNotificationEmail: 'admin@example.com',
+    operator: { ruc: '1790000000001' },
     ...overrides,
   };
 }
@@ -132,6 +133,16 @@ describe('validateConfig', () => {
       const config = validConfig({ adminNotificationEmail: '' });
       expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): ADMIN_NOTIFICATION_EMAIL');
     });
+
+    test('throws listing OPERATOR_RUC when it is missing', () => {
+      const config = validConfig({ operator: { ruc: '' } });
+      expect(() => validateConfig(config)).toThrow('Missing required environment variable(s): OPERATOR_RUC');
+    });
+
+    test.each(['179000000000', '17900000000012', '1790000000 01', 'abcdefghijklm'])(
+      'throws when OPERATOR_RUC is not a 13-digit RUC (%s)', (ruc) => {
+        expect(() => validateConfig(validConfig({ operator: { ruc } }))).toThrow('OPERATOR_RUC must be a 13-digit RUC');
+      });
 
     test('throws listing RABBITMQ_URL when it is missing', () => {
       const config = validConfig({ rabbitmq: { url: '', sriExchange: 'sri.direct' } });
