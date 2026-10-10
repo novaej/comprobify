@@ -170,14 +170,15 @@ describe('shadow mode', () => {
   const missing = () => warn.mock.calls.filter(([message]) => message === 'rls_context_missing');
 
   test('a context-free query on a tenant-owned table is reported, with where it came from', async () => {
-    await db.query('SELECT count(*) FROM tenants');
+    // Enforced tables reject the query; the warning is what names the call site.
+    await db.query('SELECT count(*) FROM tenants').catch(() => {});
     expect(missing()).toHaveLength(1);
     expect(missing()[0][1]).toMatchObject({ kind: 'query', table: 'tenants' });
     expect(missing()[0][1].site).toMatch(/rls-request-context\.test\.js/);
   });
 
   test('a repeated call site does not flood the log', async () => {
-    for (let i = 0; i < 20; i += 1) await db.query('SELECT count(*) FROM issuers');
+    for (let i = 0; i < 20; i += 1) await db.query('SELECT count(*) FROM issuers').catch(() => {});
     // The first, synchronous call can carry one extra caller frame.
     expect(missing().length).toBeGreaterThanOrEqual(1);
     expect(missing().length).toBeLessThanOrEqual(2);

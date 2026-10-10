@@ -61,6 +61,14 @@ const noContext = (fn) => inTx([], fn);
 const count = async (client, table, where = 'true', params = []) =>
   Number((await client.query(`SELECT count(*) FROM ${table} WHERE ${where}`, params)).rows[0].count);
 
+const byTenant = (table, insert) => ({
+  table: `public.${table}`,
+  ctx: 'tenant',
+  link: 'tenant_id',
+  owned: (o) => ['tenant_id = $1', [o.tenantId]],
+  insert,
+});
+
 // One entry per protected table. `insert` adds a row owned by `o` (an owner
 // from `fx`); `extra` asks for a second row that avoids unique collisions.
 const docChild = (schema, table, insertSql) => ({
@@ -101,13 +109,6 @@ const documentTables = SCHEMAS.flatMap((schema) => [
   },
 ]);
 
-const byTenant = (table, insert) => ({
-  table: `public.${table}`,
-  ctx: 'tenant',
-  link: 'tenant_id',
-  owned: (o) => ['tenant_id = $1', [o.tenantId]],
-  insert,
-});
 
 const tenantTables = [
   byTenant('notifications', async (c, o) => {
@@ -169,7 +170,52 @@ const tenantTables = [
   },
 ];
 
-const TABLES = [...documentTables, ...tenantTables];
+// The identity tables. seedOwner() creates each owner's tenant and first
+// issuer itself, so the base insert is a no-op for those two.
+const identityTables = [
+  {
+    table: 'public.tenants',
+    ctx: 'tenant',
+    link: 'id',
+    canInsertOwn: false, // a tenant row is its own owner; there is no second one to add
+    owned: (o) => ['id = $1', [o.tenantId]],
+    insert: (c, o, extra) => (extra
+      ? c.query('INSERT INTO tenants (id, email) VALUES ($1, $2)', [o.tenantId, `dup-${digits(8)}@example.test`])
+      : null),
+  },
+  byTenant('issuers', (c, o, extra) => (extra
+    ? c.query(
+      `INSERT INTO issuers (tenant_id, ruc, business_name, main_address, branch_address, branch_code, issue_point_code)
+       VALUES ($1, $2, 'Extra', 'Main St', 'Main St', '002', '001')`, [o.tenantId, digits(13)])
+    : null)),
+  byTenant('api_keys', async (c, o) => {
+    const { rows: [row] } = await c.query(
+      `INSERT INTO api_keys (tenant_id, key_hash, environment) VALUES ($1, $2, 'sandbox') RETURNING id`,
+      [o.tenantId, crypto.randomBytes(32).toString('hex')]);
+    o.apiKeyId = o.apiKeyId || row.id;
+  }),
+  {
+    table: 'public.api_key_daily_usage',
+    ctx: 'tenant',
+    link: 'api_key_id',
+    owned: (o) => ['api_key_id = $1', [o.apiKeyId]],
+    insert: (c, o, extra) => c.query(
+      `INSERT INTO api_key_daily_usage (api_key_id, usage_date, last_used_at) VALUES ($1, CURRENT_DATE - $2::int, NOW())`,
+      [o.apiKeyId, extra ? crypto.randomInt(1, 100000) : 0]),
+  },
+  {
+    table: 'public.issuer_document_types',
+    ctx: 'tenant',
+    link: 'issuer_id',
+    owned: (o) => ['issuer_id = $1', [o.issuerId]],
+    insert: (c, o, extra) => c.query(
+      `INSERT INTO issuer_document_types (issuer_id, document_type) VALUES ($1, $2)`, [o.issuerId, extra ? '04' : '01']),
+  },
+  byTenant('pending_effects', (c, o) => c.query(
+    `INSERT INTO pending_effects (tenant_id, effect_type, payload) VALUES ($1, 'WEBHOOK_FANOUT', '{}')`, [o.tenantId])),
+];
+
+const TABLES = [...identityTables, ...documentTables, ...tenantTables];
 const NAMES = TABLES.map((t) => t.table);
 const spec = (name) => TABLES.find((t) => t.table === name);
 
@@ -215,7 +261,11 @@ afterAll(async () => {
       await client.query(`DELETE FROM ${schema}.documents WHERE issuer_id = ANY($1)`, [issuers]);
       await client.query(`DELETE FROM ${schema}.sequential_numbers WHERE issuer_id = ANY($1)`, [issuers]);
     }
-    await client.query('DELETE FROM issuers WHERE id = ANY($1)', [issuers]);
+    await client.query('DELETE FROM pending_effects WHERE tenant_id = ANY($1)', [tenants]);
+    await client.query('DELETE FROM api_key_daily_usage WHERE api_key_id IN (SELECT id FROM api_keys WHERE tenant_id = ANY($1))', [tenants]);
+    await client.query('DELETE FROM api_keys WHERE tenant_id = ANY($1)', [tenants]);
+    await client.query('DELETE FROM issuer_document_types WHERE issuer_id IN (SELECT id FROM issuers WHERE tenant_id = ANY($1))', [tenants]);
+    await client.query('DELETE FROM issuers WHERE tenant_id = ANY($1)', [tenants]);
     await client.query('DELETE FROM tenants WHERE id = ANY($1)', [tenants]);
   }).catch((err) => console.error('RLS fixture cleanup failed:', err.message));
   await pool.end();
@@ -267,10 +317,8 @@ describe('catalog: every protected table is locked down', () => {
          AND c.column_name IN ('tenant_id', 'issuer_id', 'document_id', 'subscription_id', 'payment_id', 'api_key_id')
          AND k.relkind = 'r' AND NOT k.relrowsecurity
        ORDER BY 1`);
-    // Third release (identity and internal tables). Anything else listed here
-    // is a new table that skipped RLS.
-    const pending = ['public.api_key_daily_usage', 'public.api_keys', 'public.issuer_document_types', 'public.issuers', 'public.pending_effects'];
-    expect(rows.map((r) => r.t).filter((t) => !pending.includes(t))).toEqual([]);
+    // Every table that names an owner is protected. Anything listed here is a new table that skipped RLS.
+    expect(rows.map((r) => r.t)).toEqual([]);
   });
 });
 
@@ -354,7 +402,7 @@ describe('own context: sees and changes only its own rows', () => {
     const t = spec(qualified);
     const [where, params] = t.owned(fx.A);
     await as(t, fx.A, async (c) => {
-      await t.insert(c, fx.A, true);
+      if (t.canInsertOwn !== false) await t.insert(c, fx.A, true);
       const upd = await c.query(`UPDATE ${qualified} SET ${t.link} = ${t.link} WHERE ${where}`, params);
       expect(upd.rowCount).toBeGreaterThan(0);
     });
@@ -363,6 +411,10 @@ describe('own context: sees and changes only its own rows', () => {
   test.each([
     ['public.sequential_numbers', 'issuer_id', (o) => o.issuerId],
     ['sandbox.sequential_numbers', 'issuer_id', (o) => o.issuerId],
+    ['public.issuers', 'tenant_id', (o) => o.tenantId],
+    ['public.api_keys', 'tenant_id', (o) => o.tenantId],
+    ['public.pending_effects', 'tenant_id', (o) => o.tenantId],
+    ['public.issuer_document_types', 'issuer_id', (o) => o.issuerId],
     ['public.notifications', 'tenant_id', (o) => o.tenantId],
     ['public.subscriptions', 'tenant_id', (o) => o.tenantId],
     ['public.webhook_endpoints', 'tenant_id', (o) => o.tenantId],
@@ -372,7 +424,7 @@ describe('own context: sees and changes only its own rows', () => {
     // WITH CHECK rejects the new row. (documents.issuer_id is also immutable by trigger, migration 026.)
     const t = spec(qualified);
     const [where, params] = t.owned(fx.A);
-    const extra = column === 'issuer_id' ? ", document_type = '06'" : '';
+    const extra = column === 'issuer_id' ? ", document_type = '06'" : (qualified === 'public.issuers' ? ", branch_code = '009'" : '');
     await expect(as(t, fx.A, (c) => c.query(
       `UPDATE ${qualified} SET ${column} = $${params.length + 1}${extra} WHERE ${where}`, [...params, valueOf(fx.B)],
     ))).rejects.toMatchObject(POLICY_REJECTED);
@@ -611,17 +663,6 @@ describe('application code paths', () => {
     }
   });
 
-  // Document flows need a signing certificate on the issuer; not in
-  // http-two-tenants.test.js yet, so still exercised by hand.
-  test.todo('POST /v1/documents → send → authorize in sandbox reaches AUTHORIZED (worker writes sri_responses)');
-  test.todo('same flow for a promoted tenant in the public schema');
-  test.todo('POST /:key/rebuild replaces line items inside one issuer transaction');
-  test.todo('POST /:key/void writes the VOIDED event');
-  test.todo('GET /:key/credit-notes sums only this issuer\'s credit notes');
-  test.todo('Idempotency-Key replay returns the same document; concurrent race resolves via 23505');
-  test.todo('POST /v1/mailgun/webhook with a valid signature updates email_status');
-  test.todo('PATCH /v1/admin/subscriptions/:id/link-invoice works for sandbox and production access keys');
-  test.todo('GET admin RIDE by access key returns a PDF');
-  test.todo('POST /v1/tenants/promote seeds production sequentials');
-  test.todo('DELETE /v1/issuers/:id refuses an issuer with documents');
+  // End-to-end HTTP flows (documents, issuers, keys, billing, admin, worker)
+  // live in http-two-tenants.test.js.
 });
