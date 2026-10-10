@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.4] — 2026-10-10
+
 ### Added
 - **Docs: a "Connecting an AI assistant" page** (`docs/site/ai-assistants.md`, es + en) explaining how to connect an MCP-compatible assistant to a Comprobify account, what it can read, and how to revoke it from the web app. The feature itself lives in comprobify-web and the hosted MCP server; this API is unchanged by it (ADR-040).
 
