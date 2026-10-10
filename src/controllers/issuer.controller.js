@@ -1,5 +1,6 @@
 const issuerService = require('../services/issuer.service');
 const issuerModel = require('../models/issuer.model');
+const rlsContext = require('../config/rls-context');
 const AppError = require('../errors/app-error');
 const NotFoundError = require('../errors/not-found-error');
 const TenantStatus = require('../constants/tenant-status');
@@ -9,9 +10,11 @@ const ErrorCodes = require('../constants/error-codes');
  * Fetches the issuer identified by req.params.id and confirms it belongs to the
  * authenticated tenant. Returns the full issuer row.
  */
+// Both loaders read the issuer in system context so a foreign id is still
+// found and refused with 403 ISSUER_FORBIDDEN, not hidden by RLS as a 404.
 async function loadOwnedIssuer(req) {
   const id = req.params.id;
-  const issuer = await issuerModel.findById(id);
+  const issuer = await rlsContext.runAsSystem(() => issuerModel.findById(id));
   if (!issuer) {
     throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
   }
@@ -27,7 +30,7 @@ async function loadOwnedIssuer(req) {
  */
 async function loadOwnedIssuerAny(req) {
   const id = req.params.id;
-  const issuer = await issuerModel.findByIdAny(id);
+  const issuer = await rlsContext.runAsSystem(() => issuerModel.findByIdAny(id));
   if (!issuer) {
     throw new NotFoundError('Issuer', ErrorCodes.ISSUER_NOT_FOUND);
   }

@@ -1,4 +1,5 @@
 const issuerModel = require('../models/issuer.model');
+const rlsContext = require('../config/rls-context');
 const AppError = require('../errors/app-error');
 const ErrorCodes = require('../constants/error-codes');
 const requireMatchingEnvironment = require('./require-matching-environment');
@@ -33,7 +34,10 @@ const resolveIssuer = async (req, _res, next) => {
     return next(new AppError('X-Issuer-Id must be a valid UUID', 400, ErrorCodes.ISSUER_ID_INVALID));
   }
 
-  const issuer = await issuerModel.findById(issuerId);
+  // Looked up in system context so another tenant's issuer is still found and
+  // refused with 403 below, rather than hidden by RLS as a 404. The ownership
+  // check that follows is what scopes it.
+  const issuer = await rlsContext.runAsSystem(() => issuerModel.findById(issuerId));
   if (!issuer) {
     return next(new AppError('Issuer not found', 404, ErrorCodes.ISSUER_NOT_FOUND));
   }
