@@ -18,6 +18,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 - Querying `tenants`, `issuers`, `api_keys`, `pending_effects` and their child tables by hand as `comprobify_app` now needs a context too (`SET app.rls_system = 'on';`).
 
+### Fixed
+- **The API now refuses to start without `OPERATOR_RUC`.** It is printed on every document as the "RUC Proveedor" additional-info field. Unset, the API started normally and then rejected every document creation with an XSD error about `campoAdicional` that named neither the setting nor the cause. It is now a startup error, and must be 13 digits.
+
 ## [1.3.2] — 2026-10-09
 
 ### Security

@@ -115,6 +115,15 @@ function validateConfig(cfg) {
     missing.push('ADMIN_NOTIFICATION_EMAIL');
   }
 
+  // Printed on every document as the "RUC Proveedor" additional-info field
+  // (SRI Resolution NAC-DGERCGC26-00000027). Left empty, the XSD rejects every
+  // document with an opaque campoAdicional error instead of this one.
+  if (!cfg.operator.ruc) {
+    missing.push('OPERATOR_RUC');
+  } else if (!/^\d{13}$/.test(cfg.operator.ruc)) {
+    throw new Error('OPERATOR_RUC must be a 13-digit RUC');
+  }
+
   // Required when email is enabled — see collectCoreMissing() for why this
   // one lives here instead of there.
   if (cfg.email.provider && cfg.email.provider !== 'none') {
