@@ -533,7 +533,7 @@ The tests must connect as the same non-superuser role the app uses. A superuser 
 
 ## Querying the database by hand
 
-Row-Level Security is enforced and fail-loud ([ADR-036](docs/adr/036-fail-closed-row-level-security.md), [ADR-038](docs/adr/038-tenant-level-rls-fail-loud.md)). Connected as `comprobify_app` from `psql`, DBeaver, or any other client, a query on a protected table fails with `RLS: no tenant or system context ...` until the session declares one:
+Row-Level Security is enforced and fail-loud ([ADR-036](docs/adr/036-fail-closed-row-level-security.md), [ADR-038](docs/adr/038-tenant-level-rls-fail-loud.md), [ADR-039](docs/adr/039-rls-identity-tables.md)). Connected as `comprobify_app` from `psql`, DBeaver, or any other client, a query on a protected table fails with `RLS: no tenant or system context ...` until the session declares one:
 
 ```sql
 SET app.rls_system = 'on';                      -- every tenant's rows
@@ -542,9 +542,9 @@ SET app.current_tenant_id = '<tenant uuid>';    -- that tenant's notifications, 
 SET app.current_issuer_id = '<issuer uuid>';    -- that issuer's documents
 ```
 
-Protected: the document tables in both schemas (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `sri_responses`) and, in `public`, `notifications`, `notification_preferences`, `webhook_endpoints`, `webhook_deliveries`, `tenant_events`, `tenant_agreements`, `subscriptions`, `tenant_quotas`, `payments`, `payment_proofs`, `payphone_transactions`. A tenant context does not open document tables and an issuer context does not open tenant tables; set both, or use system.
+Protected: every table that holds tenant data. That is the document tables in both schemas (`documents`, `document_line_items`, `document_events`, `sequential_numbers`, `sri_responses`) and, in `public`, `tenants`, `issuers`, `issuer_document_types`, `api_keys`, `api_key_daily_usage`, `pending_effects`, `notifications`, `notification_preferences`, `webhook_endpoints`, `webhook_deliveries`, `tenant_events`, `tenant_agreements`, `subscriptions`, `tenant_quotas`, `payments`, `payment_proofs`, `payphone_transactions`. Only global tables (catalogs, prices, agreement and email templates) work without a context. A tenant context does not open document tables and an issuer context does not open tenant tables; set both, or use system.
 
-Settings last for the session; `RESET app.rls_system;` undoes one. With system context on, an `UPDATE` or `DELETE` is no longer limited to one tenant, so keep `WHERE` clauses tight. Every other table is unaffected.
+Settings last for the session; `RESET app.rls_system;` undoes one. With system context on, an `UPDATE` or `DELETE` is no longer limited to one tenant, so keep `WHERE` clauses tight.
 
 > **On production, don't leave a client connected with an open transaction.** A client in manual-commit mode (DBeaver's default for some drivers) keeps its locks until you commit or disconnect. A migration that alters a table you queried then can't get its lock, and the deploy fails after 10 seconds per attempt until you disconnect. Use auto-commit, or disconnect when you're done.
 

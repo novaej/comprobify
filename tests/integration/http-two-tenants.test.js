@@ -10,10 +10,14 @@
 for (const key of ['REDIS_URL', 'SENTRY_DSN', 'BETTERSTACK_SOURCE_TOKEN', 'PAYPHONE_TOKEN', 'PAYPHONE_STORE_ID']) process.env[key] = '';
 process.env.EMAIL_PROVIDER = 'none';
 process.env.SRI_MOCK_MODE = 'true';
+process.env.AGREEMENTS_ENABLED = 'false'; // promotion is exercised without publishing legal documents
 require('dotenv').config({ quiet: true });
 process.env.APP_ENV = process.env.APP_ENV || 'staging';
 process.env.ADMIN_SECRET = process.env.ADMIN_SECRET || 'a'.repeat(64);
 process.env.INTERNAL_SERVICE_SECRET = process.env.INTERNAL_SERVICE_SECRET || 'b'.repeat(64);
+process.env.ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'c'.repeat(64);
+// Printed on every document as an additional-info field; the XSD rejects it empty.
+process.env.OPERATOR_RUC = process.env.OPERATOR_RUC || '1790000000001';
 
 // The broker is only a dispatch signal; effects are run inline below instead.
 jest.mock('../../src/services/queue.service', () => ({
@@ -36,10 +40,46 @@ const logger = require('../../src/services/logger.service');
 const apiKeyModel = require('../../src/models/api-key.model');
 const pendingEffectService = require('../../src/services/pending-effect.service');
 const { ALL_SCOPES } = require('../../src/constants/api-key-scopes');
+const forge = require('node-forge');
+const cryptoService = require('../../src/services/crypto.service');
 const Server = require('../../src/server');
 
 const digits = (n) => Array.from({ length: n }, () => crypto.randomInt(10)).join('');
 const system = (fn) => rlsContext.runAsSystem(fn);
+
+// A throwaway self-signed certificate so the test issuers can sign documents.
+// Generated once: RSA key generation is the slow part.
+let signing;
+function signingMaterial() {
+  if (signing) return signing;
+  const keys = forge.pki.rsa.generateKeyPair(2048);
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = '01';
+  cert.validity.notBefore = new Date(Date.now() - 86400000);
+  cert.validity.notAfter = new Date(Date.now() + 365 * 86400000);
+  const attrs = [{ name: 'commonName', value: 'RLS Test Signer' }, { name: 'organizationName', value: 'Test CA' }, { name: 'countryName', value: 'EC' }];
+  cert.setSubject(attrs);
+  cert.setIssuer(attrs);
+  cert.sign(keys.privateKey, forge.md.sha256.create());
+  signing = {
+    encryptedPrivateKey: cryptoService.encrypt(forge.pki.privateKeyToPem(keys.privateKey)),
+    certificatePem: forge.pki.certificateToPem(cert),
+    expiry: cert.validity.notAfter,
+  };
+  return signing;
+}
+
+const invoiceBody = () => ({
+  documentType: '01',
+  issueDate: new Date().toLocaleDateString('en-GB', { timeZone: 'America/Guayaquil' }),
+  buyer: { idType: '04', id: '1712345678001', name: 'BUYER S.A.', address: 'AV. TEST 123', email: 'buyer@example.test' },
+  items: [{
+    mainCode: 'SVC-001', description: 'Professional Services', quantity: '1.000000', unitPrice: '100.000000', discount: '0.00',
+    taxes: [{ code: '2', rateCode: '4', rate: '15.00', taxBase: '100.00', value: '15.00' }],
+  }],
+  payments: [{ method: '20', total: '115.00' }],
+});
 
 let server;
 let baseUrl;
@@ -95,7 +135,12 @@ async function seedTenant(label) {
     const { rows: [issuer] } = await db.query(
       `INSERT INTO issuers (tenant_id, ruc, business_name, main_address, branch_address, branch_code, issue_point_code)
        VALUES ($1, $2, $3, 'Main St', 'Main St', '001', '001') RETURNING id`,
-      [tenant.id, digits(13), `HTTP Test ${label}`]);
+      [tenant.id, `${digits(10)}001`, `HTTP Test ${label}`]);
+    const { encryptedPrivateKey, certificatePem, expiry } = signingMaterial();
+    await db.query(
+      `UPDATE issuers SET encrypted_private_key = $2, certificate_pem = $3, cert_fingerprint = $4, cert_expiry = $5, required_accounting = 'NO' WHERE id = $1`,
+      [issuer.id, encryptedPrivateKey, certificatePem, crypto.createHash('sha256').update(certificatePem).digest('hex'), expiry]);
+    await db.query(`INSERT INTO issuer_document_types (issuer_id, document_type) VALUES ($1, '01')`, [issuer.id]);
     await db.query(
       `INSERT INTO tenant_quotas (tenant_id, period_start, period_end, document_quota, is_current)
        VALUES ($1, NOW(), NOW() + interval '1 month', 100, true)`, [tenant.id]);
@@ -105,11 +150,13 @@ async function seedTenant(label) {
 }
 
 // Stand-in for the worker: run every effect that is waiting.
-async function runPendingEffects() {
+async function runPendingEffects({ only = null } = {}) {
   for (let round = 0; round < 5; round += 1) {
     const { rows } = await system(() => db.query(
-      `SELECT id FROM pending_effects WHERE tenant_id = ANY($1) AND status IN ('PENDING', 'DISPATCHED') AND attempt_count = 0 ORDER BY created_at`,
-      [Object.values(tenants).map((t) => t.id)]));
+      `SELECT id FROM pending_effects
+       WHERE tenant_id = ANY($1) AND status IN ('PENDING', 'DISPATCHED') AND attempt_count = 0 AND ($2::text IS NULL OR effect_type = $2)
+       ORDER BY created_at`,
+      [Object.values(tenants).map((t) => t.id), only]));
     if (rows.length === 0) return;
     for (const { id } of rows) await pendingEffectService.process(id).catch(() => {});
   }
@@ -134,6 +181,14 @@ afterAll(async () => {
     for (const table of ['pending_effects', 'webhook_deliveries', 'webhook_endpoints', 'notifications', 'notification_preferences',
       'tenant_events', 'tenant_agreements', 'tenant_quotas', 'subscriptions']) {
       await db.query(`DELETE FROM ${table} WHERE tenant_id = ANY($1)`, [ids]);
+    }
+    for (const schema of ['public', 'sandbox']) {
+      const docs = `SELECT d.id FROM ${schema}.documents d JOIN issuers i ON i.id = d.issuer_id WHERE i.tenant_id = ANY($1)`;
+      for (const table of ['sri_responses', 'document_events', 'document_line_items']) {
+        await db.query(`DELETE FROM ${schema}.${table} WHERE document_id IN (${docs})`, [ids]);
+      }
+      await db.query(`DELETE FROM ${schema}.documents WHERE issuer_id IN (SELECT id FROM issuers WHERE tenant_id = ANY($1))`, [ids]);
+      await db.query(`DELETE FROM ${schema}.sequential_numbers WHERE issuer_id IN (SELECT id FROM issuers WHERE tenant_id = ANY($1))`, [ids]);
     }
     await db.query('DELETE FROM api_key_daily_usage WHERE api_key_id IN (SELECT id FROM api_keys WHERE tenant_id = ANY($1))', [ids]);
     await db.query('DELETE FROM api_keys WHERE tenant_id = ANY($1)', [ids]);
@@ -199,6 +254,119 @@ describe.each(['A', 'B'])('tenant %s: own account, messaging and billing', (labe
   });
 });
 
+describe.each(['A', 'B'])('tenant %s: issuers, API keys and documents', (label) => {
+  const me = () => tenants[label];
+  const withIssuer = () => ({ 'X-Issuer-Id': me().issuerId });
+
+  test('issuer management', async () => {
+    const listed = JSON.stringify(expectStatus(await call('GET', '/v1/issuers', { as: label }), 200));
+    expect(listed).toContain(me().issuerId);
+    expectStatus(await call('GET', `/v1/issuers/${me().issuerId}`, { as: label }), 200);
+    expectStatus(await call('PATCH', `/v1/issuers/${me().issuerId}`, { as: label, json: { tradeName: `Trade ${label}` } }), 200);
+    expectStatus(await call('GET', `/v1/issuers/${me().issuerId}/document-types`, { as: label }), 200);
+    expectStatus(await call('GET', `/v1/issuers/${me().issuerId}/sequentials`, { as: label }), 200);
+    expectStatus(await call('PATCH', `/v1/issuers/${me().issuerId}/can-issue`, { as: label, json: { canIssue: true } }), 200);
+  });
+
+  test('API key management', async () => {
+    const created = expectStatus(await call('POST', '/v1/keys', { as: label, json: { label: `extra-${label}`, environment: 'sandbox' } }), 201);
+    expect(pick(created, 'apiKey')).toEqual(expect.any(String));
+    // The create response carries only the plaintext key; its id comes from the listing.
+    const listed = expectStatus(await call('GET', '/v1/keys', { as: label }), 200);
+    me().extraKeyId = pick(listed, 'keys').find((k) => k.label === `extra-${label}`).id;
+
+    // The new key works, and only for its own tenant.
+    const viaNewKey = await fetch(`${baseUrl}/v1/tenants/me`, { headers: { Authorization: `Bearer ${pick(created, 'apiKey')}` } });
+    expect(pick(await viaNewKey.json(), 'id')).toBe(me().id);
+    expectStatus(await call('GET', `/v1/keys/${me().extraKeyId}/usage`, { as: label }), 200);
+  });
+
+  test('document lifecycle: create, send, authorize, read, void', async () => {
+    const idempotencyKey = crypto.randomUUID();
+    const body = invoiceBody();
+    const created = expectStatus(await call('POST', '/v1/documents', {
+      as: label, headers: { ...withIssuer(), 'Idempotency-Key': idempotencyKey }, json: body,
+    }), 201);
+    const accessKey = pick(created, 'accessKey');
+    me().accessKey = accessKey;
+    expect(pick(created, 'status')).toBe('SIGNED');
+
+    // Same key, same body: the same document comes back.
+    const replay = expectStatus(await call('POST', '/v1/documents', {
+      as: label, headers: { ...withIssuer(), 'Idempotency-Key': idempotencyKey }, json: body,
+    }), 200);
+    expect(pick(replay, 'accessKey')).toBe(accessKey);
+
+    expectStatus(await call('POST', `/v1/documents/${accessKey}/send`, { as: label, headers: withIssuer() }), 202);
+    await runPendingEffects({ only: 'SRI_SEND' });
+    expect(pick(expectStatus(await call('GET', `/v1/documents/${accessKey}`, { as: label, headers: withIssuer() }), 200), 'status')).toBe('RECEIVED');
+    expectStatus(await call('GET', `/v1/documents/${accessKey}/authorize`, { as: label, headers: withIssuer() }), 202);
+    await runPendingEffects();
+
+    const doc = expectStatus(await call('GET', `/v1/documents/${accessKey}`, { as: label, headers: withIssuer() }), 200);
+    expect(pick(doc, 'status')).toBe('AUTHORIZED');
+
+    for (const path of ['', '/stats']) expectStatus(await call('GET', `/v1/documents${path}`, { as: label, headers: withIssuer() }), 200);
+    for (const part of ['xml', 'events', 'sri-responses', 'credit-notes']) {
+      expectStatus(await call('GET', `/v1/documents/${accessKey}/${part}`, { as: label, headers: withIssuer() }), 200);
+    }
+    const ride = await fetch(`${baseUrl}/v1/documents/${accessKey}/ride`, { headers: { Authorization: `Bearer ${me().token}`, ...withIssuer() } });
+    expect(ride.status).toBe(200);
+    expect(ride.headers.get('content-type')).toMatch(/pdf/);
+
+    const responses = expectStatus(await call('GET', `/v1/documents/${accessKey}/sri-responses`, { as: label, headers: withIssuer() }), 200);
+    expect(JSON.stringify(responses)).toMatch(/RECEPTION/);
+    expect(JSON.stringify(responses)).toMatch(/AUTHORIZATION/);
+
+    // Sending is off in tests, so the buyer email is recorded as skipped, not failed.
+    const { rows } = await db.queryAsIssuer(me().issuerId, 'SELECT email_status FROM documents WHERE access_key = $1', [accessKey], true);
+    expect(rows[0].email_status).toBe('SKIPPED');
+  });
+
+  test('a second document can be voided, and batch email retry runs', async () => {
+    const created = expectStatus(await call('POST', '/v1/documents', { as: label, headers: withIssuer(), json: invoiceBody() }), 201);
+    const accessKey = pick(created, 'accessKey');
+    expect(accessKey).not.toBe(me().accessKey);
+    expectStatus(await call('POST', `/v1/documents/${accessKey}/send`, { as: label, headers: withIssuer() }), 202);
+    await runPendingEffects();
+    await runPendingEffects();
+    expectStatus(await call('POST', `/v1/documents/${accessKey}/void`, {
+      as: label, headers: withIssuer(), json: { confirmedSriVoid: true, reason: 'test void' },
+    }), 200);
+    expectStatus(await call('POST', '/v1/documents/email-retry', { as: label, headers: withIssuer() }), 200);
+    expectStatus(await call('POST', '/v1/tenants/retry-failed-documents', { as: label }), 202);
+  });
+});
+
+describe('tenant B cannot reach tenant A: issuers, keys and documents', () => {
+  test('issuer routes answer 403, not 404, for another tenant\'s issuer', async () => {
+    const id = tenants.A.issuerId;
+    expect((await call('GET', `/v1/issuers/${id}`, { as: 'B' })).status).toBe(403);
+    expect((await call('PATCH', `/v1/issuers/${id}`, { as: 'B', json: { tradeName: 'hijack' } })).status).toBe(403);
+    expect((await call('GET', `/v1/issuers/${id}/sequentials`, { as: 'B' })).status).toBe(403);
+    expect((await call('PATCH', `/v1/issuers/${id}/can-issue`, { as: 'B', json: { canIssue: false } })).status).toBe(403);
+    expect(JSON.stringify(expectStatus(await call('GET', '/v1/issuers', { as: 'B' }), 200))).not.toContain(id);
+  });
+
+  test('API keys', async () => {
+    expect((await call('DELETE', `/v1/keys/${tenants.A.extraKeyId}`, { as: 'B' })).status).toBe(404);
+    expect((await call('GET', `/v1/keys/${tenants.A.extraKeyId}/usage`, { as: 'B' })).status).toBe(404);
+    expect(JSON.stringify(expectStatus(await call('GET', '/v1/keys', { as: 'B' }), 200))).not.toContain(tenants.A.extraKeyId);
+    expect(JSON.stringify(expectStatus(await call('GET', '/v1/keys', { as: 'A' }), 200))).toContain(tenants.A.extraKeyId);
+  });
+
+  test('documents', async () => {
+    const key = tenants.A.accessKey;
+    const ownIssuer = { 'X-Issuer-Id': tenants.B.issuerId };
+    for (const part of ['', '/xml', '/events', '/ride', '/sri-responses', '/credit-notes']) {
+      expect((await call('GET', `/v1/documents/${key}${part}`, { as: 'B', headers: ownIssuer })).status).toBe(404);
+    }
+    expect((await call('POST', `/v1/documents/${key}/void`, { as: 'B', headers: ownIssuer, json: { confirmedSriVoid: true, reason: 'x' } })).status).toBe(404);
+    expect((await call('GET', `/v1/documents/${key}`, { as: 'B', headers: { 'X-Issuer-Id': tenants.A.issuerId } })).status).toBe(403);
+    expect(JSON.stringify(expectStatus(await call('GET', '/v1/documents', { as: 'B', headers: ownIssuer }), 200))).not.toContain(key);
+  });
+});
+
 describe('tenant B cannot reach tenant A', () => {
   test('payments and proofs', async () => {
     const a = tenants.A;
@@ -243,6 +411,16 @@ describe('admin and worker', () => {
     expectStatus(await call('GET', '/v1/admin/tenants', { headers: ADMIN }), 200);
   });
 
+  test('operator links A\'s invoice and downloads a RIDE by access key', async () => {
+    expectStatus(await call('PATCH', `/v1/admin/subscriptions/${tenants.A.subscriptionId}/link-invoice`, {
+      headers: ADMIN, json: { accessKey: tenants.A.accessKey },
+    }), 200);
+    const ride = await fetch(`${baseUrl}/v1/admin/documents/${tenants.A.accessKey}/ride`, { headers: ADMIN });
+    expect(ride.status).toBe(200);
+    const listed = JSON.stringify(expectStatus(await call('GET', '/v1/admin/payments?status=VERIFIED', { headers: ADMIN }), 200));
+    expect(listed).toContain(tenants.A.paymentId);
+  });
+
   test('the verified tenant is upgraded; the other is untouched', async () => {
     expect(pick(expectStatus(await call('GET', '/v1/tenants/me', { as: 'A' }), 200), 'subscriptionTier')).toBe('BUSINESS');
     expect(pick(expectStatus(await call('GET', '/v1/tenants/me', { as: 'B' }), 200), 'subscriptionTier')).toBe('GROWTH');
@@ -269,10 +447,17 @@ describe('admin and worker', () => {
     expectStatus(await call('POST', `/v1/notifications/${verified.id}/read`, { as: 'A' }), 200);
   });
 
-  test('A\'s webhook delivery was attempted and recorded for A only', async () => {
+  test('webhook deliveries stay inside one tenant: notification, endpoint and delivery all agree', async () => {
+    const ids = Object.values(tenants).map((t) => t.id);
     const { rows } = await system(() => db.query(
-      'SELECT tenant_id, count(*)::int AS n FROM webhook_deliveries WHERE tenant_id = ANY($1) GROUP BY 1', [Object.values(tenants).map((t) => t.id)]));
-    expect(rows).toEqual([{ tenant_id: tenants.A.id, n: expect.any(Number) }]);
+      `SELECT d.tenant_id AS delivery, n.tenant_id AS notification, w.tenant_id AS endpoint
+       FROM webhook_deliveries d
+       JOIN notifications n ON n.id = d.notification_id
+       JOIN webhook_endpoints w ON w.id = d.webhook_id
+       WHERE d.tenant_id = ANY($1)`, [ids]));
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.filter((r) => r.delivery !== r.notification || r.delivery !== r.endpoint)).toEqual([]);
+    expect([...new Set(rows.map((r) => r.delivery))].sort()).toEqual([...ids].sort());
   });
 
   test.each(['notifications', 'subscriptions', 'quota', 'queue-reconciliation', 'payphone-reconciliation'])(
@@ -337,6 +522,91 @@ describe('admin and worker', () => {
   test('B cannot self-cancel a payment it already reported, and can remove its own webhook', async () => {
     expect((await call('DELETE', `/v1/payments/${tenants.B.paymentId}`, { as: 'B', headers: INTERNAL })).status).toBe(409);
     expectStatus(await call('DELETE', `/v1/webhooks/${tenants.B.webhookId}`, { as: 'B' }), 200);
+  });
+});
+
+describe('branch lifecycle', () => {
+  test('A creates a branch from its own certificate, manages it, and B cannot source from it', async () => {
+    const form = new FormData();
+    form.append('branchCode', '002');
+    form.append('issuePointCode', '001');
+    form.append('sourceIssuerId', tenants.A.issuerId);
+    const created = expectStatus(await call('POST', '/v1/issuers', { as: 'A', form }), 201);
+    const branchId = pick(created, 'id');
+    expect(branchId).toBeDefined();
+    expect(branchId).not.toBe(tenants.A.issuerId);
+
+    expectStatus(await call('POST', `/v1/issuers/${branchId}/document-types`, { as: 'A', json: { documentType: '04' } }), 200);
+    expectStatus(await call('PATCH', `/v1/issuers/${branchId}/sequentials/01`, { as: 'A', json: { environment: 'sandbox', nextSequential: 50 } }), 200);
+    expectStatus(await call('DELETE', `/v1/issuers/${branchId}/document-types/04`, { as: 'A' }), 200);
+
+    // The new branch signs with the copied certificate.
+    const doc = expectStatus(await call('POST', '/v1/documents', { as: 'A', headers: { 'X-Issuer-Id': branchId }, json: invoiceBody() }), 201);
+    expect(pick(doc, 'sequential')).toMatch(/50$/);
+
+    // It has a document now, so it can be paused but not removed.
+    expect((await call('DELETE', `/v1/issuers/${branchId}`, { as: 'A' })).body).toMatchObject({ code: 'ISSUER_HAS_DOCUMENTS' });
+    expectStatus(await call('PATCH', `/v1/issuers/${branchId}/can-issue`, { as: 'A', json: { canIssue: false } }), 200);
+    expect((await call('POST', '/v1/documents', { as: 'A', headers: { 'X-Issuer-Id': branchId }, json: invoiceBody() })).status).toBe(403);
+
+    // Another tenant can neither touch the branch nor copy A's certificate into a branch of its own.
+    expect((await call('DELETE', `/v1/issuers/${branchId}`, { as: 'B' })).status).toBe(403);
+    const steal = new FormData();
+    steal.append('branchCode', '003');
+    steal.append('issuePointCode', '001');
+    steal.append('sourceIssuerId', tenants.A.issuerId);
+    const stolen = await call('POST', '/v1/issuers', { as: 'B', form: steal });
+    expect(stolen.status).toBeGreaterThanOrEqual(400);
+    expect(stolen.status).toBeLessThan(500);
+    const { rows } = await system(() => db.query(
+      'SELECT count(*)::int AS n FROM issuers WHERE tenant_id = $1', [tenants.B.id]));
+    expect(rows[0].n).toBe(1);
+  });
+});
+
+describe('rebuild and promotion', () => {
+  test('a returned document can be rebuilt by its own issuer only', async () => {
+    const headers = { 'X-Issuer-Id': tenants.A.issuerId };
+    const accessKey = pick(expectStatus(await call('POST', '/v1/documents', { as: 'A', headers, json: invoiceBody() }), 201), 'accessKey');
+    // SRI mock mode never returns a document, so put one in RETURNED the way the worker would.
+    await system(async () => {
+      for (const status of ['PENDING_SEND', 'RETURNED']) {
+        await db.query('UPDATE sandbox.documents SET status = $1 WHERE access_key = $2', [status, accessKey]);
+      }
+    });
+    expect((await call('POST', `/v1/documents/${accessKey}/rebuild`, {
+      as: 'B', headers: { 'X-Issuer-Id': tenants.B.issuerId }, json: invoiceBody(),
+    })).status).toBe(404);
+    const rebuilt = expectStatus(await call('POST', `/v1/documents/${accessKey}/rebuild`, { as: 'A', headers, json: invoiceBody() }), 200);
+    expect(pick(rebuilt, 'status')).toBe('SIGNED');
+    expect(pick(rebuilt, 'accessKey')).toBe(accessKey);
+  });
+
+  test('promotion moves B to production, replaces its keys, and its documents land in the public schema', async () => {
+    const promoted = expectStatus(await call('POST', '/v1/tenants/promote', { as: 'B', headers: INTERNAL, json: {} }), 200);
+    const productionKey = pick(promoted, 'apiKeys').find((k) => k.label === 'test').apiKey;
+
+    // The sandbox key is revoked; the mirrored production key works.
+    expect((await call('GET', '/v1/tenants/me', { as: 'B' })).status).toBe(401);
+    tenants.B.token = productionKey;
+    expect(pick(expectStatus(await call('GET', '/v1/tenants/me', { as: 'B' }), 200), 'sandbox')).toBe(false);
+
+    const headers = { 'X-Issuer-Id': tenants.B.issuerId };
+    const accessKey = pick(expectStatus(await call('POST', '/v1/documents', { as: 'B', headers, json: invoiceBody() }), 201), 'accessKey');
+    expectStatus(await call('POST', `/v1/documents/${accessKey}/send`, { as: 'B', headers }), 202);
+    await runPendingEffects();
+    await runPendingEffects();
+    expect(pick(expectStatus(await call('GET', `/v1/documents/${accessKey}`, { as: 'B', headers }), 200), 'status')).toBe('AUTHORIZED');
+
+    const counts = await system(() => db.query(
+      `SELECT (SELECT count(*)::int FROM public.documents  WHERE access_key = $1) AS in_public,
+              (SELECT count(*)::int FROM sandbox.documents WHERE access_key = $1) AS in_sandbox`, [accessKey]));
+    expect(counts.rows[0]).toEqual({ in_public: 1, in_sandbox: 0 });
+
+    // B's earlier sandbox document is not reachable from production, and A is unaffected.
+    expect((await call('GET', `/v1/documents/${tenants.B.accessKey}`, { as: 'B', headers })).status).toBe(404);
+    expect(pick(expectStatus(await call('GET', '/v1/tenants/me', { as: 'A' }), 200), 'sandbox')).toBe(true);
+    expectStatus(await call('GET', `/v1/issuers/${tenants.B.issuerId}/sequentials`, { as: 'B' }), 200);
   });
 });
 

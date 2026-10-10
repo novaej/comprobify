@@ -39,6 +39,24 @@ describe('resolveIssuer middleware', () => {
     expect(issuerModel.findById).toHaveBeenCalledWith('00000000-0000-0000-0000-000000000042');
   });
 
+  test('looks the issuer up in system context, inside the caller\'s tenant context, without replacing it', async () => {
+    // System context is what lets another tenant's issuer be found and refused with 403 instead of hidden as a 404.
+    const rlsContext = require('../../../src/config/rls-context');
+    let duringLookup;
+    issuerModel.findById.mockImplementation(async () => {
+      duringLookup = rlsContext.current();
+      return sandboxIssuer;
+    });
+    const req = makeReq({ 'x-issuer-id': '00000000-0000-0000-0000-000000000042' });
+    let afterwards;
+    await rlsContext.runAsTenant(req.tenant.id, async () => {
+      await run(req);
+      afterwards = rlsContext.current();
+    });
+    expect(duringLookup).toEqual({ system: true });
+    expect(afterwards).toEqual({ tenantId: req.tenant.id });
+  });
+
   test('400 when X-Issuer-Id header is missing', async () => {
     const req = makeReq({});
     await expect(run(req)).rejects.toMatchObject({ statusCode: 400 });

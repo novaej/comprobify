@@ -123,3 +123,4 @@ YYYY-MM-DD
 | [036](036-fail-closed-row-level-security.md) | Fail-Closed Row-Level Security | Accepted | 2026-10-07 |
 | [037](037-request-scoped-rls-context.md) | Request-Scoped RLS Context and Shadow Mode | Accepted | 2026-10-09 |
 | [038](038-tenant-level-rls-fail-loud.md) | Tenant-Level RLS Policies, Fail-Loud | Accepted | 2026-10-09 |
+| [039](039-rls-identity-tables.md) | RLS on the Identity Tables and the Effects Outbox | Accepted | 2026-10-10 |
