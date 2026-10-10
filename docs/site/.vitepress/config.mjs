@@ -23,6 +23,7 @@ function esSidebar() {
     { text: 'Primeros Pasos', link: '/getting-started' },
     { text: 'Tu cuenta y la aplicación web', link: '/account-lifecycle' },
     { text: 'Tu suscripción y cómo pagarla', link: '/paying-your-subscription' },
+    { text: 'Conectar un asistente de IA', link: '/ai-assistants' },
     {
       text: 'Endpoints',
       collapsed: false,
@@ -134,6 +135,7 @@ function enSidebar() {
     { text: 'Getting Started', link: '/en/getting-started' },
     { text: 'Your account & the web app', link: '/en/account-lifecycle' },
     { text: 'Your subscription & billing', link: '/en/paying-your-subscription' },
+    { text: 'Connecting an AI assistant', link: '/en/ai-assistants' },
     {
       text: 'Endpoints',
       collapsed: false,
