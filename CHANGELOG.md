@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.3] — 2026-10-10
+
 ### Security
 - **Row-Level Security now covers every table that holds tenant data** (ADR-039, migration 107). The last six are the identity tables — `tenants`, `issuers`, `api_keys`, `api_key_daily_usage`, `issuer_document_types` — and the effects outbox, `pending_effects`. A request can only see and change its own tenant's issuers, certificates, API key records and queued effects, enforced by the database. `api_keys` regains the protection migration 042 had to remove. No API behavior changes: a request naming another tenant's issuer still answers `403 ISSUER_FORBIDDEN`.
 
