@@ -9,6 +9,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+- **Row-Level Security now covers every table that holds tenant data** (ADR-039, migration 107). The last six are the identity tables — `tenants`, `issuers`, `api_keys`, `api_key_daily_usage`, `issuer_document_types` — and the effects outbox, `pending_effects`. A request can only see and change its own tenant's issuers, certificates, API key records and queued effects, enforced by the database. `api_keys` regains the protection migration 042 had to remove. No API behavior changes: a request naming another tenant's issuer still answers `403 ISSUER_FORBIDDEN`.
+
+### Added
+- The two-tenant HTTP tests now cover signed document flows (create, send, authorize, RIDE, XML, void, rebuild), issuer and branch management, API keys, and promotion to production, all with every policy on.
+
+### Changed
+- Querying `tenants`, `issuers`, `api_keys`, `pending_effects` and their child tables by hand as `comprobify_app` now needs a context too (`SET app.rls_system = 'on';`).
+
 ## [1.3.2] — 2026-10-09
 
 ### Security
